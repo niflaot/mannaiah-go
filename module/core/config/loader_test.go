@@ -5,9 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	corelogger "mannaiah/module/core/logger"
 )
 
@@ -47,6 +50,40 @@ type moduleFeatureConfig struct {
 type moduleExtensionConfig struct {
 	// Feature contains nested feature fields flattened by mapstructure squash.
 	Feature moduleFeatureConfig `mapstructure:",squash"`
+}
+
+// autoTagProbe verifies derived keys when mapstructure tags are omitted.
+type autoTagProbe struct {
+	// HostName is decoded using its derived key HOST_NAME.
+	HostName string
+}
+
+// invalidDecodeProbe verifies unmarshal errors for incompatible decoded values.
+type invalidDecodeProbe struct {
+	// Values expects a map but receives a scalar configuration value.
+	Values map[string]int `mapstructure:"UT_INVALID_VALUES"`
+}
+
+// helperNestedProbe verifies nested bind/default/required behavior.
+type helperNestedProbe struct {
+	// Required is mandatory because it has no default.
+	Required string `mapstructure:"REQUIRED"`
+	// Defaulted should be initialized from a default tag.
+	Defaulted int `mapstructure:"DEFAULTED" default:"10"`
+}
+
+// helperContainerProbe verifies recursion and squash behavior.
+type helperContainerProbe struct {
+	// Nested uses a non-squashed key prefix.
+	Nested helperNestedProbe `mapstructure:"NESTED"`
+	// Flat uses squash and should not use a prefix.
+	Flat helperNestedProbe `mapstructure:",squash"`
+	// AutoName has no mapstructure tag and should use derived key naming.
+	AutoName string `default:"auto"`
+	// Ignored is skipped by mapstructure binding logic.
+	Ignored string `mapstructure:"-"`
+	// hiddenValue is unexported and must be ignored by reflection traversal.
+	hiddenValue string `mapstructure:"HIDDEN_VALUE"`
 }
 
 // TestLoadFromDotEnv verifies base config loading from the .env file.
@@ -221,6 +258,236 @@ func TestLoadAllowsMissingDotEnvWhenEnvironmentHasValues(t *testing.T) {
 	}
 	if probe.Value != "present" {
 		t.Fatalf("Value = %q, want %q", probe.Value, "present")
+	}
+}
+
+// TestValidationErrorError formats missing entries in a startup-friendly message.
+func TestValidationErrorError(t *testing.T) {
+	err := ValidationError{
+		Missing: []MissingFieldError{
+			{Field: "Core.Host", Key: "CORE_HOST"},
+			{Field: "Core.Port", Key: "CORE_PORT"},
+		},
+	}
+
+	want := "missing required configuration values: Core.Host (CORE_HOST) Core.Port (CORE_PORT)"
+	got := err.Error()
+	if got != want {
+		t.Fatalf("ValidationError.Error() = %q, want %q", got, want)
+	}
+}
+
+// TestLoadConvenienceWrapper verifies the package-level Load helper delegates correctly.
+func TestLoadConvenienceWrapper(t *testing.T) {
+	envFile := filepath.Join(t.TempDir(), ".env.missing")
+
+	var cfg defaultsProbe
+	if err := Load(envFile, nil, &cfg); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Name != "mannaiah" {
+		t.Fatalf("Name = %q, want %q", cfg.Name, "mannaiah")
+	}
+}
+
+// TestLoaderLoadRejectsEmptyTargets verifies loader returns an error when called without targets.
+func TestLoaderLoadRejectsEmptyTargets(t *testing.T) {
+	loader := NewLoader(filepath.Join(t.TempDir(), ".env.missing"), nil)
+	if err := loader.Load(); err == nil {
+		t.Fatalf("expected error when no target structs are provided")
+	}
+}
+
+// TestLoaderLoadRejectsNilTarget verifies nil target entries are rejected during startup validation.
+func TestLoaderLoadRejectsNilTarget(t *testing.T) {
+	loader := NewLoader(filepath.Join(t.TempDir(), ".env.missing"), nil)
+	if err := loader.Load(nil); err == nil {
+		t.Fatalf("expected error when target entry is nil")
+	}
+}
+
+// TestLoaderLoadRejectsInvalidDotEnv verifies parse failures in .env content are returned.
+func TestLoaderLoadRejectsInvalidDotEnv(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(filePath, []byte("INVALID_LINE\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	var cfg defaultsProbe
+	err := NewLoader(filePath, nil).Load(&cfg)
+	if err == nil {
+		t.Fatalf("expected parse error for invalid .env syntax")
+	}
+	if !strings.Contains(err.Error(), "read .env file") {
+		t.Fatalf("expected .env read context in error, got %q", err.Error())
+	}
+}
+
+// TestLoaderLoadReturnsUnmarshalError verifies incompatible decoded values fail startup.
+func TestLoaderLoadReturnsUnmarshalError(t *testing.T) {
+	envFile := writeEnvFile(t, "UT_INVALID_VALUES=plain-text")
+
+	var cfg invalidDecodeProbe
+	err := NewLoader(envFile, nil).Load(&cfg)
+	if err == nil {
+		t.Fatalf("expected unmarshal error for incompatible target type")
+	}
+	if !strings.Contains(err.Error(), "unmarshal config into") {
+		t.Fatalf("expected unmarshal context in error, got %q", err.Error())
+	}
+}
+
+// TestIsMissingConfigFile verifies both missing-file detection branches and negative cases.
+func TestIsMissingConfigFile(t *testing.T) {
+	if !isMissingConfigFile(viper.ConfigFileNotFoundError{}) {
+		t.Fatalf("expected ConfigFileNotFoundError to be treated as missing file")
+	}
+	if !isMissingConfigFile(os.ErrNotExist) {
+		t.Fatalf("expected os.ErrNotExist to be treated as missing file")
+	}
+	if isMissingConfigFile(errors.New("different error")) {
+		t.Fatalf("expected unrelated errors not to be treated as missing files")
+	}
+}
+
+// TestResolveTargetStructTypeNilTarget verifies nil interface targets are rejected.
+func TestResolveTargetStructTypeNilTarget(t *testing.T) {
+	var target any
+	_, err := resolveTargetStructType(target)
+	if err == nil {
+		t.Fatalf("expected nil target to fail validation")
+	}
+}
+
+// TestNewLoaderDefaultsAndOverrides verifies loader normalization for .env path and startup logger injection.
+func TestNewLoaderDefaultsAndOverrides(t *testing.T) {
+	defaultLoader := NewLoader("", nil)
+	if defaultLoader.envFile != ".env" {
+		t.Fatalf("default envFile = %q, want %q", defaultLoader.envFile, ".env")
+	}
+	if defaultLoader.logger == nil {
+		t.Fatalf("expected default startup logger instance")
+	}
+
+	providedLogger := zap.NewNop()
+	customLoader := NewLoader("  custom.env  ", providedLogger)
+	if customLoader.envFile != "custom.env" {
+		t.Fatalf("custom envFile = %q, want %q", customLoader.envFile, "custom.env")
+	}
+	if customLoader.logger != providedLogger {
+		t.Fatalf("expected NewLoader() to preserve provided logger instance")
+	}
+}
+
+// TestRegisterBindingsAndDefaultsAndCollectMissing verifies recursion, squash, defaults, and required checks.
+func TestRegisterBindingsAndDefaultsAndCollectMissing(t *testing.T) {
+	v := viper.New()
+	structType := reflect.TypeOf(helperContainerProbe{})
+
+	if err := registerBindingsAndDefaults(v, structType, ""); err != nil {
+		t.Fatalf("registerBindingsAndDefaults() error = %v", err)
+	}
+
+	if got := v.GetInt("NESTED.DEFAULTED"); got != 10 {
+		t.Fatalf("NESTED.DEFAULTED = %d, want %d", got, 10)
+	}
+	if got := v.GetInt("DEFAULTED"); got != 10 {
+		t.Fatalf("DEFAULTED = %d, want %d", got, 10)
+	}
+	if got := v.GetString("AUTO_NAME"); got != "auto" {
+		t.Fatalf("AUTO_NAME = %q, want %q", got, "auto")
+	}
+
+	missing := collectMissing(v, structType, "", "helperContainerProbe")
+	if len(missing) != 2 {
+		t.Fatalf("missing count = %d, want %d", len(missing), 2)
+	}
+
+	v.Set("NESTED.REQUIRED", "nested-ok")
+	v.Set("REQUIRED", "flat-ok")
+	missing = collectMissing(v, structType, "", "helperContainerProbe")
+	if len(missing) != 0 {
+		t.Fatalf("expected all required keys satisfied, got %d missing entries", len(missing))
+	}
+}
+
+// TestParseMapstructureTag verifies tag parsing for empty, skip, and squash variants.
+func TestParseMapstructureTag(t *testing.T) {
+	empty := parseMapstructureTag("")
+	if empty.name != "" || empty.skip || empty.squash {
+		t.Fatalf("unexpected parsed empty tag: %+v", empty)
+	}
+
+	skip := parseMapstructureTag("-")
+	if !skip.skip {
+		t.Fatalf("expected skip option for '-' tag")
+	}
+
+	complex := parseMapstructureTag("FIELD_NAME,squash")
+	if complex.name != "FIELD_NAME" || !complex.squash || complex.skip {
+		t.Fatalf("unexpected parsed complex tag: %+v", complex)
+	}
+}
+
+// TestResolveFieldKeyPartAndJoinHelpers verifies key derivation and join helper edge cases.
+func TestResolveFieldKeyPartAndJoinHelpers(t *testing.T) {
+	if got := resolveFieldKeyPart("HostName", ""); got != "HOST_NAME" {
+		t.Fatalf("resolveFieldKeyPart() = %q, want %q", got, "HOST_NAME")
+	}
+	if got := resolveFieldKeyPart("HostName", "CUSTOM_NAME"); got != "CUSTOM_NAME" {
+		t.Fatalf("resolveFieldKeyPart() = %q, want %q", got, "CUSTOM_NAME")
+	}
+
+	if got := joinKey("", "CHILD"); got != "CHILD" {
+		t.Fatalf("joinKey() = %q, want %q", got, "CHILD")
+	}
+	if got := joinKey("PARENT", ""); got != "PARENT" {
+		t.Fatalf("joinKey() = %q, want %q", got, "PARENT")
+	}
+	if got := joinKey("PARENT", "CHILD"); got != "PARENT.CHILD" {
+		t.Fatalf("joinKey() = %q, want %q", got, "PARENT.CHILD")
+	}
+
+	if got := joinPath("", "Child"); got != "Child" {
+		t.Fatalf("joinPath() = %q, want %q", got, "Child")
+	}
+	if got := joinPath("Parent", "Child"); got != "Parent.Child" {
+		t.Fatalf("joinPath() = %q, want %q", got, "Parent.Child")
+	}
+}
+
+// TestParseDefaultValue verifies type conversion behavior for supported and fallback types.
+func TestParseDefaultValue(t *testing.T) {
+	type parseCase struct {
+		// Name identifies the case for failure output.
+		Name string
+		// Raw is the string input from struct tag defaults.
+		Raw string
+		// Type is the target field type.
+		Type reflect.Type
+		// Want is the expected parsed result.
+		Want any
+	}
+
+	cases := []parseCase{
+		{Name: "string", Raw: "value", Type: reflect.TypeOf(""), Want: "value"},
+		{Name: "bool-true", Raw: "true", Type: reflect.TypeOf(false), Want: true},
+		{Name: "bool-invalid", Raw: "not-bool", Type: reflect.TypeOf(false), Want: "not-bool"},
+		{Name: "int", Raw: "7", Type: reflect.TypeOf(int(0)), Want: int64(7)},
+		{Name: "int-invalid", Raw: "bad", Type: reflect.TypeOf(int(0)), Want: "bad"},
+		{Name: "uint", Raw: "9", Type: reflect.TypeOf(uint(0)), Want: uint64(9)},
+		{Name: "uint-invalid", Raw: "-1", Type: reflect.TypeOf(uint(0)), Want: "-1"},
+		{Name: "float", Raw: "1.5", Type: reflect.TypeOf(float64(0)), Want: float64(1.5)},
+		{Name: "float-invalid", Raw: "pi", Type: reflect.TypeOf(float64(0)), Want: "pi"},
+		{Name: "slice-string", Raw: "a, b, c", Type: reflect.TypeOf([]string{}), Want: []string{"a", "b", "c"}},
+		{Name: "slice-non-string", Raw: "1,2", Type: reflect.TypeOf([]int{}), Want: "1,2"},
+	}
+
+	for _, tc := range cases {
+		got := parseDefaultValue(tc.Raw, tc.Type)
+		if !reflect.DeepEqual(got, tc.Want) {
+			t.Fatalf("%s: parseDefaultValue() = %#v, want %#v", tc.Name, got, tc.Want)
+		}
 	}
 }
 

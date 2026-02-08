@@ -146,3 +146,81 @@ func TestNewWithWritersInvalidLevel(t *testing.T) {
 		t.Fatalf("expected error for unsupported level")
 	}
 }
+
+// TestNewBuildsLogger verifies New constructs a logger using process stdio sinks.
+func TestNewBuildsLogger(t *testing.T) {
+	log, err := New(
+		Settings{
+			Format: "json",
+			Level:  "info",
+		},
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if log == nil {
+		t.Fatalf("expected New() to return logger instance")
+	}
+}
+
+// TestResolveBuildsLoggerWhenProvidedIsNil verifies Resolve creates a logger when no instance is provided.
+func TestResolveBuildsLoggerWhenProvidedIsNil(t *testing.T) {
+	log, err := Resolve(
+		nil,
+		Settings{
+			Format: "pretty",
+			Level:  "debug",
+		},
+	)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if log == nil {
+		t.Fatalf("expected Resolve() to return logger instance")
+	}
+}
+
+// TestNewWithWritersAllowsNilErrorOutput verifies logger creation succeeds without a dedicated error sink.
+func TestNewWithWritersAllowsNilErrorOutput(t *testing.T) {
+	var out bytes.Buffer
+
+	log, err := NewWithWriters(
+		Settings{
+			Format: "console",
+			Level:  "info",
+		},
+		&out,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewWithWriters() error = %v", err)
+	}
+
+	log.Info("console-line")
+	if !strings.Contains(out.String(), "console-line") {
+		t.Fatalf("expected console output line in sink, got %q", out.String())
+	}
+}
+
+// TestNewWithWritersDefaultsToPrettyForEmptyFormat verifies an empty format resolves to pretty output.
+func TestNewWithWritersDefaultsToPrettyForEmptyFormat(t *testing.T) {
+	var out bytes.Buffer
+
+	log, err := NewWithWriters(
+		Settings{
+			Format: "",
+			Level:  "info",
+		},
+		&out,
+		&out,
+	)
+	if err != nil {
+		t.Fatalf("NewWithWriters() error = %v", err)
+	}
+
+	log.Info("default-pretty-line")
+	got := strings.TrimSpace(out.String())
+	if strings.HasPrefix(got, "{") {
+		t.Fatalf("expected non-JSON pretty output when format is empty, got %q", got)
+	}
+}
