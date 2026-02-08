@@ -1,0 +1,28 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+dist/
+
+# Build and coverage artifacts
+coverage.out
+coverage.html
+*.coverprofile
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Go workspace and module local state
+go.work.sum
+
+# IDE/editor files
+.DS_Store
+.idea/
+.vscode/
