@@ -7,6 +7,7 @@
 - `logger`: Zap logger construction and resolution helpers.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
+- `http`: Fiber server setup with config fallback and Zap request logging.
 
 ## Goals
 - Deterministic startup configuration rules.
@@ -35,5 +36,12 @@
   - `(*database.Service[T]).Find(ctx, query)`
   - `(*database.Service[T]).Update(ctx, id, updates)`
   - `(*database.Service[T]).Delete(ctx, id)`
+  - `http.New(cfg, providedLogger)`
+  - `http.NewWithCore(cfg, coreCfg, providedLogger)`
+  - `http.AddressFrom(cfg, coreCfg)`
+  - `(*http.Server).Register(register)`
+  - `(*http.Server).Mount(prefix, register)`
+  - `(*http.Server).Start()`
+  - `(*http.Server).Shutdown(ctx)`
 - Endpoints: none in this module.
 - Events: startup validation errors are emitted through Zap logger records.
