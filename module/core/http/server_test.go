@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	stdhttp "net/http"
 	"strings"
@@ -122,6 +123,108 @@ func TestRegisterAndMount(t *testing.T) {
 	}
 }
 
+// TestRegisterRoutesAndMountRoutes verifies abstract router registration for all HTTP methods.
+func TestRegisterRoutesAndMountRoutes(t *testing.T) {
+	server, err := New(Config{Host: "127.0.0.1", Port: 8087}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.RegisterRoutes(func(router Router) {
+		router.Get("/abstract/get/:name", func(ctx Context) error {
+			ctx.Locals("name", ctx.Params("name"))
+			name, _ := ctx.Locals("name").(string)
+			return ctx.Status(stdhttp.StatusOK).JSON(fiber.Map{
+				"name":  name,
+				"query": ctx.Query("q", "none"),
+			})
+		})
+		router.Post("/abstract/post", func(ctx Context) error {
+			var payload map[string]string
+			if err := ctx.BodyParser(&payload); err != nil {
+				return ctx.Status(stdhttp.StatusBadRequest).SendString("invalid")
+			}
+
+			return ctx.Status(stdhttp.StatusCreated).SendString(payload["name"])
+		})
+		router.Put("/abstract/put", func(ctx Context) error {
+			return ctx.SendStatus(stdhttp.StatusNoContent)
+		})
+		router.Patch("/abstract/patch", nil)
+		router.Delete("/abstract/delete", func(ctx Context) error {
+			return ctx.SendStatus(stdhttp.StatusNoContent)
+		})
+	})
+
+	server.MountRoutes("/v2", func(router Router) {
+		router.Get("/status", func(ctx Context) error {
+			return ctx.SendString("mounted")
+		})
+	})
+
+	getReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/abstract/get/john?q=x", nil)
+	getResp, getErr := server.App().Test(getReq)
+	if getErr != nil {
+		t.Fatalf("GET /abstract/get error = %v", getErr)
+	}
+	if getResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("GET /abstract/get status = %d, want %d", getResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	postReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/abstract/post", strings.NewReader(`{"name":"doe"}`))
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp, postErr := server.App().Test(postReq)
+	if postErr != nil {
+		t.Fatalf("POST /abstract/post error = %v", postErr)
+	}
+	if postResp.StatusCode != stdhttp.StatusCreated {
+		t.Fatalf("POST /abstract/post status = %d, want %d", postResp.StatusCode, stdhttp.StatusCreated)
+	}
+	postBody, bodyErr := io.ReadAll(postResp.Body)
+	if bodyErr != nil {
+		t.Fatalf("ReadAll() error = %v", bodyErr)
+	}
+	if strings.TrimSpace(string(postBody)) != "doe" {
+		t.Fatalf("POST /abstract/post body = %q, want %q", strings.TrimSpace(string(postBody)), "doe")
+	}
+
+	putReq, _ := stdhttp.NewRequest(stdhttp.MethodPut, "/abstract/put", nil)
+	putResp, putErr := server.App().Test(putReq)
+	if putErr != nil {
+		t.Fatalf("PUT /abstract/put error = %v", putErr)
+	}
+	if putResp.StatusCode != stdhttp.StatusNoContent {
+		t.Fatalf("PUT /abstract/put status = %d, want %d", putResp.StatusCode, stdhttp.StatusNoContent)
+	}
+
+	patchReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/abstract/patch", nil)
+	patchResp, patchErr := server.App().Test(patchReq)
+	if patchErr != nil {
+		t.Fatalf("PATCH /abstract/patch error = %v", patchErr)
+	}
+	if patchResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("PATCH /abstract/patch status = %d, want %d", patchResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	deleteReq, _ := stdhttp.NewRequest(stdhttp.MethodDelete, "/abstract/delete", nil)
+	deleteResp, deleteErr := server.App().Test(deleteReq)
+	if deleteErr != nil {
+		t.Fatalf("DELETE /abstract/delete error = %v", deleteErr)
+	}
+	if deleteResp.StatusCode != stdhttp.StatusNoContent {
+		t.Fatalf("DELETE /abstract/delete status = %d, want %d", deleteResp.StatusCode, stdhttp.StatusNoContent)
+	}
+
+	mountedReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/v2/status", nil)
+	mountedResp, mountedErr := server.App().Test(mountedReq)
+	if mountedErr != nil {
+		t.Fatalf("GET /v2/status error = %v", mountedErr)
+	}
+	if mountedResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("GET /v2/status status = %d, want %d", mountedResp.StatusCode, stdhttp.StatusOK)
+	}
+}
+
 // TestRegisterAndMountNilCallbacks verifies nil callbacks are safely ignored.
 func TestRegisterAndMountNilCallbacks(t *testing.T) {
 	server, err := New(Config{Host: "127.0.0.1", Port: 8082}, zap.NewNop())
@@ -131,6 +234,8 @@ func TestRegisterAndMountNilCallbacks(t *testing.T) {
 
 	server.Register(nil)
 	server.Mount("/v1", nil)
+	server.RegisterRoutes(nil)
+	server.MountRoutes("/v2", nil)
 }
 
 // TestZapFiberMiddlewareLogs verifies zapfiber request logs are emitted through provided logger.

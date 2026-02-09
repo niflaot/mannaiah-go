@@ -86,6 +86,20 @@ type helperContainerProbe struct {
 	hiddenValue string `mapstructure:"HIDDEN_VALUE"`
 }
 
+// providerProbe is a fake config provider used for provider-abstraction tests.
+type providerProbe struct {
+	// called indicates whether Load was invoked.
+	called bool
+	// err is the configured provider return error.
+	err error
+}
+
+// Load records invocation and returns the configured probe error.
+func (p *providerProbe) Load(targets ...any) error {
+	p.called = true
+	return p.err
+}
+
 // TestLoadFromDotEnv verifies base config loading from the .env file.
 func TestLoadFromDotEnv(t *testing.T) {
 	envFile := writeEnvFile(
@@ -488,6 +502,38 @@ func TestParseDefaultValue(t *testing.T) {
 		if !reflect.DeepEqual(got, tc.Want) {
 			t.Fatalf("%s: parseDefaultValue() = %#v, want %#v", tc.Name, got, tc.Want)
 		}
+	}
+}
+
+// TestLoadWithUsesProvider verifies LoadWith delegates to the provided abstraction.
+func TestLoadWithUsesProvider(t *testing.T) {
+	provider := &providerProbe{}
+	var cfg defaultsProbe
+
+	if err := LoadWith(provider, &cfg); err != nil {
+		t.Fatalf("LoadWith() error = %v", err)
+	}
+	if !provider.called {
+		t.Fatalf("expected provider Load() to be called")
+	}
+}
+
+// TestLoadWithNilProvider verifies nil providers are rejected.
+func TestLoadWithNilProvider(t *testing.T) {
+	err := LoadWith(nil)
+	if !errors.Is(err, ErrNilProvider) {
+		t.Fatalf("LoadWith() error = %v, want ErrNilProvider", err)
+	}
+}
+
+// TestLoadWithPropagatesProviderError verifies provider errors are returned unchanged.
+func TestLoadWithPropagatesProviderError(t *testing.T) {
+	want := errors.New("provider failed")
+	provider := &providerProbe{err: want}
+
+	err := LoadWith(provider)
+	if !errors.Is(err, want) {
+		t.Fatalf("LoadWith() error = %v, want %v", err, want)
 	}
 }
 

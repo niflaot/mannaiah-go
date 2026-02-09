@@ -7,17 +7,21 @@
 - Host/port resolution from HTTP config or fallback from core config.
 - Zap logger integration through `zapfiber` middleware.
 - Route registration and route-group mounting APIs for future modules.
+- Abstract router/context interfaces (`http.Router`, `http.Context`) to decouple module route code from Fiber internals.
 
 ## Usage Rules
 - Load `http.Config` using the shared configuration loader.
 - Prefer `NewWithCore` when host/port should fallback to core config.
-- Register routes through `Register` and `Mount` during module startup.
+- Prefer `RegisterRoutes` and `MountRoutes` for provider-agnostic route registration.
+- Use `Register` and `Mount` only when direct Fiber APIs are required.
 
 ## Key Methods / Endpoints / Events
 - Methods:
   - `http.New(cfg, providedLogger)`
   - `http.NewWithCore(cfg, coreCfg, providedLogger)`
   - `http.AddressFrom(cfg, coreCfg)`
+  - `(*http.Server).RegisterRoutes(register)`
+  - `(*http.Server).MountRoutes(prefix, register)`
   - `(*http.Server).Register(register)`
   - `(*http.Server).Mount(prefix, register)`
   - `(*http.Server).Start()`

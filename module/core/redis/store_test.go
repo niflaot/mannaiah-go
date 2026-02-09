@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	corecache "mannaiah/module/core/cache"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +115,37 @@ func TestNewSupportsPasswordOverride(t *testing.T) {
 
 	if pingErr := store.Ping(context.Background()); pingErr != nil {
 		t.Fatalf("Ping() error = %v", pingErr)
+	}
+}
+
+// TestNewCacheReturnsAbstractStore verifies abstract cache construction with Redis implementation.
+func TestNewCacheReturnsAbstractStore(t *testing.T) {
+	server := startMiniRedis(t)
+
+	abstractStore, err := NewCache(
+		Config{
+			URL: "redis://" + server.Addr() + "/0",
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewCache() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = abstractStore.Close()
+	})
+
+	var _ corecache.Store = abstractStore
+
+	if err := abstractStore.Set(context.Background(), "a", "b", 0); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	value, err := abstractStore.Get(context.Background(), "a")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if value != "b" {
+		t.Fatalf("Get() = %q, want %q", value, "b")
 	}
 }
 

@@ -20,6 +20,64 @@ var (
 	ErrInvalidPort = errors.New("http port must be between 1 and 65535")
 )
 
+// Handler defines an abstract HTTP route handler signature.
+type Handler func(ctx Context) error
+
+// Context defines an abstract HTTP request context contract.
+type Context interface {
+	// Status sets the response status code.
+	Status(code int) Context
+	// JSON writes a JSON response payload.
+	JSON(body any) error
+	// SendString writes a plain-text response payload.
+	SendString(body string) error
+	// SendStatus writes a response with status code only.
+	SendStatus(status int) error
+	// Params reads path parameter values.
+	Params(key string, defaultValue ...string) string
+	// Query reads query string values.
+	Query(key string, defaultValue ...string) string
+	// BodyParser decodes request body into output.
+	BodyParser(out any) error
+	// Locals reads or sets request-local values.
+	Locals(key string, value ...any) any
+}
+
+// Router defines an abstract HTTP router contract for module route registration.
+type Router interface {
+	// Get registers a GET route handler.
+	Get(path string, handler Handler)
+	// Post registers a POST route handler.
+	Post(path string, handler Handler)
+	// Put registers a PUT route handler.
+	Put(path string, handler Handler)
+	// Patch registers a PATCH route handler.
+	Patch(path string, handler Handler)
+	// Delete registers a DELETE route handler.
+	Delete(path string, handler Handler)
+}
+
+// Engine defines the abstract HTTP server contract exposed by this package.
+type Engine interface {
+	// Address returns the resolved server bind address.
+	Address() string
+	// RegisterRoutes registers app-level routes using abstract router interfaces.
+	RegisterRoutes(register func(router Router))
+	// MountRoutes mounts grouped routes under a prefix using abstract router interfaces.
+	MountRoutes(prefix string, register func(router Router))
+	// Start begins listening on the resolved address.
+	Start() error
+	// Shutdown gracefully stops the server using the provided context.
+	Shutdown(ctx context.Context) error
+	// Logger returns the resolved server logger instance.
+	Logger() *zap.Logger
+}
+
+var (
+	// _ ensures Server satisfies the abstract Engine contract.
+	_ Engine = (*Server)(nil)
+)
+
 // Server defines the Fiber HTTP server wrapper used by modules.
 type Server struct {
 	// app is the underlying Fiber application.
@@ -74,7 +132,7 @@ func (s *Server) Address() string {
 	return s.address
 }
 
-// Register allows future modules to register app-level routes and middleware.
+// Register allows future modules to register app-level routes and middleware using Fiber types.
 func (s *Server) Register(register func(app *fiber.App)) {
 	if register == nil {
 		return
@@ -83,13 +141,31 @@ func (s *Server) Register(register func(app *fiber.App)) {
 	register(s.app)
 }
 
-// Mount allows future modules to mount grouped routes under a prefix.
+// Mount allows future modules to mount grouped routes under a prefix using Fiber types.
 func (s *Server) Mount(prefix string, register func(router fiber.Router)) {
 	if register == nil {
 		return
 	}
 
 	register(s.app.Group(prefix))
+}
+
+// RegisterRoutes allows future modules to register app-level routes using abstract router interfaces.
+func (s *Server) RegisterRoutes(register func(router Router)) {
+	if register == nil {
+		return
+	}
+
+	register(newFiberRouterAdapter(s.app))
+}
+
+// MountRoutes allows future modules to mount grouped routes using abstract router interfaces.
+func (s *Server) MountRoutes(prefix string, register func(router Router)) {
+	if register == nil {
+		return
+	}
+
+	register(newFiberRouterAdapter(s.app.Group(prefix)))
 }
 
 // Start begins listening on the resolved address.
@@ -178,4 +254,102 @@ func AddressFrom(cfg Config, coreCfg *coreconfig.Core) (string, error) {
 	}
 
 	return address, nil
+}
+
+// fiberRouterAdapter adapts Fiber router registration to abstract router contracts.
+type fiberRouterAdapter struct {
+	// router is the wrapped Fiber router.
+	router fiber.Router
+}
+
+// newFiberRouterAdapter creates a router adapter over a Fiber router.
+func newFiberRouterAdapter(router fiber.Router) Router {
+	return &fiberRouterAdapter{router: router}
+}
+
+// Get registers a GET route handler.
+func (a *fiberRouterAdapter) Get(path string, handler Handler) {
+	a.router.Get(path, adaptHandler(handler))
+}
+
+// Post registers a POST route handler.
+func (a *fiberRouterAdapter) Post(path string, handler Handler) {
+	a.router.Post(path, adaptHandler(handler))
+}
+
+// Put registers a PUT route handler.
+func (a *fiberRouterAdapter) Put(path string, handler Handler) {
+	a.router.Put(path, adaptHandler(handler))
+}
+
+// Patch registers a PATCH route handler.
+func (a *fiberRouterAdapter) Patch(path string, handler Handler) {
+	a.router.Patch(path, adaptHandler(handler))
+}
+
+// Delete registers a DELETE route handler.
+func (a *fiberRouterAdapter) Delete(path string, handler Handler) {
+	a.router.Delete(path, adaptHandler(handler))
+}
+
+// adaptHandler wraps abstract handlers into Fiber handlers.
+func adaptHandler(handler Handler) fiber.Handler {
+	return func(ctx *fiber.Ctx) error {
+		if handler == nil {
+			return nil
+		}
+
+		return handler(&fiberContextAdapter{ctx: ctx})
+	}
+}
+
+// fiberContextAdapter adapts Fiber contexts to abstract request context contracts.
+type fiberContextAdapter struct {
+	// ctx is the wrapped Fiber context.
+	ctx *fiber.Ctx
+}
+
+// Status sets the response status code.
+func (a *fiberContextAdapter) Status(code int) Context {
+	a.ctx.Status(code)
+	return a
+}
+
+// JSON writes a JSON response payload.
+func (a *fiberContextAdapter) JSON(body any) error {
+	return a.ctx.JSON(body)
+}
+
+// SendString writes a plain-text response payload.
+func (a *fiberContextAdapter) SendString(body string) error {
+	return a.ctx.SendString(body)
+}
+
+// SendStatus writes a response with status code only.
+func (a *fiberContextAdapter) SendStatus(status int) error {
+	return a.ctx.SendStatus(status)
+}
+
+// Params reads path parameter values.
+func (a *fiberContextAdapter) Params(key string, defaultValue ...string) string {
+	return a.ctx.Params(key, defaultValue...)
+}
+
+// Query reads query string values.
+func (a *fiberContextAdapter) Query(key string, defaultValue ...string) string {
+	return a.ctx.Query(key, defaultValue...)
+}
+
+// BodyParser decodes request body into output.
+func (a *fiberContextAdapter) BodyParser(out any) error {
+	return a.ctx.BodyParser(out)
+}
+
+// Locals reads or sets request-local values.
+func (a *fiberContextAdapter) Locals(key string, value ...any) any {
+	if len(value) > 0 {
+		return a.ctx.Locals(key, value[0])
+	}
+
+	return a.ctx.Locals(key)
 }

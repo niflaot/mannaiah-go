@@ -5,6 +5,7 @@
 ## Packages
 - `config`: Viper-based startup configuration loading and validation from `.env` and environment variables.
 - `logger`: Zap logger construction and resolution helpers.
+- `cache`: Provider-agnostic cache interface contracts.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
 - `http`: Fiber server setup with config fallback and Zap request logging.
@@ -18,11 +19,18 @@
 - Methods:
   - `config.NewLoader(envFile, startupLogger)`
   - `config.Load(envFile, startupLogger, targets...)`
+  - `config.LoadWith(provider, targets...)`
   - `(*config.Loader).Load(targets...)`
+  - `cache.Store.Get(ctx, key)`
+  - `cache.Store.Set(ctx, key, value, ttl)`
+  - `cache.Store.Delete(ctx, key)`
+  - `cache.Store.Keys(ctx, pattern)`
+  - `cache.Store.GetByPattern(ctx, pattern)`
   - `logger.New(settings)`
   - `logger.NewWithWriters(settings, output, errorOutput)`
   - `logger.Resolve(provided, settings)`
   - `redis.New(cfg, providedLogger)`
+  - `redis.NewCache(cfg, providedLogger)`
   - `redis.NewWithClient(client, providedLogger, scanCount, batchSize)`
   - `(*redis.Store).Get(ctx, key)`
   - `(*redis.Store).Set(ctx, key, value, ttl)`
@@ -39,6 +47,8 @@
   - `http.New(cfg, providedLogger)`
   - `http.NewWithCore(cfg, coreCfg, providedLogger)`
   - `http.AddressFrom(cfg, coreCfg)`
+  - `(*http.Server).RegisterRoutes(register)`
+  - `(*http.Server).MountRoutes(prefix, register)`
   - `(*http.Server).Register(register)`
   - `(*http.Server).Mount(prefix, register)`
   - `(*http.Server).Start()`

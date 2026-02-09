@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	corecache "mannaiah/module/core/cache"
 	"strings"
 	"time"
 
@@ -20,25 +21,12 @@ var (
 	ErrNilClient = errors.New("redis client must not be nil")
 )
 
-// KeyValueStore defines the Redis key-value capabilities exposed by this module.
-type KeyValueStore interface {
-	// Ping verifies the Redis connection.
-	Ping(ctx context.Context) error
-	// Get returns a value for a key.
-	Get(ctx context.Context, key string) (string, error)
-	// Set writes a value for a key with a TTL.
-	Set(ctx context.Context, key string, value string, ttl time.Duration) error
-	// Delete removes a key and returns the deleted count.
-	Delete(ctx context.Context, key string) (int64, error)
-	// Keys returns key names matching a pattern using SCAN.
-	Keys(ctx context.Context, pattern string) ([]string, error)
-	// GetByPattern returns key-value pairs matching a pattern.
-	GetByPattern(ctx context.Context, pattern string) (map[string]string, error)
-	// Close releases client resources.
-	Close() error
-}
+var (
+	// _ ensures Store implements the abstract provider-agnostic cache.Store contract.
+	_ corecache.Store = (*Store)(nil)
+)
 
-// Store implements KeyValueStore backed by go-redis.
+// Store implements cache.Store backed by go-redis.
 type Store struct {
 	// client is the underlying Redis client implementation.
 	client redisv9.UniversalClient
@@ -81,6 +69,16 @@ func New(cfg Config, providedLogger *zap.Logger) (*Store, error) {
 
 	client := redisv9.NewClient(opts)
 	return NewWithClient(client, providedLogger, cfg.ScanCount, cfg.BatchSize)
+}
+
+// NewCache creates a Redis-backed abstract cache store.
+func NewCache(cfg Config, providedLogger *zap.Logger) (corecache.Store, error) {
+	store, err := New(cfg, providedLogger)
+	if err != nil {
+		return nil, err
+	}
+
+	return store, nil
 }
 
 // NewWithClient creates a Redis store with a provided client and optional logger.

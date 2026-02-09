@@ -8,15 +8,18 @@
 - Pattern-based key discovery using `SCAN` to avoid blocking `KEYS`.
 - Batched `MGET` retrieval for efficient pattern fetches.
 - Zap-based error logging and configurable logger injection.
+- Implements provider-agnostic cache contracts from `module/core/cache`.
 
 ## Usage Rules
 - Load `redis.Config` with the shared `config` loader.
 - Reuse a single `Store` instance per process.
+- Depend on `cache.Store` interfaces in domain services.
 - Prefer `GetByPattern` only for bounded operational patterns.
 
 ## Key Methods / Endpoints / Events
 - Methods:
   - `redis.New(cfg, providedLogger)`
+  - `redis.NewCache(cfg, providedLogger)`
   - `redis.NewWithClient(client, providedLogger, scanCount, batchSize)`
   - `(*redis.Store).Ping(ctx)`
   - `(*redis.Store).Get(ctx, key)`
