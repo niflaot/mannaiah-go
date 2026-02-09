@@ -6,6 +6,7 @@
 - `config`: Viper-based startup configuration loading and validation from `.env` and environment variables.
 - `logger`: Zap logger construction and resolution helpers.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
+- `database`: GORM bootstrap and reusable generic CRUD service primitives.
 
 ## Goals
 - Deterministic startup configuration rules.
@@ -27,5 +28,12 @@
   - `(*redis.Store).Delete(ctx, key)`
   - `(*redis.Store).Keys(ctx, pattern)`
   - `(*redis.Store).GetByPattern(ctx, pattern)`
+  - `database.Open(cfg, providedLogger)`
+  - `database.NewService[T](db)`
+  - `(*database.Service[T]).Create(ctx, entity)`
+  - `(*database.Service[T]).Read(ctx, id)`
+  - `(*database.Service[T]).Find(ctx, query)`
+  - `(*database.Service[T]).Update(ctx, id, updates)`
+  - `(*database.Service[T]).Delete(ctx, id)`
 - Endpoints: none in this module.
 - Events: startup validation errors are emitted through Zap logger records.
