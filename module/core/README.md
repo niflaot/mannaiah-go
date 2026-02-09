@@ -6,6 +6,7 @@
 - `config`: Viper-based startup configuration loading and validation from `.env` and environment variables.
 - `logger`: Zap logger construction and resolution helpers.
 - `cache`: Provider-agnostic cache interface contracts.
+- `messaging`: Replaceable integration messaging contracts and Watermill in-memory adapters.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
 - `http`: Fiber server setup with config fallback and Zap request logging.
@@ -26,6 +27,13 @@
   - `cache.Store.Delete(ctx, key)`
   - `cache.Store.Keys(ctx, pattern)`
   - `cache.Store.GetByPattern(ctx, pattern)`
+  - `bus.Publisher.Publish(ctx, msg)`
+  - `bus.Registrar.AddHandler(topic, handler)`
+  - `watermill.NewInMemoryPlatform(cfg, providedLogger)`
+  - `(*watermill.InMemoryPlatform).Publisher()`
+  - `(*watermill.InMemoryPlatform).Registrar()`
+  - `(*watermill.InMemoryPlatform).Run(ctx)`
+  - `(*watermill.InMemoryPlatform).Close()`
   - `logger.New(settings)`
   - `logger.NewWithWriters(settings, output, errorOutput)`
   - `logger.Resolve(provided, settings)`
