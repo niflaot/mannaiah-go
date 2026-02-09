@@ -5,6 +5,7 @@
 ## Packages
 - `config`: Viper-based startup configuration loading and validation from `.env` and environment variables.
 - `logger`: Zap logger construction and resolution helpers.
+- `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 
 ## Goals
 - Deterministic startup configuration rules.
@@ -19,5 +20,12 @@
   - `logger.New(settings)`
   - `logger.NewWithWriters(settings, output, errorOutput)`
   - `logger.Resolve(provided, settings)`
+  - `redis.New(cfg, providedLogger)`
+  - `redis.NewWithClient(client, providedLogger, scanCount, batchSize)`
+  - `(*redis.Store).Get(ctx, key)`
+  - `(*redis.Store).Set(ctx, key, value, ttl)`
+  - `(*redis.Store).Delete(ctx, key)`
+  - `(*redis.Store).Keys(ctx, pattern)`
+  - `(*redis.Store).GetByPattern(ctx, pattern)`
 - Endpoints: none in this module.
 - Events: startup validation errors are emitted through Zap logger records.
