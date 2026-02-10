@@ -125,6 +125,8 @@ type contactsE2EHarness struct {
 	createdEvents chan contactEventRecord
 	// updatedEvents defines updated-event capture channel.
 	updatedEvents chan contactEventRecord
+	// dbClosed reports whether the database handle was already closed.
+	dbClosed bool
 }
 
 // newContactsE2EHarness creates a fully wired contacts/auth/event E2E runtime harness.
@@ -156,8 +158,9 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 
 	tracer.Step("open sqlite database")
 	db, err := coredatabase.Open(coredatabase.Config{
-		Driver: "sqlite",
-		DSN:    "file::memory:?cache=shared",
+		Driver:       "sqlite",
+		DSN:          "file::memory:?cache=shared",
+		MaxOpenConns: 1,
 	}, tracer.logger)
 	if err != nil {
 		t.Fatalf("coredatabase.Open() error = %v", err)
@@ -246,56 +249,41 @@ func (h *contactsE2EHarness) Close(t *testing.T) {
 	}
 
 	h.tracer.Step("close database handle")
+	h.CloseDatabase(t)
+
+	h.tracer.Step("close jwks server")
+	h.jwksServer.Close()
+}
+
+// CloseDatabase closes the harness database handle and tolerates double-close behavior.
+func (h *contactsE2EHarness) CloseDatabase(t *testing.T) {
+	t.Helper()
+
+	if h == nil || h.db == nil || h.dbClosed {
+		return
+	}
+
 	sqlDB, err := h.db.DB()
 	if err != nil {
 		t.Fatalf("db.DB() error = %v", err)
 	}
-	if err := sqlDB.Close(); err != nil {
+	if err := sqlDB.Close(); err != nil && !isClosedDBError(err) {
 		t.Fatalf("sqlDB.Close() error = %v", err)
 	}
 
-	h.tracer.Step("close jwks server")
-	h.jwksServer.Close()
+	h.dbClosed = true
 }
 
 // DoJSONRequest executes HTTP requests against the in-memory server and decodes JSON responses.
 func (h *contactsE2EHarness) DoJSONRequest(t *testing.T, method string, path string, token string, body []byte) (int, map[string]any) {
 	t.Helper()
 
-	requestBody := bytes.NewReader(body)
-	request, err := http.NewRequest(method, path, requestBody)
+	status, payload, _, err := doJSONRequestRaw(h.server, method, path, token, body)
 	if err != nil {
-		t.Fatalf("http.NewRequest() error = %v", err)
-	}
-	if len(body) > 0 {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	if strings.TrimSpace(token) != "" {
-		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+		t.Fatalf("DoJSONRequest() error = %v", err)
 	}
 
-	response, err := h.server.App().Test(request)
-	if err != nil {
-		t.Fatalf("App().Test() error = %v", err)
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-
-	result := map[string]any{}
-	if response.ContentLength != 0 {
-		payload, readErr := io.ReadAll(response.Body)
-		if readErr != nil {
-			t.Fatalf("ReadAll() error = %v", readErr)
-		}
-		if len(payload) > 0 {
-			if err := json.Unmarshal(payload, &result); err != nil {
-				t.Fatalf("json.Unmarshal() error = %v", err)
-			}
-		}
-	}
-
-	return response.StatusCode, result
+	return status, payload
 }
 
 // SignToken creates a signed JWT token for E2E requests.
@@ -406,4 +394,51 @@ func encodeBigInt(value *big.Int) string {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(value.Bytes())
+}
+
+// doJSONRequestRaw executes HTTP requests and decodes JSON responses without testing-side failures.
+func doJSONRequestRaw(server *corehttp.Server, method string, path string, token string, body []byte) (int, map[string]any, http.Header, error) {
+	requestBody := bytes.NewReader(body)
+	request, err := http.NewRequest(method, path, requestBody)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if len(body) > 0 {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if strings.TrimSpace(token) != "" {
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	}
+
+	response, err := server.App().Test(request)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+
+	result := map[string]any{}
+	if response.ContentLength != 0 {
+		payload, readErr := io.ReadAll(response.Body)
+		if readErr != nil {
+			return 0, nil, nil, readErr
+		}
+		if len(payload) > 0 {
+			if err := json.Unmarshal(payload, &result); err != nil {
+				return 0, nil, nil, err
+			}
+		}
+	}
+
+	return response.StatusCode, result, response.Header, nil
+}
+
+// isClosedDBError reports whether a DB close failure is caused by an already-closed handle.
+func isClosedDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "closed")
 }

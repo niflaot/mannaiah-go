@@ -8,6 +8,9 @@
 - All production code must be unit tested to the maximum practical level.
 - Follow TDD by writing or updating tests before implementation changes whenever possible.
 - Every new function must be covered by end-to-end test flows whenever it participates in runtime module behavior.
+- Add resilience tests for critical flows, including authentication-provider outages, dependency connection failures (database/cache/messaging), and expected error-mapping behavior.
+- Add concurrency/race-condition tests on uniqueness/idempotency critical paths whenever applicable.
+- Add performance tests (benchmarks/load-oriented tests) for hot paths whenever practical, and keep them modular and reproducible.
 
 ## Documentation
 - Use Go doc style comments only on:

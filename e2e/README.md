@@ -7,12 +7,16 @@
 - Keeps scenario files modular (`auth/events`, `config/redis`, `database`) instead of one large suite.
 - Provides step-by-step traceability through Zap step logs.
 - Includes black-box startup process validation by running `go run ./module/core/cmd/api`.
+- Includes resilience scenarios for authentication, database-connection failures, messaging publication failures, and concurrent uniqueness races.
+- Includes benchmark coverage for hot persistence paths under module-level benchmark suites.
 
 ## Key Methods / Endpoints / Events
 - Methods:
   - `newStepTracer(t)`
   - `newContactsE2EHarness(t)`
   - `(*contactsE2EHarness).DoJSONRequest(t, method, path, token, body)`
+  - `doJSONRequestRaw(server, method, path, token, body)`
+  - `(*contactsE2EHarness).CloseDatabase(t)`
   - `(*contactsE2EHarness).SignToken(t, scopes)`
   - `(*contactsE2EHarness).AwaitCreatedEvent(t)`
   - `(*contactsE2EHarness).AwaitUpdatedEvent(t)`

@@ -15,5 +15,6 @@ Uniqueness constraints are enforced at the database layer for high-performance, 
   - `(*store.Repository).List(ctx, query)`
   - `(*store.Repository).Update(ctx, contact)`
   - `(*store.Repository).Delete(ctx, id)`
+  - Benchmarks: `BenchmarkRepositoryCreate`, `BenchmarkRepositoryList`
 - Endpoints: none in this package.
 - Events: none directly emitted; persistence changes are consumed by application-level event emission.
