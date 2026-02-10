@@ -1,6 +1,6 @@
-# Core API Command
+# API Command
 
-`cmd/coreapi` bootstraps infrastructure and loads workspace modules into runtime.
+`cmd/api` bootstraps infrastructure and loads workspace modules into runtime.
 
 ## Key Methods / Endpoints / Events
 - Methods:

@@ -7,6 +7,7 @@
 ## Testing
 - All production code must be unit tested to the maximum practical level.
 - Follow TDD by writing or updating tests before implementation changes whenever possible.
+- Every new function must be covered by end-to-end test flows whenever it participates in runtime module behavior.
 
 ## Documentation
 - Use Go doc style comments only on:
