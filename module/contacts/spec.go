@@ -5,6 +5,8 @@ import "github.com/getkin/kin-openapi/openapi3"
 const (
 	// contactsTag defines the OpenAPI tag used by contact endpoints.
 	contactsTag = "contacts"
+	// bearerSecurityScheme defines the OpenAPI security scheme key used for bearer auth.
+	bearerSecurityScheme = "bearer"
 )
 
 // OpenAPISpec returns contact-module OpenAPI documentation.
@@ -13,6 +15,11 @@ func OpenAPISpec() *openapi3.T {
 	components.Schemas = openapi3.Schemas{
 		"ContactCreate": &openapi3.SchemaRef{Value: contactCreateSchema()},
 		"ContactUpdate": &openapi3.SchemaRef{Value: contactUpdateSchema()},
+	}
+	components.SecuritySchemes = openapi3.SecuritySchemes{
+		bearerSecurityScheme: &openapi3.SecuritySchemeRef{
+			Value: openapi3.NewJWTSecurityScheme(),
+		},
 	}
 
 	return &openapi3.T{
@@ -55,10 +62,13 @@ func createContactOperation() *openapi3.Operation {
 		OperationID: "ContactsController_create",
 		Summary:     "Create a new contact",
 		Tags:        []string{contactsTag},
+		Security:    bearerSecurityRequirements(),
 		RequestBody: jsonRequestBodyRef("#/components/schemas/ContactCreate"),
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(201, responseWithDescription("The contact has been successfully created.")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
 		),
 	}
@@ -70,6 +80,7 @@ func listContactsOperation() *openapi3.Operation {
 		OperationID: "ContactsController_findAll",
 		Summary:     "Get contacts with pagination and filtering",
 		Tags:        []string{contactsTag},
+		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			queryParameter("page", "Page number (default: 1)", integerSchema()),
 			queryParameter("limit", "Items per page (default: 10)", integerSchema()),
@@ -81,6 +92,8 @@ func listContactsOperation() *openapi3.Operation {
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Return paginated contacts.")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		),
 	}
 }
@@ -91,11 +104,14 @@ func getContactOperation() *openapi3.Operation {
 		OperationID: "ContactsController_findOne",
 		Summary:     "Get a contact by id",
 		Tags:        []string{contactsTag},
+		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathParameter("id", "Contact ID", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Return the contact.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
 		),
 	}
@@ -107,6 +123,7 @@ func updateContactOperation() *openapi3.Operation {
 		OperationID: "ContactsController_update",
 		Summary:     "Update a contact",
 		Tags:        []string{contactsTag},
+		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathParameter("id", "Contact ID", openapi3.NewStringSchema()),
 		},
@@ -114,6 +131,8 @@ func updateContactOperation() *openapi3.Operation {
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("The contact has been successfully updated.")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
 		),
 	}
@@ -125,14 +144,22 @@ func deleteContactOperation() *openapi3.Operation {
 		OperationID: "ContactsController_remove",
 		Summary:     "Delete a contact",
 		Tags:        []string{contactsTag},
+		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathParameter("id", "Contact ID", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("The contact has been successfully deleted.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
 		),
 	}
+}
+
+// bearerSecurityRequirements builds bearer-auth operation security requirements.
+func bearerSecurityRequirements() *openapi3.SecurityRequirements {
+	return openapi3.NewSecurityRequirements().With(openapi3.NewSecurityRequirement().Authenticate(bearerSecurityScheme))
 }
 
 // responseWithDescription builds an OpenAPI response from a plain description.

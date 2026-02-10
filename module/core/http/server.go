@@ -27,6 +27,8 @@ type Handler func(ctx Context) error
 type Context interface {
 	// Context returns request-scoped context values.
 	Context() context.Context
+	// GetHeader reads request header values.
+	GetHeader(key string, defaultValue ...string) string
 	// Status sets the response status code.
 	Status(code int) Context
 	// JSON writes a JSON response payload.
@@ -333,6 +335,11 @@ type fiberContextAdapter struct {
 // Context returns request-scoped context values.
 func (a *fiberContextAdapter) Context() context.Context {
 	return a.ctx.UserContext()
+}
+
+// GetHeader reads request header values.
+func (a *fiberContextAdapter) GetHeader(key string, defaultValue ...string) string {
+	return a.ctx.Get(key, defaultValue...)
 }
 
 // Status sets the response status code.

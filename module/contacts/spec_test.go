@@ -14,4 +14,12 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Components == nil || spec.Components.Schemas["ContactCreate"] == nil {
 		t.Fatalf("expected ContactCreate schema")
 	}
+	if spec.Components == nil || spec.Components.SecuritySchemes[bearerSecurityScheme] == nil {
+		t.Fatalf("expected bearer security scheme")
+	}
+
+	contactsPath := spec.Paths.Value("/contacts")
+	if contactsPath == nil || contactsPath.Get == nil || contactsPath.Get.Security == nil || len(*contactsPath.Get.Security) == 0 {
+		t.Fatalf("expected bearer security requirements on contacts list operation")
+	}
 }

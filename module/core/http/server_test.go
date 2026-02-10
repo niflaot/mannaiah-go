@@ -138,6 +138,7 @@ func TestRegisterRoutesAndMountRoutes(t *testing.T) {
 			return ctx.Status(stdhttp.StatusOK).JSON(fiber.Map{
 				"name":  name,
 				"query": ctx.Query("q", "none"),
+				"auth":  ctx.GetHeader("Authorization", ""),
 			})
 		})
 		router.Post("/abstract/post", func(ctx Context) error {
@@ -164,12 +165,20 @@ func TestRegisterRoutesAndMountRoutes(t *testing.T) {
 	})
 
 	getReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/abstract/get/john?q=x", nil)
+	getReq.Header.Set("Authorization", "Bearer test")
 	getResp, getErr := server.App().Test(getReq)
 	if getErr != nil {
 		t.Fatalf("GET /abstract/get error = %v", getErr)
 	}
 	if getResp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("GET /abstract/get status = %d, want %d", getResp.StatusCode, stdhttp.StatusOK)
+	}
+	getBody, getBodyErr := io.ReadAll(getResp.Body)
+	if getBodyErr != nil {
+		t.Fatalf("ReadAll() error = %v", getBodyErr)
+	}
+	if !strings.Contains(string(getBody), "Bearer test") {
+		t.Fatalf("GET /abstract/get body = %q, want authorization header echoed", string(getBody))
 	}
 
 	postReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/abstract/post", strings.NewReader(`{"name":"doe"}`))

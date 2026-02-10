@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"mannaiah/module/auth"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
 	coreconfig "mannaiah/module/core/config"
@@ -40,8 +41,9 @@ func run(ctx context.Context, envFile string) error {
 	var httpCfg corehttp.Config
 	var dbCfg coredatabase.Config
 	var messagingCfg coremsgplatform.Config
+	var authCfg auth.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &messagingCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &messagingCfg, &authCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -98,10 +100,16 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("create contacts integration publisher: %w", err)
 	}
 
+	authModule, err := auth.New(authCfg, coreCfg.Environment, logger)
+	if err != nil {
+		return fmt.Errorf("initialize auth module: %w", err)
+	}
+
 	contactsModule, err := contacts.New(db, contactPublisher)
 	if err != nil {
 		return fmt.Errorf("initialize contacts module: %w", err)
 	}
+	contactsModule.SetAuthorizer(authModule)
 	if err := contactsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load contacts module: %w", err)
 	}

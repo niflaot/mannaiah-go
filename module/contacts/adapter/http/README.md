@@ -4,7 +4,8 @@
 
 ## Key Methods / Endpoints / Events
 - Methods:
-  - `http.NewHandler(service)`
+  - `http.NewHandler(service, authorizers...)`
+  - `(*http.Handler).SetAuthorizer(authorizer)`
   - `(*http.Handler).RegisterRoutes(router)`
 - Endpoints:
   - `POST /contacts`

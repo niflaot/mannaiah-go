@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -19,10 +20,22 @@ var (
 	ErrInvalidQuery = errors.New("invalid query parameters")
 )
 
+// Authorizer defines authentication and authorization behavior required by contact endpoints.
+type Authorizer interface {
+	// Require authenticates and authorizes requests using required permissions.
+	Require(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error
+	// IsUnauthorized reports authentication errors.
+	IsUnauthorized(err error) bool
+	// IsForbidden reports authorization errors.
+	IsForbidden(err error) bool
+}
+
 // Handler defines HTTP route handlers for contacts.
 type Handler struct {
 	// service defines contact use-case dependency.
 	service application.Service
+	// authorizer defines optional auth dependency for protected endpoints.
+	authorizer Authorizer
 }
 
 // createRequest defines request payload for contact creation.
@@ -94,21 +107,35 @@ type listResponse struct {
 }
 
 // NewHandler creates a contact HTTP handler set.
-func NewHandler(service application.Service) (*Handler, error) {
+func NewHandler(service application.Service, authorizers ...Authorizer) (*Handler, error) {
 	if service == nil {
 		return nil, ErrNilService
 	}
 
-	return &Handler{service: service}, nil
+	var authorizer Authorizer
+	if len(authorizers) > 0 {
+		authorizer = authorizers[0]
+	}
+
+	return &Handler{service: service, authorizer: authorizer}, nil
+}
+
+// SetAuthorizer configures auth dependencies for protected endpoints.
+func (h *Handler) SetAuthorizer(authorizer Authorizer) {
+	if h == nil {
+		return
+	}
+
+	h.authorizer = authorizer
 }
 
 // RegisterRoutes registers contact CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/contacts", h.create)
-	router.Get("/contacts", h.findAll)
-	router.Get("/contacts/:id", h.findOne)
-	router.Patch("/contacts/:id", h.update)
-	router.Delete("/contacts/:id", h.remove)
+	router.Post("/contacts", h.protect("contacts:create", h.create))
+	router.Get("/contacts", h.protect("contacts:read", h.findAll))
+	router.Get("/contacts/:id", h.protect("contacts:read", h.findOne))
+	router.Patch("/contacts/:id", h.protect("contacts:update", h.update))
+	router.Delete("/contacts/:id", h.protect("contacts:delete", h.remove))
 }
 
 // create handles contact creation endpoints.
@@ -131,7 +158,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		CityCode:       request.CityCode,
 	})
 	if err != nil {
-		return mapError(err)
+		return h.mapError(err)
 	}
 
 	return ctx.Status(201).JSON(contact)
@@ -146,7 +173,7 @@ func (h *Handler) findAll(ctx corehttp.Context) error {
 
 	page, err := h.service.List(ctx.Context(), query)
 	if err != nil {
-		return mapError(err)
+		return h.mapError(err)
 	}
 
 	return ctx.Status(200).JSON(listResponse{
@@ -164,7 +191,7 @@ func (h *Handler) findAll(ctx corehttp.Context) error {
 func (h *Handler) findOne(ctx corehttp.Context) error {
 	contact, err := h.service.Get(ctx.Context(), ctx.Params("id"))
 	if err != nil {
-		return mapError(err)
+		return h.mapError(err)
 	}
 
 	return ctx.Status(200).JSON(contact)
@@ -190,7 +217,7 @@ func (h *Handler) update(ctx corehttp.Context) error {
 		CityCode:       request.CityCode,
 	})
 	if err != nil {
-		return mapError(err)
+		return h.mapError(err)
 	}
 
 	return ctx.Status(200).JSON(contact)
@@ -199,7 +226,7 @@ func (h *Handler) update(ctx corehttp.Context) error {
 // remove handles contact delete endpoints.
 func (h *Handler) remove(ctx corehttp.Context) error {
 	if err := h.service.Delete(ctx.Context(), ctx.Params("id")); err != nil {
-		return mapError(err)
+		return h.mapError(err)
 	}
 
 	return ctx.Status(200).JSON(map[string]string{"status": "deleted"})
@@ -260,8 +287,32 @@ func parseExcludedIDs(raw string) []string {
 	return result
 }
 
-// mapError maps application/domain/repository errors to HTTP-layer app errors.
-func mapError(err error) error {
+// protect wraps endpoint handlers with optional authentication and permission checks.
+func (h *Handler) protect(permission string, next corehttp.Handler) corehttp.Handler {
+	if h == nil || h.authorizer == nil {
+		return next
+	}
+
+	return func(ctx corehttp.Context) error {
+		err := h.authorizer.Require(ctx.Context(), ctx.GetHeader("Authorization"), permission)
+		if err != nil {
+			return h.mapError(err)
+		}
+
+		return next(ctx)
+	}
+}
+
+// mapError maps application/domain/repository/auth errors to HTTP-layer app errors.
+func (h *Handler) mapError(err error) error {
+	if h != nil && h.authorizer != nil {
+		if h.authorizer.IsUnauthorized(err) {
+			return corehttp.NewAppError(401, "unauthorized", err)
+		}
+		if h.authorizer.IsForbidden(err) {
+			return corehttp.NewAppError(403, "forbidden", err)
+		}
+	}
 	if errors.Is(err, port.ErrNotFound) {
 		return corehttp.NewAppError(404, "contact_not_found", err)
 	}

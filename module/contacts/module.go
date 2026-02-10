@@ -59,6 +59,15 @@ func (m *Module) RegisterRoutes(router corehttp.Router) {
 	m.handler.RegisterRoutes(router)
 }
 
+// SetAuthorizer configures endpoint authentication and permission dependencies.
+func (m *Module) SetAuthorizer(authorizer http.Authorizer) {
+	if m == nil || m.handler == nil {
+		return
+	}
+
+	m.handler.SetAuthorizer(authorizer)
+}
+
 // OpenAPISpec returns contact-module OpenAPI documentation.
 func (m *Module) OpenAPISpec() *openapi3.T {
 	return OpenAPISpec()

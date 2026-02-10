@@ -16,3 +16,4 @@
   - plus any module endpoints loaded at startup
 - Events:
   - starts core in-memory messaging platform and module integration-event publication pipeline
+  - initializes auth module and injects authentication/authorization into module endpoints

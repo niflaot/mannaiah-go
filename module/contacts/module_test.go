@@ -155,6 +155,17 @@ func TestModuleLoadNilLoader(t *testing.T) {
 	}
 }
 
+// TestSetAuthorizer verifies optional authorizer wiring behavior.
+func TestSetAuthorizer(t *testing.T) {
+	db := newDBForTest(t)
+	module, err := New(db)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	module.SetAuthorizer(nil)
+}
+
 // newDBForTest creates an in-memory DB for module tests.
 func newDBForTest(t *testing.T) *gorm.DB {
 	t.Helper()

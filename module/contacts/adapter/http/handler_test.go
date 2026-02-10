@@ -53,6 +53,31 @@ func (m serviceMock) Delete(ctx context.Context, id string) error {
 	return m.deleteFn(ctx, id)
 }
 
+// authorizerMock defines auth behavior for handler tests.
+type authorizerMock struct {
+	// requireFn defines auth and permission-check behavior.
+	requireFn func(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error
+	// isUnauthorizedFn defines auth error classification behavior.
+	isUnauthorizedFn func(err error) bool
+	// isForbiddenFn defines permission error classification behavior.
+	isForbiddenFn func(err error) bool
+}
+
+// Require executes configured auth and permission-check behavior.
+func (m authorizerMock) Require(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error {
+	return m.requireFn(ctx, authorizationHeader, requiredPermissions...)
+}
+
+// IsUnauthorized executes configured authentication-error classification behavior.
+func (m authorizerMock) IsUnauthorized(err error) bool {
+	return m.isUnauthorizedFn(err)
+}
+
+// IsForbidden executes configured authorization-error classification behavior.
+func (m authorizerMock) IsForbidden(err error) bool {
+	return m.isForbiddenFn(err)
+}
+
 // TestNewHandlerRejectsNilService verifies constructor validation for nil services.
 func TestNewHandlerRejectsNilService(t *testing.T) {
 	_, err := NewHandler(nil)
@@ -221,28 +246,98 @@ func TestHandlerInvalidPayloadAndQuery(t *testing.T) {
 
 // TestMapErrorVariants verifies direct error mapping branches.
 func TestMapErrorVariants(t *testing.T) {
-	if mapped := mapError(port.ErrNotFound); mapped == nil {
+	handler := &Handler{}
+	if mapped := handler.mapError(port.ErrNotFound); mapped == nil {
 		t.Fatalf("expected mapped not-found error")
 	}
-	if mapped := mapError(application.ErrInvalidID); mapped == nil {
+	if mapped := handler.mapError(application.ErrInvalidID); mapped == nil {
 		t.Fatalf("expected mapped invalid-id error")
 	}
-	if mapped := mapError(domain.ErrEmailRequired); mapped == nil {
+	if mapped := handler.mapError(domain.ErrEmailRequired); mapped == nil {
 		t.Fatalf("expected mapped invalid-contact error")
 	}
-	if mapped := mapError(ErrInvalidQuery); mapped == nil {
+	if mapped := handler.mapError(ErrInvalidQuery); mapped == nil {
 		t.Fatalf("expected mapped invalid-query error")
 	}
-	if mapped := mapError(errors.New("boom")); mapped == nil {
+	if mapped := handler.mapError(errors.New("boom")); mapped == nil {
 		t.Fatalf("expected mapped generic error")
 	}
 }
 
+// TestHandlerAuthEnforcement verifies route-level authentication and permission behavior.
+func TestHandlerAuthEnforcement(t *testing.T) {
+	unauthorizedError := errors.New("unauthorized")
+	forbiddenError := errors.New("forbidden")
+
+	handler := newHandlerForTest(t, serviceMock{
+		createFn: func(ctx context.Context, command application.CreateCommand) (*domain.Contact, error) {
+			return &domain.Contact{}, nil
+		},
+		getFn: func(ctx context.Context, id string) (*domain.Contact, error) {
+			return &domain.Contact{ID: id}, nil
+		},
+		listFn: func(ctx context.Context, query port.ListQuery) (*application.ListResult, error) {
+			return &application.ListResult{}, nil
+		},
+		updateFn: func(ctx context.Context, id string, command application.UpdateCommand) (*domain.Contact, error) {
+			return &domain.Contact{ID: id}, nil
+		},
+		deleteFn: func(ctx context.Context, id string) error { return nil },
+	}, authorizerMock{
+		requireFn: func(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error {
+			if authorizationHeader == "Bearer unauthorized" {
+				return unauthorizedError
+			}
+			if authorizationHeader == "Bearer forbidden" {
+				return forbiddenError
+			}
+			if len(requiredPermissions) != 1 || requiredPermissions[0] != "contacts:read" {
+				t.Fatalf("requiredPermissions = %#v, want contacts:read", requiredPermissions)
+			}
+			return nil
+		},
+		isUnauthorizedFn: func(err error) bool {
+			return errors.Is(err, unauthorizedError)
+		},
+		isForbiddenFn: func(err error) bool {
+			return errors.Is(err, forbiddenError)
+		},
+	})
+	server := newHTTPServerForHandler(t, handler)
+
+	unauthorizedReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?page=1&limit=1", nil)
+	unauthorizedReq.Header.Set("Authorization", "Bearer unauthorized")
+	unauthorizedResp := runRequest(t, server, unauthorizedReq)
+	if unauthorizedResp.StatusCode != stdhttp.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", unauthorizedResp.StatusCode, stdhttp.StatusUnauthorized)
+	}
+
+	forbiddenReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?page=1&limit=1", nil)
+	forbiddenReq.Header.Set("Authorization", "Bearer forbidden")
+	forbiddenResp := runRequest(t, server, forbiddenReq)
+	if forbiddenResp.StatusCode != stdhttp.StatusForbidden {
+		t.Fatalf("status = %d, want %d", forbiddenResp.StatusCode, stdhttp.StatusForbidden)
+	}
+
+	allowedReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?page=1&limit=1", nil)
+	allowedReq.Header.Set("Authorization", "Bearer ok")
+	allowedResp := runRequest(t, server, allowedReq)
+	if allowedResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want %d", allowedResp.StatusCode, stdhttp.StatusOK)
+	}
+}
+
+// TestHandlerSetAuthorizer verifies authorizer setter behavior.
+func TestHandlerSetAuthorizer(t *testing.T) {
+	handler := &Handler{}
+	handler.SetAuthorizer(nil)
+}
+
 // newHandlerForTest creates a handler and fails test on constructor errors.
-func newHandlerForTest(t *testing.T, service application.Service) *Handler {
+func newHandlerForTest(t *testing.T, service application.Service, authorizers ...Authorizer) *Handler {
 	t.Helper()
 
-	handler, err := NewHandler(service)
+	handler, err := NewHandler(service, authorizers...)
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}

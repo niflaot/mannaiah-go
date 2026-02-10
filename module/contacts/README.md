@@ -16,6 +16,7 @@
   - `(*contacts.Module).Load(loader)`
   - `(*contacts.Module).OpenAPISpec() *openapi3.T`
   - `(*contacts.Module).RegisterRoutes(router)`
+  - `(*contacts.Module).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /contacts`
   - `GET /contacts`

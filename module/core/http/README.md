@@ -7,7 +7,7 @@
 - Host/port resolution from HTTP config or fallback from core config.
 - Zap logger integration through `zapfiber` middleware.
 - Route registration and route-group mounting APIs for future modules.
-- Abstract router/context interfaces (`http.Router`, `http.Context`) to decouple module route code from Fiber internals.
+- Abstract router/context interfaces (`http.Router`, `http.Context`) to decouple module route code from Fiber internals, including request header access via `http.Context.GetHeader`.
 
 ## Usage Rules
 - Load `http.Config` using the shared configuration loader.
