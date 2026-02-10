@@ -63,7 +63,6 @@
   - `(*swagger.Document).Merge(spec *openapi3.T)`
   - `(*swagger.Document).Build() *openapi3.T`
   - `swagger.RegisterRoute(router, path, document)`
-  - `swagger.RegisterUIRoute(router, path, specPath, title)`
   - `startup.NewRuntime(server, document)`
   - `(*startup.Runtime).RegisterRoutes(register)`
   - `(*startup.Runtime).AddOpenAPISpec(spec *openapi3.T)`

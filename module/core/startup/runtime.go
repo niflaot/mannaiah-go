@@ -2,8 +2,11 @@ package startup
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/gofiber/fiber/v2"
+	fiberswagger "github.com/gofiber/swagger"
 	corehttp "mannaiah/module/core/http"
 	"mannaiah/module/core/swagger"
 )
@@ -67,8 +70,19 @@ func (r *Runtime) ExposeOpenAPI(path string) {
 
 // ExposeOpenAPIUI registers a route that serves a Swagger UI HTML page.
 func (r *Runtime) ExposeOpenAPIUI(path string, specPath string, title string) {
-	r.RegisterRoutes(func(router corehttp.Router) {
-		swagger.RegisterUIRoute(router, path, specPath, title)
+	docsPath := resolveDocsPath(path)
+	docsWildcardPath := docsPath + "/*"
+	docsSpecPath := resolveDocsSpecPath(specPath)
+	docsTitle := resolveDocsTitle(title)
+
+	r.server.Register(func(app *fiber.App) {
+		app.Get(docsPath, func(ctx *fiber.Ctx) error {
+			return ctx.Redirect(joinDocsIndexPath(docsPath), fiber.StatusMovedPermanently)
+		})
+		app.Get(docsWildcardPath, fiberswagger.New(fiberswagger.Config{
+			URL:   docsSpecPath,
+			Title: docsTitle,
+		}))
 	})
 }
 
@@ -149,4 +163,62 @@ func docsOperation() *openapi3.Operation {
 			}),
 		),
 	}
+}
+
+// resolveDocsPath normalizes docs base paths and applies defaults when needed.
+func resolveDocsPath(path string) string {
+	resolved := strings.TrimSpace(path)
+	if resolved == "" {
+		return "/docs"
+	}
+	if !strings.HasPrefix(resolved, "/") {
+		resolved = "/" + resolved
+	}
+	if len(resolved) > 1 {
+		resolved = strings.TrimRight(resolved, "/")
+	}
+
+	return resolved
+}
+
+// resolveDocsSpecPath normalizes docs spec source paths and applies defaults when needed.
+func resolveDocsSpecPath(specPath string) string {
+	resolved := strings.TrimSpace(specPath)
+	if resolved == "" {
+		return "/openapi.json"
+	}
+	if strings.HasPrefix(resolved, "/") || isAbsoluteURL(resolved) {
+		return resolved
+	}
+
+	return "/" + resolved
+}
+
+// resolveDocsTitle normalizes docs page titles and applies defaults when needed.
+func resolveDocsTitle(title string) string {
+	resolved := strings.TrimSpace(title)
+	if resolved == "" {
+		return "API Docs"
+	}
+
+	return resolved
+}
+
+// joinDocsIndexPath resolves the docs index page path under the docs base path.
+func joinDocsIndexPath(docsPath string) string {
+	if docsPath == "/" {
+		return "/index.html"
+	}
+
+	base := strings.TrimRight(docsPath, "/")
+	if base == "" {
+		base = "/docs"
+	}
+
+	return base + "/index.html"
+}
+
+// isAbsoluteURL reports whether docs spec sources are absolute URLs.
+func isAbsoluteURL(value string) bool {
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
 }

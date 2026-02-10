@@ -82,13 +82,25 @@ func TestRuntimeRegisterRoutesAddSpecAndExposeOpenAPI(t *testing.T) {
 		t.Fatalf("/openapi.json status = %d, want %d", specResp.StatusCode, stdhttp.StatusOK)
 	}
 
-	docsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs", nil)
+	docsRedirectReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs", nil)
+	docsRedirectResp, docsRedirectErr := server.App().Test(docsRedirectReq)
+	if docsRedirectErr != nil {
+		t.Fatalf("App().Test(/docs) error = %v", docsRedirectErr)
+	}
+	if docsRedirectResp.StatusCode != stdhttp.StatusMovedPermanently {
+		t.Fatalf("/docs status = %d, want %d", docsRedirectResp.StatusCode, stdhttp.StatusMovedPermanently)
+	}
+	if docsRedirectResp.Header.Get("Location") != "/docs/index.html" {
+		t.Fatalf("/docs location = %q, want %q", docsRedirectResp.Header.Get("Location"), "/docs/index.html")
+	}
+
+	docsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs/index.html", nil)
 	docsResp, docsErr := server.App().Test(docsReq)
 	if docsErr != nil {
-		t.Fatalf("App().Test(/docs) error = %v", docsErr)
+		t.Fatalf("App().Test(/docs/index.html) error = %v", docsErr)
 	}
 	if docsResp.StatusCode != stdhttp.StatusOK {
-		t.Fatalf("/docs status = %d, want %d", docsResp.StatusCode, stdhttp.StatusOK)
+		t.Fatalf("/docs/index.html status = %d, want %d", docsResp.StatusCode, stdhttp.StatusOK)
 	}
 	docsBody, readErr := io.ReadAll(docsResp.Body)
 	if readErr != nil {
@@ -110,5 +122,70 @@ func TestCoreSpec(t *testing.T) {
 	}
 	if spec.Paths.Value("/docs") == nil {
 		t.Fatalf("expected /docs spec")
+	}
+}
+
+// TestResolveDocsPath verifies docs path normalization behavior.
+func TestResolveDocsPath(t *testing.T) {
+	if value := resolveDocsPath(""); value != "/docs" {
+		t.Fatalf("resolveDocsPath(\"\") = %q, want %q", value, "/docs")
+	}
+	if value := resolveDocsPath("docs"); value != "/docs" {
+		t.Fatalf("resolveDocsPath(\"docs\") = %q, want %q", value, "/docs")
+	}
+	if value := resolveDocsPath("/docs/"); value != "/docs" {
+		t.Fatalf("resolveDocsPath(\"/docs/\") = %q, want %q", value, "/docs")
+	}
+}
+
+// TestResolveDocsSpecPath verifies docs spec path normalization behavior.
+func TestResolveDocsSpecPath(t *testing.T) {
+	if value := resolveDocsSpecPath(""); value != "/openapi.json" {
+		t.Fatalf("resolveDocsSpecPath(\"\") = %q, want %q", value, "/openapi.json")
+	}
+	if value := resolveDocsSpecPath(" /spec.json "); value != "/spec.json" {
+		t.Fatalf("resolveDocsSpecPath(\" /spec.json \") = %q, want %q", value, "/spec.json")
+	}
+	if value := resolveDocsSpecPath("spec.json"); value != "/spec.json" {
+		t.Fatalf("resolveDocsSpecPath(\"spec.json\") = %q, want %q", value, "/spec.json")
+	}
+	if value := resolveDocsSpecPath("https://example.com/spec.json"); value != "https://example.com/spec.json" {
+		t.Fatalf("resolveDocsSpecPath(\"https://example.com/spec.json\") = %q, want %q", value, "https://example.com/spec.json")
+	}
+}
+
+// TestResolveDocsTitle verifies docs title normalization behavior.
+func TestResolveDocsTitle(t *testing.T) {
+	if value := resolveDocsTitle(""); value != "API Docs" {
+		t.Fatalf("resolveDocsTitle(\"\") = %q, want %q", value, "API Docs")
+	}
+	if value := resolveDocsTitle(" Custom Docs "); value != "Custom Docs" {
+		t.Fatalf("resolveDocsTitle(\" Custom Docs \") = %q, want %q", value, "Custom Docs")
+	}
+}
+
+// TestJoinDocsIndexPath verifies docs index-path generation behavior.
+func TestJoinDocsIndexPath(t *testing.T) {
+	if value := joinDocsIndexPath("/docs"); value != "/docs/index.html" {
+		t.Fatalf("joinDocsIndexPath(\"/docs\") = %q, want %q", value, "/docs/index.html")
+	}
+	if value := joinDocsIndexPath("/docs/"); value != "/docs/index.html" {
+		t.Fatalf("joinDocsIndexPath(\"/docs/\") = %q, want %q", value, "/docs/index.html")
+	}
+	if value := joinDocsIndexPath("/"); value != "/index.html" {
+		t.Fatalf("joinDocsIndexPath(\"/\") = %q, want %q", value, "/index.html")
+	}
+}
+
+// TestIsAbsoluteURL verifies absolute URL detection behavior.
+func TestIsAbsoluteURL(t *testing.T) {
+	if !isAbsoluteURL("http://example.com/spec.json") {
+		t.Fatalf("expected http URL to be absolute")
+	}
+	if !isAbsoluteURL("https://example.com/spec.json") {
+		t.Fatalf("expected https URL to be absolute")
+	}
+	if isAbsoluteURL("/openapi.json") {
+		t.Fatalf("expected path URL to be non-absolute")
 	}
 }

@@ -2,7 +2,6 @@ package swagger
 
 import (
 	errorspkg "errors"
-	"io"
 	stdhttp "net/http"
 	"strings"
 	"testing"
@@ -197,78 +196,6 @@ func TestRegisterRoute(t *testing.T) {
 	}
 	if resp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusOK)
-	}
-}
-
-// TestRegisterUIRoute serves Swagger UI HTML through the HTTP router.
-func TestRegisterUIRoute(t *testing.T) {
-	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8113}, nil)
-	if err != nil {
-		t.Fatalf("corehttp.New() error = %v", err)
-	}
-
-	server.RegisterRoutes(func(router corehttp.Router) {
-		RegisterUIRoute(router, "/docs", "/openapi.json", "Mannaiah Docs")
-	})
-
-	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs", nil)
-	resp, testErr := server.App().Test(req)
-	if testErr != nil {
-		t.Fatalf("App().Test() error = %v", testErr)
-	}
-	if resp.StatusCode != stdhttp.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusOK)
-	}
-	if !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
-		t.Fatalf("content-type = %q, want text/html", resp.Header.Get("Content-Type"))
-	}
-
-	body, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		t.Fatalf("ReadAll() error = %v", readErr)
-	}
-	page := string(body)
-	if !strings.Contains(page, "SwaggerUIBundle") {
-		t.Fatalf("expected SwaggerUIBundle script in docs page")
-	}
-	if !strings.Contains(page, "/openapi.json") {
-		t.Fatalf("expected spec path in docs page")
-	}
-	if !strings.Contains(page, "Mannaiah Docs") {
-		t.Fatalf("expected title in docs page")
-	}
-}
-
-// TestRegisterUIRouteDefaults verifies docs-page defaults when inputs are empty.
-func TestRegisterUIRouteDefaults(t *testing.T) {
-	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8114}, nil)
-	if err != nil {
-		t.Fatalf("corehttp.New() error = %v", err)
-	}
-
-	server.RegisterRoutes(func(router corehttp.Router) {
-		RegisterUIRoute(router, "/docs", "", "")
-	})
-
-	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs", nil)
-	resp, testErr := server.App().Test(req)
-	if testErr != nil {
-		t.Fatalf("App().Test() error = %v", testErr)
-	}
-	if resp.StatusCode != stdhttp.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusOK)
-	}
-
-	body, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		t.Fatalf("ReadAll() error = %v", readErr)
-	}
-	page := string(body)
-	if !strings.Contains(page, "/openapi.json") {
-		t.Fatalf("expected default openapi path in docs page")
-	}
-	if !strings.Contains(page, "API Docs") {
-		t.Fatalf("expected default title in docs page")
 	}
 }
 
