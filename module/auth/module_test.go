@@ -11,15 +11,15 @@ import (
 	"mannaiah/module/auth/application"
 )
 
-// TestResolveEnvironment verifies auth environment fallback resolution.
+// TestResolveEnvironment verifies auth environment resolution from core environment.
 func TestResolveEnvironment(t *testing.T) {
-	if resolved := resolveEnvironment("development", "production"); resolved != "development" {
+	if resolved := resolveEnvironment("development"); resolved != "development" {
 		t.Fatalf("resolveEnvironment() = %q, want %q", resolved, "development")
 	}
-	if resolved := resolveEnvironment("", "production"); resolved != "production" {
+	if resolved := resolveEnvironment("production"); resolved != "production" {
 		t.Fatalf("resolveEnvironment() = %q, want %q", resolved, "production")
 	}
-	if resolved := resolveEnvironment("", ""); resolved != "development" {
+	if resolved := resolveEnvironment(""); resolved != "development" {
 		t.Fatalf("resolveEnvironment() = %q, want %q", resolved, "development")
 	}
 }
@@ -85,13 +85,12 @@ func TestNewWithDevBypass(t *testing.T) {
 	module, err := New(Config{
 		Issuer:                 jwksServer.URL,
 		Audience:               "https://api.mannaiah.test",
-		NodeEnvironment:        "development",
 		DevAuthToken:           "dev-token",
 		DevAuthScope:           "contacts:manage",
 		JWKSRateLimitPerMinute: 5,
 		JWKSCacheTTLMS:         300000,
 		JWKSHTTPTimeoutMS:      5000,
-	}, "", zap.NewNop())
+	}, "development", zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -112,12 +111,11 @@ func TestNewWithDevBypassMissingScope(t *testing.T) {
 	module, err := New(Config{
 		Issuer:                 jwksServer.URL,
 		Audience:               "https://api.mannaiah.test",
-		NodeEnvironment:        "development",
 		DevAuthToken:           "dev-token",
 		JWKSRateLimitPerMinute: 5,
 		JWKSCacheTTLMS:         300000,
 		JWKSHTTPTimeoutMS:      5000,
-	}, "", zap.NewNop())
+	}, "development", zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

@@ -6,8 +6,6 @@ type Config struct {
 	Issuer string `mapstructure:"LOGTO_ISSUER"`
 	// Audience defines the API audience used for JWT audience validation.
 	Audience string `mapstructure:"LOGTO_AUDIENCE"`
-	// NodeEnvironment defines the runtime environment used for dev bypass activation.
-	NodeEnvironment string `mapstructure:"NODE_ENV" default:""`
 	// DevAuthToken defines an optional static token used for development bypass.
 	DevAuthToken string `mapstructure:"DEV_AUTH_TOKEN" default:""`
 	// DevAuthScope defines optional scopes injected into the dev bypass principal.

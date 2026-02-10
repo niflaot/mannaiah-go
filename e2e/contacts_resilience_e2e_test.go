@@ -45,7 +45,6 @@ func TestContactsAuthJWKSUnavailableE2E(t *testing.T) {
 	authModule, err := auth.New(auth.Config{
 		Issuer:                 issuer,
 		Audience:               e2eAudience,
-		NodeEnvironment:        "production",
 		JWKSRateLimitPerMinute: 5,
 		JWKSCacheTTLMS:         60000,
 		JWKSHTTPTimeoutMS:      150,
@@ -266,7 +265,6 @@ func newContactsRuntimeWithPublisher(t *testing.T, publisher contactport.Integra
 	authModule, err := auth.New(auth.Config{
 		Issuer:                 strings.TrimSuffix(jwksServer.URL, e2eIssuerSuffix),
 		Audience:               e2eAudience,
-		NodeEnvironment:        "production",
 		JWKSRateLimitPerMinute: 5,
 		JWKSCacheTTLMS:         60000,
 		JWKSHTTPTimeoutMS:      2000,

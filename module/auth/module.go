@@ -34,7 +34,7 @@ var (
 
 // New creates an auth module with JWT verification and scope authorization support.
 func New(cfg Config, coreEnvironment string, logger *zap.Logger) (*Module, error) {
-	resolvedEnvironment := resolveEnvironment(cfg.NodeEnvironment, coreEnvironment)
+	resolvedEnvironment := resolveEnvironment(coreEnvironment)
 
 	verifier, err := jwtadapter.NewVerifier(jwtadapter.Config{
 		Issuer:             strings.TrimSpace(cfg.Issuer),
@@ -81,13 +81,9 @@ func (m *Module) IsForbidden(err error) bool {
 	return errors.Is(err, application.ErrForbidden)
 }
 
-// resolveEnvironment resolves runtime environment with optional fallback values.
-func resolveEnvironment(nodeEnvironment string, fallback string) string {
-	if value := strings.TrimSpace(nodeEnvironment); value != "" {
-		return value
-	}
-
-	if value := strings.TrimSpace(fallback); value != "" {
+// resolveEnvironment resolves runtime environment from core-level configuration.
+func resolveEnvironment(coreEnvironment string) string {
+	if value := strings.TrimSpace(coreEnvironment); value != "" {
 		return value
 	}
 

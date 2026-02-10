@@ -40,7 +40,6 @@ func TestStartupProcessE2E(t *testing.T) {
 		"DB_DSN=file::memory:?cache=shared",
 		"LOGTO_ISSUER=https://issuer.example",
 		"LOGTO_AUDIENCE=https://api.mannaiah.e2e",
-		"NODE_ENV=development",
 		"DEV_AUTH_TOKEN=dev-bypass-token",
 		"DEV_AUTH_SCOPE=contacts:manage",
 	)

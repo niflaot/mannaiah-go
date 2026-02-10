@@ -147,7 +147,6 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	authModule, err := auth.New(auth.Config{
 		Issuer:                 strings.TrimSuffix(jwksServer.URL, e2eIssuerSuffix),
 		Audience:               e2eAudience,
-		NodeEnvironment:        "production",
 		JWKSRateLimitPerMinute: 5,
 		JWKSCacheTTLMS:         60000,
 		JWKSHTTPTimeoutMS:      2000,
