@@ -63,10 +63,12 @@
   - `(*swagger.Document).Merge(spec *openapi3.T)`
   - `(*swagger.Document).Build() *openapi3.T`
   - `swagger.RegisterRoute(router, path, document)`
+  - `swagger.RegisterUIRoute(router, path, specPath, title)`
   - `startup.NewRuntime(server, document)`
   - `(*startup.Runtime).RegisterRoutes(register)`
   - `(*startup.Runtime).AddOpenAPISpec(spec *openapi3.T)`
   - `(*startup.Runtime).ExposeOpenAPI(path)`
+  - `(*startup.Runtime).ExposeOpenAPIUI(path, specPath, title)`
   - `startup.CoreSpec() *openapi3.T`
   - `(*http.Server).RegisterRoutes(register)`
   - `(*http.Server).MountRoutes(prefix, register)`
@@ -74,5 +76,6 @@
   - `(*http.Server).Mount(prefix, register)`
   - `(*http.Server).Start()`
   - `(*http.Server).Shutdown(ctx)`
-- Endpoints: none in this module.
+- Endpoints:
+  - startup compositions commonly expose `/status`, `/openapi.json`, and `/docs`
 - Events: startup validation errors are emitted through Zap logger records.

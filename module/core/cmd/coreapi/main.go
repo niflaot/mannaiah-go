@@ -107,6 +107,7 @@ func run(ctx context.Context, envFile string) error {
 	}
 
 	runtime.ExposeOpenAPI("/openapi.json")
+	runtime.ExposeOpenAPIUI("/docs", "/openapi.json", "Mannaiah API Docs")
 
 	serverErrors := make(chan error, 1)
 	go func() {

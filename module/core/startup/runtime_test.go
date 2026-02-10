@@ -2,7 +2,9 @@ package startup
 
 import (
 	errorspkg "errors"
+	"io"
 	stdhttp "net/http"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -60,6 +62,7 @@ func TestRuntimeRegisterRoutesAddSpecAndExposeOpenAPI(t *testing.T) {
 		})
 	})
 	runtime.ExposeOpenAPI("/openapi.json")
+	runtime.ExposeOpenAPIUI("/docs", "/openapi.json", "Mannaiah Docs")
 
 	helloReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/hello", nil)
 	helloResp, helloErr := server.App().Test(helloReq)
@@ -78,6 +81,22 @@ func TestRuntimeRegisterRoutesAddSpecAndExposeOpenAPI(t *testing.T) {
 	if specResp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("/openapi.json status = %d, want %d", specResp.StatusCode, stdhttp.StatusOK)
 	}
+
+	docsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs", nil)
+	docsResp, docsErr := server.App().Test(docsReq)
+	if docsErr != nil {
+		t.Fatalf("App().Test(/docs) error = %v", docsErr)
+	}
+	if docsResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("/docs status = %d, want %d", docsResp.StatusCode, stdhttp.StatusOK)
+	}
+	docsBody, readErr := io.ReadAll(docsResp.Body)
+	if readErr != nil {
+		t.Fatalf("ReadAll(/docs) error = %v", readErr)
+	}
+	if !strings.Contains(string(docsBody), "SwaggerUIBundle") {
+		t.Fatalf("expected SwaggerUIBundle in docs html")
+	}
 }
 
 // TestCoreSpec verifies startup core spec generation.
@@ -88,5 +107,8 @@ func TestCoreSpec(t *testing.T) {
 	}
 	if spec.Paths.Value("/openapi.json") == nil {
 		t.Fatalf("expected /openapi.json spec")
+	}
+	if spec.Paths.Value("/docs") == nil {
+		t.Fatalf("expected /docs spec")
 	}
 }

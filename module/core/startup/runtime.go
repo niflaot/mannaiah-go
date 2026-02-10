@@ -65,6 +65,13 @@ func (r *Runtime) ExposeOpenAPI(path string) {
 	})
 }
 
+// ExposeOpenAPIUI registers a route that serves a Swagger UI HTML page.
+func (r *Runtime) ExposeOpenAPIUI(path string, specPath string, title string) {
+	r.RegisterRoutes(func(router corehttp.Router) {
+		swagger.RegisterUIRoute(router, path, specPath, title)
+	})
+}
+
 // CoreSpec returns core-level OpenAPI specs for startup-managed endpoints.
 func CoreSpec() *openapi3.T {
 	return &openapi3.T{
@@ -79,6 +86,9 @@ func CoreSpec() *openapi3.T {
 			}),
 			openapi3.WithPath("/openapi.json", &openapi3.PathItem{
 				Get: openapiOperation(),
+			}),
+			openapi3.WithPath("/docs", &openapi3.PathItem{
+				Get: docsOperation(),
 			}),
 		),
 		Tags: openapi3.Tags{
@@ -122,6 +132,20 @@ func openapiOperation() *openapi3.Operation {
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, &openapi3.ResponseRef{
 				Value: openapi3.NewResponse().WithDescription("Return aggregated API specification."),
+			}),
+		),
+	}
+}
+
+// docsOperation defines the OpenAPI operation for docs UI exposure.
+func docsOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		Summary:     "Get Swagger UI documentation page",
+		OperationID: "StatusController_getDocs",
+		Tags:        []string{"Status"},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: openapi3.NewResponse().WithDescription("Return Swagger UI page."),
 			}),
 		),
 	}

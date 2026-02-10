@@ -3,6 +3,8 @@ package swagger
 import (
 	"errors"
 	"fmt"
+	"html"
+	"strconv"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -86,6 +88,26 @@ func (d *Document) Build() *openapi3.T {
 func RegisterRoute(router corehttp.Router, path string, document *openapi3.T) {
 	router.Get(path, func(ctx corehttp.Context) error {
 		return ctx.Status(200).JSON(document)
+	})
+}
+
+// RegisterUIRoute registers an endpoint that serves a Swagger UI HTML page.
+func RegisterUIRoute(router corehttp.Router, path string, specPath string, title string) {
+	resolvedSpecPath := strings.TrimSpace(specPath)
+	if resolvedSpecPath == "" {
+		resolvedSpecPath = "/openapi.json"
+	}
+
+	resolvedTitle := strings.TrimSpace(title)
+	if resolvedTitle == "" {
+		resolvedTitle = "API Docs"
+	}
+
+	page := buildSwaggerUIPage(resolvedSpecPath, resolvedTitle)
+	router.Get(path, func(ctx corehttp.Context) error {
+		return ctx.Status(200).
+			Set("Content-Type", "text/html; charset=utf-8").
+			SendString(page)
 	})
 }
 
@@ -216,6 +238,45 @@ func cloneTag(source *openapi3.Tag) *openapi3.Tag {
 
 	cloned := *source
 	return &cloned
+}
+
+// buildSwaggerUIPage builds a static Swagger UI HTML page for a spec endpoint.
+func buildSwaggerUIPage(specPath string, title string) string {
+	escapedTitle := html.EscapeString(title)
+	quotedSpecPath := strconv.Quote(specPath)
+
+	return fmt.Sprintf(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>%s</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    html, body { margin: 0; padding: 0; background: #f5f5f5; }
+    #swagger-ui { max-width: 1200px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+  window.onload = function () {
+    window.ui = SwaggerUIBundle({
+      url: %s,
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      layout: "BaseLayout"
+    });
+  };
+  </script>
+</body>
+</html>
+`, escapedTitle, quotedSpecPath)
 }
 
 // mergeSchemas merges schema components while preventing duplicate keys.

@@ -8,7 +8,8 @@
   - `(*startup.Runtime).RegisterRoutes(register)`
   - `(*startup.Runtime).AddOpenAPISpec(spec *openapi3.T)`
   - `(*startup.Runtime).ExposeOpenAPI(path)`
+  - `(*startup.Runtime).ExposeOpenAPIUI(path, specPath, title)`
   - `startup.CoreSpec() *openapi3.T`
 - Endpoints:
-  - provides core OpenAPI specs for `/status` and `/openapi.json`
+  - provides core OpenAPI specs for `/status`, `/openapi.json`, and `/docs`
 - Events: none in this package.

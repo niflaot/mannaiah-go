@@ -35,6 +35,8 @@ type Context interface {
 	SendString(body string) error
 	// SendStatus writes a response with status code only.
 	SendStatus(status int) error
+	// Set writes response header key-value pairs.
+	Set(key string, value string) Context
 	// Params reads path parameter values.
 	Params(key string, defaultValue ...string) string
 	// Query reads query string values.
@@ -354,6 +356,12 @@ func (a *fiberContextAdapter) SendString(body string) error {
 // SendStatus writes a response with status code only.
 func (a *fiberContextAdapter) SendStatus(status int) error {
 	return a.ctx.SendStatus(status)
+}
+
+// Set writes response header key-value pairs.
+func (a *fiberContextAdapter) Set(key string, value string) Context {
+	a.ctx.Set(key, value)
+	return a
 }
 
 // Params reads path parameter values.

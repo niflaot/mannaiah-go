@@ -12,6 +12,7 @@
 - Endpoints:
   - `GET /status`
   - `GET /openapi.json`
+  - `GET /docs`
   - plus any module endpoints loaded at startup
 - Events:
   - starts core in-memory messaging platform and module integration-event publication pipeline
