@@ -256,11 +256,54 @@ func TestMapErrorVariants(t *testing.T) {
 	if mapped := handler.mapError(domain.ErrEmailRequired); mapped == nil {
 		t.Fatalf("expected mapped invalid-contact error")
 	}
+	if mapped := handler.mapError(port.ErrDuplicateEmail); mapped == nil {
+		t.Fatalf("expected mapped email-conflict error")
+	}
+	if mapped := handler.mapError(port.ErrDuplicateDocument); mapped == nil {
+		t.Fatalf("expected mapped document-conflict error")
+	}
+	if mapped := handler.mapError(port.ErrDuplicateContact); mapped == nil {
+		t.Fatalf("expected mapped generic-conflict error")
+	}
 	if mapped := handler.mapError(ErrInvalidQuery); mapped == nil {
 		t.Fatalf("expected mapped invalid-query error")
 	}
 	if mapped := handler.mapError(errors.New("boom")); mapped == nil {
 		t.Fatalf("expected mapped generic error")
+	}
+}
+
+// TestHandlerMapsConflictErrors verifies conflict payload mappings on create endpoints.
+func TestHandlerMapsConflictErrors(t *testing.T) {
+	handler := newHandlerForTest(t, serviceMock{
+		createFn: func(ctx context.Context, command application.CreateCommand) (*domain.Contact, error) {
+			return nil, port.ErrDuplicateDocument
+		},
+		getFn: func(ctx context.Context, id string) (*domain.Contact, error) {
+			return nil, nil
+		},
+		listFn: func(ctx context.Context, query port.ListQuery) (*application.ListResult, error) {
+			return nil, nil
+		},
+		updateFn: func(ctx context.Context, id string, command application.UpdateCommand) (*domain.Contact, error) {
+			return nil, nil
+		},
+		deleteFn: func(ctx context.Context, id string) error {
+			return nil
+		},
+	})
+	server := newHTTPServerForHandler(t, handler)
+
+	req, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/contacts", bytes.NewBufferString(`{"email":"john@example.com","legalName":"Acme","documentType":"CC","documentNumber":"100"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp := runRequest(t, server, req)
+	if resp.StatusCode != stdhttp.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusConflict)
+	}
+
+	payload := decodeJSONMap(t, resp)
+	if payload["message"] != "contact_document_conflict" {
+		t.Fatalf("message = %v, want %q", payload["message"], "contact_document_conflict")
 	}
 }
 

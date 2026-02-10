@@ -35,7 +35,7 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("create contact with manage scope")
-	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"john@example.com","legalName":"John Co"}`))
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"john@example.com","legalName":"John Co","documentType":"CC","documentNumber":"100"}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
@@ -51,6 +51,24 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	}
 	if createdEvent.Metadata[coremsgbus.MetadataSchemaVersion] != "v1" {
 		t.Fatalf("created event schema version = %q, want %q", createdEvent.Metadata[coremsgbus.MetadataSchemaVersion], "v1")
+	}
+
+	harness.tracer.Step("create contact with duplicated email")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"john@example.com","legalName":"John Dup","documentType":"CC","documentNumber":"101"}`))
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", status, http.StatusConflict)
+	}
+	if payload["message"] != "contact_email_conflict" {
+		t.Fatalf("payload.message = %v, want %q", payload["message"], "contact_email_conflict")
+	}
+
+	harness.tracer.Step("create contact with duplicated document combination")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"john.doc@example.com","legalName":"John Doc Dup","documentType":"CC","documentNumber":"100"}`))
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", status, http.StatusConflict)
+	}
+	if payload["message"] != "contact_document_conflict" {
+		t.Fatalf("payload.message = %v, want %q", payload["message"], "contact_document_conflict")
 	}
 
 	harness.tracer.Step("request get contact with read scope")
@@ -113,5 +131,5 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(10)
+	harness.tracer.AssertStepCount(12)
 }

@@ -69,7 +69,7 @@ func createContactOperation() *openapi3.Operation {
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
-			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
+			openapi3.WithStatus(409, responseWithDescription("Conflict - Email or document already exists.")),
 		),
 	}
 }
@@ -134,6 +134,7 @@ func updateContactOperation() *openapi3.Operation {
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
+			openapi3.WithStatus(409, responseWithDescription("Conflict - Email or document already exists.")),
 		),
 	}
 }

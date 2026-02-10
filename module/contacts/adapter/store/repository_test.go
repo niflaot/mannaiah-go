@@ -123,6 +123,90 @@ func TestRepositoryListFiltersByEmail(t *testing.T) {
 	}
 }
 
+// TestRepositoryCreateRejectsDuplicateEmail verifies duplicate email uniqueness enforcement.
+func TestRepositoryCreateRejectsDuplicateEmail(t *testing.T) {
+	repository := newRepositoryForTest(t)
+
+	first := &domain.Contact{Email: "dup@example.com", FirstName: "A", LastName: "A"}
+	if err := repository.Create(context.Background(), first); err != nil {
+		t.Fatalf("Create() first error = %v", err)
+	}
+
+	second := &domain.Contact{Email: "dup@example.com", FirstName: "B", LastName: "B"}
+	err := repository.Create(context.Background(), second)
+	if !errors.Is(err, port.ErrDuplicateEmail) {
+		t.Fatalf("Create() duplicate error = %v, want ErrDuplicateEmail", err)
+	}
+}
+
+// TestRepositoryCreateRejectsDuplicateDocument verifies document composite uniqueness enforcement.
+func TestRepositoryCreateRejectsDuplicateDocument(t *testing.T) {
+	repository := newRepositoryForTest(t)
+
+	first := &domain.Contact{
+		Email:          "doc-a@example.com",
+		FirstName:      "A",
+		LastName:       "A",
+		DocumentType:   domain.DocumentTypeCC,
+		DocumentNumber: "100",
+	}
+	if err := repository.Create(context.Background(), first); err != nil {
+		t.Fatalf("Create() first error = %v", err)
+	}
+
+	second := &domain.Contact{
+		Email:          "doc-b@example.com",
+		FirstName:      "B",
+		LastName:       "B",
+		DocumentType:   domain.DocumentTypeCC,
+		DocumentNumber: "100",
+	}
+	err := repository.Create(context.Background(), second)
+	if !errors.Is(err, port.ErrDuplicateDocument) {
+		t.Fatalf("Create() duplicate error = %v, want ErrDuplicateDocument", err)
+	}
+}
+
+// TestRepositoryUpdateRejectsDuplicateUniqueValues verifies update-time uniqueness enforcement.
+func TestRepositoryUpdateRejectsDuplicateUniqueValues(t *testing.T) {
+	repository := newRepositoryForTest(t)
+
+	first := &domain.Contact{
+		Email:          "first@example.com",
+		FirstName:      "First",
+		LastName:       "User",
+		DocumentType:   domain.DocumentTypeTI,
+		DocumentNumber: "abc-1",
+	}
+	second := &domain.Contact{
+		Email:          "second@example.com",
+		FirstName:      "Second",
+		LastName:       "User",
+		DocumentType:   domain.DocumentTypeCC,
+		DocumentNumber: "abc-2",
+	}
+	if err := repository.Create(context.Background(), first); err != nil {
+		t.Fatalf("Create() first error = %v", err)
+	}
+	if err := repository.Create(context.Background(), second); err != nil {
+		t.Fatalf("Create() second error = %v", err)
+	}
+
+	second.Email = first.Email
+	updateErr := repository.Update(context.Background(), second)
+	if !errors.Is(updateErr, port.ErrDuplicateEmail) {
+		t.Fatalf("Update() email duplicate error = %v, want ErrDuplicateEmail", updateErr)
+	}
+
+	second.Email = "second@example.com"
+	second.DocumentType = first.DocumentType
+	second.DocumentNumber = first.DocumentNumber
+	updateErr = repository.Update(context.Background(), second)
+	if !errors.Is(updateErr, port.ErrDuplicateDocument) {
+		t.Fatalf("Update() document duplicate error = %v, want ErrDuplicateDocument", updateErr)
+	}
+}
+
 // TestRepositoryUpdateDeleteNotFound verifies missing-row update/delete behavior.
 func TestRepositoryUpdateDeleteNotFound(t *testing.T) {
 	repository := newRepositoryForTest(t)
@@ -174,6 +258,39 @@ func TestRepositoryErrorPathsOnClosedDB(t *testing.T) {
 	}
 	if err := repository.Delete(context.Background(), "c-1"); err == nil {
 		t.Fatalf("expected Delete() error on closed db")
+	}
+}
+
+// TestMapDuplicateErrorClassifiesMessages verifies duplicate classification helper behavior.
+func TestMapDuplicateErrorClassifiesMessages(t *testing.T) {
+	emailErr := errors.New("UNIQUE constraint failed: contacts.email")
+	if mapped := mapDuplicateError(emailErr); !errors.Is(mapped, port.ErrDuplicateEmail) {
+		t.Fatalf("mapDuplicateError() = %v, want ErrDuplicateEmail", mapped)
+	}
+
+	documentErr := errors.New("UNIQUE constraint failed: contacts.document_key")
+	if mapped := mapDuplicateError(documentErr); !errors.Is(mapped, port.ErrDuplicateDocument) {
+		t.Fatalf("mapDuplicateError() = %v, want ErrDuplicateDocument", mapped)
+	}
+
+	otherErr := errors.New("write timeout")
+	if mapped := mapDuplicateError(otherErr); mapped != nil {
+		t.Fatalf("mapDuplicateError() = %v, want nil", mapped)
+	}
+}
+
+// TestBuildDocumentKey verifies normalized key generation behavior.
+func TestBuildDocumentKey(t *testing.T) {
+	if key := buildDocumentKey("", "100"); key != nil {
+		t.Fatalf("buildDocumentKey() expected nil for empty type")
+	}
+	if key := buildDocumentKey("CC", ""); key != nil {
+		t.Fatalf("buildDocumentKey() expected nil for empty number")
+	}
+
+	key := buildDocumentKey(" cc ", " ab-1 ")
+	if key == nil || *key != "CC|AB-1" {
+		t.Fatalf("buildDocumentKey() = %v, want %q", key, "CC|AB-1")
 	}
 }
 

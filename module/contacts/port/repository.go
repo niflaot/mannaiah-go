@@ -10,6 +10,12 @@ import (
 var (
 	// ErrNotFound is returned when a contact is not found.
 	ErrNotFound = errors.New("contact not found")
+	// ErrDuplicateContact is returned when a contact violates uniqueness constraints.
+	ErrDuplicateContact = errors.New("contact already exists")
+	// ErrDuplicateEmail is returned when a contact already uses the provided email.
+	ErrDuplicateEmail = errors.New("contact email already exists")
+	// ErrDuplicateDocument is returned when a contact already uses the same document type and number.
+	ErrDuplicateDocument = errors.New("contact document already exists")
 )
 
 // ListQuery defines query-side filters for contact listing.

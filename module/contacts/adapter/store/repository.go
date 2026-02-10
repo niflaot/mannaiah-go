@@ -33,6 +33,8 @@ type contactRecord struct {
 	DocumentType string `gorm:"index;size:16"`
 	// DocumentNumber defines document number value.
 	DocumentNumber string `gorm:"index;size:128"`
+	// DocumentKey defines a normalized document identity key used for uniqueness checks.
+	DocumentKey *string `gorm:"uniqueIndex:idx_contacts_document_key;size:191"`
 	// LegalName defines legal contact names.
 	LegalName string `gorm:"size:255"`
 	// FirstName defines personal first names.
@@ -40,7 +42,7 @@ type contactRecord struct {
 	// LastName defines personal last names.
 	LastName string `gorm:"size:255"`
 	// Email defines contact email values.
-	Email string `gorm:"uniqueIndex;size:255;not null"`
+	Email string `gorm:"uniqueIndex:idx_contacts_email;size:255;not null"`
 	// Phone defines contact phone values.
 	Phone string `gorm:"size:64"`
 	// Address defines physical addresses.
@@ -93,7 +95,7 @@ func (r *Repository) Create(ctx context.Context, contact *domain.Contact) error 
 	}
 
 	if err := r.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return fmt.Errorf("create contact record: %w", err)
+		return wrapWriteError("create", err)
 	}
 
 	*contact = toDomain(record)
@@ -150,6 +152,7 @@ func (r *Repository) Update(ctx context.Context, contact *domain.Contact) error 
 	tx := r.db.WithContext(ctx).Model(&contactRecord{}).Where("id = ?", record.ID).Updates(map[string]any{
 		"document_type":   record.DocumentType,
 		"document_number": record.DocumentNumber,
+		"document_key":    buildDocumentKey(record.DocumentType, record.DocumentNumber),
 		"legal_name":      record.LegalName,
 		"first_name":      record.FirstName,
 		"last_name":       record.LastName,
@@ -160,7 +163,7 @@ func (r *Repository) Update(ctx context.Context, contact *domain.Contact) error 
 		"city_code":       record.CityCode,
 	})
 	if tx.Error != nil {
-		return fmt.Errorf("update contact record: %w", tx.Error)
+		return wrapWriteError("update", tx.Error)
 	}
 	if tx.RowsAffected == 0 {
 		return port.ErrNotFound
@@ -244,10 +247,14 @@ func normalizeOrder(orderBy string, orderDir string) (string, string) {
 
 // toRecord maps domain contact entities to persistence records.
 func toRecord(contact domain.Contact) contactRecord {
+	documentType := strings.TrimSpace(string(contact.DocumentType))
+	documentNumber := strings.TrimSpace(contact.DocumentNumber)
+
 	return contactRecord{
 		ID:             strings.TrimSpace(contact.ID),
-		DocumentType:   strings.TrimSpace(string(contact.DocumentType)),
-		DocumentNumber: strings.TrimSpace(contact.DocumentNumber),
+		DocumentType:   documentType,
+		DocumentNumber: documentNumber,
+		DocumentKey:    buildDocumentKey(documentType, documentNumber),
 		LegalName:      strings.TrimSpace(contact.LegalName),
 		FirstName:      strings.TrimSpace(contact.FirstName),
 		LastName:       strings.TrimSpace(contact.LastName),
@@ -288,4 +295,66 @@ func generateID() string {
 	}
 
 	return hex.EncodeToString(bytes)
+}
+
+// wrapWriteError normalizes persistence write errors to stable repository errors.
+func wrapWriteError(operation string, err error) error {
+	if mapped := mapDuplicateError(err); mapped != nil {
+		return fmt.Errorf("%s contact record: %w", operation, mapped)
+	}
+
+	return fmt.Errorf("%s contact record: %w", operation, err)
+}
+
+// mapDuplicateError maps duplicate-key persistence failures into repository-level conflict errors.
+func mapDuplicateError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	message := strings.ToLower(err.Error())
+	if !errors.Is(err, gorm.ErrDuplicatedKey) && !isUniqueConstraintError(message) {
+		return nil
+	}
+
+	if isDocumentConflictError(message) {
+		return port.ErrDuplicateDocument
+	}
+	if isEmailConflictError(message) {
+		return port.ErrDuplicateEmail
+	}
+
+	return port.ErrDuplicateContact
+}
+
+// isUniqueConstraintError reports whether a persistence error message represents uniqueness conflicts.
+func isUniqueConstraintError(message string) bool {
+	return strings.Contains(message, "duplicate key") ||
+		strings.Contains(message, "duplicated key") ||
+		strings.Contains(message, "unique constraint failed") ||
+		strings.Contains(message, "unique failed")
+}
+
+// isDocumentConflictError reports whether a uniqueness conflict references the document composite key.
+func isDocumentConflictError(message string) bool {
+	return strings.Contains(message, "idx_contacts_document_key") ||
+		strings.Contains(message, "contacts.document_key")
+}
+
+// isEmailConflictError reports whether a uniqueness conflict references the email key.
+func isEmailConflictError(message string) bool {
+	return strings.Contains(message, "idx_contacts_email") ||
+		strings.Contains(message, "contacts.email")
+}
+
+// buildDocumentKey resolves a stable document key for uniqueness checks.
+func buildDocumentKey(documentType string, documentNumber string) *string {
+	normalizedType := strings.ToUpper(strings.TrimSpace(documentType))
+	normalizedNumber := strings.ToUpper(strings.TrimSpace(documentNumber))
+	if normalizedType == "" || normalizedNumber == "" {
+		return nil
+	}
+
+	key := normalizedType + "|" + normalizedNumber
+	return &key
 }

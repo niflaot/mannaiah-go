@@ -22,4 +22,12 @@ func TestOpenAPISpec(t *testing.T) {
 	if contactsPath == nil || contactsPath.Get == nil || contactsPath.Get.Security == nil || len(*contactsPath.Get.Security) == 0 {
 		t.Fatalf("expected bearer security requirements on contacts list operation")
 	}
+	if contactsPath.Post == nil || contactsPath.Post.Responses == nil || contactsPath.Post.Responses.Status(409) == nil {
+		t.Fatalf("expected conflict response on contacts create operation")
+	}
+
+	contactByIDPath := spec.Paths.Value("/contacts/{id}")
+	if contactByIDPath == nil || contactByIDPath.Patch == nil || contactByIDPath.Patch.Responses == nil || contactByIDPath.Patch.Responses.Status(409) == nil {
+		t.Fatalf("expected conflict response on contacts update operation")
+	}
 }

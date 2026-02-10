@@ -2,6 +2,10 @@
 
 `adapter/store` provides GORM persistence for contacts.
 
+Uniqueness constraints are enforced at the database layer for high-performance, race-safe writes:
+- unique `email`
+- unique normalized `(documentType, documentNumber)` when both values are present
+
 ## Key Methods / Endpoints / Events
 - Methods:
   - `store.NewRepository(db)`

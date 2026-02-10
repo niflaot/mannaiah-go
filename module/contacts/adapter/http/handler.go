@@ -322,6 +322,15 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrEmailRequired) || errors.Is(err, domain.ErrInvalidNameCombination) || errors.Is(err, domain.ErrIncompletePersonalName) {
 		return corehttp.NewAppError(400, "invalid_contact", err)
 	}
+	if errors.Is(err, port.ErrDuplicateEmail) {
+		return corehttp.NewAppError(409, "contact_email_conflict", err)
+	}
+	if errors.Is(err, port.ErrDuplicateDocument) {
+		return corehttp.NewAppError(409, "contact_document_conflict", err)
+	}
+	if errors.Is(err, port.ErrDuplicateContact) {
+		return corehttp.NewAppError(409, "contact_conflict", err)
+	}
 	if errors.Is(err, ErrInvalidQuery) {
 		return corehttp.NewAppError(400, "invalid_query", err)
 	}
