@@ -215,20 +215,16 @@ func (s *Server) logStartup(address string) {
 func mergeConfig(cfg Config, coreCfg *coreconfig.Core) Config {
 	resolved := cfg
 
-	if strings.TrimSpace(resolved.Host) == "" {
-		if coreCfg != nil && strings.TrimSpace(coreCfg.Host) != "" {
-			resolved.Host = strings.TrimSpace(coreCfg.Host)
-		} else {
-			resolved.Host = "0.0.0.0"
-		}
+	if coreCfg != nil && strings.TrimSpace(coreCfg.Host) != "" {
+		resolved.Host = strings.TrimSpace(coreCfg.Host)
+	} else if strings.TrimSpace(resolved.Host) == "" {
+		resolved.Host = "0.0.0.0"
 	}
 
-	if resolved.Port <= 0 {
-		if coreCfg != nil && coreCfg.Port > 0 {
-			resolved.Port = coreCfg.Port
-		} else {
-			resolved.Port = 8080
-		}
+	if coreCfg != nil && coreCfg.Port > 0 {
+		resolved.Port = coreCfg.Port
+	} else if resolved.Port <= 0 {
+		resolved.Port = 8080
 	}
 
 	if strings.TrimSpace(resolved.AppName) == "" {

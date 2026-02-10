@@ -4,14 +4,17 @@
 
 ## Features
 - Fiber server initialization with HTTP config defaults.
-- Host/port resolution from HTTP config or fallback from core config.
+- Host resolution from core config when available (`CORE_HOST` is authoritative for configuration-driven startup).
+- Port resolution from core config when available (`CORE_PORT` is authoritative for configuration-driven startup).
 - Zap logger integration through `zapfiber` middleware.
 - Route registration and route-group mounting APIs for future modules.
 - Abstract router/context interfaces (`http.Router`, `http.Context`) to decouple module route code from Fiber internals, including request header access via `http.Context.GetHeader`.
 
 ## Usage Rules
 - Load `http.Config` using the shared configuration loader.
-- Prefer `NewWithCore` when host/port should fallback to core config.
+- Prefer `NewWithCore` when composing runtime startup with core config.
+- Use `CORE_HOST` and `CORE_PORT` as the single host/port environment variables in startup flows.
+- `http.Config.Host` and `http.Config.Port` are code-level only and are not loaded from environment variables.
 - Prefer `RegisterRoutes` and `MountRoutes` for provider-agnostic route registration.
 - Use `Register` and `Mount` only when direct Fiber APIs are required.
 

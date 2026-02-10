@@ -9,7 +9,7 @@
 - `messaging`: Replaceable integration messaging contracts and Watermill in-memory adapters.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
-- `http`: Fiber server setup with config fallback and Zap request logging.
+- `http`: Fiber server setup with `CORE_HOST`/`CORE_PORT`-authoritative address resolution and Zap request logging.
 - `swagger`: OpenAPI aggregation and documentation route exposure.
 - `startup`: module-loading runtime helpers for composition roots.
 

@@ -35,6 +35,26 @@ func TestNewWithCoreUsesFallbackHostPort(t *testing.T) {
 	}
 }
 
+// TestNewWithCoreUsesCoreHostAndPortWhenHTTPDiffers verifies core host and port are authoritative when core config is provided.
+func TestNewWithCoreUsesCoreHostAndPortWhenHTTPDiffers(t *testing.T) {
+	coreCfg := coreconfig.Core{
+		Host: "127.0.0.1",
+		Port: 9099,
+	}
+
+	server, err := NewWithCore(Config{
+		Host: "10.10.10.10",
+		Port: 7070,
+	}, &coreCfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewWithCore() error = %v", err)
+	}
+
+	if server.Address() != "127.0.0.1:9099" {
+		t.Fatalf("Address() = %q, want %q", server.Address(), "127.0.0.1:9099")
+	}
+}
+
 // TestNewUsesHTTPConfigOverrides verifies explicit HTTP host and port override core fallback.
 func TestNewUsesHTTPConfigOverrides(t *testing.T) {
 	server, err := New(
@@ -84,6 +104,26 @@ func TestAddressFromSuccess(t *testing.T) {
 	}
 	if address != "localhost:8088" {
 		t.Fatalf("AddressFrom() = %q, want %q", address, "localhost:8088")
+	}
+}
+
+// TestAddressFromUsesCoreHostAndPortWhenProvided verifies resolution prioritizes core host and core port in merged values.
+func TestAddressFromUsesCoreHostAndPortWhenProvided(t *testing.T) {
+	address, err := AddressFrom(
+		Config{
+			Host: "192.168.1.100",
+			Port: 8088,
+		},
+		&coreconfig.Core{
+			Host: "localhost",
+			Port: 9999,
+		},
+	)
+	if err != nil {
+		t.Fatalf("AddressFrom() error = %v", err)
+	}
+	if address != "localhost:9999" {
+		t.Fatalf("AddressFrom() = %q, want %q", address, "localhost:9999")
 	}
 }
 

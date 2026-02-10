@@ -38,8 +38,6 @@ func TestStartupProcessE2E(t *testing.T) {
 		"LOG_LEVEL=info",
 		"DB_DRIVER=sqlite",
 		"DB_DSN=file::memory:?cache=shared",
-		"HTTP_HOST=127.0.0.1",
-		fmt.Sprintf("HTTP_PORT=%d", port),
 		"LOGTO_ISSUER=https://issuer.example",
 		"LOGTO_AUDIENCE=https://api.mannaiah.e2e",
 		"NODE_ENV=development",

@@ -2,10 +2,10 @@ package http
 
 // Config defines HTTP server runtime settings.
 type Config struct {
-	// Host defines the HTTP bind host.
-	Host string `mapstructure:"HTTP_HOST" default:""`
-	// Port defines the HTTP bind port.
-	Port int `mapstructure:"HTTP_PORT" default:"0"`
+	// Host defines an optional code-level bind host override for standalone server construction.
+	Host string `mapstructure:"-"`
+	// Port defines an optional code-level bind port override for standalone server construction.
+	Port int `mapstructure:"-"`
 	// AppName defines the Fiber application name.
 	AppName string `mapstructure:"HTTP_APP_NAME" default:"mannaiah-http"`
 	// Prefork enables Fiber prefork mode.
