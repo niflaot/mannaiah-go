@@ -20,6 +20,7 @@
   - `http.New(cfg, providedLogger)`
   - `http.NewWithCore(cfg, coreCfg, providedLogger)`
   - `http.AddressFrom(cfg, coreCfg)`
+  - `http.NewAppError(status, message, cause)`
   - `(*http.Server).RegisterRoutes(register)`
   - `(*http.Server).MountRoutes(prefix, register)`
   - `(*http.Server).Register(register)`
@@ -28,4 +29,7 @@
   - `(*http.Server).StartWithListener(listener)`
   - `(*http.Server).Shutdown(ctx)`
 - Endpoints: none in this package.
-- Events: HTTP request logs are emitted through zapfiber using the configured Zap logger.
+- Events:
+  - every response includes `X-Ray-ID` tracing header
+  - all handler errors are mapped to JSON payload format: `{"message":"...","error":"..."}`
+  - HTTP request logs are emitted through zapfiber using the configured Zap logger

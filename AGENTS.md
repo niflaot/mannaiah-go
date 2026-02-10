@@ -20,6 +20,10 @@
 - Do not add unnecessary inline comments inside function bodies.
 - Every package must include a `README.md` describing context and usage within the module.
 - Core modules must include a clear "Key methods / endpoints / events" section so users can quickly understand exposed behavior.
+- Core must centralize Swagger/OpenAPI aggregation and exposure.
+- Every endpoint must be documented in module-level OpenAPI specs.
+- Modules must provide their own OpenAPI spec artifacts; core startup must merge all module specs into a single aggregated document.
+- Composition roots must expose the aggregated spec endpoint (for example, `/openapi.json`).
 
 ## Architecture
 - `module/core` is the foundational core module (`core/` in domain terms).

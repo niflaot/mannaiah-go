@@ -159,6 +159,115 @@ func TestFindSupportsUnscoped(t *testing.T) {
 	}
 }
 
+// TestPaginateReturnsPageMetadata verifies paginated data and metadata behavior.
+func TestPaginateReturnsPageMetadata(t *testing.T) {
+	db := newTestDB(t)
+	service := newTemporalServiceForTest(t, db)
+
+	seedTemporal(t, service, []temporalModel{
+		{Name: "a", Status: "active"},
+		{Name: "b", Status: "active"},
+		{Name: "c", Status: "active"},
+		{Name: "d", Status: "active"},
+	})
+
+	page, err := service.Paginate(context.Background(), Query{
+		Where:    "status = ?",
+		Args:     []any{"active"},
+		Order:    "id asc",
+		Page:     2,
+		PageSize: 2,
+	})
+	if err != nil {
+		t.Fatalf("Paginate() error = %v", err)
+	}
+
+	if page.Total != 4 {
+		t.Fatalf("Total = %d, want %d", page.Total, 4)
+	}
+	if page.Page != 2 {
+		t.Fatalf("Page = %d, want %d", page.Page, 2)
+	}
+	if page.PageSize != 2 {
+		t.Fatalf("PageSize = %d, want %d", page.PageSize, 2)
+	}
+	if page.TotalPages != 2 {
+		t.Fatalf("TotalPages = %d, want %d", page.TotalPages, 2)
+	}
+	if len(page.Data) != 2 {
+		t.Fatalf("len(Data) = %d, want %d", len(page.Data), 2)
+	}
+	if page.Data[0].Name != "c" || page.Data[1].Name != "d" {
+		t.Fatalf("page data order = [%s, %s], want [c, d]", page.Data[0].Name, page.Data[1].Name)
+	}
+}
+
+// TestPaginateExcludesIDsBeforeCounting verifies excluded ids are removed from total and page slicing.
+func TestPaginateExcludesIDsBeforeCounting(t *testing.T) {
+	db := newTestDB(t)
+	service := newTemporalServiceForTest(t, db)
+
+	records := []temporalModel{
+		{Name: "a", Status: "active"},
+		{Name: "b", Status: "active"},
+		{Name: "c", Status: "active"},
+		{Name: "d", Status: "active"},
+		{Name: "e", Status: "active"},
+	}
+	seedTemporal(t, service, records)
+
+	all, err := service.Find(context.Background(), Query{Order: "id asc"})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	exclude := []uint{all[1].ID, all[3].ID}
+
+	page, err := service.Paginate(context.Background(), Query{
+		Order:      "id asc",
+		Page:       1,
+		PageSize:   3,
+		ExcludeIDs: exclude,
+	})
+	if err != nil {
+		t.Fatalf("Paginate() error = %v", err)
+	}
+
+	if page.Total != 3 {
+		t.Fatalf("Total = %d, want %d", page.Total, 3)
+	}
+	if len(page.Data) != 3 {
+		t.Fatalf("len(Data) = %d, want %d", len(page.Data), 3)
+	}
+	if page.Data[0].Name != "a" || page.Data[1].Name != "c" || page.Data[2].Name != "e" {
+		t.Fatalf("unexpected paginated names: [%s, %s, %s]", page.Data[0].Name, page.Data[1].Name, page.Data[2].Name)
+	}
+}
+
+// TestPaginateDefaults verifies default pagination resolution for invalid page inputs.
+func TestPaginateDefaults(t *testing.T) {
+	db := newTestDB(t)
+	service := newTemporalServiceForTest(t, db)
+
+	seedTemporal(t, service, []temporalModel{
+		{Name: "a", Status: "active"},
+	})
+
+	page, err := service.Paginate(context.Background(), Query{
+		Page:     0,
+		PageSize: 0,
+	})
+	if err != nil {
+		t.Fatalf("Paginate() error = %v", err)
+	}
+
+	if page.Page != 1 {
+		t.Fatalf("Page = %d, want %d", page.Page, 1)
+	}
+	if page.PageSize != 10 {
+		t.Fatalf("PageSize = %d, want %d", page.PageSize, 10)
+	}
+}
+
 // TestCreateRejectsNilEntity verifies create validation for nil entity pointers.
 func TestCreateRejectsNilEntity(t *testing.T) {
 	db := newTestDB(t)

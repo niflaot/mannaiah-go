@@ -10,6 +10,8 @@
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
 - `http`: Fiber server setup with config fallback and Zap request logging.
+- `swagger`: OpenAPI aggregation and documentation route exposure.
+- `startup`: module-loading runtime helpers for composition roots.
 
 ## Goals
 - Deterministic startup configuration rules.
@@ -50,11 +52,22 @@
   - `(*database.Service[T]).Create(ctx, entity)`
   - `(*database.Service[T]).Read(ctx, id)`
   - `(*database.Service[T]).Find(ctx, query)`
+  - `(*database.Service[T]).Paginate(ctx, query)`
   - `(*database.Service[T]).Update(ctx, id, updates)`
   - `(*database.Service[T]).Delete(ctx, id)`
   - `http.New(cfg, providedLogger)`
   - `http.NewWithCore(cfg, coreCfg, providedLogger)`
   - `http.AddressFrom(cfg, coreCfg)`
+  - `http.NewAppError(status, message, cause)`
+  - `swagger.NewDocument(info)`
+  - `(*swagger.Document).Merge(spec *openapi3.T)`
+  - `(*swagger.Document).Build() *openapi3.T`
+  - `swagger.RegisterRoute(router, path, document)`
+  - `startup.NewRuntime(server, document)`
+  - `(*startup.Runtime).RegisterRoutes(register)`
+  - `(*startup.Runtime).AddOpenAPISpec(spec *openapi3.T)`
+  - `(*startup.Runtime).ExposeOpenAPI(path)`
+  - `startup.CoreSpec() *openapi3.T`
   - `(*http.Server).RegisterRoutes(register)`
   - `(*http.Server).MountRoutes(prefix, register)`
   - `(*http.Server).Register(register)`

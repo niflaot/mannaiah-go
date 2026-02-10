@@ -1,0 +1,128 @@
+package startup
+
+import (
+	"errors"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	corehttp "mannaiah/module/core/http"
+	"mannaiah/module/core/swagger"
+)
+
+var (
+	// ErrNilServer is returned when a nil HTTP server is provided.
+	ErrNilServer = errors.New("startup server must not be nil")
+	// ErrNilDocument is returned when a nil swagger document is provided.
+	ErrNilDocument = errors.New("startup swagger document must not be nil")
+)
+
+// Runtime defines startup composition helpers shared across modules.
+type Runtime struct {
+	// server defines HTTP server runtime.
+	server *corehttp.Server
+	// document defines centralized OpenAPI aggregation document.
+	document *swagger.Document
+}
+
+// Loader defines bootstrap hooks exposed by runtime to modules.
+type Loader interface {
+	// RegisterRoutes registers module route handlers.
+	RegisterRoutes(register func(router corehttp.Router))
+	// AddOpenAPISpec merges module OpenAPI specifications.
+	AddOpenAPISpec(spec *openapi3.T) error
+}
+
+var (
+	// _ ensures Runtime satisfies module loader contracts.
+	_ Loader = (*Runtime)(nil)
+)
+
+// NewRuntime creates a startup runtime over HTTP server and swagger document dependencies.
+func NewRuntime(server *corehttp.Server, document *swagger.Document) (*Runtime, error) {
+	if server == nil {
+		return nil, ErrNilServer
+	}
+	if document == nil {
+		return nil, ErrNilDocument
+	}
+
+	return &Runtime{server: server, document: document}, nil
+}
+
+// RegisterRoutes registers route handlers into the HTTP server.
+func (r *Runtime) RegisterRoutes(register func(router corehttp.Router)) {
+	r.server.RegisterRoutes(register)
+}
+
+// AddOpenAPISpec merges module OpenAPI specs into the centralized document.
+func (r *Runtime) AddOpenAPISpec(spec *openapi3.T) error {
+	return r.document.Merge(spec)
+}
+
+// ExposeOpenAPI registers a route that serves aggregated OpenAPI documentation.
+func (r *Runtime) ExposeOpenAPI(path string) {
+	r.RegisterRoutes(func(router corehttp.Router) {
+		swagger.RegisterRoute(router, path, r.document.Build())
+	})
+}
+
+// CoreSpec returns core-level OpenAPI specs for startup-managed endpoints.
+func CoreSpec() *openapi3.T {
+	return &openapi3.T{
+		OpenAPI: "3.0.3",
+		Info: &openapi3.Info{
+			Title:   "Core Startup API",
+			Version: "0.0.1",
+		},
+		Paths: openapi3.NewPaths(
+			openapi3.WithPath("/status", &openapi3.PathItem{
+				Get: statusOperation(),
+			}),
+			openapi3.WithPath("/openapi.json", &openapi3.PathItem{
+				Get: openapiOperation(),
+			}),
+		),
+		Tags: openapi3.Tags{
+			&openapi3.Tag{Name: "Status"},
+		},
+	}
+}
+
+// statusOperation defines the OpenAPI operation for status probing.
+func statusOperation() *openapi3.Operation {
+	statusSchema := openapi3.NewStringSchema()
+	statusSchema.Example = "ok"
+
+	return &openapi3.Operation{
+		Summary:     "Get application status",
+		OperationID: "StatusController_getStatus",
+		Tags:        []string{"Status"},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: openapi3.NewResponse().
+					WithDescription("The application is running successfully.").
+					WithContent(openapi3.Content{
+						"application/json": &openapi3.MediaType{
+							Schema: &openapi3.SchemaRef{
+								Value: openapi3.NewObjectSchema().
+									WithProperty("status", statusSchema),
+							},
+						},
+					}),
+			}),
+		),
+	}
+}
+
+// openapiOperation defines the OpenAPI operation for aggregated spec exposure.
+func openapiOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		Summary:     "Get aggregated OpenAPI specification",
+		OperationID: "StatusController_getOpenAPI",
+		Tags:        []string{"Status"},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: openapi3.NewResponse().WithDescription("Return aggregated API specification."),
+			}),
+		),
+	}
+}

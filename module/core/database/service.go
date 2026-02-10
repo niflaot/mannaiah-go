@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"gorm.io/gorm"
 )
@@ -37,6 +38,26 @@ type Query struct {
 	Preloads []string
 	// Unscoped enables querying soft-deleted rows.
 	Unscoped bool
+	// ExcludeIDs defines record ids excluded from query and count results.
+	ExcludeIDs []uint
+	// Page defines the page number used by paginated queries.
+	Page int
+	// PageSize defines the number of items per page used by paginated queries.
+	PageSize int
+}
+
+// PageResult defines paginated query output metadata and result data.
+type PageResult[T any] struct {
+	// Data is the current page result set.
+	Data []T
+	// Total is the total number of rows matching filters before page slicing.
+	Total int64
+	// Page is the resolved page number.
+	Page int
+	// PageSize is the resolved page size.
+	PageSize int
+	// TotalPages is the total number of pages for the current page size.
+	TotalPages int
 }
 
 // CRUDService defines the generic CRUD behavior available for typed models.
@@ -47,6 +68,8 @@ type CRUDService[T any] interface {
 	Read(ctx context.Context, id uint) (*T, error)
 	// Find retrieves models using query filters.
 	Find(ctx context.Context, query Query) ([]T, error)
+	// Paginate retrieves models and total counts using paginated filters.
+	Paginate(ctx context.Context, query Query) (*PageResult[T], error)
 	// Update applies partial updates to a model by primary key.
 	Update(ctx context.Context, id uint, updates map[string]any) error
 	// Delete soft-deletes a model by primary key.
@@ -100,8 +123,7 @@ func (s *Service[T]) Read(ctx context.Context, id uint) (*T, error) {
 
 // Find retrieves models using query filters.
 func (s *Service[T]) Find(ctx context.Context, query Query) ([]T, error) {
-	tx := s.db.WithContext(ctx).Model(new(T))
-	tx = applyQuery(tx, query)
+	tx := applyQuery(s.db.WithContext(ctx).Model(new(T)), query)
 
 	records := make([]T, 0)
 	if err := tx.Find(&records).Error; err != nil {
@@ -109,6 +131,48 @@ func (s *Service[T]) Find(ctx context.Context, query Query) ([]T, error) {
 	}
 
 	return records, nil
+}
+
+// Paginate retrieves models and total counts using paginated filters.
+func (s *Service[T]) Paginate(ctx context.Context, query Query) (*PageResult[T], error) {
+	page, pageSize := normalizePagination(query.Page, query.PageSize)
+
+	countQuery := query
+	countQuery.Order = ""
+	countQuery.Limit = 0
+	countQuery.Offset = 0
+	countQuery.Page = 0
+	countQuery.PageSize = 0
+
+	var total int64
+	countTX := applyQuery(s.db.WithContext(ctx).Model(new(T)), countQuery)
+	if err := countTX.Count(&total).Error; err != nil {
+		return nil, fmt.Errorf("count paginated records: %w", err)
+	}
+
+	dataQuery := query
+	dataQuery.Page = page
+	dataQuery.PageSize = pageSize
+	dataQuery.Offset = (page - 1) * pageSize
+	dataQuery.Limit = pageSize
+
+	records, err := s.Find(ctx, dataQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(pageSize)))
+	}
+
+	return &PageResult[T]{
+		Data:       records,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
 }
 
 // Update applies partial updates to a model by primary key.
@@ -157,6 +221,9 @@ func applyQuery(tx *gorm.DB, query Query) *gorm.DB {
 	if query.Where != "" {
 		next = next.Where(query.Where, query.Args...)
 	}
+	if len(query.ExcludeIDs) > 0 {
+		next = next.Where("id NOT IN ?", query.ExcludeIDs)
+	}
 	if query.Order != "" {
 		next = next.Order(query.Order)
 	}
@@ -171,4 +238,19 @@ func applyQuery(tx *gorm.DB, query Query) *gorm.DB {
 	}
 
 	return next
+}
+
+// normalizePagination resolves page and page size defaults for paginated queries.
+func normalizePagination(page int, pageSize int) (int, int) {
+	resolvedPage := page
+	if resolvedPage <= 0 {
+		resolvedPage = 1
+	}
+
+	resolvedPageSize := pageSize
+	if resolvedPageSize <= 0 {
+		resolvedPageSize = 10
+	}
+
+	return resolvedPage, resolvedPageSize
 }

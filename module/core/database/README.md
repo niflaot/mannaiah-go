@@ -21,6 +21,7 @@
   - `(*database.Service[T]).Create(ctx, entity)`
   - `(*database.Service[T]).Read(ctx, id)`
   - `(*database.Service[T]).Find(ctx, query)`
+  - `(*database.Service[T]).Paginate(ctx, query)`
   - `(*database.Service[T]).Update(ctx, id, updates)`
   - `(*database.Service[T]).Delete(ctx, id)`
 - Endpoints: none in this package.

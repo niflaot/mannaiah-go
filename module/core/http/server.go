@@ -25,6 +25,8 @@ type Handler func(ctx Context) error
 
 // Context defines an abstract HTTP request context contract.
 type Context interface {
+	// Context returns request-scoped context values.
+	Context() context.Context
 	// Status sets the response status code.
 	Status(code int) Context
 	// JSON writes a JSON response payload.
@@ -103,14 +105,17 @@ func NewWithCore(cfg Config, coreCfg *coreconfig.Core, providedLogger *zap.Logge
 
 	logger := resolveLogger(providedLogger)
 	app := fiber.New(fiber.Config{
-		AppName:      resolvedCfg.AppName,
-		Prefork:      resolvedCfg.Prefork,
-		ServerHeader: resolvedCfg.ServerHeader,
-		ReadTimeout:  time.Duration(resolvedCfg.ReadTimeoutMS) * time.Millisecond,
-		WriteTimeout: time.Duration(resolvedCfg.WriteTimeoutMS) * time.Millisecond,
-		IdleTimeout:  time.Duration(resolvedCfg.IdleTimeoutMS) * time.Millisecond,
+		AppName:               resolvedCfg.AppName,
+		Prefork:               resolvedCfg.Prefork,
+		ServerHeader:          resolvedCfg.ServerHeader,
+		ReadTimeout:           time.Duration(resolvedCfg.ReadTimeoutMS) * time.Millisecond,
+		WriteTimeout:          time.Duration(resolvedCfg.WriteTimeoutMS) * time.Millisecond,
+		IdleTimeout:           time.Duration(resolvedCfg.IdleTimeoutMS) * time.Millisecond,
+		DisableStartupMessage: true,
+		ErrorHandler:          errorHandler,
 	})
 
+	app.Use(rayIDMiddleware)
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: logger,
 	}))
@@ -170,11 +175,13 @@ func (s *Server) MountRoutes(prefix string, register func(router Router)) {
 
 // Start begins listening on the resolved address.
 func (s *Server) Start() error {
+	s.logStartup(s.address)
 	return s.app.Listen(s.address)
 }
 
 // StartWithListener begins serving using a provided listener.
 func (s *Server) StartWithListener(listener net.Listener) error {
+	s.logStartup(listener.Addr().String())
 	return s.app.Listener(listener)
 }
 
@@ -186,6 +193,20 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // Logger returns the resolved server logger instance.
 func (s *Server) Logger() *zap.Logger {
 	return s.logger
+}
+
+// logStartup writes a startup message using the server logger.
+func (s *Server) logStartup(address string) {
+	if s == nil || s.logger == nil {
+		return
+	}
+
+	config := s.app.Config()
+	s.logger.Info("http server starting",
+		zap.String("address", address),
+		zap.String("app_name", config.AppName),
+		zap.Bool("prefork", config.Prefork),
+	)
 }
 
 // mergeConfig resolves HTTP config values using optional core config fallbacks.
@@ -307,6 +328,11 @@ func adaptHandler(handler Handler) fiber.Handler {
 type fiberContextAdapter struct {
 	// ctx is the wrapped Fiber context.
 	ctx *fiber.Ctx
+}
+
+// Context returns request-scoped context values.
+func (a *fiberContextAdapter) Context() context.Context {
+	return a.ctx.UserContext()
 }
 
 // Status sets the response status code.

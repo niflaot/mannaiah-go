@@ -14,6 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	coreconfig "mannaiah/module/core/config"
 )
 
@@ -335,6 +336,89 @@ func TestStartReturnsListenError(t *testing.T) {
 	}
 }
 
+// TestStartLogsStartupMessage verifies Start emits custom startup logs through zap.
+func TestStartLogsStartupMessage(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = occupied.Close()
+	})
+
+	logCore, observed := observer.New(zapcore.InfoLevel)
+	logger := zap.New(logCore)
+	port := occupied.Addr().(*net.TCPAddr).Port
+	server, newErr := New(Config{Host: "127.0.0.1", Port: port}, logger)
+	if newErr != nil {
+		t.Fatalf("New() error = %v", newErr)
+	}
+
+	startErr := server.Start()
+	if startErr == nil {
+		t.Fatalf("expected Start() listen error for occupied port")
+	}
+
+	entries := observed.FilterMessage("http server starting").All()
+	if len(entries) != 1 {
+		t.Fatalf("startup log count = %d, want 1", len(entries))
+	}
+	context := entries[0].ContextMap()
+	if context["address"] != fmt.Sprintf("127.0.0.1:%d", port) {
+		t.Fatalf("startup address = %v, want %q", context["address"], fmt.Sprintf("127.0.0.1:%d", port))
+	}
+	if context["app_name"] != "mannaiah-http" {
+		t.Fatalf("startup app_name = %v, want %q", context["app_name"], "mannaiah-http")
+	}
+}
+
+// TestStartWithListenerLogsStartupMessage verifies StartWithListener emits custom startup logs through zap.
+func TestStartWithListenerLogsStartupMessage(t *testing.T) {
+	logCore, observed := observer.New(zapcore.InfoLevel)
+	logger := zap.New(logCore)
+	server, err := New(Config{Host: "127.0.0.1", Port: 8091}, logger)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	listener, listenErr := net.Listen("tcp", "127.0.0.1:0")
+	if listenErr != nil {
+		t.Fatalf("net.Listen() error = %v", listenErr)
+	}
+	t.Cleanup(func() {
+		_ = listener.Close()
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.StartWithListener(listener)
+	}()
+
+	waitForCondition(t, 40, 25*time.Millisecond, func() bool {
+		return observed.FilterMessage("http server starting").Len() > 0
+	})
+
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+	select {
+	case startErr := <-done:
+		if startErr != nil {
+			t.Fatalf("StartWithListener() error = %v", startErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("server did not stop after shutdown")
+	}
+
+	entries := observed.FilterMessage("http server starting").All()
+	if len(entries) == 0 {
+		t.Fatalf("expected startup log entry")
+	}
+	context := entries[0].ContextMap()
+	if context["address"] != listener.Addr().String() {
+		t.Fatalf("startup address = %v, want %q", context["address"], listener.Addr().String())
+	}
+}
+
 // TestLoggerAccess verifies Logger returns the resolved logger instance.
 func TestLoggerAccess(t *testing.T) {
 	logger := zap.NewNop()
@@ -344,6 +428,18 @@ func TestLoggerAccess(t *testing.T) {
 	}
 	if server.Logger() != logger {
 		t.Fatalf("expected Logger() to return provided logger instance")
+	}
+}
+
+// TestNewDisablesFiberStartupMessage verifies Fiber startup banner output is disabled by default.
+func TestNewDisablesFiberStartupMessage(t *testing.T) {
+	server, err := New(Config{Host: "127.0.0.1", Port: 8090}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if !server.App().Config().DisableStartupMessage {
+		t.Fatalf("expected DisableStartupMessage to be true")
 	}
 }
 
@@ -398,4 +494,19 @@ func waitForHTTPReady(t *testing.T, url string, attempts int, interval time.Dura
 	}
 
 	t.Fatalf("endpoint %s did not become ready after %d attempts", url, attempts)
+}
+
+// waitForCondition retries condition checks until they pass or attempts are exhausted.
+func waitForCondition(t *testing.T, attempts int, interval time.Duration, condition func() bool) {
+	t.Helper()
+
+	for index := 0; index < attempts; index++ {
+		if condition() {
+			return
+		}
+
+		time.Sleep(interval)
+	}
+
+	t.Fatalf("condition did not become true after %d attempts", attempts)
 }
