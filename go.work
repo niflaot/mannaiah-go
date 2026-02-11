@@ -5,4 +5,5 @@ use (
 	./module/auth
 	./module/contacts
 	./module/core
+	./module/woocommerce
 )

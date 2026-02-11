@@ -11,6 +11,8 @@
 - Add resilience tests for critical flows, including authentication-provider outages, dependency connection failures (database/cache/messaging), and expected error-mapping behavior.
 - Add concurrency/race-condition tests on uniqueness/idempotency critical paths whenever applicable.
 - Add performance tests (benchmarks/load-oriented tests) for hot paths whenever practical, and keep them modular and reproducible.
+- External integration modules must include enabled/disabled path tests and outage tests (invalid credentials/host/timeouts) validating graceful behavior.
+- Integration endpoints that are documented but unavailable due to invalid integration config must return controlled service-unavailable errors and must be covered by unit and e2e tests.
 
 ## Documentation
 - Use Go doc style comments only on:
@@ -39,3 +41,4 @@
 ## Code Quality
 - Prefer asynchronous/concurrent Go capabilities where they provide clear value.
 - Keep code modular, reusable, and self-explanatory.
+- For third-party integrations, prefer maintained libraries/SDKs behind adapters instead of custom protocol clients unless there is a justified gap.

@@ -121,6 +121,8 @@ type contactsE2EHarness struct {
 	messagingErrs chan error
 	// server defines HTTP runtime dependency.
 	server *corehttp.Server
+	// contactsModule defines contacts module runtime dependency.
+	contactsModule *contacts.Module
 	// createdEvents defines created-event capture channel.
 	createdEvents chan contactEventRecord
 	// updatedEvents defines updated-event capture channel.
@@ -221,6 +223,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 		messagingCancel: messagingCancel,
 		messagingErrs:   messagingErrs,
 		server:          server,
+		contactsModule:  contactsModule,
 		createdEvents:   createdEvents,
 		updatedEvents:   updatedEvents,
 	}

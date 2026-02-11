@@ -15,6 +15,7 @@ import (
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
 	coreconfig "mannaiah/module/core/config"
+	corecron "mannaiah/module/core/cron"
 	coredatabase "mannaiah/module/core/database"
 	corehttp "mannaiah/module/core/http"
 	corelogger "mannaiah/module/core/logger"
@@ -22,6 +23,8 @@ import (
 	corewatermill "mannaiah/module/core/messaging/watermill"
 	"mannaiah/module/core/startup"
 	"mannaiah/module/core/swagger"
+	"mannaiah/module/woocommerce"
+	wooevent "mannaiah/module/woocommerce/adapter/event"
 )
 
 // main executes startup bootstrap and blocks until process shutdown.
@@ -42,8 +45,10 @@ func run(ctx context.Context, envFile string) error {
 	var dbCfg coredatabase.Config
 	var messagingCfg coremsgplatform.Config
 	var authCfg auth.Config
+	var cronCfg corecron.Config
+	var wooCfg woocommerce.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &messagingCfg, &authCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &messagingCfg, &authCfg, &cronCfg, &wooCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -99,6 +104,10 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create contacts integration publisher: %w", err)
 	}
+	wooPublisher, err := wooevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		return fmt.Errorf("create woocommerce integration publisher: %w", err)
+	}
 
 	authModule, err := auth.New(authCfg, coreCfg.Environment, logger)
 	if err != nil {
@@ -113,6 +122,31 @@ func run(ctx context.Context, envFile string) error {
 	if err := contactsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load contacts module: %w", err)
 	}
+
+	var wooScheduler corecron.Scheduler
+	if wooCfg.SyncContacts {
+		wooScheduler, err = corecron.NewScheduler(cronCfg, logger)
+		if err != nil {
+			return fmt.Errorf("create woocommerce scheduler: %w", err)
+		}
+	}
+
+	wooModule, err := woocommerce.New(wooCfg, contactsModule.Service(), wooScheduler, logger, wooPublisher)
+	if err != nil {
+		return fmt.Errorf("initialize woocommerce module: %w", err)
+	}
+	wooModule.SetAuthorizer(authModule)
+	if err := wooModule.Load(runtime); err != nil {
+		return fmt.Errorf("load woocommerce module: %w", err)
+	}
+	if err := wooModule.Start(ctx); err != nil {
+		return fmt.Errorf("start woocommerce module: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = wooModule.Stop(stopCtx)
+	}()
 
 	runtime.ExposeOpenAPI("/openapi.json")
 	runtime.ExposeOpenAPIUI("/docs", "/openapi.json", "Mannaiah API Docs")

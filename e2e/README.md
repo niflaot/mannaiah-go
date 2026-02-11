@@ -10,6 +10,7 @@
 - Includes resilience scenarios for authentication, database-connection failures, messaging publication failures, and concurrent uniqueness races.
 - Includes benchmark coverage for hot persistence paths under module-level benchmark suites.
 - Includes scheduler configuration and execution validation for the core cron package.
+- Includes WooCommerce sync flows (manual endpoint + integration availability behavior).
 
 ## Key Methods / Endpoints / Events
 - Methods:
@@ -22,12 +23,15 @@
   - `(*contactsE2EHarness).AwaitCreatedEvent(t)`
   - `(*contactsE2EHarness).AwaitUpdatedEvent(t)`
   - `waitForCronRun(t, signal, timeout)`
+  - `newWooCustomersServer(t)`
 - Endpoints:
   - `POST /contacts`
   - `GET /contacts`
   - `GET /contacts/:id`
   - `PATCH /contacts/:id`
   - `DELETE /contacts/:id`
+  - `POST /woo/sync/contacts`
 - Events:
   - `contacts.v1.created`
   - `contacts.v1.updated`
+  - `woocommerce.v1.contacts.sync.completed`

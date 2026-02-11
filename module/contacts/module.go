@@ -17,6 +17,8 @@ import (
 type Module struct {
 	// handler defines HTTP adapter used for route registration.
 	handler *http.Handler
+	// service defines application service dependencies for module integrations.
+	service application.Service
 }
 
 // Loader defines bootstrap hooks required by contacts modules.
@@ -47,7 +49,7 @@ func New(db *gorm.DB, publishers ...port.IntegrationEventPublisher) (*Module, er
 		return nil, err
 	}
 
-	return &Module{handler: handler}, nil
+	return &Module{handler: handler, service: service}, nil
 }
 
 // RegisterRoutes registers contacts routes on the provided router.
@@ -57,6 +59,15 @@ func (m *Module) RegisterRoutes(router corehttp.Router) {
 	}
 
 	m.handler.RegisterRoutes(router)
+}
+
+// Service returns contact application service dependencies for module integrations.
+func (m *Module) Service() application.Service {
+	if m == nil {
+		return nil
+	}
+
+	return m.service
 }
 
 // SetAuthorizer configures endpoint authentication and permission dependencies.
