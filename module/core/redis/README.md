@@ -8,7 +8,9 @@
 - Pattern-based key discovery using `SCAN` to avoid blocking `KEYS`.
 - Batched `MGET` retrieval for efficient pattern fetches.
 - Zap-based error logging and configurable logger injection.
+- Configurable circuit-breaker fail-fast behavior for Redis outages.
 - Implements provider-agnostic cache contracts from `module/core/cache`.
+- Uses `redis/store` internal package organization to keep facade and implementation responsibilities separated.
 
 ## Usage Rules
 - Load `redis.Config` with the shared `config` loader.

@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"context"
+	errorspkg "errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -96,6 +97,56 @@ func TestConfigEnvAndRedisE2E(t *testing.T) {
 	}
 	if deleted != 1 {
 		t.Fatalf("deleted = %d, want %d", deleted, 1)
+	}
+
+	tracer.Step("assert e2e trace logs")
+	tracer.AssertStepCount(8)
+}
+
+// TestRedisCircuitBreakerOutageE2E verifies Redis fail-fast behavior during repeated outage failures.
+func TestRedisCircuitBreakerOutageE2E(t *testing.T) {
+	tracer := newStepTracer(t)
+
+	tracer.Step("start miniredis instance")
+	miniRedis := miniredis.RunT(t)
+
+	tracer.Step("prepare temporary env file with breaker tuning")
+	envFile := writeTempEnvFile(
+		t,
+		fmt.Sprintf(
+			"REDIS_URL=redis://%s/0\nREDIS_CIRCUIT_BREAKER_ENABLED=true\nREDIS_CIRCUIT_BREAKER_FAILURE_THRESHOLD=1\nREDIS_CIRCUIT_BREAKER_INTERVAL_MS=120000\nREDIS_CIRCUIT_BREAKER_TIMEOUT_MS=120000\n",
+			miniRedis.Addr(),
+		),
+	)
+
+	var redisCfg coreredis.Config
+
+	tracer.Step("load redis configuration")
+	if err := coreconfig.Load(envFile, tracer.logger, &redisCfg); err != nil {
+		t.Fatalf("coreconfig.Load() error = %v", err)
+	}
+
+	tracer.Step("initialize redis store")
+	store, err := coreredis.New(redisCfg, tracer.logger)
+	if err != nil {
+		t.Fatalf("coreredis.New() error = %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	tracer.Step("close miniredis to simulate outage")
+	miniRedis.Close()
+
+	tracer.Step("execute first ping failure")
+	if err := store.Ping(context.Background()); err == nil {
+		t.Fatalf("expected first ping error")
+	}
+
+	tracer.Step("execute second ping and assert fail-fast open-state error")
+	err = store.Ping(context.Background())
+	if !errorspkg.Is(err, coreredis.ErrUnavailable) {
+		t.Fatalf("second Ping() error = %v, want coreredis.ErrUnavailable", err)
 	}
 
 	tracer.Step("assert e2e trace logs")

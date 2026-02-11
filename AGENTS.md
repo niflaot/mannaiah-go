@@ -42,3 +42,8 @@
 - Prefer asynchronous/concurrent Go capabilities where they provide clear value.
 - Keep code modular, reusable, and self-explanatory.
 - For third-party integrations, prefer maintained libraries/SDKs behind adapters instead of custom protocol clients unless there is a justified gap.
+- For external or unstable dependencies (remote APIs, cache, database connections, auth/JWKS), use configurable circuit breakers where practical, and test open-state graceful degradation behavior.
+- Reduce file complexity through composition and package splitting:
+  - avoid concentrating multiple responsibilities in a single file
+  - split long services/stores into focused collaborators (for example, constructor/config, operations, mapping/validation, resilience helpers)
+  - keep production files and test files intentionally small and navigable; when a file grows too large (roughly 250-300+ lines), refactor into cohesive units instead of adding more branches

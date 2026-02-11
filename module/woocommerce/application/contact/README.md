@@ -7,11 +7,12 @@
 - Orchestrate paginated WooCommerce order retrieval.
 - Map order billing fields into contact upsert commands.
 - Perform concurrent contact upserts with run-wide email deduplication.
+- Apply optional circuit-breaker fail-fast behavior for source and upsert dependencies.
 - Emit integration lifecycle events (`started`, `completed`, `failed`).
 
 ## Key Methods / Endpoints / Events
 - Methods:
-  - `contact.NewService(cfg, source, target, publisher, logger)`
+  - `contact.NewService(cfg, source, target, publisher, logger, breakers...)`
   - `(*contact.ContactSyncService).ValidateIntegration(ctx)`
   - `(*contact.ContactSyncService).SyncContacts(ctx, trigger)`
 - Endpoints: none in this package.

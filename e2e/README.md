@@ -11,6 +11,7 @@
 - Includes benchmark coverage for hot persistence paths under module-level benchmark suites.
 - Includes scheduler configuration and execution validation for the core cron package.
 - Includes WooCommerce sync flows (manual endpoint + integration availability behavior).
+- Includes WooCommerce outage fail-fast validation through circuit-breaker behavior.
 
 ## Key Methods / Endpoints / Events
 - Methods:

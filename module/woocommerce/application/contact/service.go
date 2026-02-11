@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"sync"
 
 	"go.uber.org/zap"
 	"mannaiah/module/woocommerce/port"
@@ -25,6 +23,8 @@ var (
 	ErrSyncDisabled = errors.New("woocommerce contacts sync is disabled")
 	// ErrIntegrationUnavailable is returned when WooCommerce integration is unavailable.
 	ErrIntegrationUnavailable = errors.New("woocommerce integration is unavailable")
+	// ErrUpsertUnavailable is returned when contact-upsert dependencies are unavailable.
+	ErrUpsertUnavailable = errors.New("woocommerce contact upsert dependency is unavailable")
 )
 
 // SyncConfig defines sync behavior configuration values.
@@ -35,6 +35,22 @@ type SyncConfig struct {
 	PageSize int
 	// WorkerCount defines concurrent contact upsert workers.
 	WorkerCount int
+}
+
+// CircuitBreaker defines circuit-breaker behavior used by sync dependencies.
+type CircuitBreaker interface {
+	// Execute runs operations behind a circuit breaker.
+	Execute(operation func() error) error
+	// IsOpenError reports whether errors represent open-circuit rejections.
+	IsOpenError(err error) bool
+}
+
+// CircuitBreakers defines optional per-dependency circuit-breaker wiring.
+type CircuitBreakers struct {
+	// Source guards WooCommerce API calls.
+	Source CircuitBreaker
+	// Upsert guards contact-upsert calls.
+	Upsert CircuitBreaker
 }
 
 // SyncSummary defines contact sync execution results.
@@ -75,6 +91,10 @@ type ContactSyncService struct {
 	logger *zap.Logger
 	// cfg defines sync behavior configuration values.
 	cfg SyncConfig
+	// sourceBreaker guards WooCommerce API calls.
+	sourceBreaker CircuitBreaker
+	// upsertBreaker guards contact-upsert calls.
+	upsertBreaker CircuitBreaker
 }
 
 // upsertResult defines command upsert result payload values.
@@ -91,7 +111,7 @@ var (
 )
 
 // NewService creates WooCommerce contact sync services.
-func NewService(cfg SyncConfig, source port.OrderSource, target port.ContactSyncTarget, publisher port.IntegrationEventPublisher, providedLogger *zap.Logger) (*ContactSyncService, error) {
+func NewService(cfg SyncConfig, source port.OrderSource, target port.ContactSyncTarget, publisher port.IntegrationEventPublisher, providedLogger *zap.Logger, breakers ...CircuitBreakers) (*ContactSyncService, error) {
 	if source == nil {
 		return nil, ErrNilSource
 	}
@@ -99,12 +119,16 @@ func NewService(cfg SyncConfig, source port.OrderSource, target port.ContactSync
 		return nil, ErrNilTarget
 	}
 
+	resolvedBreakers := resolveCircuitBreakers(breakers)
+
 	return &ContactSyncService{
-		source:    source,
-		target:    target,
-		publisher: resolvePublisher(publisher),
-		logger:    resolveLogger(providedLogger),
-		cfg:       normalizeSyncConfig(cfg),
+		source:        source,
+		target:        target,
+		publisher:     resolvePublisher(publisher),
+		logger:        resolveLogger(providedLogger),
+		cfg:           normalizeSyncConfig(cfg),
+		sourceBreaker: resolvedBreakers.Source,
+		upsertBreaker: resolvedBreakers.Upsert,
 	}, nil
 }
 
@@ -114,7 +138,13 @@ func (s *ContactSyncService) ValidateIntegration(ctx context.Context) error {
 		return ErrSyncDisabled
 	}
 
-	if err := s.source.Validate(ctx); err != nil {
+	err := s.executeWithBreaker(s.sourceBreaker, ErrIntegrationUnavailable, func() error {
+		return s.source.Validate(ctx)
+	})
+	if err != nil {
+		if errors.Is(err, ErrIntegrationUnavailable) {
+			return err
+		}
 		return fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 	}
 
@@ -139,7 +169,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			return nil, err
 		}
 
-		orders, hasNext, err := s.source.ListOrders(ctx, page, s.cfg.PageSize)
+		orders, hasNext, err := s.loadPage(ctx, page)
 		if err != nil {
 			wrappedErr := fmt.Errorf("list woocommerce orders page %d: %w", page, err)
 			s.publishEvent(ctx, buildSyncFailedEvent(*summary, wrappedErr))
@@ -165,180 +195,16 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 	return summary, nil
 }
 
-// resolveLogger resolves nil loggers to no-op defaults.
-func resolveLogger(providedLogger *zap.Logger) *zap.Logger {
-	if providedLogger != nil {
-		return providedLogger
+// loadPage retrieves one WooCommerce order page with breaker protection.
+func (s *ContactSyncService) loadPage(ctx context.Context, page int) (orders []port.WooOrder, hasNext bool, err error) {
+	err = s.executeWithBreaker(s.sourceBreaker, ErrIntegrationUnavailable, func() error {
+		var listErr error
+		orders, hasNext, listErr = s.source.ListOrders(ctx, page, s.cfg.PageSize)
+		return listErr
+	})
+	if err != nil {
+		return nil, false, err
 	}
 
-	return zap.NewNop()
-}
-
-// normalizeSyncConfig normalizes sync config defaults.
-func normalizeSyncConfig(cfg SyncConfig) SyncConfig {
-	resolved := cfg
-	if resolved.PageSize <= 0 {
-		resolved.PageSize = 100
-	}
-	if resolved.WorkerCount <= 0 {
-		resolved.WorkerCount = 8
-	}
-
-	return resolved
-}
-
-// normalizeTrigger resolves sync trigger fallback values.
-func normalizeTrigger(trigger string) string {
-	resolved := strings.TrimSpace(trigger)
-	if resolved == "" {
-		return "manual"
-	}
-
-	return resolved
-}
-
-// processPage applies concurrent upsert behavior for a WooCommerce order page.
-func (s *ContactSyncService) processPage(ctx context.Context, orders []port.WooOrder, seenEmails map[string]struct{}, summary *SyncSummary) error {
-	commands := make([]port.ContactSyncCommand, 0, len(orders))
-
-	for _, order := range orders {
-		command, shouldProcess := mapOrderToCommand(order)
-		if !shouldProcess {
-			summary.Skipped++
-			continue
-		}
-
-		emailKey := strings.ToLower(strings.TrimSpace(command.Email))
-		if _, seen := seenEmails[emailKey]; seen {
-			summary.Skipped++
-			continue
-		}
-		seenEmails[emailKey] = struct{}{}
-		commands = append(commands, command)
-	}
-
-	if len(commands) == 0 {
-		return nil
-	}
-
-	workerCount := s.cfg.WorkerCount
-	if workerCount > len(commands) {
-		workerCount = len(commands)
-	}
-
-	workChannel := make(chan port.ContactSyncCommand, len(commands))
-	resultChannel := make(chan upsertResult, len(commands))
-	var workerWait sync.WaitGroup
-
-	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
-		workerWait.Add(1)
-		go func() {
-			defer workerWait.Done()
-			for command := range workChannel {
-				if err := ctx.Err(); err != nil {
-					resultChannel <- upsertResult{err: err}
-					continue
-				}
-
-				outcome, upsertErr := s.target.UpsertByEmail(ctx, command)
-				resultChannel <- upsertResult{outcome: outcome, err: upsertErr}
-			}
-		}()
-	}
-
-	for _, command := range commands {
-		if err := ctx.Err(); err != nil {
-			close(workChannel)
-			workerWait.Wait()
-			close(resultChannel)
-			return err
-		}
-		workChannel <- command
-	}
-	close(workChannel)
-
-	workerWait.Wait()
-	close(resultChannel)
-
-	for result := range resultChannel {
-		if errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded) {
-			return result.err
-		}
-
-		summary.Processed++
-		if result.err != nil {
-			summary.Failed++
-			s.logger.Warn("woocommerce contact sync upsert failed", zap.Error(result.err))
-			continue
-		}
-
-		applyOutcome(summary, result.outcome)
-	}
-
-	return nil
-}
-
-// applyOutcome applies upsert outcomes to sync summary counters.
-func applyOutcome(summary *SyncSummary, outcome port.UpsertOutcome) {
-	switch outcome {
-	case port.UpsertOutcomeCreated:
-		summary.Created++
-	case port.UpsertOutcomeUnchanged:
-		summary.Unchanged++
-	default:
-		summary.Updated++
-	}
-}
-
-// mapOrderToCommand maps WooCommerce orders into contact upsert command values.
-func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
-	email := strings.ToLower(strings.TrimSpace(order.BillingEmail))
-	if email == "" {
-		return port.ContactSyncCommand{}, false
-	}
-
-	firstName := strings.TrimSpace(order.BillingFirstName)
-	lastName := strings.TrimSpace(order.BillingLastName)
-	if firstName == "" || lastName == "" {
-		return port.ContactSyncCommand{}, false
-	}
-
-	documentNumber := mapDocumentNumber(order.Metadata)
-	documentType := ""
-	if documentNumber != "" {
-		documentType = "CC"
-	}
-
-	return port.ContactSyncCommand{
-		Email:          email,
-		FirstName:      firstName,
-		LastName:       lastName,
-		Phone:          normalizePhone(order.BillingPhone),
-		Address:        strings.TrimSpace(order.BillingAddress1),
-		AddressExtra:   strings.TrimSpace(order.BillingAddress2),
-		CityCode:       strings.TrimSpace(order.BillingCity),
-		DocumentType:   documentType,
-		DocumentNumber: documentNumber,
-	}, true
-}
-
-// mapDocumentNumber resolves WooCommerce billing document metadata values.
-func mapDocumentNumber(metadata map[string]string) string {
-	if len(metadata) == 0 {
-		return ""
-	}
-
-	return strings.TrimSpace(metadata[billingDocumentMetaKey])
-}
-
-// normalizePhone normalizes WooCommerce phone values to +57-prefixed values.
-func normalizePhone(value string) string {
-	normalized := strings.ReplaceAll(strings.TrimSpace(value), " ", "")
-	normalized = strings.ReplaceAll(normalized, "+", "")
-	normalized = strings.TrimPrefix(normalized, "57")
-	if normalized == "" {
-		return ""
-	}
-
-	return "+57" + normalized
+	return orders, hasNext, nil
 }

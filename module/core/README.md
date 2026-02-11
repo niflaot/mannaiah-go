@@ -6,6 +6,7 @@
 - `config`: Viper-based startup configuration loading and validation from `.env` and environment variables.
 - `logger`: Zap logger construction and resolution helpers.
 - `cache`: Provider-agnostic cache interface contracts.
+- `circuitbreaker`: Reusable fail-fast circuit breaker abstraction over `sony/gobreaker`.
 - `messaging`: Replaceable integration messaging contracts and Watermill in-memory adapters.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
@@ -30,6 +31,11 @@
   - `cache.Store.Delete(ctx, key)`
   - `cache.Store.Keys(ctx, pattern)`
   - `cache.Store.GetByPattern(ctx, pattern)`
+  - `circuitbreaker.New(cfg, logger)`
+  - `circuitbreaker.NewBreaker(cfg, logger)`
+  - `(*circuitbreaker.Service).Execute(operation)`
+  - `(*circuitbreaker.Service).State()`
+  - `(*circuitbreaker.Service).IsOpenError(err)`
   - `bus.Publisher.Publish(ctx, msg)`
   - `bus.Registrar.AddHandler(topic, handler)`
   - `watermill.NewInMemoryPlatform(cfg, providedLogger)`

@@ -3,93 +3,11 @@ package contact
 import (
 	"context"
 	errorspkg "errors"
-	"sync"
 	"testing"
-	"time"
 
 	"go.uber.org/zap"
 	"mannaiah/module/woocommerce/port"
 )
-
-// sourceMock defines order source behavior for sync tests.
-type sourceMock struct {
-	// validateErr defines validation errors.
-	validateErr error
-	// pages defines paginated order responses.
-	pages [][]port.WooOrder
-	// listErrAtPage defines page numbers that should return list errors.
-	listErrAtPage map[int]error
-}
-
-// Validate verifies source connectivity.
-func (m *sourceMock) Validate(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	return m.validateErr
-}
-
-// ListOrders retrieves paginated order values.
-func (m *sourceMock) ListOrders(ctx context.Context, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
-	if err := ctx.Err(); err != nil {
-		return nil, false, err
-	}
-	if listErr, hasError := m.listErrAtPage[page]; hasError {
-		return nil, false, listErr
-	}
-	if page <= 0 || page > len(m.pages) {
-		return nil, false, nil
-	}
-
-	items := m.pages[page-1]
-	return items, page < len(m.pages), nil
-}
-
-// targetMock defines contact sync target behavior for sync tests.
-type targetMock struct {
-	// mu guards state mutation for concurrent workers.
-	mu sync.Mutex
-	// outcomes defines upsert outcomes keyed by email.
-	outcomes map[string]port.UpsertOutcome
-	// errors defines upsert errors keyed by email.
-	errors map[string]error
-	// commands stores received upsert commands.
-	commands []port.ContactSyncCommand
-}
-
-// UpsertByEmail creates or updates contacts by email.
-func (m *targetMock) UpsertByEmail(ctx context.Context, command port.ContactSyncCommand) (outcome port.UpsertOutcome, err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.commands = append(m.commands, command)
-	if err := m.errors[command.Email]; err != nil {
-		return "", err
-	}
-	if outcome, ok := m.outcomes[command.Email]; ok {
-		return outcome, nil
-	}
-
-	return port.UpsertOutcomeUpdated, nil
-}
-
-// publisherMock defines integration event publication behavior for sync tests.
-type publisherMock struct {
-	// events stores published integration events.
-	events []port.IntegrationEvent
-	// mu guards state mutation for concurrent event publication.
-	mu sync.Mutex
-}
-
-// Publish captures integration events.
-func (m *publisherMock) Publish(ctx context.Context, event port.IntegrationEvent) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.events = append(m.events, event)
-	return nil
-}
 
 // TestNewServiceValidation verifies constructor validation behavior.
 func TestNewServiceValidation(t *testing.T) {
@@ -122,6 +40,33 @@ func TestValidateIntegration(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 	if validationErr := service.ValidateIntegration(context.Background()); !errorspkg.Is(validationErr, ErrIntegrationUnavailable) {
+		t.Fatalf("ValidateIntegration() error = %v, want ErrIntegrationUnavailable", validationErr)
+	}
+}
+
+// TestValidateIntegrationCircuitOpen verifies source breaker open-state mapping behavior.
+func TestValidateIntegrationCircuitOpen(t *testing.T) {
+	source := &sourceMock{}
+	target := &targetMock{outcomes: map[string]port.UpsertOutcome{}, errors: map[string]error{}}
+	breaker := &circuitBreakerMock{
+		executeErr: errorspkg.New("source breaker open"),
+		openError:  true,
+	}
+
+	service, err := NewService(
+		SyncConfig{Enabled: true},
+		source,
+		target,
+		nil,
+		nil,
+		CircuitBreakers{Source: breaker},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	validationErr := service.ValidateIntegration(context.Background())
+	if !errorspkg.Is(validationErr, ErrIntegrationUnavailable) {
 		t.Fatalf("ValidateIntegration() error = %v, want ErrIntegrationUnavailable", validationErr)
 	}
 }
@@ -279,6 +224,49 @@ func TestSyncContactsFailure(t *testing.T) {
 	}
 }
 
+// TestSyncContactsUpsertCircuitOpen verifies degraded upsert behavior when breaker opens.
+func TestSyncContactsUpsertCircuitOpen(t *testing.T) {
+	source := &sourceMock{
+		pages: [][]port.WooOrder{
+			{{BillingEmail: "broken@example.com", BillingFirstName: "Broken", BillingLastName: "Case"}},
+		},
+	}
+	target := &targetMock{
+		outcomes: map[string]port.UpsertOutcome{},
+		errors:   map[string]error{},
+	}
+	breaker := &circuitBreakerMock{
+		executeErr: errorspkg.New("upsert breaker open"),
+		openError:  true,
+	}
+
+	service, err := NewService(
+		SyncConfig{Enabled: true},
+		source,
+		target,
+		&publisherMock{},
+		zap.NewNop(),
+		CircuitBreakers{Upsert: breaker},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncContacts(context.Background(), "manual")
+	if syncErr != nil {
+		t.Fatalf("SyncContacts() error = %v", syncErr)
+	}
+	if summary.Processed != 1 {
+		t.Fatalf("summary.Processed = %d, want %d", summary.Processed, 1)
+	}
+	if summary.Failed != 1 {
+		t.Fatalf("summary.Failed = %d, want %d", summary.Failed, 1)
+	}
+	if len(target.commands) != 0 {
+		t.Fatalf("len(commands) = %d, want %d when upsert breaker is open", len(target.commands), 0)
+	}
+}
+
 // TestSyncContactsListError verifies page fetch failures and failed event emission.
 func TestSyncContactsListError(t *testing.T) {
 	source := &sourceMock{
@@ -326,120 +314,5 @@ func TestSyncContactsContextCancel(t *testing.T) {
 	cancel()
 	if _, syncErr := service.SyncContacts(ctx, "manual"); !errorspkg.Is(syncErr, ErrIntegrationUnavailable) {
 		t.Fatalf("SyncContacts() error = %v, want ErrIntegrationUnavailable", syncErr)
-	}
-}
-
-// TestMapOrderToCommand verifies order-to-command mapping behavior.
-func TestMapOrderToCommand(t *testing.T) {
-	command, shouldProcess := mapOrderToCommand(port.WooOrder{
-		BillingEmail:     " user@example.com ",
-		BillingFirstName: "First",
-		BillingLastName:  "Last",
-		BillingPhone:     "+57 300 444 5566",
-		BillingAddress1:  "Street 1",
-		BillingAddress2:  "Suite 1",
-		BillingCity:      "Bogota",
-		Metadata:         map[string]string{billingDocumentMetaKey: "  98765 "},
-	})
-	if !shouldProcess {
-		t.Fatalf("expected order to be processed")
-	}
-	if command.Email != "user@example.com" {
-		t.Fatalf("command.Email = %q, want %q", command.Email, "user@example.com")
-	}
-	if command.DocumentNumber != "98765" {
-		t.Fatalf("command.DocumentNumber = %q, want %q", command.DocumentNumber, "98765")
-	}
-	if command.DocumentType != "CC" {
-		t.Fatalf("command.DocumentType = %q, want %q", command.DocumentType, "CC")
-	}
-
-	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "   "})
-	if shouldProcess {
-		t.Fatalf("expected order without email to be skipped")
-	}
-	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "user@example.com", BillingFirstName: "", BillingLastName: "Doe"})
-	if shouldProcess {
-		t.Fatalf("expected order without complete names to be skipped")
-	}
-}
-
-// TestNormalizeHelpers verifies private normalization helper behavior.
-func TestNormalizeHelpers(t *testing.T) {
-	cfg := normalizeSyncConfig(SyncConfig{})
-	if cfg.PageSize != 100 {
-		t.Fatalf("cfg.PageSize = %d, want %d", cfg.PageSize, 100)
-	}
-	if cfg.WorkerCount != 8 {
-		t.Fatalf("cfg.WorkerCount = %d, want %d", cfg.WorkerCount, 8)
-	}
-	if normalizeTrigger("  ") != "manual" {
-		t.Fatalf("normalizeTrigger(\"  \") should fallback to manual")
-	}
-	if normalizePhone("+57 312 456 7890") != "+573124567890" {
-		t.Fatalf("normalizePhone() should normalize +57 values")
-	}
-	if normalizePhone("  3112233445  ") != "+573112233445" {
-		t.Fatalf("normalizePhone() should normalize local values")
-	}
-	if mapDocumentNumber(map[string]string{}) != "" {
-		t.Fatalf("mapDocumentNumber(empty) should be empty")
-	}
-}
-
-// TestApplyOutcome verifies upsert outcome accounting behavior.
-func TestApplyOutcome(t *testing.T) {
-	summary := &SyncSummary{}
-	applyOutcome(summary, port.UpsertOutcomeCreated)
-	applyOutcome(summary, port.UpsertOutcomeUpdated)
-	applyOutcome(summary, port.UpsertOutcomeUnchanged)
-
-	if summary.Created != 1 {
-		t.Fatalf("summary.Created = %d, want %d", summary.Created, 1)
-	}
-	if summary.Updated != 1 {
-		t.Fatalf("summary.Updated = %d, want %d", summary.Updated, 1)
-	}
-	if summary.Unchanged != 1 {
-		t.Fatalf("summary.Unchanged = %d, want %d", summary.Unchanged, 1)
-	}
-}
-
-// TestPublishEventNoPanic verifies event publication fallback behavior.
-func TestPublishEventNoPanic(t *testing.T) {
-	source := &sourceMock{}
-	target := &targetMock{outcomes: map[string]port.UpsertOutcome{}, errors: map[string]error{}}
-
-	service, err := NewService(SyncConfig{Enabled: true}, source, target, nil, nil)
-	if err != nil {
-		t.Fatalf("NewService() error = %v", err)
-	}
-
-	service.publishEvent(context.Background(), buildSyncStartedEvent("manual"))
-}
-
-// TestProcessPageContextTimeout verifies context timeout behavior during processing.
-func TestProcessPageContextTimeout(t *testing.T) {
-	source := &sourceMock{}
-	target := &targetMock{
-		outcomes: map[string]port.UpsertOutcome{},
-		errors: map[string]error{
-			"timeout@example.com": context.DeadlineExceeded,
-		},
-	}
-
-	service, err := NewService(SyncConfig{Enabled: true}, source, target, nil, zap.NewNop())
-	if err != nil {
-		t.Fatalf("NewService() error = %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-
-	time.Sleep(2 * time.Millisecond)
-
-	summary := &SyncSummary{}
-	if processErr := service.processPage(ctx, []port.WooOrder{{BillingEmail: "timeout@example.com", BillingFirstName: "Time", BillingLastName: "Out"}}, map[string]struct{}{}, summary); !errorspkg.Is(processErr, context.DeadlineExceeded) {
-		t.Fatalf("processPage() error = %v, want context.DeadlineExceeded", processErr)
 	}
 }

@@ -7,8 +7,10 @@
 - Contact synchronization from WooCommerce orders into the contacts module.
 - Manual and scheduled sync triggers.
 - Integration events for sync lifecycle visibility.
+- Configurable circuit-breaker protection for WooCommerce source outages.
 
 ## Architecture
+- `runtime/`: module composition root wiring (constructor, lifecycle, source/bootstrap helpers, module OpenAPI artifact).
 - `port/`: provider-agnostic contracts.
 - `application/`: application-layer feature namespace.
 - `application/contact`: contacts feature use cases and integration event mapping.

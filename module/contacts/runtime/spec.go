@@ -1,4 +1,4 @@
-package contacts
+package runtime
 
 import "github.com/getkin/kin-openapi/openapi3"
 

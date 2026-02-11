@@ -1,4 +1,4 @@
-package woocommerce
+package runtime
 
 import (
 	"context"
@@ -299,5 +299,11 @@ func TestResolveHelpers(t *testing.T) {
 	}
 	if resolveContext(nil) == nil {
 		t.Fatalf("resolveContext(nil) should return background context")
+	}
+	if newSourceCircuitBreaker(Config{CircuitBreakerEnabled: false}, zap.NewNop()) != nil {
+		t.Fatalf("newSourceCircuitBreaker() should return nil when disabled")
+	}
+	if newSourceCircuitBreaker(Config{CircuitBreakerEnabled: true}, zap.NewNop()) == nil {
+		t.Fatalf("newSourceCircuitBreaker() should return breaker when enabled")
 	}
 }

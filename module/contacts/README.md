@@ -3,6 +3,7 @@
 `module/contacts` provides DDD/hexagonal contact management use cases and HTTP adapters.
 
 ## Packages
+- `runtime`: module composition root wiring and module OpenAPI artifact.
 - `domain`: contact entities and invariants.
 - `port`: repository ports and query contracts.
 - `application`: use-case services.
