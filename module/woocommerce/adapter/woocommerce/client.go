@@ -2,8 +2,13 @@ package woocommerce
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +44,16 @@ type Config struct {
 type Client struct {
 	// client defines underlying WooCommerce SDK clients.
 	client *wc.WooCommerce
+	// baseURL defines normalized WooCommerce base URL values.
+	baseURL string
+	// consumerKey defines WooCommerce API consumer key values.
+	consumerKey string
+	// consumerSecret defines WooCommerce API consumer secret values.
+	consumerSecret string
+	// timeout defines HTTP timeout values for raw-order fallback requests.
+	timeout time.Duration
+	// verifySSL controls TLS verification behavior for raw-order fallback requests.
+	verifySSL bool
 }
 
 var (
@@ -57,8 +72,9 @@ func NewClient(cfg Config) (*Client, error) {
 		timeout = 5 * time.Second
 	}
 
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.URL), "/")
 	client := wc.NewClient(wcconfig.Config{
-		URL:                    strings.TrimRight(strings.TrimSpace(cfg.URL), "/"),
+		URL:                    baseURL,
 		Version:                "v3",
 		ConsumerKey:            strings.TrimSpace(cfg.ConsumerKey),
 		ConsumerSecret:         strings.TrimSpace(cfg.ConsumerSecret),
@@ -67,7 +83,14 @@ func NewClient(cfg Config) (*Client, error) {
 		VerifySSL:              cfg.VerifySSL,
 	})
 
-	return &Client{client: client}, nil
+	return &Client{
+		client:         client,
+		baseURL:        baseURL,
+		consumerKey:    strings.TrimSpace(cfg.ConsumerKey),
+		consumerSecret: strings.TrimSpace(cfg.ConsumerSecret),
+		timeout:        timeout,
+		verifySSL:      cfg.VerifySSL,
+	}, nil
 }
 
 // Validate verifies source connectivity and credentials.
@@ -100,8 +123,21 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 	params.Order = wc.SortAsc
 	params.OrderBy = "id"
 
-	items, _, _, isLastPage, listErr := c.client.Services.Order.All(params)
+	items, _, totalPages, isLastPage, listErr := c.client.Services.Order.All(params)
 	if listErr != nil {
+		if shouldUseRawOrderFallback(listErr) {
+			rawItems, rawHasNext, rawErr := c.listOrdersRaw(ctx, page, pageSize)
+			if rawErr == nil {
+				return rawItems, rawHasNext, nil
+			}
+
+			return nil, false, fmt.Errorf(
+				"list woocommerce orders: strict SDK decode failed (%s); raw fallback failed: %w",
+				compactError(listErr, 280),
+				rawErr,
+			)
+		}
+
 		return nil, false, fmt.Errorf("list woocommerce orders: %w", listErr)
 	}
 
@@ -121,6 +157,7 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 			BillingEmail:     strings.TrimSpace(item.Billing.Email),
 			BillingFirstName: strings.TrimSpace(item.Billing.FirstName),
 			BillingLastName:  strings.TrimSpace(item.Billing.LastName),
+			BillingCompany:   strings.TrimSpace(item.Billing.Company),
 			BillingPhone:     strings.TrimSpace(item.Billing.Phone),
 			BillingAddress1:  strings.TrimSpace(item.Billing.Address1),
 			BillingAddress2:  strings.TrimSpace(item.Billing.Address2),
@@ -133,7 +170,169 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 		return nil, false, err
 	}
 
-	return result, !isLastPage, nil
+	return result, resolveHasNextPage(page, pageSize, len(items), totalPages, isLastPage), nil
+}
+
+// listOrdersRaw performs tolerant order decoding for metadata values unsupported by SDK structs.
+func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
+	query := url.Values{}
+	query.Set("page", strconv.Itoa(page))
+	query.Set("per_page", strconv.Itoa(pageSize))
+	query.Set("order", "asc")
+	query.Set("orderby", "id")
+	query.Set("consumer_key", c.consumerKey)
+	query.Set("consumer_secret", c.consumerSecret)
+
+	endpoint := c.baseURL + "/wp-json/wc/v3/orders?" + query.Encode()
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if requestErr != nil {
+		return nil, false, fmt.Errorf("create raw orders request: %w", requestErr)
+	}
+
+	httpClient := &http.Client{
+		Timeout: c.timeout,
+	}
+	if !c.verifySSL {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	response, responseErr := httpClient.Do(request)
+	if responseErr != nil {
+		return nil, false, fmt.Errorf("execute raw orders request: %w", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, false, fmt.Errorf("raw orders request returned status %d", response.StatusCode)
+	}
+
+	type rawMeta struct {
+		Key   string `json:"key"`
+		Value any    `json:"value"`
+	}
+	type rawOrder struct {
+		ID      int `json:"id"`
+		Billing struct {
+			Email     string `json:"email"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+			Company   string `json:"company"`
+			Phone     string `json:"phone"`
+			Address1  string `json:"address_1"`
+			Address2  string `json:"address_2"`
+			City      string `json:"city"`
+		} `json:"billing"`
+		MetaData []rawMeta `json:"meta_data"`
+	}
+
+	var payload []rawOrder
+	if decodeErr := json.NewDecoder(response.Body).Decode(&payload); decodeErr != nil {
+		return nil, false, fmt.Errorf("decode raw orders response: %w", decodeErr)
+	}
+
+	result := make([]port.WooOrder, 0, len(payload))
+	for _, item := range payload {
+		metadata := map[string]string{}
+		for _, meta := range item.MetaData {
+			key := strings.TrimSpace(meta.Key)
+			if key == "" {
+				continue
+			}
+			metadata[key] = normalizeMetadataValue(meta.Value)
+		}
+
+		result = append(result, port.WooOrder{
+			ID:               item.ID,
+			BillingEmail:     strings.TrimSpace(item.Billing.Email),
+			BillingFirstName: strings.TrimSpace(item.Billing.FirstName),
+			BillingLastName:  strings.TrimSpace(item.Billing.LastName),
+			BillingCompany:   strings.TrimSpace(item.Billing.Company),
+			BillingPhone:     strings.TrimSpace(item.Billing.Phone),
+			BillingAddress1:  strings.TrimSpace(item.Billing.Address1),
+			BillingAddress2:  strings.TrimSpace(item.Billing.Address2),
+			BillingCity:      strings.TrimSpace(item.Billing.City),
+			Metadata:         metadata,
+		})
+	}
+
+	totalPages, _ := strconv.Atoi(response.Header.Get("X-Wp-Totalpages"))
+	isLastPage := page >= totalPages && totalPages > 0
+	return result, resolveHasNextPage(page, pageSize, len(result), totalPages, isLastPage), nil
+}
+
+// shouldUseRawOrderFallback reports whether strict SDK decode failures should use tolerant raw decoding.
+func shouldUseRawOrderFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	value := strings.ToLower(err.Error())
+	markers := [...]string{
+		"fuzzystringdecoder",
+		"entity.order.meta",
+		"entity.meta.value",
+		"meta_data",
+		"not number or string",
+		"cannot unmarshal",
+		"json:",
+	}
+	for _, marker := range markers {
+		if strings.Contains(value, marker) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// normalizeMetadataValue converts dynamic metadata values to stable string representations.
+func normalizeMetadataValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(typed)
+	case float64:
+		if typed == float64(int64(typed)) {
+			return strconv.FormatInt(int64(typed), 10)
+		}
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(typed)
+	case []any:
+		if len(typed) == 1 {
+			return normalizeMetadataValue(typed[0])
+		}
+		payload, err := json.Marshal(typed)
+		if err != nil {
+			return fmt.Sprintf("%v", typed)
+		}
+		return string(payload)
+	case map[string]any:
+		payload, err := json.Marshal(typed)
+		if err != nil {
+			return fmt.Sprintf("%v", typed)
+		}
+		return string(payload)
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", typed))
+	}
+}
+
+// compactError normalizes and truncates error text for concise diagnostics.
+func compactError(err error, limit int) string {
+	if err == nil {
+		return ""
+	}
+
+	value := strings.Join(strings.Fields(strings.TrimSpace(err.Error())), " ")
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+
+	return value[:limit] + "..."
 }
 
 // validateConfig validates WooCommerce client configuration values.
@@ -149,4 +348,17 @@ func validateConfig(cfg Config) error {
 	}
 
 	return nil
+}
+
+// resolveHasNextPage resolves pagination continuation behavior from header and payload signals.
+func resolveHasNextPage(page int, pageSize int, itemCount int, totalPages int, isLastPage bool) bool {
+	if totalPages > 0 && page < totalPages {
+		return true
+	}
+
+	if pageSize > 0 && itemCount >= pageSize {
+		return true
+	}
+
+	return !isLastPage
 }

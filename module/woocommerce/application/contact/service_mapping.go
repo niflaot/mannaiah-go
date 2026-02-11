@@ -15,7 +15,9 @@ func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
 
 	firstName := strings.TrimSpace(order.BillingFirstName)
 	lastName := strings.TrimSpace(order.BillingLastName)
-	if firstName == "" || lastName == "" {
+	company := strings.TrimSpace(order.BillingCompany)
+	hasPersonalName := firstName != "" && lastName != ""
+	if !hasPersonalName && company == "" {
 		return port.ContactSyncCommand{}, false
 	}
 
@@ -25,10 +27,16 @@ func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
 		documentType = "CC"
 	}
 
+	legalName := ""
+	if !hasPersonalName {
+		legalName = company
+	}
+
 	return port.ContactSyncCommand{
 		Email:          email,
 		FirstName:      firstName,
 		LastName:       lastName,
+		LegalName:      legalName,
 		Phone:          normalizePhone(order.BillingPhone),
 		Address:        strings.TrimSpace(order.BillingAddress1),
 		AddressExtra:   strings.TrimSpace(order.BillingAddress2),

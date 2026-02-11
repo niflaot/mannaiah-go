@@ -162,6 +162,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 	}
 
 	seenEmails := map[string]struct{}{}
+	pendingCommands := make([]port.ContactSyncCommand, 0)
 	page := 1
 	for {
 		if err := ctx.Err(); err != nil {
@@ -171,7 +172,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 
 		orders, hasNext, err := s.loadPage(ctx, page)
 		if err != nil {
-			wrappedErr := fmt.Errorf("list woocommerce orders page %d: %w", page, err)
+			wrappedErr := fmt.Errorf("list woocommerce orders page %d (%s): %w", page, formatSyncProgress(summary), err)
 			s.publishEvent(ctx, buildSyncFailedEvent(*summary, wrappedErr))
 			return nil, wrappedErr
 		}
@@ -180,15 +181,18 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			break
 		}
 
-		if err := s.processPage(ctx, orders, seenEmails, summary); err != nil {
-			s.publishEvent(ctx, buildSyncFailedEvent(*summary, err))
-			return nil, err
-		}
+		pendingCommands = append(pendingCommands, collectCommandsFromOrders(orders, seenEmails, summary)...)
 
 		if !hasNext {
 			break
 		}
 		page++
+	}
+
+	if err := s.processCommands(ctx, pendingCommands, summary); err != nil {
+		wrappedErr := fmt.Errorf("process woocommerce orders sync (%s): %w", formatSyncProgress(summary), err)
+		s.publishEvent(ctx, buildSyncFailedEvent(*summary, wrappedErr))
+		return nil, wrappedErr
 	}
 
 	s.publishEvent(ctx, buildSyncCompletedEvent(*summary))
@@ -207,4 +211,22 @@ func (s *ContactSyncService) loadPage(ctx context.Context, page int) (orders []p
 	}
 
 	return orders, hasNext, nil
+}
+
+// formatSyncProgress formats sync summary counters for error diagnostics.
+func formatSyncProgress(summary *SyncSummary) string {
+	if summary == nil {
+		return "trigger=unknown processed=0 created=0 updated=0 unchanged=0 skipped=0 failed=0"
+	}
+
+	return fmt.Sprintf(
+		"trigger=%s processed=%d created=%d updated=%d unchanged=%d skipped=%d failed=%d",
+		summary.Trigger,
+		summary.Processed,
+		summary.Created,
+		summary.Updated,
+		summary.Unchanged,
+		summary.Skipped,
+		summary.Failed,
+	)
 }

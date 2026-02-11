@@ -9,6 +9,7 @@ import (
 	wmlog "github.com/ThreeDotsLabs/watermill"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // TestZapAdapterLogs verifies Watermill logger adapter writes logs through Zap.
@@ -52,4 +53,30 @@ func TestZapAdapterWith(t *testing.T) {
 func TestZapAdapterNilLoggerFallback(t *testing.T) {
 	adapter := NewZapAdapter(nil)
 	adapter.Info("noop", nil)
+}
+
+// TestZapAdapterDowngradesNoSubscribersMessage verifies no-subscriber Watermill messages are logged at debug level.
+func TestZapAdapterDowngradesNoSubscribersMessage(t *testing.T) {
+	core, observed := observer.New(zapcore.DebugLevel)
+	adapter := NewZapAdapter(zap.New(core))
+
+	adapter.Info("No subscribers to send message", wmlog.LogFields{"topic": "events"})
+
+	entries := observed.All()
+	if len(entries) != 1 {
+		t.Fatalf("len(entries) = %d, want %d", len(entries), 1)
+	}
+	if entries[0].Level != zapcore.DebugLevel {
+		t.Fatalf("entry.Level = %v, want %v", entries[0].Level, zapcore.DebugLevel)
+	}
+}
+
+// TestIsNoSubscribersMessage verifies no-subscriber message matching behavior.
+func TestIsNoSubscribersMessage(t *testing.T) {
+	if !isNoSubscribersMessage("No subscribers to send message") {
+		t.Fatalf("expected exact message match")
+	}
+	if isNoSubscribersMessage("other") {
+		t.Fatalf("unexpected match for unrelated message")
+	}
 }

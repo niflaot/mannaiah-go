@@ -12,6 +12,8 @@ type WooOrder struct {
 	BillingFirstName string
 	// BillingLastName defines order billing last-name values.
 	BillingLastName string
+	// BillingCompany defines order billing company values.
+	BillingCompany string
 	// BillingPhone defines order billing phone values.
 	BillingPhone string
 	// BillingAddress1 defines order billing address line 1 values.

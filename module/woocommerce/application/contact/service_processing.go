@@ -10,10 +10,9 @@ import (
 	"mannaiah/module/woocommerce/port"
 )
 
-// processPage applies concurrent upsert behavior for a WooCommerce order page.
-func (s *ContactSyncService) processPage(ctx context.Context, orders []port.WooOrder, seenEmails map[string]struct{}, summary *SyncSummary) error {
+// collectCommandsFromOrders maps order payload values into deduplicated contact commands.
+func collectCommandsFromOrders(orders []port.WooOrder, seenEmails map[string]struct{}, summary *SyncSummary) []port.ContactSyncCommand {
 	commands := make([]port.ContactSyncCommand, 0, len(orders))
-
 	for _, order := range orders {
 		command, shouldProcess := mapOrderToCommand(order)
 		if !shouldProcess {
@@ -30,6 +29,11 @@ func (s *ContactSyncService) processPage(ctx context.Context, orders []port.WooO
 		commands = append(commands, command)
 	}
 
+	return commands
+}
+
+// processCommands applies concurrent upsert behavior for prepared sync command values.
+func (s *ContactSyncService) processCommands(ctx context.Context, commands []port.ContactSyncCommand, summary *SyncSummary) error {
 	if len(commands) == 0 {
 		return nil
 	}

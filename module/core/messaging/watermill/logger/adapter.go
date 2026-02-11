@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"strings"
 
 	wmlog "github.com/ThreeDotsLabs/watermill"
 	"go.uber.org/zap"
@@ -33,6 +34,11 @@ func (a *zapAdapter) Error(message string, err error, fields wmlog.LogFields) {
 
 // Info logs Watermill info-level events.
 func (a *zapAdapter) Info(message string, fields wmlog.LogFields) {
+	if isNoSubscribersMessage(message) {
+		a.logger.Debug(message, logFieldsToZap(fields)...)
+		return
+	}
+
 	a.logger.Info(message, logFieldsToZap(fields)...)
 }
 
@@ -74,4 +80,9 @@ func normalizeLogValue(value any) any {
 	}
 
 	return fmt.Sprintf("%v", value)
+}
+
+// isNoSubscribersMessage reports Watermill pubsub no-subscriber information messages.
+func isNoSubscribersMessage(message string) bool {
+	return strings.EqualFold(strings.TrimSpace(message), "No subscribers to send message")
 }

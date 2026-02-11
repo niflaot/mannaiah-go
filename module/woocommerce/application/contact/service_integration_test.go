@@ -3,6 +3,7 @@ package contact
 import (
 	"context"
 	errorspkg "errors"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -288,6 +289,33 @@ func TestSyncContactsListError(t *testing.T) {
 	}
 	if publisher.events[1].Topic != TopicContactsSyncFailed {
 		t.Fatalf("events[1].Topic = %q, want %q", publisher.events[1].Topic, TopicContactsSyncFailed)
+	}
+}
+
+// TestSyncContactsListErrorDoesNotApplyPartialWrites verifies that source-page failures do not upsert partial state.
+func TestSyncContactsListErrorDoesNotApplyPartialWrites(t *testing.T) {
+	source := &sourceMock{
+		pages: [][]port.WooOrder{
+			{{BillingEmail: "first@example.com", BillingFirstName: "First", BillingLastName: "User"}},
+			{},
+		},
+		listErrAtPage: map[int]error{2: errorspkg.New("upstream page failure")},
+	}
+	target := &targetMock{outcomes: map[string]port.UpsertOutcome{}, errors: map[string]error{}}
+
+	service, err := NewService(SyncConfig{Enabled: true}, source, target, &publisherMock{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if _, syncErr := service.SyncContacts(context.Background(), "manual"); syncErr == nil {
+		t.Fatalf("expected SyncContacts() error")
+	} else if !strings.Contains(syncErr.Error(), "processed=0") {
+		t.Fatalf("SyncContacts() error = %q, expected progress diagnostics", syncErr.Error())
+	}
+
+	if len(target.commands) != 0 {
+		t.Fatalf("len(commands) = %d, want %d when page listing fails before apply phase", len(target.commands), 0)
 	}
 }
 

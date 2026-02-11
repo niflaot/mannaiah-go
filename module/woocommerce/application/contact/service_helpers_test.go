@@ -39,9 +39,20 @@ func TestMapOrderToCommand(t *testing.T) {
 	if shouldProcess {
 		t.Fatalf("expected order without email to be skipped")
 	}
-	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "user@example.com", BillingFirstName: "", BillingLastName: "Doe"})
+	command, shouldProcess = mapOrderToCommand(port.WooOrder{
+		BillingEmail:   "user@example.com",
+		BillingCompany: "Acme Corp",
+	})
+	if !shouldProcess {
+		t.Fatalf("expected order with billing company to be processed as legal contact")
+	}
+	if command.LegalName != "Acme Corp" {
+		t.Fatalf("command.LegalName = %q, want %q", command.LegalName, "Acme Corp")
+	}
+
+	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "user@example.com", BillingFirstName: "", BillingLastName: "Doe", BillingCompany: ""})
 	if shouldProcess {
-		t.Fatalf("expected order without complete names to be skipped")
+		t.Fatalf("expected order without personal names and company to be skipped")
 	}
 }
 
@@ -72,6 +83,13 @@ func TestNormalizeHelpers(t *testing.T) {
 	manualBreakers := CircuitBreakers{Source: &circuitBreakerMock{}}
 	if resolveCircuitBreakers([]CircuitBreakers{manualBreakers}).Source == nil {
 		t.Fatalf("resolveCircuitBreakers(values).Source should preserve values")
+	}
+	progress := formatSyncProgress(&SyncSummary{Trigger: "manual", Processed: 1, Created: 1})
+	if progress == "" {
+		t.Fatalf("formatSyncProgress(summary) should not be empty")
+	}
+	if formatSyncProgress(nil) == "" {
+		t.Fatalf("formatSyncProgress(nil) should not be empty")
 	}
 }
 
@@ -106,8 +124,8 @@ func TestPublishEventNoPanic(t *testing.T) {
 	service.publishEvent(context.Background(), buildSyncStartedEvent("manual"))
 }
 
-// TestProcessPageContextTimeout verifies context timeout behavior during processing.
-func TestProcessPageContextTimeout(t *testing.T) {
+// TestProcessCommandsContextTimeout verifies context timeout behavior during processing.
+func TestProcessCommandsContextTimeout(t *testing.T) {
 	source := &sourceMock{}
 	target := &targetMock{
 		outcomes: map[string]port.UpsertOutcome{},
@@ -127,8 +145,13 @@ func TestProcessPageContextTimeout(t *testing.T) {
 	time.Sleep(2 * time.Millisecond)
 
 	summary := &SyncSummary{}
-	if processErr := service.processPage(ctx, []port.WooOrder{{BillingEmail: "timeout@example.com", BillingFirstName: "Time", BillingLastName: "Out"}}, map[string]struct{}{}, summary); !errorspkg.Is(processErr, context.DeadlineExceeded) {
-		t.Fatalf("processPage() error = %v, want context.DeadlineExceeded", processErr)
+	commands := collectCommandsFromOrders(
+		[]port.WooOrder{{BillingEmail: "timeout@example.com", BillingFirstName: "Time", BillingLastName: "Out"}},
+		map[string]struct{}{},
+		summary,
+	)
+	if processErr := service.processCommands(ctx, commands, summary); !errorspkg.Is(processErr, context.DeadlineExceeded) {
+		t.Fatalf("processCommands() error = %v, want context.DeadlineExceeded", processErr)
 	}
 }
 
