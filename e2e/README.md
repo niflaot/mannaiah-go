@@ -9,6 +9,7 @@
 - Includes black-box startup process validation by running `go run ./module/core/cmd/api`.
 - Includes resilience scenarios for authentication, database-connection failures, messaging publication failures, and concurrent uniqueness races.
 - Includes benchmark coverage for hot persistence paths under module-level benchmark suites.
+- Includes scheduler configuration and execution validation for the core cron package.
 
 ## Key Methods / Endpoints / Events
 - Methods:
@@ -20,6 +21,7 @@
   - `(*contactsE2EHarness).SignToken(t, scopes)`
   - `(*contactsE2EHarness).AwaitCreatedEvent(t)`
   - `(*contactsE2EHarness).AwaitUpdatedEvent(t)`
+  - `waitForCronRun(t, signal, timeout)`
 - Endpoints:
   - `POST /contacts`
   - `GET /contacts`

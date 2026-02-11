@@ -10,6 +10,7 @@
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
 - `http`: Fiber server setup with `CORE_HOST`/`CORE_PORT`-authoritative address resolution and Zap request logging.
+- `cron`: provider-agnostic in-process scheduling backed by `robfig/cron`.
 - `swagger`: OpenAPI aggregation and documentation route exposure.
 - `startup`: module-loading runtime helpers for composition roots.
 
@@ -55,6 +56,15 @@
   - `(*database.Service[T]).Paginate(ctx, query)`
   - `(*database.Service[T]).Update(ctx, id, updates)`
   - `(*database.Service[T]).Delete(ctx, id)`
+  - `cron.New(cfg, providedLogger)`
+  - `cron.NewScheduler(cfg, providedLogger)`
+  - `(*cron.Service).Add(spec, job)`
+  - `(*cron.Service).AddFunc(spec, job)`
+  - `(*cron.Service).Remove(id)`
+  - `(*cron.Service).Entries()`
+  - `(*cron.Service).Start()`
+  - `(*cron.Service).Run()`
+  - `(*cron.Service).Stop(ctx)`
   - `http.New(cfg, providedLogger)`
   - `http.NewWithCore(cfg, coreCfg, providedLogger)`
   - `http.AddressFrom(cfg, coreCfg)`
