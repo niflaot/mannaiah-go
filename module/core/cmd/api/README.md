@@ -11,6 +11,7 @@
   - `shutdownResources(db, httpServer, messaging)`
 - Endpoints:
   - `GET /status`
+  - `GET /check-auth`
   - `GET /openapi.json`
   - `GET /docs`
   - plus any module endpoints loaded at startup

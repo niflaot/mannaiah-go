@@ -132,6 +132,9 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("initialize auth module: %w", err)
 	}
+	if err := authModule.Load(runtime); err != nil {
+		return fmt.Errorf("load auth module: %w", err)
+	}
 
 	contactsModule, err := contacts.New(db, contactPublisher)
 	if err != nil {

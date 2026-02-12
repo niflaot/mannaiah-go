@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
+	authhttp "mannaiah/module/auth/adapter/http"
 	jwtadapter "mannaiah/module/auth/adapter/jwt"
 	"mannaiah/module/auth/application"
+	corehttp "mannaiah/module/core/http"
 )
 
 // Authorizer defines authentication and authorization behavior required by module adapters.
@@ -21,10 +24,20 @@ type Authorizer interface {
 	IsForbidden(err error) bool
 }
 
+// Loader defines bootstrap hooks required by auth modules.
+type Loader interface {
+	// RegisterRoutes registers module route handlers.
+	RegisterRoutes(register func(router corehttp.Router))
+	// AddOpenAPISpec merges module OpenAPI specs.
+	AddOpenAPISpec(spec *openapi3.T) error
+}
+
 // Module defines auth-module composition dependencies.
 type Module struct {
 	// service defines application-layer auth behavior.
-	service *application.AuthService
+	service application.Service
+	// handler defines HTTP adapter used for route registration.
+	handler *authhttp.Handler
 }
 
 var (
@@ -59,7 +72,12 @@ func New(cfg Config, coreEnvironment string, logger *zap.Logger) (*Module, error
 		return nil, err
 	}
 
-	return &Module{service: service}, nil
+	handler, err := authhttp.NewHandler(service)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Module{service: service, handler: handler}, nil
 }
 
 // Require authenticates and authorizes a request by bearer header and required permissions.
@@ -79,6 +97,34 @@ func (m *Module) IsUnauthorized(err error) bool {
 // IsForbidden reports whether an error is an authorization failure.
 func (m *Module) IsForbidden(err error) bool {
 	return errors.Is(err, application.ErrForbidden)
+}
+
+// RegisterRoutes registers auth routes on the provided router.
+func (m *Module) RegisterRoutes(router corehttp.Router) {
+	if m == nil || m.handler == nil {
+		return
+	}
+
+	m.handler.RegisterRoutes(router)
+}
+
+// OpenAPISpec returns auth-module OpenAPI documentation.
+func (m *Module) OpenAPISpec() *openapi3.T {
+	return OpenAPISpec()
+}
+
+// Load mounts all module routes/specs into the provided startup loader.
+func (m *Module) Load(loader Loader) error {
+	if m == nil || loader == nil {
+		return nil
+	}
+
+	loader.RegisterRoutes(m.RegisterRoutes)
+	if err := loader.AddOpenAPISpec(m.OpenAPISpec()); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // resolveEnvironment resolves runtime environment from core-level configuration.

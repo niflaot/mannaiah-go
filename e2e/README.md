@@ -32,6 +32,7 @@
   - `GET /contacts/:id`
   - `PATCH /contacts/:id`
   - `DELETE /contacts/:id`
+  - `GET /check-auth`
   - `POST /products`
   - `GET /products`
   - `GET /products/:id`

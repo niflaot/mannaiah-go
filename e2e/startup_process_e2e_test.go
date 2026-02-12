@@ -93,6 +93,9 @@ func TestStartupProcessE2E(t *testing.T) {
 	if paths["/assets"] == nil || paths["/assets/{id}"] == nil {
 		t.Fatalf("expected /assets paths in aggregated openapi")
 	}
+	if paths["/check-auth"] == nil {
+		t.Fatalf("expected /check-auth path in aggregated openapi")
+	}
 
 	tracer.Step("create contact through development auth bypass")
 	createCode, createBody := doJSONHTTP(t, client, http.MethodPost, "http://"+address+"/contacts", "dev-bypass-token", map[string]any{

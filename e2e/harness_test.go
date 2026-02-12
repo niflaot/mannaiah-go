@@ -252,6 +252,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 		t.Fatalf("corehttp.New() error = %v", err)
 	}
 	server.RegisterRoutes(contactsModule.RegisterRoutes)
+	server.RegisterRoutes(authModule.RegisterRoutes)
 	server.RegisterRoutes(assetsModule.RegisterRoutes)
 	server.RegisterRoutes(productsModule.RegisterRoutes)
 
