@@ -1,4 +1,4 @@
-package contact
+package service
 
 import (
 	"context"
@@ -43,8 +43,14 @@ func (s *ContactSyncService) processCommands(ctx context.Context, commands []por
 		workerCount = len(commands)
 	}
 
-	workChannel := make(chan port.ContactSyncCommand, len(commands))
-	resultChannel := make(chan upsertResult, len(commands))
+	channelSize := workerCount * 2
+	if channelSize < 1 {
+		channelSize = 1
+	}
+
+	workChannel := make(chan port.ContactSyncCommand, channelSize)
+	resultChannel := make(chan upsertResult, channelSize)
+	dispatchErrChannel := make(chan error, 1)
 	var workerWait sync.WaitGroup
 
 	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
@@ -68,23 +74,41 @@ func (s *ContactSyncService) processCommands(ctx context.Context, commands []por
 		}()
 	}
 
-	for _, command := range commands {
-		if err := ctx.Err(); err != nil {
-			close(workChannel)
-			workerWait.Wait()
-			close(resultChannel)
-			return err
+	go func() {
+		defer close(workChannel)
+
+		for _, command := range commands {
+			if err := ctx.Err(); err != nil {
+				dispatchErrChannel <- err
+				return
+			}
+
+			select {
+			case workChannel <- command:
+			case <-ctx.Done():
+				dispatchErrChannel <- ctx.Err()
+				return
+			}
 		}
-		workChannel <- command
-	}
-	close(workChannel)
 
-	workerWait.Wait()
-	close(resultChannel)
+		dispatchErrChannel <- nil
+	}()
 
+	go func() {
+		workerWait.Wait()
+		close(resultChannel)
+	}()
+
+	var canceledErr error
 	for result := range resultChannel {
 		if errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded) {
-			return result.err
+			if canceledErr == nil {
+				canceledErr = result.err
+			}
+			continue
+		}
+		if canceledErr != nil {
+			continue
 		}
 
 		summary.Processed++
@@ -95,6 +119,13 @@ func (s *ContactSyncService) processCommands(ctx context.Context, commands []por
 		}
 
 		applyOutcome(summary, result.outcome)
+	}
+
+	if dispatchErr := <-dispatchErrChannel; dispatchErr != nil && canceledErr == nil {
+		canceledErr = dispatchErr
+	}
+	if canceledErr != nil {
+		return canceledErr
 	}
 
 	return nil

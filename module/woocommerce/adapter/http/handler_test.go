@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	corehttp "mannaiah/module/core/http"
-	woocontact "mannaiah/module/woocommerce/application/contact"
+	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 )
 
 // serviceMock defines WooCommerce service behavior for handler tests.
 type serviceMock struct {
 	// summary defines sync summary responses.
-	summary *woocontact.SyncSummary
+	summary *woocontactservice.SyncSummary
 	// syncErr defines sync execution errors.
 	syncErr error
 }
@@ -24,7 +24,7 @@ func (m *serviceMock) ValidateIntegration(ctx context.Context) error {
 }
 
 // SyncContacts performs sync behavior.
-func (m *serviceMock) SyncContacts(ctx context.Context, trigger string) (*woocontact.SyncSummary, error) {
+func (m *serviceMock) SyncContacts(ctx context.Context, trigger string) (*woocontactservice.SyncSummary, error) {
 	if m.syncErr != nil {
 		return nil, m.syncErr
 	}
@@ -32,7 +32,7 @@ func (m *serviceMock) SyncContacts(ctx context.Context, trigger string) (*woocon
 		return m.summary, nil
 	}
 
-	return &woocontact.SyncSummary{Trigger: trigger}, nil
+	return &woocontactservice.SyncSummary{Trigger: trigger}, nil
 }
 
 // authorizerMock defines authorization behavior for handler tests.
@@ -73,7 +73,7 @@ func TestNewHandlerValidation(t *testing.T) {
 // TestRegisterRoutesAndSync verifies route registration and successful sync behavior.
 func TestRegisterRoutesAndSync(t *testing.T) {
 	handler, err := NewHandler(&serviceMock{
-		summary: &woocontact.SyncSummary{Trigger: "manual", Processed: 2},
+		summary: &woocontactservice.SyncSummary{Trigger: "manual", Processed: 2},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
@@ -125,10 +125,10 @@ func TestMapError(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
-	if appErr := handler.mapError(woocontact.ErrSyncDisabled); appErr == nil {
+	if appErr := handler.mapError(woocontactservice.ErrSyncDisabled); appErr == nil {
 		t.Fatalf("expected mapError(sync disabled)")
 	}
-	if appErr := handler.mapError(woocontact.ErrIntegrationUnavailable); appErr == nil {
+	if appErr := handler.mapError(woocontactservice.ErrIntegrationUnavailable); appErr == nil {
 		t.Fatalf("expected mapError(integration unavailable)")
 	}
 	if appErr := handler.mapError(errorspkg.New("unknown")); appErr == nil {

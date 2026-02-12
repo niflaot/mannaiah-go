@@ -6,7 +6,7 @@ import (
 
 	corecircuitbreaker "mannaiah/module/core/circuitbreaker"
 	wooadapter "mannaiah/module/woocommerce/adapter/woocommerce"
-	woocontact "mannaiah/module/woocommerce/application/contact"
+	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	"mannaiah/module/woocommerce/port"
 
 	"go.uber.org/zap"
@@ -24,7 +24,7 @@ func newSource(cfg Config) (port.OrderSource, error) {
 }
 
 // newSourceCircuitBreaker creates WooCommerce source circuit-breaker dependencies from module config values.
-func newSourceCircuitBreaker(cfg Config, providedLogger *zap.Logger) woocontact.CircuitBreaker {
+func newSourceCircuitBreaker(cfg Config, providedLogger *zap.Logger) woocontactservice.CircuitBreaker {
 	if !cfg.CircuitBreakerEnabled {
 		return nil
 	}

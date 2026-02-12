@@ -1,4 +1,4 @@
-package contact
+package event
 
 import (
 	"context"
@@ -9,12 +9,12 @@ import (
 
 // TestResolvePublisher verifies optional publisher resolution behavior.
 func TestResolvePublisher(t *testing.T) {
-	if value := resolvePublisher(nil); value == nil {
+	if value := ResolvePublisher(nil); value == nil {
 		t.Fatalf("expected noop publisher")
 	}
 
 	publisher := &publisherProbe{}
-	if value := resolvePublisher(publisher); value != publisher {
+	if value := ResolvePublisher(publisher); value != publisher {
 		t.Fatalf("expected provided publisher to be preserved")
 	}
 }
@@ -23,13 +23,13 @@ func TestResolvePublisher(t *testing.T) {
 type publisherProbe struct{}
 
 // Publish emits integration events.
-func (publisherProbe) Publish(ctx context.Context, event port.IntegrationEvent) error {
+func (publisherProbe) Publish(ctx context.Context, integrationEvent port.IntegrationEvent) error {
 	return nil
 }
 
 // TestBuildSyncEvents verifies integration event factory behavior.
 func TestBuildSyncEvents(t *testing.T) {
-	started := buildSyncStartedEvent("manual")
+	started := NewSyncStartedEvent("manual")
 	if started.Topic != TopicContactsSyncStarted {
 		t.Fatalf("started.Topic = %q, want %q", started.Topic, TopicContactsSyncStarted)
 	}
@@ -37,7 +37,7 @@ func TestBuildSyncEvents(t *testing.T) {
 		t.Fatalf("started.SchemaVersion = %q, want %q", started.SchemaVersion, schemaVersionV1)
 	}
 
-	summary := SyncSummary{
+	summary := Summary{
 		Trigger:   "cron",
 		Processed: 10,
 		Created:   4,
@@ -46,12 +46,12 @@ func TestBuildSyncEvents(t *testing.T) {
 		Skipped:   1,
 		Failed:    0,
 	}
-	completed := buildSyncCompletedEvent(summary)
+	completed := NewSyncCompletedEvent(summary)
 	if completed.Topic != TopicContactsSyncCompleted {
 		t.Fatalf("completed.Topic = %q, want %q", completed.Topic, TopicContactsSyncCompleted)
 	}
 
-	failed := buildSyncFailedEvent(summary, context.Canceled)
+	failed := NewSyncFailedEvent(summary, context.Canceled)
 	if failed.Topic != TopicContactsSyncFailed {
 		t.Fatalf("failed.Topic = %q, want %q", failed.Topic, TopicContactsSyncFailed)
 	}

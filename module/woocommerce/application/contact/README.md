@@ -1,22 +1,16 @@
-# WooCommerce Contact Sync Application Package
+# WooCommerce Contact Application Namespace
 
-`application/contact` contains contact-related WooCommerce use cases and transport-agnostic event mapping for WooCommerce order ingestion.
+`application/contact` is a namespace package used to group contact-related WooCommerce use cases.
 
 ## Responsibilities
-- Validate integration availability before sync execution.
-- Orchestrate paginated WooCommerce order retrieval.
-- Map order billing fields into contact upsert commands.
-- Perform concurrent contact upserts with run-wide email deduplication.
-- Apply optional circuit-breaker fail-fast behavior for source and upsert dependencies.
-- Emit integration lifecycle events (`started`, `completed`, `failed`).
+- Provide a stable package boundary for contact application features.
+- Delegate concrete use-case behavior to child packages.
+
+## Child Packages
+- `application/contact/service`: contact sync use case orchestration.
+- `application/contact/event`: contact sync integration event contracts/builders.
 
 ## Key Methods / Endpoints / Events
-- Methods:
-  - `contact.NewService(cfg, source, target, publisher, logger, breakers...)`
-  - `(*contact.ContactSyncService).ValidateIntegration(ctx)`
-  - `(*contact.ContactSyncService).SyncContacts(ctx, trigger)`
+- Methods: none on this namespace package.
 - Endpoints: none in this package.
-- Events:
-  - `woocommerce.v1.contacts.sync.started`
-  - `woocommerce.v1.contacts.sync.completed`
-  - `woocommerce.v1.contacts.sync.failed`
+- Events: defined by child packages.

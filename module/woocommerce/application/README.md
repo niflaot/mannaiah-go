@@ -7,7 +7,9 @@
 - Keep each use case isolated in a dedicated child package.
 
 ## Feature Packages
-- `application/contact`: contact-related WooCommerce use cases (sync and future contact operations).
+- `application/contact`: contact feature namespace package.
+- `application/contact/service`: contact-related WooCommerce sync use case orchestration.
+- `application/contact/event`: contact-related WooCommerce integration event contracts/builders.
 
 ## Key Methods / Endpoints / Events
 - Methods:

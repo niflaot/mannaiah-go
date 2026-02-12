@@ -11,7 +11,7 @@ import (
 	corehttp "mannaiah/module/core/http"
 	contactsadapter "mannaiah/module/woocommerce/adapter/contacts"
 	"mannaiah/module/woocommerce/adapter/http"
-	woocontact "mannaiah/module/woocommerce/application/contact"
+	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -29,7 +29,7 @@ type Module struct {
 	// cfg defines WooCommerce integration config values.
 	cfg Config
 	// contactsSyncService defines contact sync use-case dependencies.
-	contactsSyncService woocontact.Service
+	contactsSyncService woocontactservice.Service
 	// handler defines HTTP route adapter dependencies.
 	handler *http.Handler
 	// scheduler defines optional cron scheduler dependencies.
@@ -76,8 +76,8 @@ func New(cfg Config, contactService contactapplication.Service, scheduler corecr
 		source = failingSource{err: sourceErr}
 	}
 
-	contactSyncService, err := woocontact.NewService(
-		woocontact.SyncConfig{
+	contactSyncService, err := woocontactservice.NewService(
+		woocontactservice.SyncConfig{
 			Enabled:     cfg.SyncContacts,
 			PageSize:    cfg.SyncPageSize,
 			WorkerCount: cfg.SyncWorkers,
@@ -86,7 +86,7 @@ func New(cfg Config, contactService contactapplication.Service, scheduler corecr
 		upserter,
 		resolvePublisher(publishers),
 		logger,
-		woocontact.CircuitBreakers{
+		woocontactservice.CircuitBreakers{
 			Source: newSourceCircuitBreaker(cfg, logger),
 		},
 	)

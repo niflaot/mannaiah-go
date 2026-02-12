@@ -47,3 +47,8 @@
   - avoid concentrating multiple responsibilities in a single file
   - split long services/stores into focused collaborators (for example, constructor/config, operations, mapping/validation, resilience helpers)
   - keep production files and test files intentionally small and navigable; when a file grows too large (roughly 250-300+ lines), refactor into cohesive units instead of adding more branches
+- Enforce feature package role-splitting for application modules:
+  - keep `application/<feature>` as a namespace package when multiple responsibilities exist
+  - place use-case orchestration in `application/<feature>/service`
+  - place integration event contracts/builders in `application/<feature>/event`
+  - do not define integration event topics/payload builders inside service packages when an `event` package exists

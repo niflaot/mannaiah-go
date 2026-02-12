@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
-	woocontact "mannaiah/module/woocommerce/application/contact"
+	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 )
 
 // Start runs startup checks and cron scheduler registration.
@@ -84,7 +84,7 @@ func (m *Module) validateAtStartup(ctx context.Context) {
 	defer cancel()
 
 	if err := m.contactsSyncService.ValidateIntegration(validationCtx); err != nil {
-		if !errors.Is(err, woocontact.ErrSyncDisabled) {
+		if !errors.Is(err, woocontactservice.ErrSyncDisabled) {
 			m.logger.Warn(
 				"woocommerce integration unavailable; endpoints remain documented and return 503 until integration recovers",
 				zap.Error(err),

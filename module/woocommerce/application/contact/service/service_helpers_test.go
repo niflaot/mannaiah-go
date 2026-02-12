@@ -1,4 +1,4 @@
-package contact
+package service
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	woocontactevent "mannaiah/module/woocommerce/application/contact/event"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -121,7 +122,7 @@ func TestPublishEventNoPanic(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
-	service.publishEvent(context.Background(), buildSyncStartedEvent("manual"))
+	service.publishEvent(context.Background(), woocontactevent.NewSyncStartedEvent("manual"))
 }
 
 // TestProcessCommandsContextTimeout verifies context timeout behavior during processing.

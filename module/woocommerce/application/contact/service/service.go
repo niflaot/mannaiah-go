@@ -1,4 +1,4 @@
-package contact
+package service
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	woocontactevent "mannaiah/module/woocommerce/application/contact/event"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -124,7 +125,7 @@ func NewService(cfg SyncConfig, source port.OrderSource, target port.ContactSync
 	return &ContactSyncService{
 		source:        source,
 		target:        target,
-		publisher:     resolvePublisher(publisher),
+		publisher:     woocontactevent.ResolvePublisher(publisher),
 		logger:        resolveLogger(providedLogger),
 		cfg:           normalizeSyncConfig(cfg),
 		sourceBreaker: resolvedBreakers.Source,
@@ -154,10 +155,10 @@ func (s *ContactSyncService) ValidateIntegration(ctx context.Context) error {
 // SyncContacts performs contact synchronization and emits integration events.
 func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (*SyncSummary, error) {
 	summary := &SyncSummary{Trigger: normalizeTrigger(trigger)}
-	s.publishEvent(ctx, buildSyncStartedEvent(summary.Trigger))
+	s.publishEvent(ctx, woocontactevent.NewSyncStartedEvent(summary.Trigger))
 
 	if err := s.ValidateIntegration(ctx); err != nil {
-		s.publishEvent(ctx, buildSyncFailedEvent(*summary, err))
+		s.publishEvent(ctx, woocontactevent.NewSyncFailedEvent(toEventSummary(*summary), err))
 		return nil, err
 	}
 
@@ -166,14 +167,14 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 	page := 1
 	for {
 		if err := ctx.Err(); err != nil {
-			s.publishEvent(ctx, buildSyncFailedEvent(*summary, err))
+			s.publishEvent(ctx, woocontactevent.NewSyncFailedEvent(toEventSummary(*summary), err))
 			return nil, err
 		}
 
 		orders, hasNext, err := s.loadPage(ctx, page)
 		if err != nil {
 			wrappedErr := fmt.Errorf("list woocommerce orders page %d (%s): %w", page, formatSyncProgress(summary), err)
-			s.publishEvent(ctx, buildSyncFailedEvent(*summary, wrappedErr))
+			s.publishEvent(ctx, woocontactevent.NewSyncFailedEvent(toEventSummary(*summary), wrappedErr))
 			return nil, wrappedErr
 		}
 
@@ -191,11 +192,11 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 
 	if err := s.processCommands(ctx, pendingCommands, summary); err != nil {
 		wrappedErr := fmt.Errorf("process woocommerce orders sync (%s): %w", formatSyncProgress(summary), err)
-		s.publishEvent(ctx, buildSyncFailedEvent(*summary, wrappedErr))
+		s.publishEvent(ctx, woocontactevent.NewSyncFailedEvent(toEventSummary(*summary), wrappedErr))
 		return nil, wrappedErr
 	}
 
-	s.publishEvent(ctx, buildSyncCompletedEvent(*summary))
+	s.publishEvent(ctx, woocontactevent.NewSyncCompletedEvent(toEventSummary(*summary)))
 	return summary, nil
 }
 

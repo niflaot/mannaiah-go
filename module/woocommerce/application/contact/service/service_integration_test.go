@@ -1,4 +1,4 @@
-package contact
+package service
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+	woocontactevent "mannaiah/module/woocommerce/application/contact/event"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -143,24 +144,35 @@ func TestSyncContactsSuccess(t *testing.T) {
 	if len(publisher.events) != 2 {
 		t.Fatalf("len(events) = %d, want %d", len(publisher.events), 2)
 	}
-	if publisher.events[0].Topic != TopicContactsSyncStarted {
-		t.Fatalf("events[0].Topic = %q, want %q", publisher.events[0].Topic, TopicContactsSyncStarted)
+	if publisher.events[0].Topic != woocontactevent.TopicContactsSyncStarted {
+		t.Fatalf("events[0].Topic = %q, want %q", publisher.events[0].Topic, woocontactevent.TopicContactsSyncStarted)
 	}
-	if publisher.events[1].Topic != TopicContactsSyncCompleted {
-		t.Fatalf("events[1].Topic = %q, want %q", publisher.events[1].Topic, TopicContactsSyncCompleted)
+	if publisher.events[1].Topic != woocontactevent.TopicContactsSyncCompleted {
+		t.Fatalf("events[1].Topic = %q, want %q", publisher.events[1].Topic, woocontactevent.TopicContactsSyncCompleted)
 	}
 
 	if len(target.commands) != 2 {
 		t.Fatalf("len(commands) = %d, want %d", len(target.commands), 2)
 	}
-	if target.commands[0].Phone != "+573124567890" {
-		t.Fatalf("commands[0].Phone = %q, want %q", target.commands[0].Phone, "+573124567890")
+
+	var johnCommand *port.ContactSyncCommand
+	for index := range target.commands {
+		if target.commands[index].Email == "john@example.com" {
+			johnCommand = &target.commands[index]
+			break
+		}
 	}
-	if target.commands[0].DocumentNumber != "1234" {
-		t.Fatalf("commands[0].DocumentNumber = %q, want %q", target.commands[0].DocumentNumber, "1234")
+	if johnCommand == nil {
+		t.Fatalf("expected john@example.com upsert command")
 	}
-	if target.commands[0].DocumentType != "CC" {
-		t.Fatalf("commands[0].DocumentType = %q, want %q", target.commands[0].DocumentType, "CC")
+	if johnCommand.Phone != "+573124567890" {
+		t.Fatalf("john phone = %q, want %q", johnCommand.Phone, "+573124567890")
+	}
+	if johnCommand.DocumentNumber != "1234" {
+		t.Fatalf("john document number = %q, want %q", johnCommand.DocumentNumber, "1234")
+	}
+	if johnCommand.DocumentType != "CC" {
+		t.Fatalf("john document type = %q, want %q", johnCommand.DocumentType, "CC")
 	}
 }
 
@@ -287,8 +299,8 @@ func TestSyncContactsListError(t *testing.T) {
 	if len(publisher.events) != 2 {
 		t.Fatalf("len(events) = %d, want %d", len(publisher.events), 2)
 	}
-	if publisher.events[1].Topic != TopicContactsSyncFailed {
-		t.Fatalf("events[1].Topic = %q, want %q", publisher.events[1].Topic, TopicContactsSyncFailed)
+	if publisher.events[1].Topic != woocontactevent.TopicContactsSyncFailed {
+		t.Fatalf("events[1].Topic = %q, want %q", publisher.events[1].Topic, woocontactevent.TopicContactsSyncFailed)
 	}
 }
 

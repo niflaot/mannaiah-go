@@ -1,4 +1,4 @@
-package contact
+package event
 
 import (
 	"context"
@@ -21,6 +21,24 @@ const (
 	// schemaVersionV1 defines current integration event schema versions.
 	schemaVersionV1 = "v1"
 )
+
+// Summary defines contact sync counters used by integration event payloads.
+type Summary struct {
+	// Trigger defines sync trigger names.
+	Trigger string
+	// Processed defines upsert-attempt counts.
+	Processed int
+	// Created defines created contact counts.
+	Created int
+	// Updated defines updated contact counts.
+	Updated int
+	// Unchanged defines no-op contact counts.
+	Unchanged int
+	// Skipped defines skipped-order counts.
+	Skipped int
+	// Failed defines failed upsert counts.
+	Failed int
+}
 
 // ContactsSyncEventPayload defines sync event payload values.
 type ContactsSyncEventPayload struct {
@@ -46,12 +64,12 @@ type ContactsSyncEventPayload struct {
 type noopIntegrationEventPublisher struct{}
 
 // Publish ignores integration events.
-func (noopIntegrationEventPublisher) Publish(ctx context.Context, event port.IntegrationEvent) error {
+func (noopIntegrationEventPublisher) Publish(ctx context.Context, integrationEvent port.IntegrationEvent) error {
 	return nil
 }
 
-// resolvePublisher resolves optional integration event publisher dependencies.
-func resolvePublisher(publisher port.IntegrationEventPublisher) port.IntegrationEventPublisher {
+// ResolvePublisher resolves optional integration event publisher dependencies.
+func ResolvePublisher(publisher port.IntegrationEventPublisher) port.IntegrationEventPublisher {
 	if publisher != nil {
 		return publisher
 	}
@@ -59,20 +77,15 @@ func resolvePublisher(publisher port.IntegrationEventPublisher) port.Integration
 	return noopIntegrationEventPublisher{}
 }
 
-// publishEvent publishes sync integration events and ignores publication failures.
-func (s *ContactSyncService) publishEvent(ctx context.Context, event port.IntegrationEvent) {
-	_ = s.publisher.Publish(ctx, event)
-}
-
-// buildSyncStartedEvent maps sync-started payload values to integration event envelopes.
-func buildSyncStartedEvent(trigger string) port.IntegrationEvent {
+// NewSyncStartedEvent maps sync-started payload values to integration event envelopes.
+func NewSyncStartedEvent(trigger string) port.IntegrationEvent {
 	return buildSyncEvent(TopicContactsSyncStarted, ContactsSyncEventPayload{
 		Trigger: strings.TrimSpace(trigger),
 	})
 }
 
-// buildSyncCompletedEvent maps sync-summary values to completed integration event envelopes.
-func buildSyncCompletedEvent(summary SyncSummary) port.IntegrationEvent {
+// NewSyncCompletedEvent maps sync-summary values to completed integration event envelopes.
+func NewSyncCompletedEvent(summary Summary) port.IntegrationEvent {
 	return buildSyncEvent(TopicContactsSyncCompleted, ContactsSyncEventPayload{
 		Trigger:   summary.Trigger,
 		Processed: summary.Processed,
@@ -84,8 +97,8 @@ func buildSyncCompletedEvent(summary SyncSummary) port.IntegrationEvent {
 	})
 }
 
-// buildSyncFailedEvent maps sync-summary values to failed integration event envelopes.
-func buildSyncFailedEvent(summary SyncSummary, syncErr error) port.IntegrationEvent {
+// NewSyncFailedEvent maps sync-summary values to failed integration event envelopes.
+func NewSyncFailedEvent(summary Summary, syncErr error) port.IntegrationEvent {
 	payload := ContactsSyncEventPayload{
 		Trigger:   summary.Trigger,
 		Processed: summary.Processed,

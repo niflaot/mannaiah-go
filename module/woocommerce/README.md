@@ -13,7 +13,9 @@
 - `runtime/`: module composition root wiring (constructor, lifecycle, source/bootstrap helpers, module OpenAPI artifact).
 - `port/`: provider-agnostic contracts.
 - `application/`: application-layer feature namespace.
-- `application/contact`: contacts feature use cases and integration event mapping.
+- `application/contact`: contact feature namespace package.
+- `application/contact/service`: contact sync use case orchestration.
+- `application/contact/event`: contact integration event contracts/builders.
 - `adapter/woocommerce`: WooCommerce SDK adapter (`github.com/jmolboy/woocommerce-go`).
 - `adapter/contacts`: contacts upsert adapter via contacts application service.
 - `adapter/http`: protected sync endpoint adapters.

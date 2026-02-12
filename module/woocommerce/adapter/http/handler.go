@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	corehttp "mannaiah/module/core/http"
-	woocontact "mannaiah/module/woocommerce/application/contact"
+	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 )
 
 var (
@@ -26,13 +26,13 @@ type Authorizer interface {
 // Handler defines HTTP route handlers for WooCommerce integration endpoints.
 type Handler struct {
 	// service defines WooCommerce sync service dependencies.
-	service woocontact.Service
+	service woocontactservice.Service
 	// authorizer defines optional auth dependency for protected endpoints.
 	authorizer Authorizer
 }
 
 // NewHandler creates WooCommerce HTTP handler sets.
-func NewHandler(service woocontact.Service, authorizers ...Authorizer) (*Handler, error) {
+func NewHandler(service woocontactservice.Service, authorizers ...Authorizer) (*Handler, error) {
 	if service == nil {
 		return nil, ErrNilService
 	}
@@ -98,10 +98,10 @@ func (h *Handler) mapError(err error) error {
 			return corehttp.NewAppError(403, "forbidden", err)
 		}
 	}
-	if errors.Is(err, woocontact.ErrSyncDisabled) {
+	if errors.Is(err, woocontactservice.ErrSyncDisabled) {
 		return corehttp.NewAppError(503, "woocommerce_contacts_sync_disabled", err)
 	}
-	if errors.Is(err, woocontact.ErrIntegrationUnavailable) {
+	if errors.Is(err, woocontactservice.ErrIntegrationUnavailable) {
 		return corehttp.NewAppError(503, "woocommerce_integration_unavailable", err)
 	}
 
