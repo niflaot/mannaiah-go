@@ -2,11 +2,12 @@ FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
 COPY module ./module
 
+WORKDIR /app/module/core
+
 RUN go mod download
-RUN go build -o /out/mannaiah-api ./module/core/cmd/api
+RUN go build -o /out/mannaiah-api ./cmd/api
 
 FROM debian:bookworm-slim AS runtime
 
