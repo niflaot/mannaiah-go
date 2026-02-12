@@ -30,6 +30,7 @@ import (
 	coremsgbus "mannaiah/module/core/messaging/bus"
 	coremsgplatform "mannaiah/module/core/messaging/platform"
 	corewatermill "mannaiah/module/core/messaging/watermill"
+	"mannaiah/module/products"
 )
 
 const (
@@ -123,6 +124,8 @@ type contactsE2EHarness struct {
 	server *corehttp.Server
 	// contactsModule defines contacts module runtime dependency.
 	contactsModule *contacts.Module
+	// productsModule defines products module runtime dependency.
+	productsModule *products.Module
 	// createdEvents defines created-event capture channel.
 	createdEvents chan contactEventRecord
 	// updatedEvents defines updated-event capture channel.
@@ -206,12 +209,20 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	}
 	contactsModule.SetAuthorizer(authModule)
 
+	tracer.Step("initialize products module")
+	productsModule, err := products.New(db)
+	if err != nil {
+		t.Fatalf("products.New() error = %v", err)
+	}
+	productsModule.SetAuthorizer(authModule)
+
 	tracer.Step("initialize http server")
 	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8011}, tracer.logger)
 	if err != nil {
 		t.Fatalf("corehttp.New() error = %v", err)
 	}
 	server.RegisterRoutes(contactsModule.RegisterRoutes)
+	server.RegisterRoutes(productsModule.RegisterRoutes)
 
 	return &contactsE2EHarness{
 		tracer:          tracer,
@@ -224,6 +235,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 		messagingErrs:   messagingErrs,
 		server:          server,
 		contactsModule:  contactsModule,
+		productsModule:  productsModule,
 		createdEvents:   createdEvents,
 		updatedEvents:   updatedEvents,
 	}
@@ -428,7 +440,11 @@ func doJSONRequestRaw(server *corehttp.Server, method string, path string, token
 		}
 		if len(payload) > 0 {
 			if err := json.Unmarshal(payload, &result); err != nil {
-				return 0, nil, nil, err
+				var listPayload []any
+				if listErr := json.Unmarshal(payload, &listPayload); listErr != nil {
+					return 0, nil, nil, err
+				}
+				result = map[string]any{"data": listPayload}
 			}
 		}
 	}

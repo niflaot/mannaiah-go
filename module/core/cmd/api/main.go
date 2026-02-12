@@ -23,6 +23,7 @@ import (
 	corewatermill "mannaiah/module/core/messaging/watermill"
 	"mannaiah/module/core/startup"
 	"mannaiah/module/core/swagger"
+	"mannaiah/module/products"
 	"mannaiah/module/woocommerce"
 	wooevent "mannaiah/module/woocommerce/adapter/event"
 )
@@ -121,6 +122,15 @@ func run(ctx context.Context, envFile string) error {
 	contactsModule.SetAuthorizer(authModule)
 	if err := contactsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load contacts module: %w", err)
+	}
+
+	productsModule, err := products.New(db)
+	if err != nil {
+		return fmt.Errorf("initialize products module: %w", err)
+	}
+	productsModule.SetAuthorizer(authModule)
+	if err := productsModule.Load(runtime); err != nil {
+		return fmt.Errorf("load products module: %w", err)
 	}
 
 	var wooScheduler corecron.Scheduler

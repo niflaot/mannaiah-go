@@ -80,6 +80,12 @@ func TestStartupProcessE2E(t *testing.T) {
 	if !ok || paths["/woo/sync/contacts"] == nil {
 		t.Fatalf("expected /woo/sync/contacts path in aggregated openapi")
 	}
+	if paths["/products"] == nil || paths["/products/{id}"] == nil {
+		t.Fatalf("expected /products paths in aggregated openapi")
+	}
+	if paths["/variations"] == nil || paths["/variations/{id}"] == nil {
+		t.Fatalf("expected /variations paths in aggregated openapi")
+	}
 
 	tracer.Step("create contact through development auth bypass")
 	createCode, createBody := doJSONHTTP(t, client, http.MethodPost, "http://"+address+"/contacts", "dev-bypass-token", map[string]any{

@@ -20,6 +20,7 @@ require (
 	gorm.io/gorm v1.31.1
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
+	mannaiah/module/products v0.0.0
 	mannaiah/module/woocommerce v0.0.0
 )
 
@@ -103,5 +104,7 @@ require (
 replace mannaiah/module/contacts => ../contacts
 
 replace mannaiah/module/auth => ../auth
+
+replace mannaiah/module/products => ../products
 
 replace mannaiah/module/woocommerce => ../woocommerce

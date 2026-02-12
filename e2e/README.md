@@ -31,6 +31,16 @@
   - `GET /contacts/:id`
   - `PATCH /contacts/:id`
   - `DELETE /contacts/:id`
+  - `POST /products`
+  - `GET /products`
+  - `GET /products/:id`
+  - `PATCH /products/:id`
+  - `DELETE /products/:id`
+  - `POST /variations`
+  - `GET /variations`
+  - `GET /variations/:id`
+  - `PATCH /variations/:id`
+  - `DELETE /variations/:id`
   - `POST /woo/sync/contacts`
 - Events:
   - `contacts.v1.created`
