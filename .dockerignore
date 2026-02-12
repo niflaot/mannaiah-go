@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+**/.DS_Store
+**/*.out
+**/*.html
+**/*.log
+**/coverage.out
+**/coverage.html
+.env
+tmp
