@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"errors"
 	stdhttp "net/http"
 	"testing"
@@ -12,10 +13,18 @@ import (
 	productstore "mannaiah/module/products/adapter/store/product"
 )
 
+// runtimeAssetLookupMock defines asset lookup behavior for runtime tests.
+type runtimeAssetLookupMock struct{}
+
+// Exists returns successful lookup behavior for runtime tests.
+func (runtimeAssetLookupMock) Exists(ctx context.Context, id string) (bool, error) {
+	return true, nil
+}
+
 // TestNewAndRegisterRoutes verifies module wiring and route registration.
 func TestNewAndRegisterRoutes(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db)
+	module, err := New(db, runtimeAssetLookupMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -58,7 +67,7 @@ func TestRegisterRoutesNilModule(t *testing.T) {
 
 // TestNewRejectsNilDB verifies module constructor validation for nil DB dependencies.
 func TestNewRejectsNilDB(t *testing.T) {
-	if _, err := New(nil); !errors.Is(err, productstore.ErrNilDB) {
+	if _, err := New(nil, runtimeAssetLookupMock{}); !errors.Is(err, productstore.ErrNilDB) {
 		t.Fatalf("New() error = %v, want ErrNilDB", err)
 	}
 }
@@ -85,7 +94,7 @@ func (l *loaderProbe) AddOpenAPISpec(spec *openapi3.T) error {
 // TestModuleLoad verifies module self-loading behavior for routes and OpenAPI specs.
 func TestModuleLoad(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db)
+	module, err := New(db, runtimeAssetLookupMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -116,7 +125,7 @@ func (failingLoaderProbe) AddOpenAPISpec(spec *openapi3.T) error {
 // TestModuleLoadError verifies loader merge failures are returned.
 func TestModuleLoadError(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db)
+	module, err := New(db, runtimeAssetLookupMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -129,7 +138,7 @@ func TestModuleLoadError(t *testing.T) {
 // TestModuleLoadNilLoader verifies nil loader behavior.
 func TestModuleLoadNilLoader(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db)
+	module, err := New(db, runtimeAssetLookupMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -142,7 +151,7 @@ func TestModuleLoadNilLoader(t *testing.T) {
 // TestSetAuthorizer verifies optional authorizer wiring behavior.
 func TestSetAuthorizer(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db)
+	module, err := New(db, runtimeAssetLookupMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

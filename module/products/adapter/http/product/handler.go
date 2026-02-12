@@ -220,6 +220,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, productapplication.ErrInvalidID) {
 		return corehttp.NewAppError(400, "invalid_product_id", err)
 	}
+	if errors.Is(err, productapplication.ErrAssetNotFound) {
+		return corehttp.NewAppError(400, "invalid_product_asset_reference", err)
+	}
 	if errors.Is(err, productdomain.ErrSKURequired) ||
 		errors.Is(err, productdomain.ErrGalleryAssetIDRequired) ||
 		errors.Is(err, productdomain.ErrDatasheetRealmRequired) {

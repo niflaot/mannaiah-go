@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,6 +22,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 	"gorm.io/gorm"
+	"mannaiah/module/assets"
+	assetevent "mannaiah/module/assets/adapter/event"
+	assetsapplication "mannaiah/module/assets/application"
+	assetport "mannaiah/module/assets/port"
 	"mannaiah/module/auth"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
@@ -124,12 +129,20 @@ type contactsE2EHarness struct {
 	server *corehttp.Server
 	// contactsModule defines contacts module runtime dependency.
 	contactsModule *contacts.Module
+	// assetsModule defines assets module runtime dependency.
+	assetsModule *assets.Module
 	// productsModule defines products module runtime dependency.
 	productsModule *products.Module
 	// createdEvents defines created-event capture channel.
 	createdEvents chan contactEventRecord
 	// updatedEvents defines updated-event capture channel.
 	updatedEvents chan contactEventRecord
+	// assetCreatedEvents defines asset-created event capture channel.
+	assetCreatedEvents chan contactEventRecord
+	// assetUpdatedEvents defines asset-updated event capture channel.
+	assetUpdatedEvents chan contactEventRecord
+	// assetDeletedEvents defines asset-deleted event capture channel.
+	assetDeletedEvents chan contactEventRecord
 	// dbClosed reports whether the database handle was already closed.
 	dbClosed bool
 }
@@ -178,10 +191,16 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 
 	createdEvents := make(chan contactEventRecord, 4)
 	updatedEvents := make(chan contactEventRecord, 4)
+	assetCreatedEvents := make(chan contactEventRecord, 4)
+	assetUpdatedEvents := make(chan contactEventRecord, 4)
+	assetDeletedEvents := make(chan contactEventRecord, 4)
 
 	tracer.Step("register event listeners")
 	registerContactTopicHandler(t, messaging, contactapplication.TopicContactCreated, createdEvents)
 	registerContactTopicHandler(t, messaging, contactapplication.TopicContactUpdated, updatedEvents)
+	registerContactTopicHandler(t, messaging, assetsapplication.TopicAssetCreated, assetCreatedEvents)
+	registerContactTopicHandler(t, messaging, assetsapplication.TopicAssetUpdated, assetUpdatedEvents)
+	registerContactTopicHandler(t, messaging, assetsapplication.TopicAssetDeleted, assetDeletedEvents)
 
 	messagingCtx, messagingCancel := context.WithCancel(context.Background())
 	messagingErrs := make(chan error, 1)
@@ -202,6 +221,10 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	if err != nil {
 		t.Fatalf("contactevent.NewPublisher() error = %v", err)
 	}
+	assetPublisher, err := assetevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		t.Fatalf("assetevent.NewPublisher() error = %v", err)
+	}
 
 	contactsModule, err := contacts.New(db, publisher)
 	if err != nil {
@@ -209,8 +232,15 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	}
 	contactsModule.SetAuthorizer(authModule)
 
+	tracer.Step("initialize assets module")
+	assetsModule, err := assets.New(db, newInMemoryAssetStorage(), assetPublisher)
+	if err != nil {
+		t.Fatalf("assets.New() error = %v", err)
+	}
+	assetsModule.SetAuthorizer(authModule)
+
 	tracer.Step("initialize products module")
-	productsModule, err := products.New(db)
+	productsModule, err := products.New(db, assetsModule.Service())
 	if err != nil {
 		t.Fatalf("products.New() error = %v", err)
 	}
@@ -222,23 +252,88 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 		t.Fatalf("corehttp.New() error = %v", err)
 	}
 	server.RegisterRoutes(contactsModule.RegisterRoutes)
+	server.RegisterRoutes(assetsModule.RegisterRoutes)
 	server.RegisterRoutes(productsModule.RegisterRoutes)
 
 	return &contactsE2EHarness{
-		tracer:          tracer,
-		key:             key,
-		jwksServer:      jwksServer,
-		authModule:      authModule,
-		db:              db,
-		messaging:       messaging,
-		messagingCancel: messagingCancel,
-		messagingErrs:   messagingErrs,
-		server:          server,
-		contactsModule:  contactsModule,
-		productsModule:  productsModule,
-		createdEvents:   createdEvents,
-		updatedEvents:   updatedEvents,
+		tracer:             tracer,
+		key:                key,
+		jwksServer:         jwksServer,
+		authModule:         authModule,
+		db:                 db,
+		messaging:          messaging,
+		messagingCancel:    messagingCancel,
+		messagingErrs:      messagingErrs,
+		server:             server,
+		contactsModule:     contactsModule,
+		assetsModule:       assetsModule,
+		productsModule:     productsModule,
+		createdEvents:      createdEvents,
+		updatedEvents:      updatedEvents,
+		assetCreatedEvents: assetCreatedEvents,
+		assetUpdatedEvents: assetUpdatedEvents,
+		assetDeletedEvents: assetDeletedEvents,
 	}
+}
+
+// inMemoryAssetStorage defines e2e in-memory storage behavior for assets.
+type inMemoryAssetStorage struct {
+	// mu protects concurrent object operations.
+	mu sync.RWMutex
+	// objects stores keyed object payload values.
+	objects map[string][]byte
+}
+
+// newInMemoryAssetStorage creates an in-memory asset storage implementation.
+func newInMemoryAssetStorage() *inMemoryAssetStorage {
+	return &inMemoryAssetStorage{objects: map[string][]byte{}}
+}
+
+// Upload stores payload bytes by key.
+func (s *inMemoryAssetStorage) Upload(ctx context.Context, request assetport.UploadRequest) error {
+	if s == nil {
+		return errors.New("asset storage is nil")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	copied := make([]byte, len(request.Body))
+	copy(copied, request.Body)
+	s.objects[request.Key] = copied
+
+	return nil
+}
+
+// Delete removes payloads by key.
+func (s *inMemoryAssetStorage) Delete(ctx context.Context, key string) error {
+	if s == nil {
+		return errors.New("asset storage is nil")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.objects, key)
+	return nil
+}
+
+// Exists verifies whether payloads exist by key.
+func (s *inMemoryAssetStorage) Exists(ctx context.Context, key string) (bool, error) {
+	if s == nil {
+		return false, errors.New("asset storage is nil")
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, exists := s.objects[key]
+	return exists, nil
+}
+
+// AvailabilityError reports storage availability behavior.
+func (s *inMemoryAssetStorage) AvailabilityError() error {
+	return nil
 }
 
 // Close releases harness resources.
@@ -334,6 +429,27 @@ func (h *contactsE2EHarness) AwaitUpdatedEvent(t *testing.T) contactEventRecord 
 	t.Helper()
 
 	return awaitEventRecord(t, h.updatedEvents, "contacts.v1.updated")
+}
+
+// AwaitAssetCreatedEvent waits for an asset-created integration event.
+func (h *contactsE2EHarness) AwaitAssetCreatedEvent(t *testing.T) contactEventRecord {
+	t.Helper()
+
+	return awaitEventRecord(t, h.assetCreatedEvents, "assets.v1.created")
+}
+
+// AwaitAssetUpdatedEvent waits for an asset-updated integration event.
+func (h *contactsE2EHarness) AwaitAssetUpdatedEvent(t *testing.T) contactEventRecord {
+	t.Helper()
+
+	return awaitEventRecord(t, h.assetUpdatedEvents, "assets.v1.updated")
+}
+
+// AwaitAssetDeletedEvent waits for an asset-deleted integration event.
+func (h *contactsE2EHarness) AwaitAssetDeletedEvent(t *testing.T) contactEventRecord {
+	t.Helper()
+
+	return awaitEventRecord(t, h.assetDeletedEvents, "assets.v1.deleted")
 }
 
 // registerContactTopicHandler registers event listeners for a topic and pushes decoded events to a channel.

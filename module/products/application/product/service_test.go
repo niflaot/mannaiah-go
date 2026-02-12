@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	errorspkg "errors"
+	"sync/atomic"
 	"testing"
 
 	productdomain "mannaiah/module/products/domain/product"
@@ -51,10 +52,24 @@ func (m repositoryMock) Delete(ctx context.Context, id string) error {
 	return m.deleteFn(ctx, id)
 }
 
+// assetLookupMock defines asset lookup behavior for service tests.
+type assetLookupMock struct {
+	// existsFn defines exists behavior.
+	existsFn func(ctx context.Context, id string) (bool, error)
+}
+
+// Exists executes configured lookup behavior.
+func (m assetLookupMock) Exists(ctx context.Context, id string) (bool, error) {
+	return m.existsFn(ctx, id)
+}
+
 // TestNewService validates constructor behavior.
 func TestNewService(t *testing.T) {
-	if _, err := NewService(nil); !errorspkg.Is(err, ErrNilRepository) {
-		t.Fatalf("NewService(nil) error = %v, want ErrNilRepository", err)
+	if _, err := NewService(nil, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil }}); !errorspkg.Is(err, ErrNilRepository) {
+		t.Fatalf("NewService(nil, lookup) error = %v, want ErrNilRepository", err)
+	}
+	if _, err := NewService(repositoryMock{}, nil); !errorspkg.Is(err, ErrNilAssetLookup) {
+		t.Fatalf("NewService(repo, nil) error = %v, want ErrNilAssetLookup", err)
 	}
 }
 
@@ -69,7 +84,9 @@ func TestCreate(t *testing.T) {
 		listFn:   func(ctx context.Context) ([]productdomain.Product, error) { return nil, nil },
 		updateFn: func(ctx context.Context, product *productdomain.Product) error { return nil },
 		deleteFn: func(ctx context.Context, id string) error { return nil },
-	})
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) {
+		return id != "missing", nil
+	}})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -80,6 +97,16 @@ func TestCreate(t *testing.T) {
 	}
 	if entity.ID != "p-1" {
 		t.Fatalf("entity.ID = %q, want %q", entity.ID, "p-1")
+	}
+
+	_, missingAssetErr := service.Create(context.Background(), CreateCommand{
+		SKU: "SKU-2",
+		Gallery: []productdomain.GalleryItem{
+			{AssetID: "missing"},
+		},
+	})
+	if !errorspkg.Is(missingAssetErr, ErrAssetNotFound) {
+		t.Fatalf("Create(missing asset) error = %v, want ErrAssetNotFound", missingAssetErr)
 	}
 }
 
@@ -95,7 +122,7 @@ func TestGetListDelete(t *testing.T) {
 		},
 		updateFn: func(ctx context.Context, product *productdomain.Product) error { return nil },
 		deleteFn: func(ctx context.Context, id string) error { return nil },
-	})
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil }})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -129,7 +156,7 @@ func TestUpdateMergesDatasheets(t *testing.T) {
 			return nil
 		},
 		deleteFn: func(ctx context.Context, id string) error { return nil },
-	})
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil }})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -146,6 +173,56 @@ func TestUpdateMergesDatasheets(t *testing.T) {
 	}
 }
 
+// TestUpdateValidatesGalleryAssets verifies gallery asset lookup behavior in updates.
+func TestUpdateValidatesGalleryAssets(t *testing.T) {
+	service, err := NewService(repositoryMock{
+		createFn: func(ctx context.Context, product *productdomain.Product) error { return nil },
+		getFn: func(ctx context.Context, id string) (*productdomain.Product, error) {
+			return &productdomain.Product{ID: id, SKU: "SKU-1"}, nil
+		},
+		listFn:   func(ctx context.Context) ([]productdomain.Product, error) { return nil, nil },
+		updateFn: func(ctx context.Context, product *productdomain.Product) error { return nil },
+		deleteFn: func(ctx context.Context, id string) error { return nil },
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) {
+		if id == "missing" {
+			return false, nil
+		}
+		return true, nil
+	}})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	_, updateErr := service.Update(context.Background(), "p-1", UpdateCommand{
+		Gallery:    []productdomain.GalleryItem{{AssetID: "missing"}},
+		HasGallery: true,
+	})
+	if !errorspkg.Is(updateErr, ErrAssetNotFound) {
+		t.Fatalf("Update() error = %v, want ErrAssetNotFound", updateErr)
+	}
+}
+
+// TestValidateGalleryAssetsConcurrency verifies deduplicated concurrent lookup behavior.
+func TestValidateGalleryAssetsConcurrency(t *testing.T) {
+	var calls int64
+	lookup := assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) {
+		atomic.AddInt64(&calls, 1)
+		return true, nil
+	}}
+
+	gallery := make([]productdomain.GalleryItem, 0, 20)
+	for index := 0; index < 20; index++ {
+		gallery = append(gallery, productdomain.GalleryItem{AssetID: "asset-1"})
+	}
+
+	if err := validateGalleryAssets(context.Background(), lookup, gallery); err != nil {
+		t.Fatalf("validateGalleryAssets() error = %v", err)
+	}
+	if atomic.LoadInt64(&calls) != 1 {
+		t.Fatalf("lookup calls = %d, want %d", calls, 1)
+	}
+}
+
 // TestErrorWrapping verifies wrapped repository errors.
 func TestErrorWrapping(t *testing.T) {
 	repositoryErr := errorspkg.New("repository failed")
@@ -155,7 +232,7 @@ func TestErrorWrapping(t *testing.T) {
 		listFn:   func(ctx context.Context) ([]productdomain.Product, error) { return nil, repositoryErr },
 		updateFn: func(ctx context.Context, product *productdomain.Product) error { return repositoryErr },
 		deleteFn: func(ctx context.Context, id string) error { return repositoryErr },
-	})
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil }})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -187,7 +264,7 @@ func TestSentinelUnwrap(t *testing.T) {
 		listFn:   func(ctx context.Context) ([]productdomain.Product, error) { return nil, nil },
 		updateFn: func(ctx context.Context, product *productdomain.Product) error { return productport.ErrDuplicateSKU },
 		deleteFn: func(ctx context.Context, id string) error { return productport.ErrNotFound },
-	})
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil }})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -212,5 +289,13 @@ func TestCopyDatasheets(t *testing.T) {
 	}
 	if &copied[0] == &values[0] {
 		t.Fatalf("expected copied slice backing values")
+	}
+}
+
+// TestUniqueGalleryAssetIDs verifies gallery-id normalization behavior.
+func TestUniqueGalleryAssetIDs(t *testing.T) {
+	ids := uniqueGalleryAssetIDs([]productdomain.GalleryItem{{AssetID: " a1 "}, {AssetID: "a1"}, {AssetID: "a2"}, {AssetID: " "}})
+	if len(ids) != 2 {
+		t.Fatalf("len(ids) = %d, want %d", len(ids), 2)
 	}
 }

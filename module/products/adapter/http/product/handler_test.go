@@ -167,6 +167,7 @@ func TestHandlerMapErrorVariants(t *testing.T) {
 	cases := []error{
 		productport.ErrNotFound,
 		productapplication.ErrInvalidID,
+		productapplication.ErrAssetNotFound,
 		productdomain.ErrSKURequired,
 		productport.ErrDuplicateSKU,
 		errorspkg.New("boom"),

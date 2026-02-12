@@ -1,10 +1,19 @@
 package products
 
 import (
+	"context"
 	"testing"
 
 	coredb "mannaiah/module/core/database"
 )
+
+// lookupMock defines asset lookup behavior for facade tests.
+type lookupMock struct{}
+
+// Exists returns successful lookup behavior for facade tests.
+func (lookupMock) Exists(ctx context.Context, id string) (bool, error) {
+	return true, nil
+}
 
 // TestOpenAPISpecFacade verifies root facade OpenAPI delegation behavior.
 func TestOpenAPISpecFacade(t *testing.T) {
@@ -32,7 +41,7 @@ func TestNewFacade(t *testing.T) {
 		_ = sqlDB.Close()
 	})
 
-	module, err := New(db)
+	module, err := New(db, lookupMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

@@ -21,6 +21,17 @@ func TestProductsAuthE2E(t *testing.T) {
 
 	readToken := harness.SignToken(t, "products:read")
 	manageToken := harness.SignToken(t, "products:manage")
+	assetCreateToken := harness.SignToken(t, "assets:create")
+
+	harness.tracer.Step("upload asset for product gallery")
+	assetStatus, assetPayload := doAssetUploadRequest(t, harness, assetCreateToken, "product.png", []byte("image"), "Product Image")
+	if assetStatus != http.StatusCreated {
+		t.Fatalf("asset status = %d, want %d", assetStatus, http.StatusCreated)
+	}
+	assetID, _ := assetPayload["_id"].(string)
+	if assetID == "" {
+		t.Fatalf("expected asset id in response")
+	}
 
 	harness.tracer.Step("request product create with insufficient permissions")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/products", readToken, []byte(`{"sku":"SKU-1"}`))
@@ -32,7 +43,7 @@ func TestProductsAuthE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("create product with manage scope")
-	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/products", manageToken, []byte(`{"sku":"SKU-1","gallery":[{"assetId":"asset-1","isMain":true}],"datasheets":[{"realm":"default","name":"Classic Tee","description":"Base"}],"variations":["var-red"],"variants":[{"variationIds":["var-red"]}]}`))
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/products", manageToken, []byte(`{"sku":"SKU-1","gallery":[{"assetId":"`+assetID+`","isMain":true}],"datasheets":[{"realm":"default","name":"Classic Tee","description":"Base"}],"variations":["var-red"],"variants":[{"variationIds":["var-red"]}]}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
@@ -98,5 +109,5 @@ func TestProductsAuthE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(10)
+	harness.tracer.AssertStepCount(11)
 }

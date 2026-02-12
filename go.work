@@ -2,6 +2,7 @@ go 1.25.5
 
 use (
 	.
+	./module/assets
 	./module/auth
 	./module/contacts
 	./module/core

@@ -35,7 +35,7 @@ type Loader interface {
 }
 
 // New creates a products module with schema migration and adapter wiring.
-func New(db *gorm.DB) (*Module, error) {
+func New(db *gorm.DB, assetLookup productapplication.AssetLookup) (*Module, error) {
 	productRepository, err := productstore.NewRepository(db)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func New(db *gorm.DB) (*Module, error) {
 		return nil, err
 	}
 
-	productService, err := productapplication.NewService(productRepository)
+	productService, err := productapplication.NewService(productRepository, assetLookup)
 	if err != nil {
 		return nil, err
 	}

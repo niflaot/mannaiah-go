@@ -12,6 +12,7 @@
 - Includes scheduler configuration and execution validation for the core cron package.
 - Includes WooCommerce sync flows (manual endpoint + integration availability behavior).
 - Includes WooCommerce outage fail-fast validation through circuit-breaker behavior.
+- Includes assets upload/CRUD plus product-gallery asset-reference validation.
 
 ## Key Methods / Endpoints / Events
 - Methods:
@@ -36,6 +37,11 @@
   - `GET /products/:id`
   - `PATCH /products/:id`
   - `DELETE /products/:id`
+  - `POST /assets`
+  - `GET /assets`
+  - `GET /assets/:id`
+  - `PATCH /assets/:id`
+  - `DELETE /assets/:id`
   - `POST /variations`
   - `GET /variations`
   - `GET /variations/:id`
@@ -45,4 +51,7 @@
 - Events:
   - `contacts.v1.created`
   - `contacts.v1.updated`
+  - `assets.v1.created`
+  - `assets.v1.updated`
+  - `assets.v1.deleted`
   - `woocommerce.v1.contacts.sync.completed`

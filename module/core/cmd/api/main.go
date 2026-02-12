@@ -11,6 +11,9 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"mannaiah/module/assets"
+	assetevent "mannaiah/module/assets/adapter/event"
+	assetstorage "mannaiah/module/assets/adapter/storage"
 	"mannaiah/module/auth"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
@@ -22,6 +25,7 @@ import (
 	coremsgplatform "mannaiah/module/core/messaging/platform"
 	corewatermill "mannaiah/module/core/messaging/watermill"
 	"mannaiah/module/core/startup"
+	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
 	"mannaiah/module/products"
 	"mannaiah/module/woocommerce"
@@ -44,12 +48,13 @@ func run(ctx context.Context, envFile string) error {
 	var coreCfg coreconfig.Core
 	var httpCfg corehttp.Config
 	var dbCfg coredatabase.Config
+	var storageCfg corestorage.Config
 	var messagingCfg coremsgplatform.Config
 	var authCfg auth.Config
 	var cronCfg corecron.Config
 	var wooCfg woocommerce.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &messagingCfg, &authCfg, &cronCfg, &wooCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &wooCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -72,6 +77,15 @@ func run(ctx context.Context, envFile string) error {
 	defer func() {
 		_ = sqlDB.Close()
 	}()
+
+	storageStore := corestorage.NewS3(storageCfg, logger)
+	assetStorage, err := assetstorage.NewCoreStoreAdapter(storageStore)
+	if err != nil {
+		return fmt.Errorf("create asset storage adapter: %w", err)
+	}
+	if availabilityErr := assetStorage.AvailabilityError(); availabilityErr != nil {
+		return fmt.Errorf("storage is mandatory: %w", availabilityErr)
+	}
 
 	messaging, err := corewatermill.NewInMemoryPlatform(messagingCfg, logger)
 	if err != nil {
@@ -105,6 +119,10 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create contacts integration publisher: %w", err)
 	}
+	assetPublisher, err := assetevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		return fmt.Errorf("create assets integration publisher: %w", err)
+	}
 	wooPublisher, err := wooevent.NewPublisher(messaging.Publisher())
 	if err != nil {
 		return fmt.Errorf("create woocommerce integration publisher: %w", err)
@@ -124,7 +142,16 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("load contacts module: %w", err)
 	}
 
-	productsModule, err := products.New(db)
+	assetsModule, err := assets.New(db, assetStorage, assetPublisher)
+	if err != nil {
+		return fmt.Errorf("initialize assets module: %w", err)
+	}
+	assetsModule.SetAuthorizer(authModule)
+	if err := assetsModule.Load(runtime); err != nil {
+		return fmt.Errorf("load assets module: %w", err)
+	}
+
+	productsModule, err := products.New(db, assetsModule.Service())
 	if err != nil {
 		return fmt.Errorf("initialize products module: %w", err)
 	}

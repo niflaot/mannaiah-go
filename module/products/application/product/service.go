@@ -13,9 +13,19 @@ import (
 var (
 	// ErrNilRepository is returned when repository dependencies are nil.
 	ErrNilRepository = errors.New("products repository must not be nil")
+	// ErrNilAssetLookup is returned when asset lookup dependencies are nil.
+	ErrNilAssetLookup = errors.New("products asset lookup must not be nil")
 	// ErrInvalidID is returned when ids are empty.
 	ErrInvalidID = errors.New("product id is required")
+	// ErrAssetNotFound is returned when referenced gallery assets do not exist.
+	ErrAssetNotFound = errors.New("product gallery asset not found")
 )
+
+// AssetLookup defines asset-reference lookup behavior required by products.
+type AssetLookup interface {
+	// Exists verifies whether an asset exists by identifier.
+	Exists(ctx context.Context, id string) (bool, error)
+}
 
 // CreateCommand defines create-product command payloads.
 type CreateCommand struct {
@@ -71,6 +81,8 @@ type Service interface {
 type ProductService struct {
 	// repository defines persistence dependencies.
 	repository productport.Repository
+	// assetLookup defines gallery-asset lookup dependencies.
+	assetLookup AssetLookup
 }
 
 var (
@@ -79,12 +91,15 @@ var (
 )
 
 // NewService creates product services.
-func NewService(repository productport.Repository) (*ProductService, error) {
+func NewService(repository productport.Repository, assetLookup AssetLookup) (*ProductService, error) {
 	if repository == nil {
 		return nil, ErrNilRepository
 	}
+	if assetLookup == nil {
+		return nil, ErrNilAssetLookup
+	}
 
-	return &ProductService{repository: repository}, nil
+	return &ProductService{repository: repository, assetLookup: assetLookup}, nil
 }
 
 // Create creates products.
@@ -98,6 +113,9 @@ func (s *ProductService) Create(ctx context.Context, command CreateCommand) (*pr
 	}
 	entity.Normalize()
 	if err := entity.Validate(); err != nil {
+		return nil, err
+	}
+	if err := validateGalleryAssets(ctx, s.assetLookup, entity.Gallery); err != nil {
 		return nil, err
 	}
 
@@ -163,6 +181,9 @@ func (s *ProductService) Update(ctx context.Context, id string, command UpdateCo
 
 	entity.Normalize()
 	if err := entity.Validate(); err != nil {
+		return nil, err
+	}
+	if err := validateGalleryAssets(ctx, s.assetLookup, entity.Gallery); err != nil {
 		return nil, err
 	}
 

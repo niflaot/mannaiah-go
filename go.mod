@@ -7,6 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	go.uber.org/zap v1.27.1
 	gorm.io/gorm v1.31.1
+	mannaiah/module/assets v0.0.0
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
 	mannaiah/module/core v0.0.0
@@ -94,6 +95,8 @@ require (
 )
 
 replace mannaiah/module/auth => ./module/auth
+
+replace mannaiah/module/assets => ./module/assets
 
 replace mannaiah/module/contacts => ./module/contacts
 

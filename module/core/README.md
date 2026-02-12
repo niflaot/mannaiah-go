@@ -10,6 +10,7 @@
 - `messaging`: Replaceable integration messaging contracts and Watermill in-memory adapters.
 - `redis`: Redis key-value primitives with pattern scanning and batched retrieval.
 - `database`: GORM bootstrap and reusable generic CRUD service primitives.
+- `storage`: provider-agnostic object-storage abstraction with S3 implementation and availability controls.
 - `http`: Fiber server setup with `CORE_HOST`/`CORE_PORT`-authoritative address resolution and Zap request logging.
 - `cron`: provider-agnostic in-process scheduling backed by `robfig/cron`.
 - `swagger`: OpenAPI aggregation and documentation route exposure.
@@ -62,6 +63,12 @@
   - `(*database.Service[T]).Paginate(ctx, query)`
   - `(*database.Service[T]).Update(ctx, id, updates)`
   - `(*database.Service[T]).Delete(ctx, id)`
+  - `storage.NewS3(cfg, logger)`
+  - `storage.Disabled(reason)`
+  - `storage.Store.Upload(ctx, request)`
+  - `storage.Store.Delete(ctx, key)`
+  - `storage.Store.Exists(ctx, key)`
+  - `storage.Store.AvailabilityError()`
   - `cron.New(cfg, providedLogger)`
   - `cron.NewScheduler(cfg, providedLogger)`
   - `(*cron.Service).Add(spec, job)`

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net"
 	"strconv"
 	"strings"
@@ -43,6 +44,10 @@ type Context interface {
 	Query(key string, defaultValue ...string) string
 	// BodyParser decodes request body into output.
 	BodyParser(out any) error
+	// FormFile reads multipart file payload values.
+	FormFile(key string) (*multipart.FileHeader, error)
+	// FormValue reads multipart/form values.
+	FormValue(key string, defaultValue ...string) string
 	// Locals reads or sets request-local values.
 	Locals(key string, value ...any) any
 }
@@ -372,6 +377,25 @@ func (a *fiberContextAdapter) Query(key string, defaultValue ...string) string {
 // BodyParser decodes request body into output.
 func (a *fiberContextAdapter) BodyParser(out any) error {
 	return a.ctx.BodyParser(out)
+}
+
+// FormFile reads multipart file payload values.
+func (a *fiberContextAdapter) FormFile(key string) (*multipart.FileHeader, error) {
+	return a.ctx.FormFile(key)
+}
+
+// FormValue reads multipart/form values.
+func (a *fiberContextAdapter) FormValue(key string, defaultValue ...string) string {
+	if len(defaultValue) == 0 {
+		return a.ctx.FormValue(key)
+	}
+
+	value := a.ctx.FormValue(key)
+	if strings.TrimSpace(value) == "" {
+		return defaultValue[0]
+	}
+
+	return value
 }
 
 // Locals reads or sets request-local values.

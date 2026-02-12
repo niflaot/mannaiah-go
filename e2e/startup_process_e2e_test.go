@@ -38,10 +38,14 @@ func TestStartupProcessE2E(t *testing.T) {
 		"LOG_LEVEL=info",
 		"DB_DRIVER=sqlite",
 		"DB_DSN=file::memory:?cache=shared",
+		"STORAGE_ENABLED=true",
+		"STORAGE_ENDPOINT=http://127.0.0.1:9000",
+		"STORAGE_REGION=us-east-1",
+		"STORAGE_BUCKET_NAME=mannaiah-e2e",
 		"LOGTO_ISSUER=https://issuer.example",
 		"LOGTO_AUDIENCE=https://api.mannaiah.e2e",
 		"DEV_AUTH_TOKEN=dev-bypass-token",
-		"DEV_AUTH_SCOPE=contacts:manage",
+		"DEV_AUTH_SCOPE=contacts:manage assets:create",
 	)
 
 	var stdout bytes.Buffer
@@ -85,6 +89,9 @@ func TestStartupProcessE2E(t *testing.T) {
 	}
 	if paths["/variations"] == nil || paths["/variations/{id}"] == nil {
 		t.Fatalf("expected /variations paths in aggregated openapi")
+	}
+	if paths["/assets"] == nil || paths["/assets/{id}"] == nil {
+		t.Fatalf("expected /assets paths in aggregated openapi")
 	}
 
 	tracer.Step("create contact through development auth bypass")
@@ -130,7 +137,56 @@ func TestStartupProcessE2E(t *testing.T) {
 	}
 
 	tracer.Step("assert startup process trace logs")
-	tracer.AssertStepCount(9)
+	tracer.AssertStepCount(10)
+}
+
+// TestStartupProcessRequiresStorage verifies startup fails fast when storage is disabled.
+func TestStartupProcessRequiresStorage(t *testing.T) {
+	tracer := newStepTracer(t)
+	repoRoot := resolveRepositoryRoot(t)
+
+	command := exec.Command("go", "run", "./module/core/cmd/api")
+	command.Dir = repoRoot
+	command.Env = append(os.Environ(),
+		"CORE_HOST=127.0.0.1",
+		"CORE_PORT=8199",
+		"CORE_ENVIRONMENT=development",
+		"LOG_FORMAT=json",
+		"LOG_LEVEL=info",
+		"DB_DRIVER=sqlite",
+		"DB_DSN=file::memory:?cache=shared",
+		"STORAGE_ENABLED=false",
+		"LOGTO_ISSUER=https://issuer.example",
+		"LOGTO_AUDIENCE=https://api.mannaiah.e2e",
+		"DEV_AUTH_TOKEN=dev-bypass-token",
+		"DEV_AUTH_SCOPE=contacts:manage",
+	)
+
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+
+	tracer.Step("start process without storage")
+	if err := command.Start(); err != nil {
+		t.Fatalf("command.Start() error = %v", err)
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- command.Wait()
+	}()
+
+	select {
+	case err := <-waitDone:
+		if err == nil {
+			t.Fatalf("expected startup failure when storage is disabled")
+		}
+		if !strings.Contains(strings.ToLower(stderr.String()), "storage is mandatory") {
+			t.Fatalf("stderr = %q, want storage mandatory error", stderr.String())
+		}
+	case <-time.After(8 * time.Second):
+		_ = command.Process.Kill()
+		t.Fatalf("startup did not fail within timeout")
+	}
 }
 
 // resolveRepositoryRoot resolves the repository root path from the root E2E package directory.
