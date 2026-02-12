@@ -32,13 +32,13 @@ type productRecord struct {
 	// SKU defines unique stock-keeping values.
 	SKU string `gorm:"size:255;not null;uniqueIndex"`
 	// Gallery defines encoded gallery JSON payload.
-	Gallery string `gorm:"type:text;not null;default:'[]'"`
+	Gallery string `gorm:"type:text;not null"`
 	// Datasheets defines encoded datasheet JSON payload.
-	Datasheets string `gorm:"type:text;not null;default:'[]'"`
+	Datasheets string `gorm:"type:text;not null"`
 	// Variations defines encoded variation JSON payload.
-	Variations string `gorm:"type:text;not null;default:'[]'"`
+	Variations string `gorm:"type:text;not null"`
 	// Variants defines encoded variant JSON payload.
-	Variants string `gorm:"type:text;not null;default:'[]'"`
+	Variants string `gorm:"type:text;not null"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
