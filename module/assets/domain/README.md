@@ -1,8 +1,8 @@
 # assets/domain
 
-Domain entity and invariants for assets.
+Domain entities and invariants for assets, folders, tags, and metadata validation.
 
 ## Key methods / endpoints / events
-- Methods: `(*Asset).Normalize()`, `(Asset).ValidateCreate()`, `ValidateID(id)`
-- Endpoints: consumed by `/assets` handlers.
+- Methods: `(*Asset).Normalize()`, `(Asset).ValidateCreate()`, `ValidateID(id)`, `(*Folder).Normalize()`, `(Folder).ValidateCreate()`, `ValidateFolderID(id)`, `BuildFolderSlug(name)`
+- Endpoints: consumed by `/assets*` and `/assets/folders*` handlers.
 - Events: mapped by application layer to integration events.

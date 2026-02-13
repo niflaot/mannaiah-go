@@ -14,7 +14,7 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	defer harness.Close(t)
 
 	harness.tracer.Step("request asset upload without authorization header")
-	status, payload := doAssetUploadRequest(t, harness, "", "image.png", []byte("payload"), "Asset One")
+	status, payload := doAssetUploadRequest(t, harness, "", "image.png", []byte("payload"), map[string]string{"name": "Asset One"})
 	if status != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", status, http.StatusUnauthorized)
 	}
@@ -28,8 +28,23 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	assetsDeleteToken := harness.SignToken(t, "assets:delete")
 	productsManageToken := harness.SignToken(t, "products:manage")
 
+	harness.tracer.Step("create folder for logical organization")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/assets/folders", assetsCreateToken, []byte(`{"name":"Catalog","tags":[{"name":"hero","color":"#ff0000"}]}`))
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
+	}
+	folderID, _ := payload["_id"].(string)
+	if folderID == "" {
+		t.Fatalf("expected folder id in response")
+	}
+
 	harness.tracer.Step("upload asset with create scope")
-	status, payload = doAssetUploadRequest(t, harness, assetsCreateToken, "image.png", []byte("payload"), "Hero")
+	status, payload = doAssetUploadRequest(t, harness, assetsCreateToken, "image.png", []byte("payload"), map[string]string{
+		"name":     "Hero",
+		"folderId": folderID,
+		"tags":     `[{"name":"cover","color":"#00aa11"}]`,
+		"metadata": `{"alt":"homepage hero"}`,
+	})
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
@@ -38,6 +53,15 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 		t.Fatalf("expected asset id in response")
 	}
 	harness.AwaitAssetCreatedEvent(t)
+
+	harness.tracer.Step("verify uploaded asset persisted folder assignment and metadata")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/assets/"+assetID, assetsReadToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["folderId"] != folderID {
+		t.Fatalf("payload.folderId = %v, want %q", payload["folderId"], folderID)
+	}
 
 	harness.tracer.Step("list assets with read scope")
 	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/assets?page=1&limit=10", assetsReadToken, nil)
@@ -58,6 +82,23 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 		t.Fatalf("payload.name = %v, want %q", payload["name"], "Hero Updated")
 	}
 	harness.AwaitAssetUpdatedEvent(t)
+
+	harness.tracer.Step("rename and soft-delete folder while detaching assets")
+	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/assets/folders/"+folderID, assetsUpdateToken, []byte(`{"name":"Catalog 2026","tags":[{"name":"catalog","color":"#ffaa00"}]}`))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	status, payload = harness.DoJSONRequest(t, http.MethodDelete, "/assets/folders/"+folderID, assetsDeleteToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/assets/"+assetID, assetsReadToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["folderId"] != nil && payload["folderId"] != "" {
+		t.Fatalf("payload.folderId = %v, want empty after folder deletion", payload["folderId"])
+	}
 
 	harness.tracer.Step("create product referencing existing asset")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/products", productsManageToken, []byte(`{"sku":"SKU-ASSET-1","gallery":[{"assetId":"`+assetID+`","isMain":true}]}`))
@@ -85,11 +126,11 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	harness.AwaitAssetDeletedEvent(t)
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(7)
+	harness.tracer.AssertStepCount(10)
 }
 
 // doAssetUploadRequest uploads asset payloads as multipart/form-data.
-func doAssetUploadRequest(t *testing.T, harness *contactsE2EHarness, token string, fileName string, content []byte, name string) (int, map[string]any) {
+func doAssetUploadRequest(t *testing.T, harness *contactsE2EHarness, token string, fileName string, content []byte, fields map[string]string) (int, map[string]any) {
 	t.Helper()
 
 	body := &bytes.Buffer{}
@@ -102,9 +143,9 @@ func doAssetUploadRequest(t *testing.T, harness *contactsE2EHarness, token strin
 	if _, err := filePart.Write(content); err != nil {
 		t.Fatalf("filePart.Write() error = %v", err)
 	}
-	if name != "" {
-		if err := writer.WriteField("name", name); err != nil {
-			t.Fatalf("WriteField(name) error = %v", err)
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatalf("WriteField(%s) error = %v", key, err)
 		}
 	}
 	if err := writer.Close(); err != nil {

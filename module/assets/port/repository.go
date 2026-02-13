@@ -10,6 +10,8 @@ import (
 var (
 	// ErrNotFound is returned when asset records are missing.
 	ErrNotFound = errors.New("asset not found")
+	// ErrFolderNotFound is returned when folder records are missing.
+	ErrFolderNotFound = errors.New("asset folder not found")
 )
 
 // ListQuery defines list-assets query values.
@@ -34,6 +36,38 @@ type PageResult struct {
 	Limit int
 }
 
+// FolderPageResult defines paginated folder-list response values.
+type FolderPageResult struct {
+	// Data defines current page rows.
+	Data []domain.Folder
+	// Total defines total rows.
+	Total int64
+	// Page defines current page numbers.
+	Page int
+	// Limit defines current page size values.
+	Limit int
+}
+
+// AssetUpdate defines partial asset update operations.
+type AssetUpdate struct {
+	// Name defines optional display name updates.
+	Name *string
+	// FolderID defines optional folder assignment updates.
+	FolderID *string
+	// Tags defines optional tags updates.
+	Tags *[]domain.Tag
+	// Metadata defines optional metadata updates.
+	Metadata *map[string]string
+}
+
+// FolderUpdate defines partial folder update operations.
+type FolderUpdate struct {
+	// Name defines optional folder name updates.
+	Name *string
+	// Tags defines optional folder tag updates.
+	Tags *[]domain.Tag
+}
+
 // Repository defines asset metadata persistence behavior.
 type Repository interface {
 	// EnsureSchema ensures storage schema availability.
@@ -44,8 +78,20 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*domain.Asset, error)
 	// List paginates asset metadata rows.
 	List(ctx context.Context, query ListQuery) (*PageResult, error)
-	// UpdateName updates asset custom names.
-	UpdateName(ctx context.Context, id string, name string) (*domain.Asset, error)
+	// Update updates asset metadata fields.
+	Update(ctx context.Context, id string, update AssetUpdate) (*domain.Asset, error)
 	// SoftDelete soft-deletes asset metadata rows.
 	SoftDelete(ctx context.Context, id string) error
+	// CreateFolder persists folder metadata rows.
+	CreateFolder(ctx context.Context, folder *domain.Folder) error
+	// GetFolderByID loads folder metadata rows by id.
+	GetFolderByID(ctx context.Context, id string) (*domain.Folder, error)
+	// ListFolders paginates folder metadata rows.
+	ListFolders(ctx context.Context, query ListQuery) (*FolderPageResult, error)
+	// UpdateFolder updates folder metadata fields.
+	UpdateFolder(ctx context.Context, id string, update FolderUpdate) (*domain.Folder, error)
+	// SoftDeleteFolder soft-deletes folder rows and detaches linked assets.
+	SoftDeleteFolder(ctx context.Context, id string) error
+	// ExistsFolder reports whether folders exist by id.
+	ExistsFolder(ctx context.Context, id string) (bool, error)
 }

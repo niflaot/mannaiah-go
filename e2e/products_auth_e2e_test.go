@@ -24,7 +24,7 @@ func TestProductsAuthE2E(t *testing.T) {
 	assetCreateToken := harness.SignToken(t, "assets:create")
 
 	harness.tracer.Step("upload asset for product gallery")
-	assetStatus, assetPayload := doAssetUploadRequest(t, harness, assetCreateToken, "product.png", []byte("image"), "Product Image")
+	assetStatus, assetPayload := doAssetUploadRequest(t, harness, assetCreateToken, "product.png", []byte("image"), map[string]string{"name": "Product Image"})
 	if assetStatus != http.StatusCreated {
 		t.Fatalf("asset status = %d, want %d", assetStatus, http.StatusCreated)
 	}

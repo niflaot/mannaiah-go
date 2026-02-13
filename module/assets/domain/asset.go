@@ -2,6 +2,8 @@ package domain
 
 import (
 	"errors"
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -29,10 +31,16 @@ type Asset struct {
 	Name string `json:"name"`
 	// OriginalName defines uploaded file names.
 	OriginalName string `json:"originalName"`
+	// FolderID defines optional logical folder identifiers.
+	FolderID string `json:"folderId,omitempty"`
 	// MimeType defines mime type values.
 	MimeType string `json:"mimeType"`
 	// Size defines object size in bytes.
 	Size int64 `json:"size"`
+	// Tags defines optional classification tags.
+	Tags []Tag `json:"tags,omitempty"`
+	// Metadata defines optional key-value metadata values.
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines update timestamps.
@@ -53,7 +61,10 @@ func (a *Asset) Normalize() {
 	a.Key = strings.TrimSpace(a.Key)
 	a.Name = strings.TrimSpace(a.Name)
 	a.OriginalName = strings.TrimSpace(a.OriginalName)
+	a.FolderID = strings.TrimSpace(a.FolderID)
 	a.MimeType = strings.TrimSpace(a.MimeType)
+	normalizeTags(a.Tags)
+	a.Metadata = normalizeMetadata(a.Metadata)
 }
 
 // ValidateCreate verifies asset metadata required for creation.
@@ -70,6 +81,12 @@ func (a Asset) ValidateCreate() error {
 	if a.Size <= 0 {
 		return ErrInvalidSize
 	}
+	if err := validateTags(a.Tags); err != nil {
+		return err
+	}
+	if err := validateMetadata(a.Metadata); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -78,6 +95,56 @@ func (a Asset) ValidateCreate() error {
 func ValidateID(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return ErrIDRequired
+	}
+
+	return nil
+}
+
+// normalizeTags normalizes tag names and colors in-place.
+func normalizeTags(tags []Tag) {
+	for index := range tags {
+		tags[index].Name = strings.ToLower(strings.TrimSpace(tags[index].Name))
+		tags[index].Color = strings.ToLower(strings.TrimSpace(tags[index].Color))
+	}
+}
+
+// normalizeMetadata normalizes metadata keys and values.
+func normalizeMetadata(metadata map[string]string) map[string]string {
+	if metadata == nil {
+		return map[string]string{}
+	}
+
+	normalized := make(map[string]string, len(metadata))
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			continue
+		}
+		normalized[trimmedKey] = strings.TrimSpace(metadata[key])
+	}
+
+	return normalized
+}
+
+// validateMetadata verifies metadata key/value constraints.
+func validateMetadata(metadata map[string]string) error {
+	for key, value := range metadata {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			return ErrInvalidMetadata
+		}
+		if len(trimmedKey) > 128 {
+			return fmt.Errorf("%w: key %q exceeds max length", ErrInvalidMetadata, trimmedKey)
+		}
+		if len(value) > 2048 {
+			return fmt.Errorf("%w: value for %q exceeds max length", ErrInvalidMetadata, trimmedKey)
+		}
 	}
 
 	return nil

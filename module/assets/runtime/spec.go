@@ -14,9 +14,16 @@ func OpenAPISpec() *openapi3.T {
 	components := openapi3.NewComponents()
 	components.Schemas = openapi3.Schemas{
 		"Asset":                  &openapi3.SchemaRef{Value: assetSchema()},
+		"AssetTag":               &openapi3.SchemaRef{Value: tagSchema()},
+		"AssetFolder":            &openapi3.SchemaRef{Value: folderSchema()},
 		"UpdateAssetDto":         &openapi3.SchemaRef{Value: updateAssetSchema()},
+		"CreateAssetFolderDto":   &openapi3.SchemaRef{Value: createFolderSchema()},
+		"UpdateAssetFolderDto":   &openapi3.SchemaRef{Value: updateFolderSchema()},
 		"PaginatedAssetResponse": &openapi3.SchemaRef{Value: paginatedAssetResponseSchema()},
-		"AssetPaginationMeta":    &openapi3.SchemaRef{Value: assetPaginationMetaSchema()},
+		"PaginatedFolderResponse": &openapi3.SchemaRef{
+			Value: paginatedFolderResponseSchema(),
+		},
+		"AssetPaginationMeta": &openapi3.SchemaRef{Value: assetPaginationMetaSchema()},
 	}
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
@@ -31,6 +38,8 @@ func OpenAPISpec() *openapi3.T {
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/assets", assetsPathItem()),
 			openapi3.WithPath("/assets/{id}", assetByIDPathItem()),
+			openapi3.WithPath("/assets/folders", foldersPathItem()),
+			openapi3.WithPath("/assets/folders/{id}", folderByIDPathItem()),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
@@ -56,11 +65,31 @@ func assetByIDPathItem() *openapi3.PathItem {
 	}
 }
 
+// foldersPathItem returns OpenAPI path operations for folder collection endpoints.
+func foldersPathItem() *openapi3.PathItem {
+	return &openapi3.PathItem{
+		Post: createFolderOperation(),
+		Get:  listFoldersOperation(),
+	}
+}
+
+// folderByIDPathItem returns OpenAPI path operations for folder ID-scoped endpoints.
+func folderByIDPathItem() *openapi3.PathItem {
+	return &openapi3.PathItem{
+		Get:    getFolderOperation(),
+		Patch:  updateFolderOperation(),
+		Delete: deleteFolderOperation(),
+	}
+}
+
 // createAssetOperation defines the OpenAPI operation for asset uploads.
 func createAssetOperation() *openapi3.Operation {
 	formSchema := openapi3.NewObjectSchema().
 		WithProperty("file", openapi3.NewStringSchema().WithFormat("binary")).
-		WithProperty("name", openapi3.NewStringSchema())
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("folderId", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewStringSchema()).
+		WithProperty("metadata", openapi3.NewStringSchema())
 	formSchema.Required = []string{"file"}
 
 	requestBody := openapi3.NewRequestBody().
@@ -80,6 +109,7 @@ func createAssetOperation() *openapi3.Operation {
 			openapi3.WithStatus(400, responseWithDescription("Bad Request - File validation failed.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Folder not found.")),
 			openapi3.WithStatus(503, responseWithDescription("Storage integration unavailable.")),
 		),
 	}
@@ -138,7 +168,7 @@ func updateAssetOperation() *openapi3.Operation {
 			openapi3.WithStatus(200, responseWithDescription("The asset has been successfully updated.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
-			openapi3.WithStatus(404, responseWithDescription("Asset not found.")),
+			openapi3.WithStatus(404, responseWithDescription("Asset or folder not found.")),
 		),
 	}
 }
@@ -158,7 +188,100 @@ func deleteAssetOperation() *openapi3.Operation {
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Asset not found.")),
-			openapi3.WithStatus(503, responseWithDescription("Storage integration unavailable.")),
+		),
+	}
+}
+
+// createFolderOperation defines the OpenAPI operation for folder creation.
+func createFolderOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsFoldersController_create",
+		Summary:     "Create an asset folder",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		RequestBody: jsonRequestBodyRef("#/components/schemas/CreateAssetFolderDto"),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(201, responseWithDescription("The folder has been successfully created.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		),
+	}
+}
+
+// listFoldersOperation defines the OpenAPI operation for folder listing.
+func listFoldersOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsFoldersController_findAll",
+		Summary:     "Get asset folders",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			queryParameter("page", false, "Page number", openapi3.NewIntegerSchema()),
+			queryParameter("limit", false, "Items per page", openapi3.NewIntegerSchema()),
+			queryParameter("filters", false, "Filter criteria", openapi3.NewStringSchema()),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Return paginated folders.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		),
+	}
+}
+
+// getFolderOperation defines the OpenAPI operation for folder retrieval by ID.
+func getFolderOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsFoldersController_findOne",
+		Summary:     "Get an asset folder by id",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Folder ID", openapi3.NewStringSchema()),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Return the folder.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(404, responseWithDescription("Folder not found.")),
+		),
+	}
+}
+
+// updateFolderOperation defines the OpenAPI operation for folder updates.
+func updateFolderOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsFoldersController_update",
+		Summary:     "Update an asset folder",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Folder ID", openapi3.NewStringSchema()),
+		},
+		RequestBody: jsonRequestBodyRef("#/components/schemas/UpdateAssetFolderDto"),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("The folder has been successfully updated.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Folder not found.")),
+		),
+	}
+}
+
+// deleteFolderOperation defines the OpenAPI operation for folder deletion.
+func deleteFolderOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsFoldersController_remove",
+		Summary:     "Delete an asset folder",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Folder ID", openapi3.NewStringSchema()),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("The folder has been successfully deleted.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Folder not found.")),
 		),
 	}
 }
@@ -194,6 +317,13 @@ func queryParameter(name string, required bool, description string, schema *open
 	return &openapi3.ParameterRef{Value: openapi3.NewQueryParameter(name).WithRequired(required).WithDescription(description).WithSchema(schema)}
 }
 
+// tagSchema returns the schema for asset/folder tags.
+func tagSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("color", openapi3.NewStringSchema())
+}
+
 // assetSchema returns the response schema for asset payloads.
 func assetSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
@@ -201,8 +331,24 @@ func assetSchema() *openapi3.Schema {
 		WithProperty("key", openapi3.NewStringSchema()).
 		WithProperty("name", openapi3.NewStringSchema()).
 		WithProperty("originalName", openapi3.NewStringSchema()).
+		WithProperty("folderId", openapi3.NewStringSchema()).
 		WithProperty("mimeType", openapi3.NewStringSchema()).
 		WithProperty("size", openapi3.NewIntegerSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
+		WithProperty("metadata", openapi3.NewObjectSchema().WithAdditionalProperties(openapi3.NewStringSchema())).
+		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
+		WithProperty("updatedAt", openapi3.NewDateTimeSchema()).
+		WithProperty("deletedAt", openapi3.NewDateTimeSchema()).
+		WithProperty("isDeleted", openapi3.NewBoolSchema())
+}
+
+// folderSchema returns the response schema for folder payloads.
+func folderSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("_id", openapi3.NewStringSchema()).
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("slug", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema()).
 		WithProperty("deletedAt", openapi3.NewDateTimeSchema()).
@@ -213,7 +359,24 @@ func assetSchema() *openapi3.Schema {
 func updateAssetSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("folderId", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
+		WithProperty("metadata", openapi3.NewObjectSchema().WithAdditionalProperties(openapi3.NewStringSchema()))
+}
+
+// createFolderSchema returns the request schema for folder creation payloads.
+func createFolderSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
 		WithRequired([]string{"name"})
+}
+
+// updateFolderSchema returns the request schema for folder update payloads.
+func updateFolderSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema()))
 }
 
 // assetPaginationMetaSchema returns the response schema for pagination metadata.
@@ -228,5 +391,12 @@ func assetPaginationMetaSchema() *openapi3.Schema {
 func paginatedAssetResponseSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("data", openapi3.NewArraySchema().WithItems(assetSchema())).
+		WithProperty("meta", assetPaginationMetaSchema())
+}
+
+// paginatedFolderResponseSchema returns the response schema for paginated folder responses.
+func paginatedFolderResponseSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("data", openapi3.NewArraySchema().WithItems(folderSchema())).
 		WithProperty("meta", assetPaginationMetaSchema())
 }

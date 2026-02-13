@@ -20,6 +20,12 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Paths.Value("/assets/{id}") == nil {
 		t.Fatalf("expected /assets/{id} path")
 	}
+	if spec.Paths.Value("/assets/folders") == nil {
+		t.Fatalf("expected /assets/folders path")
+	}
+	if spec.Paths.Value("/assets/folders/{id}") == nil {
+		t.Fatalf("expected /assets/folders/{id} path")
+	}
 }
 
 // TestSpecHelpers verifies helper schema and parameter behavior.
@@ -39,13 +45,16 @@ func TestSpecHelpers(t *testing.T) {
 	if queryParameter("page", false, "page", nil) == nil {
 		t.Fatalf("expected queryParameter")
 	}
-	if assetsPathItem() == nil || assetByIDPathItem() == nil {
+	if assetsPathItem() == nil || assetByIDPathItem() == nil || foldersPathItem() == nil || folderByIDPathItem() == nil {
 		t.Fatalf("expected path items")
 	}
 	if createAssetOperation() == nil || listAssetsOperation() == nil || getAssetOperation() == nil || updateAssetOperation() == nil || deleteAssetOperation() == nil {
 		t.Fatalf("expected operations")
 	}
-	if assetSchema() == nil || updateAssetSchema() == nil || assetPaginationMetaSchema() == nil || paginatedAssetResponseSchema() == nil {
+	if createFolderOperation() == nil || listFoldersOperation() == nil || getFolderOperation() == nil || updateFolderOperation() == nil || deleteFolderOperation() == nil {
+		t.Fatalf("expected folder operations")
+	}
+	if assetSchema() == nil || folderSchema() == nil || tagSchema() == nil || updateAssetSchema() == nil || createFolderSchema() == nil || updateFolderSchema() == nil || assetPaginationMetaSchema() == nil || paginatedAssetResponseSchema() == nil || paginatedFolderResponseSchema() == nil {
 		t.Fatalf("expected schemas")
 	}
 }

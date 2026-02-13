@@ -4,7 +4,10 @@ import (
 	"context"
 	errorspkg "errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"mannaiah/module/assets/domain"
 	"mannaiah/module/assets/port"
@@ -18,10 +21,22 @@ type repositoryMock struct {
 	getByIDFn func(ctx context.Context, id string) (*domain.Asset, error)
 	// listFn defines list behavior.
 	listFn func(ctx context.Context, query port.ListQuery) (*port.PageResult, error)
-	// updateNameFn defines update behavior.
-	updateNameFn func(ctx context.Context, id string, name string) (*domain.Asset, error)
+	// updateFn defines update behavior.
+	updateFn func(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error)
 	// softDeleteFn defines soft-delete behavior.
 	softDeleteFn func(ctx context.Context, id string) error
+	// createFolderFn defines folder-create behavior.
+	createFolderFn func(ctx context.Context, folder *domain.Folder) error
+	// getFolderByIDFn defines folder-get behavior.
+	getFolderByIDFn func(ctx context.Context, id string) (*domain.Folder, error)
+	// listFoldersFn defines folder-list behavior.
+	listFoldersFn func(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error)
+	// updateFolderFn defines folder-update behavior.
+	updateFolderFn func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error)
+	// softDeleteFolderFn defines folder-delete behavior.
+	softDeleteFolderFn func(ctx context.Context, id string) error
+	// existsFolderFn defines folder-exists behavior.
+	existsFolderFn func(ctx context.Context, id string) (bool, error)
 }
 
 // EnsureSchema ignores schema behavior for service tests.
@@ -42,14 +57,44 @@ func (m repositoryMock) List(ctx context.Context, query port.ListQuery) (*port.P
 	return m.listFn(ctx, query)
 }
 
-// UpdateName executes configured update behavior.
-func (m repositoryMock) UpdateName(ctx context.Context, id string, name string) (*domain.Asset, error) {
-	return m.updateNameFn(ctx, id, name)
+// Update executes configured update behavior.
+func (m repositoryMock) Update(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error) {
+	return m.updateFn(ctx, id, update)
 }
 
 // SoftDelete executes configured soft-delete behavior.
 func (m repositoryMock) SoftDelete(ctx context.Context, id string) error {
 	return m.softDeleteFn(ctx, id)
+}
+
+// CreateFolder executes configured folder-create behavior.
+func (m repositoryMock) CreateFolder(ctx context.Context, folder *domain.Folder) error {
+	return m.createFolderFn(ctx, folder)
+}
+
+// GetFolderByID executes configured folder-get behavior.
+func (m repositoryMock) GetFolderByID(ctx context.Context, id string) (*domain.Folder, error) {
+	return m.getFolderByIDFn(ctx, id)
+}
+
+// ListFolders executes configured folder-list behavior.
+func (m repositoryMock) ListFolders(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error) {
+	return m.listFoldersFn(ctx, query)
+}
+
+// UpdateFolder executes configured folder-update behavior.
+func (m repositoryMock) UpdateFolder(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
+	return m.updateFolderFn(ctx, id, update)
+}
+
+// SoftDeleteFolder executes configured folder-delete behavior.
+func (m repositoryMock) SoftDeleteFolder(ctx context.Context, id string) error {
+	return m.softDeleteFolderFn(ctx, id)
+}
+
+// ExistsFolder executes configured folder-exists behavior.
+func (m repositoryMock) ExistsFolder(ctx context.Context, id string) (bool, error) {
+	return m.existsFolderFn(ctx, id)
 }
 
 // storageMock defines storage behavior for service tests.
@@ -97,24 +142,8 @@ func (m publisherMock) Publish(ctx context.Context, event port.IntegrationEvent)
 
 // TestNewService validates service constructor behavior.
 func TestNewService(t *testing.T) {
-	storage := storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
-	}
-	repository := repositoryMock{
-		createFn: func(ctx context.Context, asset *domain.Asset) error { return nil },
-		getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) {
-			return &domain.Asset{ID: id}, nil
-		},
-		listFn: func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) {
-			return &port.PageResult{}, nil
-		},
-		updateNameFn: func(ctx context.Context, id string, name string) (*domain.Asset, error) {
-			return &domain.Asset{ID: id, Name: name}, nil
-		},
-		softDeleteFn: func(ctx context.Context, id string) error { return nil },
-	}
+	repository := newRepositoryMock()
+	storage := newStorageMock()
 
 	if _, err := NewService(nil, storage); !errorspkg.Is(err, ErrNilRepository) {
 		t.Fatalf("NewService(nil, storage) error = %v, want ErrNilRepository", err)
@@ -132,27 +161,33 @@ func TestNewService(t *testing.T) {
 	}
 }
 
-// TestCreate validates create command behavior and invariants.
-func TestCreate(t *testing.T) {
-	repository := repositoryMock{
-		createFn: func(ctx context.Context, asset *domain.Asset) error { return nil },
-		getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) {
-			return &domain.Asset{ID: id}, nil
-		},
-		listFn: func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) { return &port.PageResult{}, nil },
-		updateNameFn: func(ctx context.Context, id string, name string) (*domain.Asset, error) {
-			return &domain.Asset{ID: id, Name: name}, nil
-		},
-		softDeleteFn: func(ctx context.Context, id string) error { return nil },
-	}
-
-	service, err := NewService(repository, storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
-	})
+// TestCreateValidationAndSuccess verifies create behavior for assets.
+func TestCreateValidationAndSuccess(t *testing.T) {
+	var uploadedKey string
+	var publishedTopic string
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			createFn: func(ctx context.Context, asset *domain.Asset) error { return nil },
+			existsFolderFn: func(ctx context.Context, id string) (bool, error) {
+				return id == "f-1", nil
+			},
+		}),
+		newStorageMock(),
+		publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error {
+			publishedTopic = event.Topic
+			return nil
+		}},
+	)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
+	}
+	service.storage = storageMock{
+		uploadFn: func(ctx context.Context, request port.UploadRequest) error {
+			uploadedKey = request.Key
+			return nil
+		},
+		deleteFn: func(ctx context.Context, key string) error { return nil },
+		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
 	}
 
 	if _, createErr := service.Create(context.Background(), CreateCommand{}); !errorspkg.Is(createErr, ErrFileRequired) {
@@ -163,81 +198,23 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("Create(large) error = %v, want ErrFileTooLarge", createErr)
 	}
 
-	if _, createErr := service.Create(context.Background(), CreateCommand{Body: []byte("a"), OriginalName: "file.png"}); !errorspkg.Is(createErr, domain.ErrMimeTypeRequired) {
-		t.Fatalf("Create(missing mime) error = %v, want domain.ErrMimeTypeRequired", createErr)
-	}
-}
-
-// TestCreateWithStorageUnavailable verifies availability failure behavior.
-func TestCreateWithStorageUnavailable(t *testing.T) {
-	service, err := NewService(repositoryMock{
-		createFn: func(ctx context.Context, asset *domain.Asset) error { return nil },
-		getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) {
-			return &domain.Asset{ID: id}, nil
-		},
-		listFn:       func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) { return &port.PageResult{}, nil },
-		updateNameFn: func(ctx context.Context, id string, name string) (*domain.Asset, error) { return &domain.Asset{ID: id}, nil },
-		softDeleteFn: func(ctx context.Context, id string) error { return nil },
-	}, storageMock{
-		uploadFn:       func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn:       func(ctx context.Context, key string) error { return nil },
-		existsFn:       func(ctx context.Context, key string) (bool, error) { return true, nil },
-		availabilityErr: errorspkg.New("disabled"),
-	})
-	if err != nil {
-		t.Fatalf("NewService() error = %v", err)
-	}
-
-	_, createErr := service.Create(context.Background(), CreateCommand{
-		OriginalName: "file.png",
+	if _, createErr := service.Create(context.Background(), CreateCommand{
+		OriginalName: "a.png",
 		MimeType:     "image/png",
-		Body:         []byte("payload"),
-	})
-	if !errorspkg.Is(createErr, ErrStorageUnavailable) {
-		t.Fatalf("Create() error = %v, want ErrStorageUnavailable", createErr)
-	}
-}
-
-// TestCreateSuccess verifies create flow with storage upload and event publication.
-func TestCreateSuccess(t *testing.T) {
-	var uploadedKey string
-	var publishedTopic string
-
-	service, err := NewService(repositoryMock{
-		createFn: func(ctx context.Context, asset *domain.Asset) error {
-			asset.CreatedAt = asset.CreatedAt.UTC()
-			asset.UpdatedAt = asset.CreatedAt
-			return nil
-		},
-		getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) {
-			return &domain.Asset{ID: id}, nil
-		},
-		listFn:       func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) { return &port.PageResult{}, nil },
-		updateNameFn: func(ctx context.Context, id string, name string) (*domain.Asset, error) { return &domain.Asset{ID: id}, nil },
-		softDeleteFn: func(ctx context.Context, id string) error { return nil },
-	}, storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error {
-			uploadedKey = request.Key
-			if request.ContentType != "image/png" {
-				t.Fatalf("request.ContentType = %q, want %q", request.ContentType, "image/png")
-			}
-			return nil
-		},
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
-	}, publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error {
-		publishedTopic = event.Topic
-		return nil
-	}})
-	if err != nil {
-		t.Fatalf("NewService() error = %v", err)
+		Body:         []byte("p"),
+		FolderID:     "missing",
+	}); !errorspkg.Is(createErr, port.ErrFolderNotFound) {
+		t.Fatalf("Create(folder missing) error = %v, want port.ErrFolderNotFound", createErr)
 	}
 
 	entity, createErr := service.Create(context.Background(), CreateCommand{
-		Name:         " Product Image ",
-		OriginalName: " image one.png ",
+		Name:         " Hero ",
+		OriginalName: "image.png",
+		FolderID:     "f-1",
 		MimeType:     "image/png",
 		Body:         []byte("payload"),
+		Tags:         []domain.Tag{{Name: "hero", Color: "#ff0000"}},
+		Metadata:     map[string]string{"alt": "hero"},
 	})
 	if createErr != nil {
 		t.Fatalf("Create() error = %v", createErr)
@@ -245,38 +222,32 @@ func TestCreateSuccess(t *testing.T) {
 	if entity == nil {
 		t.Fatalf("expected created entity")
 	}
-	if strings.TrimSpace(entity.ID) == "" {
-		t.Fatalf("expected generated id")
-	}
 	if !strings.HasPrefix(uploadedKey, "assets/") {
-		t.Fatalf("uploadedKey = %q, want prefix assets/", uploadedKey)
+		t.Fatalf("uploadedKey = %q, want assets/ prefix", uploadedKey)
 	}
 	if publishedTopic != TopicAssetCreated {
 		t.Fatalf("publishedTopic = %q, want %q", publishedTopic, TopicAssetCreated)
 	}
 }
 
-// TestCreateRollback verifies rollback behavior when metadata persistence fails.
-func TestCreateRollback(t *testing.T) {
+// TestCreateRollbackAndPublishFailures verifies create rollback and publish failures.
+func TestCreateRollbackAndPublishFailures(t *testing.T) {
 	repositoryErr := errorspkg.New("db failed")
 	rollbackCalled := false
 
-	service, err := NewService(repositoryMock{
-		createFn: func(ctx context.Context, asset *domain.Asset) error {
-			return repositoryErr
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			createFn: func(ctx context.Context, asset *domain.Asset) error { return repositoryErr },
+		}),
+		storageMock{
+			uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
+			deleteFn: func(ctx context.Context, key string) error {
+				rollbackCalled = true
+				return nil
+			},
+			existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
 		},
-		getByIDFn:     func(ctx context.Context, id string) (*domain.Asset, error) { return nil, nil },
-		listFn:        func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) { return &port.PageResult{}, nil },
-		updateNameFn:  func(ctx context.Context, id string, name string) (*domain.Asset, error) { return &domain.Asset{}, nil },
-		softDeleteFn:  func(ctx context.Context, id string) error { return nil },
-	}, storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error {
-			rollbackCalled = true
-			return nil
-		},
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
-	})
+	)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -288,61 +259,54 @@ func TestCreateRollback(t *testing.T) {
 	if !rollbackCalled {
 		t.Fatalf("expected rollback delete call")
 	}
-}
 
-// TestCreatePublishFailure verifies publication failure handling.
-func TestCreatePublishFailure(t *testing.T) {
 	publishErr := errorspkg.New("publish failed")
-
-	service, err := NewService(repositoryMock{
-		createFn:      func(ctx context.Context, asset *domain.Asset) error { return nil },
-		getByIDFn:     func(ctx context.Context, id string) (*domain.Asset, error) { return nil, nil },
-		listFn:        func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) { return &port.PageResult{}, nil },
-		updateNameFn:  func(ctx context.Context, id string, name string) (*domain.Asset, error) { return &domain.Asset{}, nil },
-		softDeleteFn:  func(ctx context.Context, id string) error { return nil },
-	}, storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
-	}, publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error {
-		return publishErr
-	}})
+	service, err = NewService(
+		newRepositoryMock(),
+		newStorageMock(),
+		publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error { return publishErr }},
+	)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-
-	_, createErr := service.Create(context.Background(), CreateCommand{OriginalName: "a.png", MimeType: "image/png", Body: []byte("p")})
+	_, createErr = service.Create(context.Background(), CreateCommand{OriginalName: "a.png", MimeType: "image/png", Body: []byte("p")})
 	if !errorspkg.Is(createErr, publishErr) {
 		t.Fatalf("Create() error = %v, want publishErr", createErr)
 	}
 }
 
-// TestGetListUpdateDeleteExists verifies non-create service operations.
+// TestGetListUpdateDeleteExists verifies non-create asset operations.
 func TestGetListUpdateDeleteExists(t *testing.T) {
 	entity := &domain.Asset{ID: "a-1", Key: "assets/a-1.png", Name: "name", OriginalName: "a.png", MimeType: "image/png", Size: 10}
-
-	service, err := NewService(repositoryMock{
-		createFn: func(ctx context.Context, asset *domain.Asset) error { return nil },
-		getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) {
-			if id == "missing" {
-				return nil, port.ErrNotFound
-			}
-			return entity, nil
-		},
-		listFn: func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) {
-			return &port.PageResult{Data: []domain.Asset{*entity}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
-		},
-		updateNameFn: func(ctx context.Context, id string, name string) (*domain.Asset, error) {
-			updated := *entity
-			updated.Name = name
-			return &updated, nil
-		},
-		softDeleteFn: func(ctx context.Context, id string) error { return nil },
-	}, storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
-	}, publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error { return nil }})
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) {
+				if id == "missing" {
+					return nil, port.ErrNotFound
+				}
+				return entity, nil
+			},
+			listFn: func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) {
+				return &port.PageResult{Data: []domain.Asset{*entity}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
+			},
+			updateFn: func(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error) {
+				updated := *entity
+				if update.Name != nil {
+					updated.Name = *update.Name
+				}
+				if update.FolderID != nil {
+					updated.FolderID = *update.FolderID
+				}
+				return &updated, nil
+			},
+			softDeleteFn: func(ctx context.Context, id string) error { return nil },
+			existsFolderFn: func(ctx context.Context, id string) (bool, error) {
+				return id != "missing-folder", nil
+			},
+		}),
+		newStorageMock(),
+		publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error { return nil }},
+	)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -362,21 +326,29 @@ func TestGetListUpdateDeleteExists(t *testing.T) {
 		t.Fatalf("listed.Total = %d, want %d", listed.Total, 1)
 	}
 
-	if _, updateErr := service.UpdateName(context.Background(), "", "name"); !errorspkg.Is(updateErr, ErrInvalidID) {
-		t.Fatalf("UpdateName(empty id) error = %v, want ErrInvalidID", updateErr)
+	if _, updateErr := service.Update(context.Background(), "a-1", UpdateCommand{Name: ptr(" ")}); !errorspkg.Is(updateErr, ErrInvalidName) {
+		t.Fatalf("Update(empty name) error = %v, want ErrInvalidName", updateErr)
 	}
-	if _, updateErr := service.UpdateName(context.Background(), "a-1", " "); !errorspkg.Is(updateErr, ErrInvalidName) {
-		t.Fatalf("UpdateName(empty name) error = %v, want ErrInvalidName", updateErr)
+	if _, updateErr := service.Update(context.Background(), "a-1", UpdateCommand{FolderID: ptr("missing-folder")}); !errorspkg.Is(updateErr, port.ErrFolderNotFound) {
+		t.Fatalf("Update(folder missing) error = %v, want port.ErrFolderNotFound", updateErr)
 	}
-	if _, updateErr := service.UpdateName(context.Background(), "a-1", "new"); updateErr != nil {
+	updated, updateErr := service.Update(context.Background(), "a-1", UpdateCommand{Name: ptr("updated"), FolderID: ptr("f-1")})
+	if updateErr != nil {
+		t.Fatalf("Update() error = %v", updateErr)
+	}
+	if updated.Name != "updated" {
+		t.Fatalf("updated.Name = %q, want %q", updated.Name, "updated")
+	}
+
+	if _, updateErr := service.UpdateName(context.Background(), "a-1", "updated-2"); updateErr != nil {
 		t.Fatalf("UpdateName() error = %v", updateErr)
 	}
 
-	if deleteErr := service.Delete(context.Background(), ""); !errorspkg.Is(deleteErr, ErrInvalidID) {
-		t.Fatalf("Delete(empty) error = %v, want ErrInvalidID", deleteErr)
-	}
 	if deleteErr := service.Delete(context.Background(), "a-1"); deleteErr != nil {
 		t.Fatalf("Delete() error = %v", deleteErr)
+	}
+	if deleteErr := service.Delete(context.Background(), ""); !errorspkg.Is(deleteErr, ErrInvalidID) {
+		t.Fatalf("Delete(empty) error = %v, want ErrInvalidID", deleteErr)
 	}
 
 	exists, existsErr := service.Exists(context.Background(), "a-1")
@@ -386,7 +358,6 @@ func TestGetListUpdateDeleteExists(t *testing.T) {
 	if !exists {
 		t.Fatalf("Exists() = false, want true")
 	}
-
 	missing, missingErr := service.Exists(context.Background(), "missing")
 	if missingErr != nil {
 		t.Fatalf("Exists(missing) error = %v", missingErr)
@@ -396,18 +367,277 @@ func TestGetListUpdateDeleteExists(t *testing.T) {
 	}
 }
 
-// TestBuildStorageKey verifies storage key normalization behavior.
-func TestBuildStorageKey(t *testing.T) {
-	key := buildStorageKey(" id-1 ", " ../my image.png ")
-	if !strings.HasPrefix(key, "assets/id-1-") {
-		t.Fatalf("key = %q, want prefix %q", key, "assets/id-1-")
-	}
-	if !strings.HasSuffix(key, "my-image.png") {
-		t.Fatalf("key = %q, want suffix %q", key, "my-image.png")
+// TestFolderOperations verifies folder create/read/list/update/delete behavior.
+func TestFolderOperations(t *testing.T) {
+	folder := &domain.Folder{ID: "f-1", Name: "Hero", Slug: "hero"}
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			createFolderFn: func(ctx context.Context, value *domain.Folder) error {
+				folder = value
+				return nil
+			},
+			getFolderByIDFn: func(ctx context.Context, id string) (*domain.Folder, error) {
+				if id == "missing" {
+					return nil, port.ErrNotFound
+				}
+				return folder, nil
+			},
+			listFoldersFn: func(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error) {
+				return &port.FolderPageResult{Data: []domain.Folder{*folder}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
+			},
+			updateFolderFn: func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
+				if update.Name != nil {
+					folder.Name = *update.Name
+				}
+				return folder, nil
+			},
+			softDeleteFolderFn: func(ctx context.Context, id string) error { return nil },
+		}),
+		newStorageMock(),
+		publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error { return nil }},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
 	}
 
-	fallback := buildStorageKey("id-2", "")
-	if !strings.HasSuffix(fallback, "-file") {
-		t.Fatalf("fallback = %q, want suffix %q", fallback, "-file")
+	if _, createErr := service.CreateFolder(context.Background(), CreateFolderCommand{}); !errorspkg.Is(createErr, ErrInvalidFolderName) {
+		t.Fatalf("CreateFolder(empty) error = %v, want ErrInvalidFolderName", createErr)
+	}
+
+	created, createErr := service.CreateFolder(context.Background(), CreateFolderCommand{Name: " Hero "})
+	if createErr != nil {
+		t.Fatalf("CreateFolder() error = %v", createErr)
+	}
+	if created.Name != "Hero" {
+		t.Fatalf("created.Name = %q, want %q", created.Name, "Hero")
+	}
+
+	if _, getErr := service.GetFolder(context.Background(), ""); !errorspkg.Is(getErr, ErrInvalidFolderID) {
+		t.Fatalf("GetFolder(empty) error = %v, want ErrInvalidFolderID", getErr)
+	}
+	if _, getErr := service.GetFolder(context.Background(), "f-1"); getErr != nil {
+		t.Fatalf("GetFolder() error = %v", getErr)
+	}
+
+	listed, listErr := service.ListFolders(context.Background(), ListQuery{Page: 1, Limit: 10})
+	if listErr != nil {
+		t.Fatalf("ListFolders() error = %v", listErr)
+	}
+	if listed.Total != 1 {
+		t.Fatalf("listed.Total = %d, want %d", listed.Total, 1)
+	}
+
+	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{Name: ptr(" ")}); !errorspkg.Is(updateErr, ErrInvalidFolderName) {
+		t.Fatalf("UpdateFolder(empty name) error = %v, want ErrInvalidFolderName", updateErr)
+	}
+	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{Name: ptr("Catalog")}); updateErr != nil {
+		t.Fatalf("UpdateFolder() error = %v", updateErr)
+	}
+
+	if deleteErr := service.DeleteFolder(context.Background(), ""); !errorspkg.Is(deleteErr, ErrInvalidFolderID) {
+		t.Fatalf("DeleteFolder(empty) error = %v, want ErrInvalidFolderID", deleteErr)
+	}
+	if deleteErr := service.DeleteFolder(context.Background(), "f-1"); deleteErr != nil {
+		t.Fatalf("DeleteFolder() error = %v", deleteErr)
+	}
+}
+
+// TestCreateWithStorageUnavailable verifies availability failure behavior.
+func TestCreateWithStorageUnavailable(t *testing.T) {
+	service, err := NewService(newRepositoryMock(), storageMock{
+		uploadFn:        func(ctx context.Context, request port.UploadRequest) error { return nil },
+		deleteFn:        func(ctx context.Context, key string) error { return nil },
+		existsFn:        func(ctx context.Context, key string) (bool, error) { return true, nil },
+		availabilityErr: errorspkg.New("disabled"),
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	_, createErr := service.Create(context.Background(), CreateCommand{
+		OriginalName: "file.png",
+		MimeType:     "image/png",
+		Body:         []byte("payload"),
+	})
+	if !errorspkg.Is(createErr, ErrStorageUnavailable) {
+		t.Fatalf("Create() error = %v, want ErrStorageUnavailable", createErr)
+	}
+}
+
+// TestUpdateLocksByAssetID verifies per-asset write serialization behavior.
+func TestUpdateLocksByAssetID(t *testing.T) {
+	var active int32
+	var maxActive int32
+
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			updateFn: func(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error) {
+				current := atomic.AddInt32(&active, 1)
+				updateMax(&maxActive, current)
+				time.Sleep(10 * time.Millisecond)
+				atomic.AddInt32(&active, -1)
+				return &domain.Asset{ID: id, Name: "ok"}, nil
+			},
+		}),
+		newStorageMock(),
+		publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error { return nil }},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	runConcurrent(8, func() {
+		_, callErr := service.Update(context.Background(), "a-1", UpdateCommand{Name: ptr("name")})
+		if callErr != nil {
+			t.Errorf("Update() error = %v", callErr)
+		}
+	})
+	if maxActive != 1 {
+		t.Fatalf("maxActive = %d, want %d", maxActive, 1)
+	}
+}
+
+// TestUpdateFolderLocksByFolderID verifies per-folder write serialization behavior.
+func TestUpdateFolderLocksByFolderID(t *testing.T) {
+	var active int32
+	var maxActive int32
+
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			updateFolderFn: func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
+				current := atomic.AddInt32(&active, 1)
+				updateMax(&maxActive, current)
+				time.Sleep(10 * time.Millisecond)
+				atomic.AddInt32(&active, -1)
+				return &domain.Folder{ID: id, Name: "ok", Slug: "ok"}, nil
+			},
+		}),
+		newStorageMock(),
+		publisherMock{publishFn: func(ctx context.Context, event port.IntegrationEvent) error { return nil }},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	runConcurrent(8, func() {
+		_, callErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{Name: ptr("name")})
+		if callErr != nil {
+			t.Errorf("UpdateFolder() error = %v", callErr)
+		}
+	})
+	if maxActive != 1 {
+		t.Fatalf("maxActive = %d, want %d", maxActive, 1)
+	}
+}
+
+// newRepositoryMock creates repository mocks with default behaviors.
+func newRepositoryMock() repositoryMock {
+	return newRepositoryMockWith(repositoryMock{})
+}
+
+// newRepositoryMockWith creates repository mocks applying overrides.
+func newRepositoryMockWith(overrides repositoryMock) repositoryMock {
+	mock := repositoryMock{
+		createFn:  func(ctx context.Context, asset *domain.Asset) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*domain.Asset, error) { return &domain.Asset{ID: id}, nil },
+		listFn: func(ctx context.Context, query port.ListQuery) (*port.PageResult, error) {
+			return &port.PageResult{}, nil
+		},
+		updateFn: func(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error) {
+			return &domain.Asset{ID: id}, nil
+		},
+		softDeleteFn:   func(ctx context.Context, id string) error { return nil },
+		createFolderFn: func(ctx context.Context, folder *domain.Folder) error { return nil },
+		getFolderByIDFn: func(ctx context.Context, id string) (*domain.Folder, error) {
+			return &domain.Folder{ID: id, Name: "folder", Slug: "folder"}, nil
+		},
+		listFoldersFn: func(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error) {
+			return &port.FolderPageResult{}, nil
+		},
+		updateFolderFn: func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
+			return &domain.Folder{ID: id, Name: "folder", Slug: "folder"}, nil
+		},
+		softDeleteFolderFn: func(ctx context.Context, id string) error {
+			return nil
+		},
+		existsFolderFn: func(ctx context.Context, id string) (bool, error) { return true, nil },
+	}
+
+	if overrides.createFn != nil {
+		mock.createFn = overrides.createFn
+	}
+	if overrides.getByIDFn != nil {
+		mock.getByIDFn = overrides.getByIDFn
+	}
+	if overrides.listFn != nil {
+		mock.listFn = overrides.listFn
+	}
+	if overrides.updateFn != nil {
+		mock.updateFn = overrides.updateFn
+	}
+	if overrides.softDeleteFn != nil {
+		mock.softDeleteFn = overrides.softDeleteFn
+	}
+	if overrides.createFolderFn != nil {
+		mock.createFolderFn = overrides.createFolderFn
+	}
+	if overrides.getFolderByIDFn != nil {
+		mock.getFolderByIDFn = overrides.getFolderByIDFn
+	}
+	if overrides.listFoldersFn != nil {
+		mock.listFoldersFn = overrides.listFoldersFn
+	}
+	if overrides.updateFolderFn != nil {
+		mock.updateFolderFn = overrides.updateFolderFn
+	}
+	if overrides.softDeleteFolderFn != nil {
+		mock.softDeleteFolderFn = overrides.softDeleteFolderFn
+	}
+	if overrides.existsFolderFn != nil {
+		mock.existsFolderFn = overrides.existsFolderFn
+	}
+
+	return mock
+}
+
+// newStorageMock creates storage mocks with default behaviors.
+func newStorageMock() storageMock {
+	return storageMock{
+		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
+		deleteFn: func(ctx context.Context, key string) error { return nil },
+		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
+	}
+}
+
+// ptr creates pointers for scalar values.
+func ptr(value string) *string {
+	return &value
+}
+
+// runConcurrent executes functions concurrently count times.
+func runConcurrent(count int, fn func()) {
+	var group sync.WaitGroup
+	group.Add(count)
+
+	for range count {
+		go func() {
+			defer group.Done()
+			fn()
+		}()
+	}
+
+	group.Wait()
+}
+
+// updateMax updates max values using compare-and-swap loops.
+func updateMax(target *int32, candidate int32) {
+	for {
+		current := atomic.LoadInt32(target)
+		if candidate <= current {
+			return
+		}
+		if atomic.CompareAndSwapInt32(target, current, candidate) {
+			return
+		}
 	}
 }

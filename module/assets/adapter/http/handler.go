@@ -2,8 +2,8 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"io"
 	"strconv"
 	"strings"
 
@@ -36,16 +36,18 @@ type Handler struct {
 	authorizer Authorizer
 }
 
-// updateRequest defines request payload for asset update operations.
-type updateRequest struct {
-	// Name defines target asset names.
-	Name string `json:"name"`
-}
-
 // listResponse defines response payload for paginated asset listing.
 type listResponse struct {
 	// Data defines listed rows.
 	Data []domain.Asset `json:"data"`
+	// Meta defines pagination metadata.
+	Meta listResponseMeta `json:"meta"`
+}
+
+// folderListResponse defines response payload for paginated folder listing.
+type folderListResponse struct {
+	// Data defines listed rows.
+	Data []domain.Folder `json:"data"`
 	// Meta defines pagination metadata.
 	Meta listResponseMeta `json:"meta"`
 }
@@ -89,114 +91,19 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	h.authorizer = authorizer
 }
 
-// RegisterRoutes registers asset CRUD endpoints.
+// RegisterRoutes registers asset and folder CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/assets", h.protect("assets:create", h.create))
-	router.Get("/assets", h.protect("assets:read", h.findAll))
-	router.Get("/assets/:id", h.protect("assets:read", h.findOne))
-	router.Patch("/assets/:id", h.protect("assets:update", h.update))
-	router.Delete("/assets/:id", h.protect("assets:delete", h.remove))
-}
+	router.Post("/assets/folders", h.protect("assets:create", h.createFolder))
+	router.Get("/assets/folders", h.protect("assets:read", h.findFolders))
+	router.Get("/assets/folders/:id", h.protect("assets:read", h.findFolderByID))
+	router.Patch("/assets/folders/:id", h.protect("assets:update", h.updateFolder))
+	router.Delete("/assets/folders/:id", h.protect("assets:delete", h.deleteFolder))
 
-// create handles asset upload endpoints.
-func (h *Handler) create(ctx corehttp.Context) error {
-	fileHeader, err := ctx.FormFile("file")
-	if err != nil {
-		return corehttp.NewAppError(400, "file_required", assetsapplication.ErrFileRequired)
-	}
-
-	file, err := fileHeader.Open()
-	if err != nil {
-		return corehttp.NewAppError(400, "invalid_file", err)
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	body, err := io.ReadAll(file)
-	if err != nil {
-		return corehttp.NewAppError(400, "invalid_file", err)
-	}
-
-	name := strings.TrimSpace(ctx.FormValue("name"))
-	mimeType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-
-	entity, createErr := h.service.Create(ctx.Context(), assetsapplication.CreateCommand{
-		Name:         name,
-		OriginalName: fileHeader.Filename,
-		MimeType:     mimeType,
-		Size:         fileHeader.Size,
-		Body:         body,
-	})
-	if createErr != nil {
-		return h.mapError(createErr)
-	}
-
-	return ctx.Status(201).JSON(entity)
-}
-
-// findAll handles paginated list endpoints.
-func (h *Handler) findAll(ctx corehttp.Context) error {
-	page, err := parseIntQuery(ctx, "page", 1)
-	if err != nil {
-		return corehttp.NewAppError(400, "invalid_page", err)
-	}
-	limit, err := parseIntQuery(ctx, "limit", 10)
-	if err != nil {
-		return corehttp.NewAppError(400, "invalid_limit", err)
-	}
-	filters := strings.TrimSpace(ctx.Query("filters"))
-
-	result, listErr := h.service.List(ctx.Context(), assetsapplication.ListQuery{
-		Page:    page,
-		Limit:   limit,
-		Filters: filters,
-	})
-	if listErr != nil {
-		return h.mapError(listErr)
-	}
-
-	return ctx.Status(200).JSON(listResponse{
-		Data: result.Data,
-		Meta: listResponseMeta{Page: result.Page, Total: result.Total, Limit: result.Limit},
-	})
-}
-
-// findOne handles asset-by-id retrieval endpoints.
-func (h *Handler) findOne(ctx corehttp.Context) error {
-	entity, err := h.service.Get(ctx.Context(), ctx.Params("id"))
-	if err != nil {
-		return h.mapError(err)
-	}
-
-	return ctx.Status(200).JSON(entity)
-}
-
-// update handles asset name update endpoints.
-func (h *Handler) update(ctx corehttp.Context) error {
-	var request updateRequest
-	if err := ctx.BodyParser(&request); err != nil {
-		return corehttp.NewAppError(400, "invalid_payload", err)
-	}
-
-	entity, err := h.service.UpdateName(ctx.Context(), ctx.Params("id"), request.Name)
-	if err != nil {
-		return h.mapError(err)
-	}
-
-	return ctx.Status(200).JSON(entity)
-}
-
-// remove handles asset delete endpoints.
-func (h *Handler) remove(ctx corehttp.Context) error {
-	if err := h.service.Delete(ctx.Context(), ctx.Params("id")); err != nil {
-		return h.mapError(err)
-	}
-
-	return ctx.Status(200).JSON(deleteResponse{Status: "deleted"})
+	router.Post("/assets", h.protect("assets:create", h.createAsset))
+	router.Get("/assets", h.protect("assets:read", h.findAssets))
+	router.Get("/assets/:id", h.protect("assets:read", h.findAssetByID))
+	router.Patch("/assets/:id", h.protect("assets:update", h.updateAsset))
+	router.Delete("/assets/:id", h.protect("assets:delete", h.deleteAsset))
 }
 
 // protect wraps handlers with optional auth checks.
@@ -234,6 +141,12 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, assetsapplication.ErrInvalidName) {
 		return corehttp.NewAppError(400, "invalid_asset_name", err)
 	}
+	if errors.Is(err, assetsapplication.ErrInvalidFolderID) {
+		return corehttp.NewAppError(400, "invalid_folder_id", err)
+	}
+	if errors.Is(err, assetsapplication.ErrInvalidFolderName) {
+		return corehttp.NewAppError(400, "invalid_folder_name", err)
+	}
 	if errors.Is(err, assetsapplication.ErrFileRequired) {
 		return corehttp.NewAppError(400, "file_required", err)
 	}
@@ -243,8 +156,18 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrKeyRequired) ||
 		errors.Is(err, domain.ErrOriginalNameRequired) ||
 		errors.Is(err, domain.ErrMimeTypeRequired) ||
-		errors.Is(err, domain.ErrInvalidSize) {
+		errors.Is(err, domain.ErrInvalidSize) ||
+		errors.Is(err, domain.ErrFolderNameRequired) ||
+		errors.Is(err, domain.ErrFolderSlugInvalid) ||
+		errors.Is(err, domain.ErrTooManyTags) ||
+		errors.Is(err, domain.ErrInvalidTagName) ||
+		errors.Is(err, domain.ErrInvalidTagColor) ||
+		errors.Is(err, domain.ErrDuplicatedTags) ||
+		errors.Is(err, domain.ErrInvalidMetadata) {
 		return corehttp.NewAppError(400, "invalid_asset", err)
+	}
+	if errors.Is(err, port.ErrFolderNotFound) {
+		return corehttp.NewAppError(404, "asset_folder_not_found", err)
 	}
 	if errors.Is(err, port.ErrNotFound) {
 		return corehttp.NewAppError(404, "asset_not_found", err)
@@ -266,4 +189,19 @@ func parseIntQuery(ctx corehttp.Context, key string, fallback int) (int, error) 
 	}
 
 	return parsed, nil
+}
+
+// parseJSONField decodes optional JSON form-field values.
+func parseJSONField[T any](raw string) (*T, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	decoded := new(T)
+	if err := json.Unmarshal([]byte(trimmed), decoded); err != nil {
+		return nil, err
+	}
+
+	return decoded, nil
 }
