@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
 )
 
 const (
@@ -95,43 +96,87 @@ func rayIDMiddleware(ctx *fiber.Ctx) error {
 
 // errorHandler maps all handler errors to a consistent JSON payload format.
 func errorHandler(ctx *fiber.Ctx, err error) error {
-	rayID := readOrCreateRayID(ctx)
-	ctx.Locals(rayIDLocalsKey, rayID)
-	ctx.Set(HeaderRayID, rayID)
+	return errorHandlerWithLogger(nil)(ctx, err)
+}
 
-	status := fiber.StatusInternalServerError
-	message := defaultErrorMessage
-	errorValue := defaultErrorMessage
+// errorHandlerWithLogger maps errors to JSON and emits structured 5xx logs when logger is provided.
+func errorHandlerWithLogger(logger *zap.Logger) fiber.ErrorHandler {
+	resolvedLogger := logger
+	if resolvedLogger == nil {
+		resolvedLogger = zap.NewNop()
+	}
 
-	var appErr *AppError
-	if errors.As(err, &appErr) && appErr != nil {
-		status = appErr.Status
-		message = appErr.Message
-		errorValue = appErr.Error()
-	} else {
-		var fiberErr *fiber.Error
-		if errors.As(err, &fiberErr) && fiberErr != nil {
-			status = fiberErr.Code
-			message = statusMessageKey(status)
-			errorValue = strings.TrimSpace(fiberErr.Message)
-		} else if err != nil {
-			errorValue = strings.TrimSpace(err.Error())
+	return func(ctx *fiber.Ctx, err error) error {
+		rayID := readOrCreateRayID(ctx)
+		ctx.Locals(rayIDLocalsKey, rayID)
+		ctx.Set(HeaderRayID, rayID)
+
+		status := fiber.StatusInternalServerError
+		message := defaultErrorMessage
+		errorValue := defaultErrorMessage
+
+		var appErr *AppError
+		if errors.As(err, &appErr) && appErr != nil {
+			status = appErr.Status
+			message = appErr.Message
+			errorValue = appErr.Error()
+		} else {
+			var fiberErr *fiber.Error
+			if errors.As(err, &fiberErr) && fiberErr != nil {
+				status = fiberErr.Code
+				message = statusMessageKey(status)
+				errorValue = strings.TrimSpace(fiberErr.Message)
+			} else if err != nil {
+				errorValue = strings.TrimSpace(err.Error())
+			}
 		}
+
+		if strings.TrimSpace(message) == "" {
+			message = statusMessageKey(status)
+		}
+		if strings.TrimSpace(errorValue) == "" {
+			errorValue = message
+		}
+
+		payload := ErrorResponse{
+			Message: message,
+			Error:   errorValue,
+		}
+
+		if status >= fiber.StatusInternalServerError {
+			resolvedLogger.Error("http request failed",
+				zap.String("ray_id", rayID),
+				zap.Int("status", status),
+				zap.String("method", ctx.Method()),
+				zap.String("url", ctx.OriginalURL()),
+				zap.String("message", message),
+				zap.String("error_chain", formatErrorChain(err)),
+			)
+		}
+
+		return ctx.Status(status).JSON(payload)
+	}
+}
+
+// formatErrorChain returns a flattened error chain for faster root-cause inspection in logs.
+func formatErrorChain(err error) string {
+	if err == nil {
+		return defaultErrorMessage
 	}
 
-	if strings.TrimSpace(message) == "" {
-		message = statusMessageKey(status)
+	parts := make([]string, 0, 4)
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		text := strings.TrimSpace(current.Error())
+		if text == "" {
+			continue
+		}
+		parts = append(parts, text)
 	}
-	if strings.TrimSpace(errorValue) == "" {
-		errorValue = message
+	if len(parts) == 0 {
+		return defaultErrorMessage
 	}
 
-	payload := ErrorResponse{
-		Message: message,
-		Error:   errorValue,
-	}
-
-	return ctx.Status(status).JSON(payload)
+	return strings.Join(parts, " -> ")
 }
 
 // readOrCreateRayID resolves tracing id from headers, locals, or generated value.

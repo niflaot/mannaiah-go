@@ -48,7 +48,7 @@ func NewWithCore(cfg Config, coreCfg *coreconfig.Core, providedLogger *zap.Logge
 		WriteTimeout:          time.Duration(resolvedCfg.WriteTimeoutMS) * time.Millisecond,
 		IdleTimeout:           time.Duration(resolvedCfg.IdleTimeoutMS) * time.Millisecond,
 		DisableStartupMessage: true,
-		ErrorHandler:          errorHandler,
+		ErrorHandler:          errorHandlerWithLogger(logger),
 	})
 
 	app.Use(rayIDMiddleware)

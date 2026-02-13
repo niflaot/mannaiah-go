@@ -3,11 +3,15 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	stdhttp "net/http"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // TestRayIDHeaderGeneratedOnSuccess verifies tracing header injection on successful responses.
@@ -92,6 +96,55 @@ func TestErrorHandlerFormatsGenericError(t *testing.T) {
 	}
 	if resp.Header.Get(HeaderRayID) == "" {
 		t.Fatalf("expected %s header", HeaderRayID)
+	}
+}
+
+// TestErrorHandlerLogsServerErrorCause verifies 5xx responses emit structured root-cause logs.
+func TestErrorHandlerLogsServerErrorCause(t *testing.T) {
+	logCore, observed := observer.New(zapcore.ErrorLevel)
+	logger := zap.New(logCore)
+
+	server, err := New(Config{Host: "127.0.0.1", Port: 8096}, logger)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.Register(func(app *fiber.App) {
+		app.Get("/boom-log", func(ctx *fiber.Ctx) error {
+			low := errors.New("sql duplicate key")
+			return NewAppError(stdhttp.StatusInternalServerError, "internal_server_error", fmt.Errorf("create asset metadata: %w", low))
+		})
+	})
+
+	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/boom-log", nil)
+	resp, testErr := server.App().Test(req)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if resp.StatusCode != stdhttp.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusInternalServerError)
+	}
+
+	entries := observed.FilterMessage("http request failed").All()
+	if len(entries) == 0 {
+		t.Fatalf("expected structured error log entry")
+	}
+
+	entry := entries[0]
+	fields := entry.ContextMap()
+	if fields["status"] != int64(stdhttp.StatusInternalServerError) {
+		t.Fatalf("status field = %v, want %d", fields["status"], stdhttp.StatusInternalServerError)
+	}
+	if fields["url"] != "/boom-log" {
+		t.Fatalf("url field = %v, want %q", fields["url"], "/boom-log")
+	}
+	if fields["ray_id"] == "" {
+		t.Fatalf("expected ray_id field in error log")
+	}
+
+	errorChain, _ := fields["error_chain"].(string)
+	if errorChain == "" || !containsAll(errorChain, []string{"create asset metadata", "sql duplicate key"}) {
+		t.Fatalf("error_chain = %q, want wrapped cause details", errorChain)
 	}
 }
 
@@ -184,6 +237,20 @@ func TestStatusMessageKey(t *testing.T) {
 	}
 }
 
+// TestFormatErrorChain verifies error-chain formatting behavior.
+func TestFormatErrorChain(t *testing.T) {
+	if value := formatErrorChain(nil); value != "internal_server_error" {
+		t.Fatalf("formatErrorChain(nil) = %q, want %q", value, "internal_server_error")
+	}
+
+	base := errors.New("low")
+	wrapped := fmt.Errorf("mid: %w", base)
+	chain := formatErrorChain(wrapped)
+	if !containsAll(chain, []string{"mid: low", "low"}) {
+		t.Fatalf("formatErrorChain(wrapped) = %q, want full chain", chain)
+	}
+}
+
 // decodeErrorPayload decodes a standard error response payload.
 func decodeErrorPayload(t *testing.T, resp *stdhttp.Response) ErrorResponse {
 	t.Helper()
@@ -198,4 +265,15 @@ func decodeErrorPayload(t *testing.T, resp *stdhttp.Response) ErrorResponse {
 	}
 
 	return payload
+}
+
+// containsAll verifies all tokens exist within a target string.
+func containsAll(target string, tokens []string) bool {
+	for _, token := range tokens {
+		if !strings.Contains(target, token) {
+			return false
+		}
+	}
+
+	return true
 }
