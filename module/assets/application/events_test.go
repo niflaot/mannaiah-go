@@ -77,12 +77,13 @@ func TestBuildIntegrationEvents(t *testing.T) {
 	}
 
 	folder := domain.Folder{
-		ID:        "f-1",
-		Name:      "Hero",
-		Slug:      "hero",
-		Tags:      []domain.Tag{{Name: "hero", Color: "#ff0000"}},
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		ID:             "f-1",
+		Name:           "Hero",
+		Slug:           "hero",
+		ParentFolderID: "root",
+		Tags:           []domain.Tag{{Name: "hero", Color: "#ff0000"}},
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
 	}
 	folderCreated := buildFolderCreatedIntegrationEvent(folder)
 	if folderCreated.Topic != TopicFolderCreated {
@@ -102,6 +103,9 @@ func TestBuildIntegrationEvents(t *testing.T) {
 	}
 	if !folderPayload.IsDeleted {
 		t.Fatalf("folderPayload.IsDeleted = false, want true")
+	}
+	if folderPayload.ParentFolderID != "root" {
+		t.Fatalf("folderPayload.ParentFolderID = %q, want %q", folderPayload.ParentFolderID, "root")
 	}
 }
 

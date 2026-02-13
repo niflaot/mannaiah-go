@@ -1,6 +1,6 @@
 # module/assets
 
-Assets module for uploading files to object storage and managing metadata.
+Assets module for uploading files to object storage and managing metadata, tags, and nested logical folders.
 
 ## Key methods / endpoints / events
 - Methods: `assets.New(db, storage, publishers...)`, `(*assets.Module).RegisterRoutes`, `(*assets.Module).SetAuthorizer`, `(*assets.Module).Load`, `(*assets.Module).Service`, `assets.OpenAPISpec()`

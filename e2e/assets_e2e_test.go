@@ -33,15 +33,39 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
-	folderID, _ := payload["_id"].(string)
-	if folderID == "" {
-		t.Fatalf("expected folder id in response")
+	parentFolderID, _ := payload["_id"].(string)
+	if parentFolderID == "" {
+		t.Fatalf("expected parent folder id in response")
+	}
+
+	harness.tracer.Step("create child folder inside parent folder")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/assets/folders", assetsCreateToken, []byte(`{"name":"Catalog Child","parentFolderId":"`+parentFolderID+`","tags":[{"name":"child","color":"#00aa00"}]}`))
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
+	}
+	childFolderID, _ := payload["_id"].(string)
+	if childFolderID == "" {
+		t.Fatalf("expected child folder id in response")
+	}
+
+	harness.tracer.Step("list nested folders by parent filter")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/assets/folders?page=1&limit=10&parentFolderId="+parentFolderID, assetsReadToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	folderData, ok := payload["data"].([]any)
+	if !ok || len(folderData) != 1 {
+		t.Fatalf("payload.data = %v, want one child folder", payload["data"])
+	}
+	folderRow, ok := folderData[0].(map[string]any)
+	if !ok || folderRow["_id"] != childFolderID {
+		t.Fatalf("folder row = %v, want child folder id %q", folderData[0], childFolderID)
 	}
 
 	harness.tracer.Step("upload asset with create scope")
 	status, payload = doAssetUploadRequest(t, harness, assetsCreateToken, "image.png", []byte("payload"), map[string]string{
 		"name":     "Hero",
-		"folderId": folderID,
+		"folderId": childFolderID,
 		"tags":     `[{"name":"cover","color":"#00aa11"}]`,
 		"metadata": `{"alt":"homepage hero"}`,
 	})
@@ -59,8 +83,8 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	if payload["folderId"] != folderID {
-		t.Fatalf("payload.folderId = %v, want %q", payload["folderId"], folderID)
+	if payload["folderId"] != childFolderID {
+		t.Fatalf("payload.folderId = %v, want %q", payload["folderId"], childFolderID)
 	}
 
 	harness.tracer.Step("list assets with read scope")
@@ -84,11 +108,22 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	harness.AwaitAssetUpdatedEvent(t)
 
 	harness.tracer.Step("rename and soft-delete folder while detaching assets")
-	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/assets/folders/"+folderID, assetsUpdateToken, []byte(`{"name":"Catalog 2026","tags":[{"name":"catalog","color":"#ffaa00"}]}`))
+	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/assets/folders/"+parentFolderID, assetsUpdateToken, []byte(`{"name":"Catalog 2026","tags":[{"name":"catalog","color":"#ffaa00"}]}`))
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	status, payload = harness.DoJSONRequest(t, http.MethodDelete, "/assets/folders/"+folderID, assetsDeleteToken, nil)
+
+	harness.tracer.Step("reject cyclic parent move")
+	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/assets/folders/"+parentFolderID, assetsUpdateToken, []byte(`{"parentFolderId":"`+childFolderID+`"}`))
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if payload["message"] != "invalid_folder_parent" {
+		t.Fatalf("payload.message = %v, want %q", payload["message"], "invalid_folder_parent")
+	}
+
+	harness.tracer.Step("delete parent folder recursively and detach assets")
+	status, payload = harness.DoJSONRequest(t, http.MethodDelete, "/assets/folders/"+parentFolderID, assetsDeleteToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
@@ -126,7 +161,7 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	harness.AwaitAssetDeletedEvent(t)
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(10)
+	harness.tracer.AssertStepCount(13)
 }
 
 // doAssetUploadRequest uploads asset payloads as multipart/form-data.

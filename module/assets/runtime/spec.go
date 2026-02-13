@@ -220,6 +220,7 @@ func listFoldersOperation() *openapi3.Operation {
 			queryParameter("page", false, "Page number", openapi3.NewIntegerSchema()),
 			queryParameter("limit", false, "Items per page", openapi3.NewIntegerSchema()),
 			queryParameter("filters", false, "Filter criteria", openapi3.NewStringSchema()),
+			queryParameter("parentFolderId", false, "Parent folder ID", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Return paginated folders.")),
@@ -348,6 +349,7 @@ func folderSchema() *openapi3.Schema {
 		WithProperty("_id", openapi3.NewStringSchema()).
 		WithProperty("name", openapi3.NewStringSchema()).
 		WithProperty("slug", openapi3.NewStringSchema()).
+		WithProperty("parentFolderId", openapi3.NewStringSchema()).
 		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema()).
@@ -368,6 +370,7 @@ func updateAssetSchema() *openapi3.Schema {
 func createFolderSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("parentFolderId", openapi3.NewStringSchema()).
 		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
 		WithRequired([]string{"name"})
 }
@@ -376,6 +379,7 @@ func createFolderSchema() *openapi3.Schema {
 func updateFolderSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("parentFolderId", openapi3.NewStringSchema()).
 		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema()))
 }
 

@@ -1,6 +1,6 @@
 # assets/application
 
-Application services for asset upload, metadata lifecycle, and integration event emission.
+Application services for asset upload, metadata lifecycle, nested folder hierarchy orchestration, and integration event emission.
 
 ## Key methods / endpoints / events
 - Methods: `NewService(repository, storage, publishers...)`, `(*AssetService).Create`, `(*AssetService).Get`, `(*AssetService).List`, `(*AssetService).Update`, `(*AssetService).Delete`, `(*AssetService).Exists`, `(*AssetService).CreateFolder`, `(*AssetService).GetFolder`, `(*AssetService).ListFolders`, `(*AssetService).UpdateFolder`, `(*AssetService).DeleteFolder`

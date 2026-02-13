@@ -1,6 +1,6 @@
 # assets/adapter/http
 
-Fiber HTTP adapter for asset upload and metadata CRUD endpoints.
+Fiber HTTP adapter for asset upload and metadata CRUD endpoints, including nested folder operations.
 
 ## Key methods / endpoints / events
 - Methods: `NewHandler(service, authorizer...)`, `(*Handler).RegisterRoutes`, `(*Handler).SetAuthorizer`

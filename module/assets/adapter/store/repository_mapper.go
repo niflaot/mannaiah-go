@@ -90,12 +90,18 @@ func toFolderRecord(folder domain.Folder) (folderRecord, error) {
 		return folderRecord{}, err
 	}
 
-	return folderRecord{
+	record := folderRecord{
 		ID:       folder.ID,
 		Name:     folder.Name,
 		Slug:     folder.Slug,
 		TagsJSON: tags,
-	}, nil
+	}
+	if folder.ParentFolderID != "" {
+		parentID := folder.ParentFolderID
+		record.ParentFolderID = &parentID
+	}
+
+	return record, nil
 }
 
 // toFolderDomain maps persistence records into domain folders.
@@ -106,13 +112,17 @@ func toFolderDomain(record folderRecord) (domain.Folder, error) {
 	}
 
 	entity := domain.Folder{
-		ID:        record.ID,
-		Name:      record.Name,
-		Slug:      record.Slug,
-		Tags:      tags,
-		CreatedAt: record.CreatedAt,
-		UpdatedAt: record.UpdatedAt,
-		IsDeleted: record.DeletedAt.Valid,
+		ID:             record.ID,
+		Name:           record.Name,
+		Slug:           record.Slug,
+		Tags:           tags,
+		CreatedAt:      record.CreatedAt,
+		UpdatedAt:      record.UpdatedAt,
+		IsDeleted:      record.DeletedAt.Valid,
+		ParentFolderID: "",
+	}
+	if record.ParentFolderID != nil {
+		entity.ParentFolderID = *record.ParentFolderID
 	}
 	if record.DeletedAt.Valid {
 		deletedAt := record.DeletedAt.Time

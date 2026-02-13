@@ -18,6 +18,16 @@ func (r *Repository) CreateFolder(ctx context.Context, folder *domain.Folder) er
 		return err
 	}
 
+	if record.ParentFolderID != nil {
+		exists, existsErr := r.ExistsFolder(ctx, *record.ParentFolderID)
+		if existsErr != nil {
+			return existsErr
+		}
+		if !exists {
+			return port.ErrFolderNotFound
+		}
+	}
+
 	if err := r.db.WithContext(ctx).Create(&record).Error; err != nil {
 		return fmt.Errorf("create folder record: %w", err)
 	}
@@ -52,6 +62,7 @@ func (r *Repository) ListFolders(ctx context.Context, query port.ListQuery) (*po
 	page, limit := normalizePagination(query.Page, query.Limit)
 
 	base := r.db.WithContext(ctx).Model(&folderRecord{})
+	base = applyFolderParentFilter(base, query.ParentFolderID)
 	base = applyFolderListFilters(base, query.Filters)
 
 	var total int64
@@ -93,6 +104,27 @@ func (r *Repository) UpdateFolder(ctx context.Context, id string, update port.Fo
 			record.Name = strings.TrimSpace(*update.Name)
 			record.Slug = domain.BuildFolderSlug(record.Name)
 		}
+		if update.ParentFolderID != nil {
+			parentID := strings.TrimSpace(*update.ParentFolderID)
+			if parentID == "" {
+				record.ParentFolderID = nil
+			} else {
+				if parentID == trimmedID {
+					return domain.ErrFolderParentSelfReference
+				}
+				parent, parentErr := getFolderRecordByID(tx, parentID)
+				if parentErr != nil {
+					if errors.Is(parentErr, gorm.ErrRecordNotFound) {
+						return port.ErrFolderNotFound
+					}
+					return parentErr
+				}
+				if cycleErr := assertNoParentCycle(tx, trimmedID, parent.ID); cycleErr != nil {
+					return cycleErr
+				}
+				record.ParentFolderID = &parent.ID
+			}
+		}
 		if update.Tags != nil {
 			encodedTags, encodeErr := encodeTags(*update.Tags)
 			if encodeErr != nil {
@@ -122,7 +154,15 @@ func (r *Repository) SoftDeleteFolder(ctx context.Context, id string) error {
 	trimmedID := strings.TrimSpace(id)
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		deleteTx := tx.Delete(&folderRecord{}, "id = ?", trimmedID)
+		folderIDs, collectErr := collectFolderTreeIDs(tx, trimmedID)
+		if collectErr != nil {
+			return collectErr
+		}
+		if len(folderIDs) == 0 {
+			return port.ErrNotFound
+		}
+
+		deleteTx := tx.Delete(&folderRecord{}, "id IN ?", folderIDs)
 		if deleteTx.Error != nil {
 			return fmt.Errorf("soft delete folder record: %w", deleteTx.Error)
 		}
@@ -131,7 +171,7 @@ func (r *Repository) SoftDeleteFolder(ctx context.Context, id string) error {
 		}
 
 		if err := tx.Model(&assetRecord{}).
-			Where("folder_id = ?", trimmedID).
+			Where("folder_id IN ?", folderIDs).
 			Where("deleted_at IS NULL").
 			Update("folder_id", nil).Error; err != nil {
 			return fmt.Errorf("detach assets from folder: %w", err)
@@ -170,4 +210,101 @@ func applyFolderListFilters(tx *gorm.DB, filters string) *gorm.DB {
 
 	pattern := "%" + strings.ToLower(trimmed) + "%"
 	return tx.Where("LOWER(name) LIKE ? OR LOWER(slug) LIKE ?", pattern, pattern)
+}
+
+// applyFolderParentFilter applies optional parent-folder filtering for nested trees.
+func applyFolderParentFilter(tx *gorm.DB, parentFolderID string) *gorm.DB {
+	trimmedParentID := strings.TrimSpace(parentFolderID)
+	if trimmedParentID == "" {
+		return tx
+	}
+
+	return tx.Where("parent_folder_id = ?", trimmedParentID)
+}
+
+// getFolderRecordByID loads folder records by id for hierarchy validation.
+func getFolderRecordByID(tx *gorm.DB, id string) (*folderRecord, error) {
+	var record folderRecord
+	if err := tx.First(&record, "id = ?", strings.TrimSpace(id)).Error; err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
+// assertNoParentCycle ensures assigning parentID to folderID does not create hierarchy cycles.
+func assertNoParentCycle(tx *gorm.DB, folderID string, parentID string) error {
+	visited := map[string]struct{}{}
+	currentID := strings.TrimSpace(parentID)
+	trimmedFolderID := strings.TrimSpace(folderID)
+
+	for currentID != "" {
+		if currentID == trimmedFolderID {
+			return domain.ErrFolderParentCycle
+		}
+		if _, exists := visited[currentID]; exists {
+			return domain.ErrFolderParentCycle
+		}
+		visited[currentID] = struct{}{}
+
+		record, err := getFolderRecordByID(tx, currentID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return port.ErrFolderNotFound
+			}
+			return fmt.Errorf("load parent folder record: %w", err)
+		}
+		if record.ParentFolderID == nil {
+			return nil
+		}
+
+		currentID = strings.TrimSpace(*record.ParentFolderID)
+	}
+
+	return nil
+}
+
+// collectFolderTreeIDs returns root and descendant ids for recursive soft-delete operations.
+func collectFolderTreeIDs(tx *gorm.DB, rootID string) ([]string, error) {
+	trimmedRootID := strings.TrimSpace(rootID)
+	root, err := getFolderRecordByID(tx, trimmedRootID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load folder record for delete: %w", err)
+	}
+
+	ids := []string{root.ID}
+	seen := map[string]struct{}{root.ID: {}}
+	frontier := []string{root.ID}
+
+	for len(frontier) > 0 {
+		children := make([]string, 0)
+		if err := tx.Model(&folderRecord{}).
+			Where("parent_folder_id IN ?", frontier).
+			Where("deleted_at IS NULL").
+			Pluck("id", &children).Error; err != nil {
+			return nil, fmt.Errorf("load child folder records: %w", err)
+		}
+
+		next := make([]string, 0, len(children))
+		for _, childID := range children {
+			trimmedChildID := strings.TrimSpace(childID)
+			if trimmedChildID == "" {
+				continue
+			}
+			if _, exists := seen[trimmedChildID]; exists {
+				continue
+			}
+
+			seen[trimmedChildID] = struct{}{}
+			ids = append(ids, trimmedChildID)
+			next = append(next, trimmedChildID)
+		}
+
+		frontier = next
+	}
+
+	return ids, nil
 }

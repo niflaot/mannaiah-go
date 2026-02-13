@@ -10,6 +10,8 @@ import (
 type createFolderRequest struct {
 	// Name defines folder names.
 	Name string `json:"name"`
+	// ParentFolderID defines optional parent-folder assignments.
+	ParentFolderID string `json:"parentFolderId"`
 	// Tags defines optional folder tags.
 	Tags []domain.Tag `json:"tags"`
 }
@@ -18,6 +20,8 @@ type createFolderRequest struct {
 type updateFolderRequest struct {
 	// Name defines optional folder-name updates.
 	Name *string `json:"name"`
+	// ParentFolderID defines optional parent-folder assignment updates.
+	ParentFolderID *string `json:"parentFolderId"`
 	// Tags defines optional folder-tag updates.
 	Tags *[]domain.Tag `json:"tags"`
 }
@@ -30,8 +34,9 @@ func (h *Handler) createFolder(ctx corehttp.Context) error {
 	}
 
 	entity, err := h.service.CreateFolder(ctx.Context(), assetsapplication.CreateFolderCommand{
-		Name: request.Name,
-		Tags: request.Tags,
+		Name:           request.Name,
+		ParentFolderID: request.ParentFolderID,
+		Tags:           request.Tags,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -52,9 +57,10 @@ func (h *Handler) findFolders(ctx corehttp.Context) error {
 	}
 
 	result, listErr := h.service.ListFolders(ctx.Context(), assetsapplication.ListQuery{
-		Page:    page,
-		Limit:   limit,
-		Filters: ctx.Query("filters"),
+		Page:           page,
+		Limit:          limit,
+		Filters:        ctx.Query("filters"),
+		ParentFolderID: ctx.Query("parentFolderId"),
 	})
 	if listErr != nil {
 		return h.mapError(listErr)
@@ -84,8 +90,9 @@ func (h *Handler) updateFolder(ctx corehttp.Context) error {
 	}
 
 	entity, err := h.service.UpdateFolder(ctx.Context(), ctx.Params("id"), assetsapplication.UpdateFolderCommand{
-		Name: request.Name,
-		Tags: request.Tags,
+		Name:           request.Name,
+		ParentFolderID: request.ParentFolderID,
+		Tags:           request.Tags,
 	})
 	if err != nil {
 		return h.mapError(err)

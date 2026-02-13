@@ -22,6 +22,8 @@ type ListQuery struct {
 	Limit int
 	// Filters defines optional free-text filters.
 	Filters string
+	// ParentFolderID defines optional parent-folder filters for nested folder queries.
+	ParentFolderID string
 }
 
 // PageResult defines paginated list response values.
@@ -64,6 +66,8 @@ type AssetUpdate struct {
 type FolderUpdate struct {
 	// Name defines optional folder name updates.
 	Name *string
+	// ParentFolderID defines optional parent-folder assignment updates.
+	ParentFolderID *string
 	// Tags defines optional folder tag updates.
 	Tags *[]domain.Tag
 }

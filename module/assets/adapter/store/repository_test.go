@@ -144,6 +144,46 @@ func TestRepositoryFolderCRUD(t *testing.T) {
 		t.Fatalf("Create(asset) error = %v", err)
 	}
 
+	child := &domain.Folder{
+		ID:             "f-2",
+		Name:           "Child",
+		ParentFolderID: folder.ID,
+		Tags:           []domain.Tag{{Name: "child", Color: "#00aa00"}},
+	}
+	child.Normalize()
+	if err := repository.CreateFolder(ctx, child); err != nil {
+		t.Fatalf("CreateFolder(child) error = %v", err)
+	}
+	grandchild := &domain.Folder{
+		ID:             "f-3",
+		Name:           "Grandchild",
+		ParentFolderID: child.ID,
+	}
+	grandchild.Normalize()
+	if err := repository.CreateFolder(ctx, grandchild); err != nil {
+		t.Fatalf("CreateFolder(grandchild) error = %v", err)
+	}
+
+	childPage, err := repository.ListFolders(ctx, port.ListQuery{Page: 1, Limit: 10, ParentFolderID: folder.ID})
+	if err != nil {
+		t.Fatalf("ListFolders(parent) error = %v", err)
+	}
+	if childPage.Total != 1 {
+		t.Fatalf("childPage.Total = %d, want %d", childPage.Total, 1)
+	}
+	if childPage.Data[0].ID != child.ID {
+		t.Fatalf("childPage.Data[0].ID = %q, want %q", childPage.Data[0].ID, child.ID)
+	}
+
+	selfParent := folder.ID
+	if _, err := repository.UpdateFolder(ctx, folder.ID, port.FolderUpdate{ParentFolderID: &selfParent}); !errorspkg.Is(err, domain.ErrFolderParentSelfReference) {
+		t.Fatalf("UpdateFolder(self parent) error = %v, want domain.ErrFolderParentSelfReference", err)
+	}
+	parentToGrandchild := grandchild.ID
+	if _, err := repository.UpdateFolder(ctx, folder.ID, port.FolderUpdate{ParentFolderID: &parentToGrandchild}); !errorspkg.Is(err, domain.ErrFolderParentCycle) {
+		t.Fatalf("UpdateFolder(cycle) error = %v, want domain.ErrFolderParentCycle", err)
+	}
+
 	if err := repository.SoftDeleteFolder(ctx, folder.ID); err != nil {
 		t.Fatalf("SoftDeleteFolder() error = %v", err)
 	}
@@ -154,6 +194,20 @@ func TestRepositoryFolderCRUD(t *testing.T) {
 	}
 	if exists {
 		t.Fatalf("ExistsFolder(deleted) = true, want false")
+	}
+	childExists, err := repository.ExistsFolder(ctx, child.ID)
+	if err != nil {
+		t.Fatalf("ExistsFolder(child) error = %v", err)
+	}
+	if childExists {
+		t.Fatalf("ExistsFolder(child) = true, want false")
+	}
+	grandchildExists, err := repository.ExistsFolder(ctx, grandchild.ID)
+	if err != nil {
+		t.Fatalf("ExistsFolder(grandchild) error = %v", err)
+	}
+	if grandchildExists {
+		t.Fatalf("ExistsFolder(grandchild) = true, want false")
 	}
 
 	loadedAsset, err := repository.GetByID(ctx, asset.ID)
@@ -211,6 +265,23 @@ func TestRepositoryDuplicateConstraints(t *testing.T) {
 	second.Normalize()
 	if err := repository.CreateFolder(ctx, second); err == nil {
 		t.Fatalf("expected duplicate folder slug error")
+	}
+}
+
+// TestRepositoryCreateFolderMissingParent verifies folder-parent existence validation.
+func TestRepositoryCreateFolderMissingParent(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	ctx := context.Background()
+
+	folder := &domain.Folder{
+		ID:             "f-1",
+		Name:           "Orphan",
+		ParentFolderID: "missing",
+	}
+	folder.Normalize()
+
+	if err := repository.CreateFolder(ctx, folder); !errorspkg.Is(err, port.ErrFolderNotFound) {
+		t.Fatalf("CreateFolder(missing parent) error = %v, want port.ErrFolderNotFound", err)
 	}
 }
 

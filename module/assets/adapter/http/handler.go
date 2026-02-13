@@ -147,6 +147,12 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, assetsapplication.ErrInvalidFolderName) {
 		return corehttp.NewAppError(400, "invalid_folder_name", err)
 	}
+	if errors.Is(err, assetsapplication.ErrInvalidFolderParent) {
+		return corehttp.NewAppError(400, "invalid_folder_parent", err)
+	}
+	if errors.Is(err, domain.ErrFolderParentSelfReference) || errors.Is(err, domain.ErrFolderParentCycle) {
+		return corehttp.NewAppError(400, "invalid_folder_parent", err)
+	}
 	if errors.Is(err, assetsapplication.ErrFileRequired) {
 		return corehttp.NewAppError(400, "file_required", err)
 	}

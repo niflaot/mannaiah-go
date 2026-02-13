@@ -14,6 +14,10 @@ var (
 	ErrFolderNameRequired = errors.New("asset folder name is required")
 	// ErrFolderSlugInvalid is returned when folder slug generation fails.
 	ErrFolderSlugInvalid = errors.New("asset folder slug is invalid")
+	// ErrFolderParentSelfReference is returned when folder parent references itself.
+	ErrFolderParentSelfReference = errors.New("asset folder parent cannot reference itself")
+	// ErrFolderParentCycle is returned when folder parent creates cyclic hierarchies.
+	ErrFolderParentCycle = errors.New("asset folder parent hierarchy cycle detected")
 )
 
 var (
@@ -29,6 +33,8 @@ type Folder struct {
 	Name string `json:"name"`
 	// Slug defines normalized folder slugs used in logical paths.
 	Slug string `json:"slug"`
+	// ParentFolderID defines optional parent folder identifiers for nested folders.
+	ParentFolderID string `json:"parentFolderId,omitempty"`
 	// Tags defines optional classification tags.
 	Tags []Tag `json:"tags,omitempty"`
 	// CreatedAt defines creation timestamps.
@@ -50,6 +56,7 @@ func (f *Folder) Normalize() {
 	f.ID = strings.TrimSpace(f.ID)
 	f.Name = strings.TrimSpace(f.Name)
 	f.Slug = strings.TrimSpace(strings.ToLower(f.Slug))
+	f.ParentFolderID = strings.TrimSpace(f.ParentFolderID)
 	if f.Slug == "" {
 		f.Slug = BuildFolderSlug(f.Name)
 	}

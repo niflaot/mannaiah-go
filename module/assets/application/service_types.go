@@ -31,6 +31,8 @@ var (
 	ErrInvalidFolderID = errors.New("asset folder id is required")
 	// ErrInvalidFolderName is returned when folder names are empty.
 	ErrInvalidFolderName = errors.New("asset folder name is required")
+	// ErrInvalidFolderParent is returned when folder parent assignments are invalid.
+	ErrInvalidFolderParent = errors.New("asset folder parent is invalid")
 	// ErrFileRequired is returned when file content is missing.
 	ErrFileRequired = errors.New("asset file is required")
 	// ErrFileTooLarge is returned when upload files exceed size limits.
@@ -79,12 +81,16 @@ type ListQuery struct {
 	Limit int
 	// Filters defines optional free-text filters.
 	Filters string
+	// ParentFolderID defines optional parent-folder filters for nested folder queries.
+	ParentFolderID string
 }
 
 // CreateFolderCommand defines create-folder command payloads.
 type CreateFolderCommand struct {
 	// Name defines folder display names.
 	Name string
+	// ParentFolderID defines optional parent-folder assignments.
+	ParentFolderID string
 	// Tags defines optional folder classification tags.
 	Tags []domain.Tag
 }
@@ -93,6 +99,8 @@ type CreateFolderCommand struct {
 type UpdateFolderCommand struct {
 	// Name defines optional folder-name updates.
 	Name *string
+	// ParentFolderID defines optional parent-folder assignment updates.
+	ParentFolderID *string
 	// Tags defines optional folder-tag updates.
 	Tags *[]domain.Tag
 }

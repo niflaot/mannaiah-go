@@ -1,6 +1,6 @@
 # assets/port
 
-Port contracts for asset metadata persistence, binary storage, and integration events.
+Port contracts for asset metadata persistence, nested-folder hierarchy operations, binary storage, and integration events.
 
 ## Key methods / endpoints / events
 - Methods:

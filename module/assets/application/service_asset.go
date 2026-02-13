@@ -96,9 +96,10 @@ func (s *AssetService) Get(ctx context.Context, id string) (*domain.Asset, error
 // List paginates assets.
 func (s *AssetService) List(ctx context.Context, query ListQuery) (*port.PageResult, error) {
 	result, err := s.repository.List(ctx, port.ListQuery{
-		Page:    query.Page,
-		Limit:   query.Limit,
-		Filters: strings.TrimSpace(query.Filters),
+		Page:           query.Page,
+		Limit:          query.Limit,
+		Filters:        strings.TrimSpace(query.Filters),
+		ParentFolderID: strings.TrimSpace(query.ParentFolderID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list assets: %w", err)

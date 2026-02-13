@@ -65,6 +65,8 @@ type FolderEventPayload struct {
 	Name string `json:"name"`
 	// Slug defines normalized folder slugs.
 	Slug string `json:"slug"`
+	// ParentFolderID defines optional parent-folder identifiers.
+	ParentFolderID string `json:"parentFolderId,omitempty"`
 	// Tags defines optional classification tags.
 	Tags []domain.Tag `json:"tags,omitempty"`
 	// IsDeleted reports soft-delete status.
@@ -199,13 +201,14 @@ func toAssetEventPayload(asset domain.Asset) AssetEventPayload {
 // toFolderEventPayload maps folder entities into integration payload values.
 func toFolderEventPayload(folder domain.Folder) FolderEventPayload {
 	return FolderEventPayload{
-		ID:        strings.TrimSpace(folder.ID),
-		Name:      strings.TrimSpace(folder.Name),
-		Slug:      strings.TrimSpace(folder.Slug),
-		Tags:      folder.Tags,
-		IsDeleted: folder.IsDeleted,
-		CreatedAt: folder.CreatedAt,
-		UpdatedAt: folder.UpdatedAt,
+		ID:             strings.TrimSpace(folder.ID),
+		Name:           strings.TrimSpace(folder.Name),
+		Slug:           strings.TrimSpace(folder.Slug),
+		ParentFolderID: strings.TrimSpace(folder.ParentFolderID),
+		Tags:           folder.Tags,
+		IsDeleted:      folder.IsDeleted,
+		CreatedAt:      folder.CreatedAt,
+		UpdatedAt:      folder.UpdatedAt,
 	}
 }
 

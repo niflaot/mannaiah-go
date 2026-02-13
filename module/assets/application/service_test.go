@@ -370,6 +370,7 @@ func TestGetListUpdateDeleteExists(t *testing.T) {
 // TestFolderOperations verifies folder create/read/list/update/delete behavior.
 func TestFolderOperations(t *testing.T) {
 	folder := &domain.Folder{ID: "f-1", Name: "Hero", Slug: "hero"}
+	child := &domain.Folder{ID: "f-2", Name: "Child", Slug: "child", ParentFolderID: "f-1"}
 	service, err := NewService(
 		newRepositoryMockWith(repositoryMock{
 			createFolderFn: func(ctx context.Context, value *domain.Folder) error {
@@ -377,17 +378,26 @@ func TestFolderOperations(t *testing.T) {
 				return nil
 			},
 			getFolderByIDFn: func(ctx context.Context, id string) (*domain.Folder, error) {
+				if id == "f-2" {
+					return child, nil
+				}
 				if id == "missing" {
 					return nil, port.ErrNotFound
 				}
 				return folder, nil
 			},
 			listFoldersFn: func(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error) {
+				if query.ParentFolderID == "f-1" {
+					return &port.FolderPageResult{Data: []domain.Folder{*child}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
+				}
 				return &port.FolderPageResult{Data: []domain.Folder{*folder}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
 			},
 			updateFolderFn: func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
 				if update.Name != nil {
 					folder.Name = *update.Name
+				}
+				if update.ParentFolderID != nil {
+					folder.ParentFolderID = *update.ParentFolderID
 				}
 				return folder, nil
 			},
@@ -403,13 +413,19 @@ func TestFolderOperations(t *testing.T) {
 	if _, createErr := service.CreateFolder(context.Background(), CreateFolderCommand{}); !errorspkg.Is(createErr, ErrInvalidFolderName) {
 		t.Fatalf("CreateFolder(empty) error = %v, want ErrInvalidFolderName", createErr)
 	}
+	if _, createErr := service.CreateFolder(context.Background(), CreateFolderCommand{Name: "Hero", ParentFolderID: "missing"}); !errorspkg.Is(createErr, port.ErrFolderNotFound) {
+		t.Fatalf("CreateFolder(missing parent) error = %v, want port.ErrFolderNotFound", createErr)
+	}
 
-	created, createErr := service.CreateFolder(context.Background(), CreateFolderCommand{Name: " Hero "})
+	created, createErr := service.CreateFolder(context.Background(), CreateFolderCommand{Name: " Hero ", ParentFolderID: "f-1"})
 	if createErr != nil {
 		t.Fatalf("CreateFolder() error = %v", createErr)
 	}
 	if created.Name != "Hero" {
 		t.Fatalf("created.Name = %q, want %q", created.Name, "Hero")
+	}
+	if created.ParentFolderID != "f-1" {
+		t.Fatalf("created.ParentFolderID = %q, want %q", created.ParentFolderID, "f-1")
 	}
 
 	if _, getErr := service.GetFolder(context.Background(), ""); !errorspkg.Is(getErr, ErrInvalidFolderID) {
@@ -419,7 +435,7 @@ func TestFolderOperations(t *testing.T) {
 		t.Fatalf("GetFolder() error = %v", getErr)
 	}
 
-	listed, listErr := service.ListFolders(context.Background(), ListQuery{Page: 1, Limit: 10})
+	listed, listErr := service.ListFolders(context.Background(), ListQuery{Page: 1, Limit: 10, ParentFolderID: "f-1"})
 	if listErr != nil {
 		t.Fatalf("ListFolders() error = %v", listErr)
 	}
@@ -429,6 +445,12 @@ func TestFolderOperations(t *testing.T) {
 
 	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{Name: ptr(" ")}); !errorspkg.Is(updateErr, ErrInvalidFolderName) {
 		t.Fatalf("UpdateFolder(empty name) error = %v, want ErrInvalidFolderName", updateErr)
+	}
+	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{ParentFolderID: ptr("f-1")}); !errorspkg.Is(updateErr, ErrInvalidFolderParent) {
+		t.Fatalf("UpdateFolder(self parent) error = %v, want ErrInvalidFolderParent", updateErr)
+	}
+	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{ParentFolderID: ptr("f-2")}); !errorspkg.Is(updateErr, ErrInvalidFolderParent) {
+		t.Fatalf("UpdateFolder(cycle) error = %v, want ErrInvalidFolderParent", updateErr)
 	}
 	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{Name: ptr("Catalog")}); updateErr != nil {
 		t.Fatalf("UpdateFolder() error = %v", updateErr)

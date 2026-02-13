@@ -12,7 +12,7 @@
 - Includes scheduler configuration and execution validation for the core cron package.
 - Includes WooCommerce sync flows (manual endpoint + integration availability behavior).
 - Includes WooCommerce outage fail-fast validation through circuit-breaker behavior.
-- Includes assets upload/CRUD, folder operations, and product-gallery asset-reference validation.
+- Includes assets upload/CRUD, nested folder operations, and product-gallery asset-reference validation.
 
 ## Key Methods / Endpoints / Events
 - Methods:

@@ -11,7 +11,7 @@ func TestBuildFolderSlug(t *testing.T) {
 
 // TestFolderValidation verifies folder validation behavior.
 func TestFolderValidation(t *testing.T) {
-	folder := &Folder{Name: "  Hero Images  ", Tags: []Tag{{Name: "hero", Color: "#ff0000"}}}
+	folder := &Folder{Name: "  Hero Images  ", ParentFolderID: " root ", Tags: []Tag{{Name: "hero", Color: "#ff0000"}}}
 	folder.Normalize()
 
 	if folder.Slug != "hero-images" {
@@ -19,6 +19,9 @@ func TestFolderValidation(t *testing.T) {
 	}
 	if err := folder.ValidateCreate(); err != nil {
 		t.Fatalf("ValidateCreate() error = %v", err)
+	}
+	if folder.ParentFolderID != "root" {
+		t.Fatalf("folder.ParentFolderID = %q, want %q", folder.ParentFolderID, "root")
 	}
 
 	if err := (&Folder{}).ValidateCreate(); err != ErrFolderNameRequired {

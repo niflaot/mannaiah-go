@@ -176,14 +176,14 @@ func TestAssetEndpoints(t *testing.T) {
 		t.Fatalf("DELETE /assets/:id status = %d, want %d", deleteResp.StatusCode, http.StatusOK)
 	}
 
-	createFolderReq, _ := http.NewRequest(http.MethodPost, "/assets/folders", bytes.NewBufferString(`{"name":"Hero","tags":[{"name":"hero","color":"#ff0000"}]}`))
+	createFolderReq, _ := http.NewRequest(http.MethodPost, "/assets/folders", bytes.NewBufferString(`{"name":"Hero","parentFolderId":"root","tags":[{"name":"hero","color":"#ff0000"}]}`))
 	createFolderReq.Header.Set("Content-Type", "application/json")
 	createFolderResp := runRequest(t, server, createFolderReq)
 	if createFolderResp.StatusCode != http.StatusCreated {
 		t.Fatalf("POST /assets/folders status = %d, want %d", createFolderResp.StatusCode, http.StatusCreated)
 	}
 
-	listFoldersReq, _ := http.NewRequest(http.MethodGet, "/assets/folders?page=1&limit=10", nil)
+	listFoldersReq, _ := http.NewRequest(http.MethodGet, "/assets/folders?page=1&limit=10&parentFolderId=root", nil)
 	listFoldersResp := runRequest(t, server, listFoldersReq)
 	if listFoldersResp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /assets/folders status = %d, want %d", listFoldersResp.StatusCode, http.StatusOK)
@@ -195,7 +195,7 @@ func TestAssetEndpoints(t *testing.T) {
 		t.Fatalf("GET /assets/folders/:id status = %d, want %d", getFolderResp.StatusCode, http.StatusOK)
 	}
 
-	updateFolderReq, _ := http.NewRequest(http.MethodPatch, "/assets/folders/f-1", bytes.NewBufferString(`{"name":"Catalog"}`))
+	updateFolderReq, _ := http.NewRequest(http.MethodPatch, "/assets/folders/f-1", bytes.NewBufferString(`{"name":"Catalog","parentFolderId":"root"}`))
 	updateFolderReq.Header.Set("Content-Type", "application/json")
 	updateFolderResp := runRequest(t, server, updateFolderReq)
 	if updateFolderResp.StatusCode != http.StatusOK {
@@ -218,10 +218,13 @@ func TestHandlerErrorMapping(t *testing.T) {
 		assetsapplication.ErrInvalidName,
 		assetsapplication.ErrInvalidFolderID,
 		assetsapplication.ErrInvalidFolderName,
+		assetsapplication.ErrInvalidFolderParent,
 		assetsapplication.ErrFileRequired,
 		assetsapplication.ErrFileTooLarge,
 		domain.ErrKeyRequired,
 		domain.ErrFolderNameRequired,
+		domain.ErrFolderParentSelfReference,
+		domain.ErrFolderParentCycle,
 		domain.ErrInvalidMetadata,
 		port.ErrFolderNotFound,
 		port.ErrNotFound,
@@ -395,7 +398,7 @@ func newServiceMock() serviceMock {
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 		existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil },
 		createFolderFn: func(ctx context.Context, command assetsapplication.CreateFolderCommand) (*domain.Folder, error) {
-			return &domain.Folder{ID: "f-1", Name: command.Name, Slug: "hero"}, nil
+			return &domain.Folder{ID: "f-1", Name: command.Name, Slug: "hero", ParentFolderID: command.ParentFolderID}, nil
 		},
 		getFolderFn: func(ctx context.Context, id string) (*domain.Folder, error) {
 			return &domain.Folder{ID: id, Name: "Hero", Slug: "hero"}, nil
@@ -404,7 +407,11 @@ func newServiceMock() serviceMock {
 			return &port.FolderPageResult{Data: []domain.Folder{{ID: "f-1", Name: "Hero", Slug: "hero"}}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
 		},
 		updateFolderFn: func(ctx context.Context, id string, command assetsapplication.UpdateFolderCommand) (*domain.Folder, error) {
-			return &domain.Folder{ID: id, Name: "Catalog", Slug: "catalog"}, nil
+			parentID := ""
+			if command.ParentFolderID != nil {
+				parentID = *command.ParentFolderID
+			}
+			return &domain.Folder{ID: id, Name: "Catalog", Slug: "catalog", ParentFolderID: parentID}, nil
 		},
 		deleteFolderFn: func(ctx context.Context, id string) error { return nil },
 	}

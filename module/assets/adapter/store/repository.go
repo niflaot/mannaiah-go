@@ -57,6 +57,8 @@ type folderRecord struct {
 	Name string `gorm:"size:255;not null"`
 	// Slug defines normalized folder slugs.
 	Slug string `gorm:"size:191;uniqueIndex:idx_asset_folders_slug;not null"`
+	// ParentFolderID defines optional parent-folder identifiers for nested folders.
+	ParentFolderID *string `gorm:"size:64;index"`
 	// TagsJSON defines serialized tag values.
 	TagsJSON string `gorm:"type:text"`
 	// CreatedAt defines creation timestamps.

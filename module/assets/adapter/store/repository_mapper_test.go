@@ -77,10 +77,11 @@ func TestToRecordMappings(t *testing.T) {
 	}
 
 	folderRecord, err := toFolderRecord(domain.Folder{
-		ID:   "f-1",
-		Name: "Catalog",
-		Slug: "catalog",
-		Tags: []domain.Tag{{Name: "hero", Color: "#ff0000"}},
+		ID:             "f-1",
+		Name:           "Catalog",
+		Slug:           "catalog",
+		ParentFolderID: "root",
+		Tags:           []domain.Tag{{Name: "hero", Color: "#ff0000"}},
 	})
 	if err != nil {
 		t.Fatalf("toFolderRecord() error = %v", err)
@@ -91,5 +92,8 @@ func TestToRecordMappings(t *testing.T) {
 	}
 	if mappedFolder.Slug != "catalog" {
 		t.Fatalf("mappedFolder.Slug = %q, want %q", mappedFolder.Slug, "catalog")
+	}
+	if mappedFolder.ParentFolderID != "root" {
+		t.Fatalf("mappedFolder.ParentFolderID = %q, want %q", mappedFolder.ParentFolderID, "root")
 	}
 }

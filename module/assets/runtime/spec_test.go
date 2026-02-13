@@ -57,4 +57,12 @@ func TestSpecHelpers(t *testing.T) {
 	if assetSchema() == nil || folderSchema() == nil || tagSchema() == nil || updateAssetSchema() == nil || createFolderSchema() == nil || updateFolderSchema() == nil || assetPaginationMetaSchema() == nil || paginatedAssetResponseSchema() == nil || paginatedFolderResponseSchema() == nil {
 		t.Fatalf("expected schemas")
 	}
+
+	listFolders := listFoldersOperation()
+	if listFolders == nil || len(listFolders.Parameters) == 0 {
+		t.Fatalf("expected listFoldersOperation parameters")
+	}
+	if len(listFolders.Parameters) < 4 {
+		t.Fatalf("expected parentFolderId query parameter on listFoldersOperation")
+	}
 }
