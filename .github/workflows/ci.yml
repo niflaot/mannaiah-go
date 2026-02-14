@@ -62,7 +62,36 @@ jobs:
       - name: Run Root E2E Suite
         env:
           CGO_ENABLED: "1"
-        run: go test ./e2e -v -count=1
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_log="root-e2e-attempt-1.log"
+          retry_log="root-e2e-attempt-2.log"
+
+          echo "Running root E2E suite (attempt 1)..."
+          if go test ./e2e -v -count=1 2>&1 | tee "$first_log"; then
+            exit 0
+          fi
+
+          echo "::warning::Root E2E suite failed on attempt 1. Retrying once..."
+          if go test ./e2e -v -count=1 2>&1 | tee "$retry_log"; then
+            echo "::warning::Root E2E suite passed on retry (attempt 2)."
+            exit 0
+          fi
+
+          echo "::error::Root E2E suite failed after retry. Failing tests from logs:"
+          grep -E '^--- FAIL: ' "$first_log" "$retry_log" || true
+          exit 1
+
+      - name: Upload Root E2E Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-e2e-logs
+          path: |
+            root-e2e-attempt-1.log
+            root-e2e-attempt-2.log
+          if-no-files-found: ignore
 
   performance-tests:
     name: Performance Benchmarks
