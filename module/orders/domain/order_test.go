@@ -12,7 +12,7 @@ func TestOrderNormalize(t *testing.T) {
 		Realm:      " woocommerce ",
 		ContactID:  " c-1 ",
 		Items: []Item{
-			{SKU: " SKU-1 ", AlternateName: " Name ", ProductID: " p-1 ", ResolutionSource: " sku "},
+			{SKU: " SKU-1 ", AlternateName: " Name ", ProductID: " p-1 ", ResolutionSource: " sku ", Metadata: map[string]string{" sku.note ": " value "}},
 		},
 		CurrentStatus: " CREATED ",
 		StatusHistory: []StatusEntry{
@@ -23,6 +23,9 @@ func TestOrderNormalize(t *testing.T) {
 			Address2: " Apt 1 ",
 			Phone:    " +57 3000000000 ",
 			CityCode: " 110111 ",
+		},
+		Metadata: map[string]string{
+			" source ": " woo ",
 		},
 	}
 
@@ -39,6 +42,12 @@ func TestOrderNormalize(t *testing.T) {
 	}
 	if entity.ShippingAddress.CityCode != "110111" {
 		t.Fatalf("ShippingAddress.CityCode = %q, want %q", entity.ShippingAddress.CityCode, "110111")
+	}
+	if entity.Metadata["source"] != "woo" {
+		t.Fatalf("Metadata[source] = %q, want %q", entity.Metadata["source"], "woo")
+	}
+	if entity.Items[0].Metadata["sku.note"] != "value" {
+		t.Fatalf("Items[0].Metadata[sku.note] = %q, want %q", entity.Items[0].Metadata["sku.note"], "value")
 	}
 }
 
@@ -73,6 +82,7 @@ func TestOrderValidate(t *testing.T) {
 		{name: "item qty", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 0}}, CurrentStatus: StatusCreated}, err: ErrItemQuantityInvalid},
 		{name: "status", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: "bad"}, err: ErrStatusInvalid},
 		{name: "status author", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, StatusHistory: []StatusEntry{{Status: StatusCreated}}}, err: ErrStatusAuthorRequired},
+		{name: "metadata invalid", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1, Metadata: map[string]string{"k": string(make([]byte, 2050))}}}, CurrentStatus: StatusCreated}, err: ErrInvalidMetadata},
 	}
 
 	for _, testCase := range cases {

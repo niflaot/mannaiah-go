@@ -8,6 +8,7 @@ require (
 	go.uber.org/zap v1.27.1
 	mannaiah/module/contacts v0.0.0
 	mannaiah/module/core v0.0.0
+	mannaiah/module/orders v0.0.0
 )
 
 require (
@@ -64,3 +65,5 @@ require (
 replace mannaiah/module/core => ../core
 
 replace mannaiah/module/contacts => ../contacts
+
+replace mannaiah/module/orders => ../orders

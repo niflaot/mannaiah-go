@@ -5,7 +5,8 @@
 ## Responsibilities
 - Validate WooCommerce connectivity and credentials.
 - Retrieve paginated orders.
-- Map SDK entities into port-level order contracts.
+- Map SDK entities into port-level order contracts (status, shipping, items, comments, metadata).
+- Use tolerant raw-response fallback decoding when SDK strict decoding fails on non-scalar metadata.
 
 ## Key Methods / Endpoints / Events
 - Methods:

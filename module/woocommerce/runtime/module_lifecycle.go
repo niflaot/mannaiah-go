@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
+	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 )
 
 // Start runs startup checks and cron scheduler registration.
@@ -24,24 +25,43 @@ func (m *Module) Start(ctx context.Context) error {
 	}
 
 	m.validateAtStartup(resolveContext(ctx))
-	if !m.cfg.SyncContacts {
+	if !m.cfg.SyncContacts && !m.cfg.SyncOrders {
 		m.started = true
 		return nil
 	}
 
-	entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.SyncContactsCron), func() {
-		syncCtx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
-		defer cancel()
+	if m.cfg.SyncContacts {
+		entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.SyncContactsCron), func() {
+			syncCtx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
+			defer cancel()
 
-		if _, syncErr := m.contactsSyncService.SyncContacts(syncCtx, "cron"); syncErr != nil {
-			m.logger.Warn("woocommerce cron contacts sync failed", zap.Error(syncErr))
+			if _, syncErr := m.contactsSyncService.SyncContacts(syncCtx, "cron"); syncErr != nil {
+				m.logger.Warn("woocommerce cron contacts sync failed", zap.Error(syncErr))
+			}
+		})
+		if err != nil {
+			return fmt.Errorf("register woocommerce contacts sync cron: %w", err)
 		}
-	})
-	if err != nil {
-		return fmt.Errorf("register woocommerce contacts sync cron: %w", err)
+
+		m.contactsSchedulerEntryID = entryID
 	}
 
-	m.schedulerEntryID = entryID
+	if m.cfg.SyncOrders {
+		entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.SyncOrdersCron), func() {
+			syncCtx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
+			defer cancel()
+
+			if _, syncErr := m.ordersSyncService.SyncOrders(syncCtx, "cron"); syncErr != nil {
+				m.logger.Warn("woocommerce cron orders sync failed", zap.Error(syncErr))
+			}
+		})
+		if err != nil {
+			return fmt.Errorf("register woocommerce orders sync cron: %w", err)
+		}
+
+		m.ordersSchedulerEntryID = entryID
+	}
+
 	m.scheduler.Start()
 	m.started = true
 	return nil
@@ -60,16 +80,21 @@ func (m *Module) Stop(ctx context.Context) error {
 	}
 
 	m.started = false
-	entryID := m.schedulerEntryID
-	m.schedulerEntryID = 0
+	contactsEntryID := m.contactsSchedulerEntryID
+	m.contactsSchedulerEntryID = 0
+	ordersEntryID := m.ordersSchedulerEntryID
+	m.ordersSchedulerEntryID = 0
 	scheduler := m.scheduler
 	m.mutex.Unlock()
 
 	if scheduler == nil {
 		return nil
 	}
-	if entryID != 0 {
-		scheduler.Remove(entryID)
+	if contactsEntryID != 0 {
+		scheduler.Remove(contactsEntryID)
+	}
+	if ordersEntryID != 0 {
+		scheduler.Remove(ordersEntryID)
 	}
 	if err := scheduler.Stop(ctx); err != nil {
 		return fmt.Errorf("stop woocommerce scheduler: %w", err)
@@ -80,15 +105,21 @@ func (m *Module) Stop(ctx context.Context) error {
 
 // validateAtStartup verifies integration availability and logs startup warnings.
 func (m *Module) validateAtStartup(ctx context.Context) {
-	validationCtx, cancel := context.WithTimeout(ctx, resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
-	defer cancel()
+	validate := func(run func(ctx context.Context) error, disabledErr error) {
+		validationCtx, cancel := context.WithTimeout(ctx, resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
+		defer cancel()
 
-	if err := m.contactsSyncService.ValidateIntegration(validationCtx); err != nil {
-		if !errors.Is(err, woocontactservice.ErrSyncDisabled) {
+		if err := run(validationCtx); err != nil {
+			if errors.Is(err, disabledErr) {
+				return
+			}
 			m.logger.Warn(
 				"woocommerce integration unavailable; endpoints remain documented and return 503 until integration recovers",
 				zap.Error(err),
 			)
 		}
 	}
+
+	validate(m.contactsSyncService.ValidateIntegration, woocontactservice.ErrSyncDisabled)
+	validate(m.ordersSyncService.ValidateIntegration, wooorderservice.ErrSyncDisabled)
 }

@@ -5,6 +5,7 @@
 ## Scope
 - WooCommerce adapter and sync orchestration.
 - Contact synchronization from WooCommerce orders into the contacts module.
+- Order synchronization from WooCommerce orders into the orders module.
 - Contact `createdAt` alignment with oldest WooCommerce order dates per email.
 - Manual and scheduled sync triggers.
 - Integration events for sync lifecycle visibility.
@@ -19,19 +20,24 @@
 - `application/contact/event`: contact integration event contracts/builders.
 - `adapter/woocommerce`: WooCommerce SDK adapter (`github.com/jmolboy/woocommerce-go`).
 - `adapter/contacts`: contacts upsert adapter via contacts application service.
+- `adapter/orders`: orders upsert adapter via orders + contacts application services.
 - `adapter/http`: protected sync endpoint adapters.
 - `adapter/event`: core messaging publication adapter.
 
 ## Key Methods / Endpoints / Events
 - Methods:
-  - `woocommerce.New(cfg, contactService, scheduler, logger, publishers...)`
+  - `woocommerce.New(cfg, contactService, orderService, scheduler, logger, publishers...)`
   - `(*woocommerce.Module).Load(loader)`
   - `(*woocommerce.Module).Start(ctx)`
   - `(*woocommerce.Module).Stop(ctx)`
   - `(*woocommerce.Module).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /woo/sync/contacts`
+  - `POST /woo/sync/orders`
 - Events:
   - `woocommerce.v1.contacts.sync.started`
   - `woocommerce.v1.contacts.sync.completed`
   - `woocommerce.v1.contacts.sync.failed`
+  - `woocommerce.v1.orders.sync.started`
+  - `woocommerce.v1.orders.sync.completed`
+  - `woocommerce.v1.orders.sync.failed`

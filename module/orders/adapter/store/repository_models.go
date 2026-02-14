@@ -86,6 +86,30 @@ type orderShippingAddressRecord struct {
 	CityCode string `gorm:"size:64;not null"`
 }
 
+// orderMetadataRecord defines order metadata persistence rows.
+type orderMetadataRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_metadata_order_key,priority:1"`
+	// Key defines metadata keys.
+	Key string `gorm:"size:128;not null;index;uniqueIndex:idx_order_metadata_order_key,priority:2"`
+	// Value defines metadata values.
+	Value string `gorm:"type:text;not null"`
+}
+
+// orderItemMetadataRecord defines order-item metadata persistence rows.
+type orderItemMetadataRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderItemID defines owning order-item identifiers.
+	OrderItemID uint `gorm:"not null;index;uniqueIndex:idx_order_item_metadata_item_key,priority:1"`
+	// Key defines metadata keys.
+	Key string `gorm:"size:128;not null;index;uniqueIndex:idx_order_item_metadata_item_key,priority:2"`
+	// Value defines metadata values.
+	Value string `gorm:"type:text;not null"`
+}
+
 // TableName defines storage table names.
 func (orderRecord) TableName() string { return "orders" }
 
@@ -97,3 +121,9 @@ func (orderStatusRecord) TableName() string { return "order_status_history" }
 
 // TableName defines storage table names.
 func (orderShippingAddressRecord) TableName() string { return "order_shipping_addresses" }
+
+// TableName defines storage table names.
+func (orderMetadataRecord) TableName() string { return "order_metadata" }
+
+// TableName defines storage table names.
+func (orderItemMetadataRecord) TableName() string { return "order_item_metadata" }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
@@ -19,6 +20,50 @@ type repositoryMock struct {
 	listFn func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error)
 	// appendStatusFn defines append-status behavior.
 	appendStatusFn func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error)
+}
+
+// TestUpdateStatusCustomOccurredAt verifies update-status timestamp override behavior.
+func TestUpdateStatusCustomOccurredAt(t *testing.T) {
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1"}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				ContactID:     "c-1",
+				CurrentStatus: entry.Status,
+				StatusHistory: []ordersdomain.StatusEntry{entry},
+			}, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	service, err := NewService(repository, customers)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	occurredAt := time.Date(2026, time.February, 14, 15, 0, 0, 0, time.UTC)
+	updated, err := service.UpdateStatus(context.Background(), "o-1", UpdateStatusCommand{
+		Status:      ordersdomain.StatusCompleted,
+		Author:      "user:1",
+		Description: "completed",
+		OccurredAt:  &occurredAt,
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if len(updated.StatusHistory) != 1 || !updated.StatusHistory[0].OccurredAt.UTC().Equal(occurredAt) {
+		t.Fatalf("status occurredAt = %v, want %v", updated.StatusHistory, occurredAt)
+	}
 }
 
 // Create executes mocked create behavior.
@@ -86,9 +131,13 @@ func TestCreateResolvesItemsAndShipping(t *testing.T) {
 			order.ID = "o-1"
 			return nil
 		},
-		getByIDFn:      func(ctx context.Context, id string) (*ordersdomain.Order, error) { return nil, nil },
-		listFn:         func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) { return nil, 0, nil },
-		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) { return nil, nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) { return nil, nil },
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
 	}
 	customers := customerSourceMock{
 		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
@@ -158,8 +207,12 @@ func TestCreateStoresCustomShippingOnlyWhenDifferent(t *testing.T) {
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
 			return nil, nil
 		},
-		listFn:         func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) { return nil, 0, nil },
-		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) { return nil, nil },
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
 	}
 	customers := customerSourceMock{
 		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {

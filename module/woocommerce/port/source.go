@@ -5,6 +5,28 @@ import (
 	"time"
 )
 
+// WooOrderItem defines WooCommerce order item values.
+type WooOrderItem struct {
+	// SKU defines order item SKU values.
+	SKU string
+	// Name defines order item name values.
+	Name string
+	// Quantity defines order item quantity values.
+	Quantity int
+	// Metadata defines item metadata values.
+	Metadata map[string]string
+}
+
+// WooOrderComment defines WooCommerce order comment values.
+type WooOrderComment struct {
+	// Author defines comment author values.
+	Author string
+	// Description defines comment text values.
+	Description string
+	// OccurredAt defines comment timestamps.
+	OccurredAt time.Time
+}
+
 // WooOrder defines order data retrieved from WooCommerce.
 type WooOrder struct {
 	// ID defines WooCommerce order identifiers.
@@ -27,6 +49,34 @@ type WooOrder struct {
 	BillingCity string
 	// CreatedAt defines order creation timestamps.
 	CreatedAt time.Time
+	// Status defines order status values.
+	Status string
+	// BillingAddressLine1 defines billing address line 1 values.
+	BillingAddressLine1 string
+	// BillingAddressLine2 defines billing address line 2 values.
+	BillingAddressLine2 string
+	// BillingCityCode defines billing city-code values.
+	BillingCityCode string
+	// BillingPhoneNormalized defines billing phone values.
+	BillingPhoneNormalized string
+	// ShippingFirstName defines shipping first-name values.
+	ShippingFirstName string
+	// ShippingLastName defines shipping last-name values.
+	ShippingLastName string
+	// ShippingCompany defines shipping company values.
+	ShippingCompany string
+	// ShippingPhone defines shipping phone values.
+	ShippingPhone string
+	// ShippingAddressLine1 defines shipping address line 1 values.
+	ShippingAddressLine1 string
+	// ShippingAddressLine2 defines shipping address line 2 values.
+	ShippingAddressLine2 string
+	// ShippingCityCode defines shipping city-code values.
+	ShippingCityCode string
+	// Items defines order item values.
+	Items []WooOrderItem
+	// Comments defines order comment values.
+	Comments []WooOrderComment
 	// Metadata defines order metadata values keyed by metadata key.
 	Metadata map[string]string
 }

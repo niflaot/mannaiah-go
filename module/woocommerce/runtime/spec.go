@@ -28,11 +28,30 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/woo/sync/contacts", &openapi3.PathItem{
 				Post: syncContactsOperation(),
 			}),
+			openapi3.WithPath("/woo/sync/orders", &openapi3.PathItem{
+				Post: syncOrdersOperation(),
+			}),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: wooTag},
 		},
+	}
+}
+
+// syncOrdersOperation defines OpenAPI operations for manual order sync endpoints.
+func syncOrdersOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "WooCommerceSyncController_triggerOrderSync",
+		Summary:     "Trigger WooCommerce order sync",
+		Tags:        []string{wooTag},
+		Security:    bearerSecurityRequirements(),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Sync triggered successfully.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(503, responseWithDescription("WooCommerce integration unavailable or disabled.")),
+		),
 	}
 }
 

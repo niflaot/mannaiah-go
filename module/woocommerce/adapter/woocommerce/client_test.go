@@ -37,8 +37,10 @@ func TestValidateAndListOrders(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(writer).Encode([]map[string]any{
 			{
-				"id":           10,
-				"date_created": "2024-03-01T08:00:00Z",
+				"id":            10,
+				"status":        "processing",
+				"date_created":  "2024-03-01T08:00:00Z",
+				"date_modified": "2024-03-01T09:00:00Z",
 				"billing": map[string]any{
 					"email":      "john@example.com",
 					"first_name": "John",
@@ -48,6 +50,24 @@ func TestValidateAndListOrders(t *testing.T) {
 					"address_2":  "Suite 1",
 					"city":       "Bogota",
 				},
+				"shipping": map[string]any{
+					"first_name": "John",
+					"last_name":  "Doe",
+					"address_1":  "Street 2",
+					"address_2":  "Apt 1",
+					"city":       "Medellin",
+				},
+				"line_items": []map[string]any{
+					{
+						"name":     "Product One",
+						"sku":      "SKU-1",
+						"quantity": 2,
+						"meta_data": []map[string]any{
+							{"key": "color", "value": "red"},
+						},
+					},
+				},
+				"customer_note": "packed by warehouse",
 				"meta_data": []map[string]any{
 					{"key": "_billing_document", "value": "998877"},
 				},
@@ -83,6 +103,18 @@ func TestValidateAndListOrders(t *testing.T) {
 	}
 	if orders[0].BillingEmail != "john@example.com" {
 		t.Fatalf("orders[0].BillingEmail = %q, want %q", orders[0].BillingEmail, "john@example.com")
+	}
+	if orders[0].Status != "processing" {
+		t.Fatalf("orders[0].Status = %q, want %q", orders[0].Status, "processing")
+	}
+	if orders[0].ShippingAddressLine1 != "Street 2" {
+		t.Fatalf("orders[0].ShippingAddressLine1 = %q, want %q", orders[0].ShippingAddressLine1, "Street 2")
+	}
+	if len(orders[0].Items) != 1 || orders[0].Items[0].SKU != "SKU-1" {
+		t.Fatalf("orders[0].Items = %+v, want one sku row", orders[0].Items)
+	}
+	if len(orders[0].Comments) != 1 || orders[0].Comments[0].Description != "packed by warehouse" {
+		t.Fatalf("orders[0].Comments = %+v, want customer note comment", orders[0].Comments)
 	}
 	if orders[0].Metadata["_billing_document"] != "998877" {
 		t.Fatalf("orders[0].Metadata[_billing_document] = %q, want %q", orders[0].Metadata["_billing_document"], "998877")
@@ -238,12 +270,21 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 		_ = json.NewEncoder(writer).Encode([]map[string]any{
 			{
 				"id":           42,
+				"status":       "completed",
 				"date_created": "2024-04-10T12:30:00Z",
 				"billing": map[string]any{
 					"email":      "array.meta@example.com",
 					"first_name": "Array",
 					"last_name":  "Meta",
 				},
+				"line_items": []map[string]any{
+					{
+						"name":     "Fallback Product",
+						"sku":      "SKU-RAW-1",
+						"quantity": 1,
+					},
+				},
+				"customer_note": "raw note",
 				"meta_data": []map[string]any{
 					{"key": "_full_payment_orders", "value": []int{1021898}},
 				},
@@ -272,6 +313,15 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 	}
 	if len(orders) != 1 {
 		t.Fatalf("len(orders) = %d, want %d", len(orders), 1)
+	}
+	if orders[0].Status != "completed" {
+		t.Fatalf("orders[0].Status = %q, want %q", orders[0].Status, "completed")
+	}
+	if len(orders[0].Items) != 1 || orders[0].Items[0].SKU != "SKU-RAW-1" {
+		t.Fatalf("orders[0].Items = %+v, want one raw sku row", orders[0].Items)
+	}
+	if len(orders[0].Comments) != 1 || orders[0].Comments[0].Description != "raw note" {
+		t.Fatalf("orders[0].Comments = %+v, want raw note comment", orders[0].Comments)
 	}
 	if orders[0].Metadata["_full_payment_orders"] != "1021898" {
 		t.Fatalf("metadata[_full_payment_orders] = %q, want %q", orders[0].Metadata["_full_payment_orders"], "1021898")

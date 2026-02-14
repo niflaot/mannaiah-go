@@ -48,7 +48,7 @@ func TestWooCommerceContactsSyncE2E(t *testing.T) {
 		RequestTimeoutMS:    2000,
 		ValidationTimeoutMS: 1000,
 		VerifySSL:           true,
-	}, harness.contactsModule.Service(), scheduler, harness.tracer.logger, publisher)
+	}, harness.contactsModule.Service(), harness.ordersModule.Service(), scheduler, harness.tracer.logger, publisher)
 	if err != nil {
 		t.Fatalf("woocommerce.New() error = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestWooCommerceInvalidIntegrationE2E(t *testing.T) {
 	module, err := woocommerce.New(woocommerce.Config{
 		SyncContacts:     true,
 		SyncContactsCron: "0 0 * * *",
-	}, harness.contactsModule.Service(), scheduler, harness.tracer.logger)
+	}, harness.contactsModule.Service(), harness.ordersModule.Service(), scheduler, harness.tracer.logger)
 	if err != nil {
 		t.Fatalf("woocommerce.New() error = %v", err)
 	}
@@ -171,7 +171,7 @@ func TestWooCommerceSyncDisabledE2E(t *testing.T) {
 	harness.tracer.Step("initialize woocommerce module with sync disabled")
 	module, err := woocommerce.New(woocommerce.Config{
 		SyncContacts: false,
-	}, harness.contactsModule.Service(), nil, harness.tracer.logger)
+	}, harness.contactsModule.Service(), harness.ordersModule.Service(), nil, harness.tracer.logger)
 	if err != nil {
 		t.Fatalf("woocommerce.New() error = %v", err)
 	}
@@ -232,7 +232,7 @@ func TestWooCommerceOutageCircuitBreakerE2E(t *testing.T) {
 		CircuitBreakerFailureThreshold: 1,
 		CircuitBreakerTimeoutMS:        120000,
 		CircuitBreakerIntervalMS:       120000,
-	}, harness.contactsModule.Service(), scheduler, harness.tracer.logger)
+	}, harness.contactsModule.Service(), harness.ordersModule.Service(), scheduler, harness.tracer.logger)
 	if err != nil {
 		t.Fatalf("woocommerce.New() error = %v", err)
 	}
@@ -295,7 +295,7 @@ func TestWooCommerceSyncPageFailureNoPartialWritesE2E(t *testing.T) {
 		RequestTimeoutMS:    2000,
 		ValidationTimeoutMS: 1000,
 		VerifySSL:           true,
-	}, harness.contactsModule.Service(), scheduler, harness.tracer.logger)
+	}, harness.contactsModule.Service(), harness.ordersModule.Service(), scheduler, harness.tracer.logger)
 	if err != nil {
 		t.Fatalf("woocommerce.New() error = %v", err)
 	}

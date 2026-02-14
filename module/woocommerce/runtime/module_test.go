@@ -14,6 +14,8 @@ import (
 	contactport "mannaiah/module/contacts/port"
 	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
+	ordersapplication "mannaiah/module/orders/application"
+	ordersdomain "mannaiah/module/orders/domain"
 )
 
 // contactServiceMock defines contacts service behavior for module tests.
@@ -44,14 +46,37 @@ func (contactServiceMock) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// orderServiceMock defines orders service behavior for module tests.
+type orderServiceMock struct{}
+
+// Create creates orders.
+func (orderServiceMock) Create(ctx context.Context, command ordersapplication.CreateCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: "created", Identifier: command.Identifier, Realm: command.Realm}, nil
+}
+
+// Get retrieves orders by id.
+func (orderServiceMock) Get(ctx context.Context, id string) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
+// List lists order pages.
+func (orderServiceMock) List(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error) {
+	return &ordersapplication.ListResult{}, nil
+}
+
+// UpdateStatus updates order status rows.
+func (orderServiceMock) UpdateStatus(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id, CurrentStatus: command.Status}, nil
+}
+
 // schedulerMock defines scheduler behavior for module tests.
 type schedulerMock struct {
 	// addErr defines add-operation errors.
 	addErr error
 	// stopErr defines stop-operation errors.
 	stopErr error
-	// addedSpec defines added spec values.
-	addedSpec string
+	// addedSpecs defines added spec values.
+	addedSpecs []string
 	// addCalled reports add-operation calls.
 	addCalled bool
 	// removeCalled reports remove-operation calls.
@@ -68,8 +93,8 @@ func (m *schedulerMock) Add(spec string, job corecron.Job) (corecron.EntryID, er
 		return 0, m.addErr
 	}
 	m.addCalled = true
-	m.addedSpec = spec
-	return corecron.EntryID(1), nil
+	m.addedSpecs = append(m.addedSpecs, spec)
+	return corecron.EntryID(len(m.addedSpecs)), nil
 }
 
 // AddFunc registers function jobs.
@@ -140,17 +165,20 @@ func (authorizerMock) IsForbidden(err error) bool {
 
 // TestNewValidation verifies constructor validation behavior.
 func TestNewValidation(t *testing.T) {
-	if _, err := New(Config{}, nil, nil, nil); !errorspkg.Is(err, ErrNilContactService) {
+	if _, err := New(Config{}, nil, orderServiceMock{}, nil, nil); !errorspkg.Is(err, ErrNilContactService) {
 		t.Fatalf("New(nil service) error = %v, want ErrNilContactService", err)
 	}
-	if _, err := New(Config{SyncContacts: true}, contactServiceMock{}, nil, nil); !errorspkg.Is(err, ErrNilSchedulerWhenEnabled) {
+	if _, err := New(Config{}, contactServiceMock{}, nil, nil, nil); !errorspkg.Is(err, ErrNilOrderService) {
+		t.Fatalf("New(nil order service) error = %v, want ErrNilOrderService", err)
+	}
+	if _, err := New(Config{SyncContacts: true}, contactServiceMock{}, orderServiceMock{}, nil, nil); !errorspkg.Is(err, ErrNilSchedulerWhenEnabled) {
 		t.Fatalf("New(sync enabled nil scheduler) error = %v, want ErrNilSchedulerWhenEnabled", err)
 	}
 }
 
 // TestLoadRegisterRoutes verifies module route/spec registration behavior.
 func TestLoadRegisterRoutes(t *testing.T) {
-	module, err := New(Config{}, contactServiceMock{}, nil, zap.NewNop())
+	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -169,7 +197,7 @@ func TestLoadRegisterRoutes(t *testing.T) {
 
 // TestRegisterRoutesServer verifies endpoint registration behavior.
 func TestRegisterRoutesServer(t *testing.T) {
-	module, err := New(Config{}, contactServiceMock{}, nil, zap.NewNop())
+	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -188,11 +216,20 @@ func TestRegisterRoutesServer(t *testing.T) {
 	if resp.StatusCode != stdhttp.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusServiceUnavailable)
 	}
+
+	orderReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/orders", nil)
+	orderResp, orderTestErr := server.App().Test(orderReq)
+	if orderTestErr != nil {
+		t.Fatalf("App().Test() error = %v", orderTestErr)
+	}
+	if orderResp.StatusCode != stdhttp.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", orderResp.StatusCode, stdhttp.StatusServiceUnavailable)
+	}
 }
 
 // TestSetAuthorizer verifies optional authorizer wiring behavior.
 func TestSetAuthorizer(t *testing.T) {
-	module, err := New(Config{}, contactServiceMock{}, nil, zap.NewNop())
+	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -209,7 +246,7 @@ func TestStartStopWithScheduler(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -217,7 +254,7 @@ func TestStartStopWithScheduler(t *testing.T) {
 	if err := module.Start(context.Background()); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	if !scheduler.addCalled || scheduler.addedSpec != "0 0 * * *" {
+	if !scheduler.addCalled || len(scheduler.addedSpecs) != 1 || scheduler.addedSpecs[0] != "0 0 * * *" {
 		t.Fatalf("expected scheduler AddFunc call with cron spec")
 	}
 	if !scheduler.startCalled {
@@ -257,7 +294,7 @@ func TestStartSchedulerError(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -276,7 +313,7 @@ func TestStopSchedulerError(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -286,6 +323,37 @@ func TestStopSchedulerError(t *testing.T) {
 	}
 	if err := module.Stop(context.Background()); err == nil {
 		t.Fatalf("expected Stop() error")
+	}
+}
+
+// TestStartStopWithBothSchedulers verifies scheduler registration behavior for contact and order sync jobs.
+func TestStartStopWithBothSchedulers(t *testing.T) {
+	scheduler := &schedulerMock{}
+	module, err := New(Config{
+		SyncContacts:     true,
+		SyncContactsCron: "0 0 * * *",
+		SyncOrders:       true,
+		SyncOrdersCron:   "0 1 * * *",
+		URL:              "https://example.com",
+		ConsumerKey:      "key",
+		ConsumerSecret:   "secret",
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if err := module.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if len(scheduler.addedSpecs) != 2 {
+		t.Fatalf("len(addedSpecs) = %d, want 2", len(scheduler.addedSpecs))
+	}
+	if scheduler.addedSpecs[0] != "0 0 * * *" || scheduler.addedSpecs[1] != "0 1 * * *" {
+		t.Fatalf("addedSpecs = %v, want [0 0 * * * 0 1 * * *]", scheduler.addedSpecs)
+	}
+
+	if err := module.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
 	}
 }
 

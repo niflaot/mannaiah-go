@@ -84,6 +84,9 @@ func TestStartupProcessE2E(t *testing.T) {
 	if !ok || paths["/woo/sync/contacts"] == nil {
 		t.Fatalf("expected /woo/sync/contacts path in aggregated openapi")
 	}
+	if paths["/woo/sync/orders"] == nil {
+		t.Fatalf("expected /woo/sync/orders path in aggregated openapi")
+	}
 	if paths["/products"] == nil || paths["/products/{id}"] == nil {
 		t.Fatalf("expected /products paths in aggregated openapi")
 	}

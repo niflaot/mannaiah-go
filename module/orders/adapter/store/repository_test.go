@@ -29,7 +29,15 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 		Realm:      "woocommerce",
 		ContactID:  "contact-1",
 		Items: []ordersdomain.Item{
-			{SKU: "SKU-1", Quantity: 2, ProductID: "product-1", ResolutionSource: ordersdomain.ItemResolutionSourceSKU},
+			{
+				SKU:              "SKU-1",
+				Quantity:         2,
+				ProductID:        "product-1",
+				ResolutionSource: ordersdomain.ItemResolutionSourceSKU,
+				Metadata: map[string]string{
+					"color": "red",
+				},
+			},
 			{SKU: "SKU-2", AlternateName: "Fallback", Quantity: 1, ResolutionSource: ordersdomain.ItemResolutionSourceAlternateName},
 		},
 		CurrentStatus: ordersdomain.StatusCreated,
@@ -42,6 +50,9 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 			Address2: "Apt 2",
 			Phone:    "3000000",
 			CityCode: "11001",
+		},
+		Metadata: map[string]string{
+			"integration.source": "woocommerce",
 		},
 	}
 	if err := repository.Create(ctx, entity); err != nil {
@@ -66,6 +77,12 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 	}
 	if stored.ShippingAddress.CityCode != "11001" {
 		t.Fatalf("stored.ShippingAddress.CityCode = %q, want %q", stored.ShippingAddress.CityCode, "11001")
+	}
+	if stored.Metadata["integration.source"] != "woocommerce" {
+		t.Fatalf("stored.Metadata[integration.source] = %q, want %q", stored.Metadata["integration.source"], "woocommerce")
+	}
+	if stored.Items[0].Metadata["color"] != "red" {
+		t.Fatalf("stored.Items[0].Metadata[color] = %q, want %q", stored.Items[0].Metadata["color"], "red")
 	}
 
 	nextStatus := ordersdomain.StatusEntry{

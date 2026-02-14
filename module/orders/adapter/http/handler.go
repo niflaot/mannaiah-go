@@ -46,6 +46,8 @@ type createItemRequest struct {
 	AlternateName string `json:"alternateName"`
 	// Quantity defines ordered quantity values.
 	Quantity int `json:"quantity"`
+	// Metadata defines item metadata values.
+	Metadata map[string]string `json:"metadata"`
 }
 
 // shippingAddressRequest defines request payload for shipping-address values.
@@ -78,6 +80,8 @@ type createRequest struct {
 	Description string `json:"description"`
 	// ShippingAddress defines optional explicit shipping-address values.
 	ShippingAddress *shippingAddressRequest `json:"shippingAddress"`
+	// Metadata defines order metadata values.
+	Metadata map[string]string `json:"metadata"`
 }
 
 // updateStatusRequest defines request payload for status updates.
@@ -156,6 +160,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		Author:        request.Author,
 		Description:   request.Description,
 		Items:         mapCreateItems(request.Items),
+		Metadata:      request.Metadata,
 	}
 	if request.ShippingAddress != nil {
 		command.ShippingAddress = &ordersapplication.ShippingAddressCommand{
@@ -234,6 +239,7 @@ func mapCreateItems(items []createItemRequest) []ordersapplication.CreateItemCom
 			SKU:           item.SKU,
 			AlternateName: item.AlternateName,
 			Quantity:      item.Quantity,
+			Metadata:      item.Metadata,
 		})
 	}
 

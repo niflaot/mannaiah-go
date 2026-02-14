@@ -31,6 +31,8 @@ type CreateItemCommand struct {
 	AlternateName string
 	// Quantity defines ordered quantity values.
 	Quantity int
+	// Metadata defines item metadata values.
+	Metadata map[string]string
 }
 
 // ShippingAddressCommand defines shipping-address command values.
@@ -63,6 +65,10 @@ type CreateCommand struct {
 	Description string
 	// ShippingAddress defines optional explicit shipping-address values.
 	ShippingAddress *ShippingAddressCommand
+	// Metadata defines order metadata values.
+	Metadata map[string]string
+	// CreatedAt defines optional source creation timestamps.
+	CreatedAt *time.Time
 }
 
 // UpdateStatusCommand defines status-update payload values.
@@ -73,6 +79,8 @@ type UpdateStatusCommand struct {
 	Author string
 	// Description defines status description values.
 	Description string
+	// OccurredAt defines optional status timestamp values.
+	OccurredAt *time.Time
 }
 
 // ListQuery defines list payload values.
@@ -186,6 +194,10 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		Items:         items,
 		CurrentStatus: initialStatus,
 		StatusHistory: []ordersdomain.StatusEntry{entry},
+		Metadata:      command.Metadata,
+	}
+	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {
+		order.CreatedAt = command.CreatedAt.UTC()
 	}
 	applyShipping(order, customer, command.ShippingAddress)
 	order.Normalize()
@@ -270,6 +282,9 @@ func (s *OrderService) UpdateStatus(ctx context.Context, id string, command Upda
 		Author:      strings.TrimSpace(command.Author),
 		Description: strings.TrimSpace(command.Description),
 		OccurredAt:  time.Now().UTC(),
+	}
+	if command.OccurredAt != nil && !command.OccurredAt.IsZero() {
+		entry.OccurredAt = command.OccurredAt.UTC()
 	}
 	if strings.TrimSpace(entry.Author) == "" {
 		return nil, ErrStatusAuthorRequired

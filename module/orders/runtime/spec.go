@@ -202,6 +202,7 @@ func orderCreateSchema() *openapi3.Schema {
 		WithProperty("author", openapi3.NewStringSchema()).
 		WithProperty("description", openapi3.NewStringSchema()).
 		WithProperty("shippingAddress", orderShippingSchema()).
+		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"identifier", "realm", "contactId", "items"})
 }
 
@@ -226,6 +227,7 @@ func orderSchema() *openapi3.Schema {
 		WithProperty("statusHistory", openapi3.NewArraySchema().WithItems(orderStatusEntrySchema())).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("hasCustomShippingAddress", openapi3.NewBoolSchema()).
+		WithProperty("metadata", metadataSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
 }
@@ -238,6 +240,7 @@ func orderItemSchema() *openapi3.Schema {
 		WithProperty("quantity", openapi3.NewIntegerSchema()).
 		WithProperty("productId", openapi3.NewStringSchema()).
 		WithProperty("resolutionSource", openapi3.NewStringSchema()).
+		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"sku", "quantity"})
 }
 
@@ -281,4 +284,9 @@ func orderListMetaSchema() *openapi3.Schema {
 		WithProperty("total", openapi3.NewIntegerSchema()).
 		WithProperty("limit", openapi3.NewIntegerSchema()).
 		WithProperty("totalPages", openapi3.NewIntegerSchema())
+}
+
+// metadataSchema returns object schema for metadata maps.
+func metadataSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().WithAdditionalProperties(openapi3.NewStringSchema())
 }

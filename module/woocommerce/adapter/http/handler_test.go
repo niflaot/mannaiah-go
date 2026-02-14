@@ -8,10 +8,11 @@ import (
 
 	corehttp "mannaiah/module/core/http"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
+	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 )
 
-// serviceMock defines WooCommerce service behavior for handler tests.
-type serviceMock struct {
+// contactsServiceMock defines WooCommerce contacts service behavior for handler tests.
+type contactsServiceMock struct {
 	// summary defines sync summary responses.
 	summary *woocontactservice.SyncSummary
 	// syncErr defines sync execution errors.
@@ -19,12 +20,12 @@ type serviceMock struct {
 }
 
 // ValidateIntegration validates integration state.
-func (m *serviceMock) ValidateIntegration(ctx context.Context) error {
+func (m *contactsServiceMock) ValidateIntegration(ctx context.Context) error {
 	return nil
 }
 
 // SyncContacts performs sync behavior.
-func (m *serviceMock) SyncContacts(ctx context.Context, trigger string) (*woocontactservice.SyncSummary, error) {
+func (m *contactsServiceMock) SyncContacts(ctx context.Context, trigger string) (*woocontactservice.SyncSummary, error) {
 	if m.syncErr != nil {
 		return nil, m.syncErr
 	}
@@ -33,6 +34,31 @@ func (m *serviceMock) SyncContacts(ctx context.Context, trigger string) (*woocon
 	}
 
 	return &woocontactservice.SyncSummary{Trigger: trigger}, nil
+}
+
+// ordersServiceMock defines WooCommerce orders service behavior for handler tests.
+type ordersServiceMock struct {
+	// summary defines sync summary responses.
+	summary *wooorderservice.SyncSummary
+	// syncErr defines sync execution errors.
+	syncErr error
+}
+
+// ValidateIntegration validates integration state.
+func (m *ordersServiceMock) ValidateIntegration(ctx context.Context) error {
+	return nil
+}
+
+// SyncOrders performs sync behavior.
+func (m *ordersServiceMock) SyncOrders(ctx context.Context, trigger string) (*wooorderservice.SyncSummary, error) {
+	if m.syncErr != nil {
+		return nil, m.syncErr
+	}
+	if m.summary != nil {
+		return m.summary, nil
+	}
+
+	return &wooorderservice.SyncSummary{Trigger: trigger}, nil
 }
 
 // authorizerMock defines authorization behavior for handler tests.
@@ -65,15 +91,20 @@ var (
 
 // TestNewHandlerValidation verifies constructor validation behavior.
 func TestNewHandlerValidation(t *testing.T) {
-	if _, err := NewHandler(nil); !errorspkg.Is(err, ErrNilService) {
-		t.Fatalf("NewHandler(nil) error = %v, want ErrNilService", err)
+	if _, err := NewHandler(nil, &ordersServiceMock{}); !errorspkg.Is(err, ErrNilContactService) {
+		t.Fatalf("NewHandler(nil contacts) error = %v, want ErrNilContactService", err)
+	}
+	if _, err := NewHandler(&contactsServiceMock{}, nil); !errorspkg.Is(err, ErrNilOrderService) {
+		t.Fatalf("NewHandler(nil orders) error = %v, want ErrNilOrderService", err)
 	}
 }
 
 // TestRegisterRoutesAndSync verifies route registration and successful sync behavior.
 func TestRegisterRoutesAndSync(t *testing.T) {
-	handler, err := NewHandler(&serviceMock{
+	handler, err := NewHandler(&contactsServiceMock{
 		summary: &woocontactservice.SyncSummary{Trigger: "manual", Processed: 2},
+	}, &ordersServiceMock{
+		summary: &wooorderservice.SyncSummary{Trigger: "manual", Processed: 3},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
@@ -93,11 +124,20 @@ func TestRegisterRoutesAndSync(t *testing.T) {
 	if response.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("status = %d, want %d", response.StatusCode, stdhttp.StatusOK)
 	}
+
+	orderRequest, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/orders", nil)
+	orderResponse, orderErr := server.App().Test(orderRequest)
+	if orderErr != nil {
+		t.Fatalf("App().Test() error = %v", orderErr)
+	}
+	if orderResponse.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want %d", orderResponse.StatusCode, stdhttp.StatusOK)
+	}
 }
 
 // TestRegisterRoutesWithAuth verifies protected route behavior.
 func TestRegisterRoutesWithAuth(t *testing.T) {
-	handler, err := NewHandler(&serviceMock{}, &authorizerMock{requireErr: errUnauthorized})
+	handler, err := NewHandler(&contactsServiceMock{}, &ordersServiceMock{}, &authorizerMock{requireErr: errUnauthorized})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -120,7 +160,7 @@ func TestRegisterRoutesWithAuth(t *testing.T) {
 
 // TestMapError verifies sync error mapping behavior.
 func TestMapError(t *testing.T) {
-	handler, err := NewHandler(&serviceMock{})
+	handler, err := NewHandler(&contactsServiceMock{}, &ordersServiceMock{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -131,6 +171,12 @@ func TestMapError(t *testing.T) {
 	if appErr := handler.mapError(woocontactservice.ErrIntegrationUnavailable); appErr == nil {
 		t.Fatalf("expected mapError(integration unavailable)")
 	}
+	if appErr := handler.mapError(wooorderservice.ErrSyncDisabled); appErr == nil {
+		t.Fatalf("expected mapError(order sync disabled)")
+	}
+	if appErr := handler.mapError(wooorderservice.ErrIntegrationUnavailable); appErr == nil {
+		t.Fatalf("expected mapError(order integration unavailable)")
+	}
 	if appErr := handler.mapError(errorspkg.New("unknown")); appErr == nil {
 		t.Fatalf("expected mapError(unknown)")
 	}
@@ -138,7 +184,7 @@ func TestMapError(t *testing.T) {
 
 // TestSetAuthorizer verifies optional authorizer wiring behavior.
 func TestSetAuthorizer(t *testing.T) {
-	handler, err := NewHandler(&serviceMock{})
+	handler, err := NewHandler(&contactsServiceMock{}, &ordersServiceMock{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}

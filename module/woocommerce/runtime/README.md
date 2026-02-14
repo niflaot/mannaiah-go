@@ -11,7 +11,7 @@
 
 ## Key Methods / Endpoints / Events
 - Methods:
-  - `runtime.New(cfg, contactService, scheduler, logger, publishers...)`
+  - `runtime.New(cfg, contactService, orderService, scheduler, logger, publishers...)`
   - `(*runtime.Module).RegisterRoutes(router)`
   - `(*runtime.Module).SetAuthorizer(authorizer)`
   - `(*runtime.Module).OpenAPISpec()`
@@ -20,5 +20,7 @@
   - `(*runtime.Module).Stop(ctx)`
 - Endpoints:
   - `POST /woo/sync/contacts` (registered via HTTP adapter)
+  - `POST /woo/sync/orders` (registered via HTTP adapter)
 - Events:
   - delegates lifecycle event emission to `application/contact/service`
+  - delegates lifecycle event emission to `application/order/service`

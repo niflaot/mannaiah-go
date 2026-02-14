@@ -23,6 +23,8 @@ var (
 	ErrStatusInvalid = errors.New("order status is invalid")
 	// ErrStatusAuthorRequired is returned when status authors are empty.
 	ErrStatusAuthorRequired = errors.New("order status author is required")
+	// ErrInvalidMetadata is returned when metadata keys or values are invalid.
+	ErrInvalidMetadata = errors.New("order metadata is invalid")
 )
 
 // Status defines supported order-status values.
@@ -65,6 +67,8 @@ type Item struct {
 	ProductID string `json:"productId,omitempty"`
 	// ResolutionSource defines item resolution origin values.
 	ResolutionSource ItemResolutionSource `json:"resolutionSource"`
+	// Metadata defines item metadata values.
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // StatusEntry defines order-status history values.
@@ -111,6 +115,8 @@ type Order struct {
 	ShippingAddress ShippingAddress `json:"shippingAddress"`
 	// HasCustomShippingAddress reports whether shipping was explicitly provided for this order.
 	HasCustomShippingAddress bool `json:"hasCustomShippingAddress"`
+	// Metadata defines order metadata values.
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines update timestamps.
@@ -135,12 +141,14 @@ func (o *Order) Normalize() {
 		o.Items[index].AlternateName = strings.TrimSpace(o.Items[index].AlternateName)
 		o.Items[index].ProductID = strings.TrimSpace(o.Items[index].ProductID)
 		o.Items[index].ResolutionSource = ItemResolutionSource(strings.TrimSpace(string(o.Items[index].ResolutionSource)))
+		o.Items[index].Metadata = normalizeMetadata(o.Items[index].Metadata)
 	}
 	for index := range o.StatusHistory {
 		o.StatusHistory[index].Status = Status(strings.TrimSpace(string(o.StatusHistory[index].Status)))
 		o.StatusHistory[index].Author = strings.TrimSpace(o.StatusHistory[index].Author)
 		o.StatusHistory[index].Description = strings.TrimSpace(o.StatusHistory[index].Description)
 	}
+	o.Metadata = normalizeMetadata(o.Metadata)
 }
 
 // Validate validates order aggregate invariants.
@@ -164,6 +172,9 @@ func (o Order) Validate() error {
 		if item.Quantity <= 0 {
 			return ErrItemQuantityInvalid
 		}
+		if !isValidMetadata(item.Metadata) {
+			return ErrInvalidMetadata
+		}
 	}
 	if err := validateStatus(o.CurrentStatus); err != nil {
 		return err
@@ -175,6 +186,9 @@ func (o Order) Validate() error {
 		if strings.TrimSpace(entry.Author) == "" {
 			return ErrStatusAuthorRequired
 		}
+	}
+	if !isValidMetadata(o.Metadata) {
+		return ErrInvalidMetadata
 	}
 
 	return nil
@@ -198,4 +212,36 @@ func normalizeShippingAddress(value ShippingAddress) ShippingAddress {
 	value.CityCode = strings.TrimSpace(value.CityCode)
 
 	return value
+}
+
+// normalizeMetadata canonicalizes metadata keys and values and drops empty keys.
+func normalizeMetadata(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	normalized := make(map[string]string, len(values))
+	for key, value := range values {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			continue
+		}
+		normalized[trimmedKey] = strings.TrimSpace(value)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
+}
+
+// isValidMetadata reports whether metadata keys and values satisfy size constraints.
+func isValidMetadata(values map[string]string) bool {
+	for key, value := range values {
+		if len(strings.TrimSpace(key)) > 128 || len(strings.TrimSpace(value)) > 2048 {
+			return false
+		}
+	}
+
+	return true
 }

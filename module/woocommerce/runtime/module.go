@@ -9,15 +9,20 @@ import (
 	contactapplication "mannaiah/module/contacts/application"
 	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
+	ordersapplication "mannaiah/module/orders/application"
 	contactsadapter "mannaiah/module/woocommerce/adapter/contacts"
 	"mannaiah/module/woocommerce/adapter/http"
+	ordersadapter "mannaiah/module/woocommerce/adapter/orders"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
+	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 	"mannaiah/module/woocommerce/port"
 )
 
 var (
 	// ErrNilContactService is returned when contact service dependencies are nil.
 	ErrNilContactService = errors.New("woocommerce contact service must not be nil")
+	// ErrNilOrderService is returned when order service dependencies are nil.
+	ErrNilOrderService = errors.New("woocommerce order service must not be nil")
 	// ErrNilSchedulerWhenEnabled is returned when sync is enabled without scheduler dependencies.
 	ErrNilSchedulerWhenEnabled = errors.New("woocommerce scheduler must not be nil when sync is enabled")
 	// ErrModuleNotInitialized is returned when module startup methods are called on nil receivers.
@@ -30,12 +35,16 @@ type Module struct {
 	cfg Config
 	// contactsSyncService defines contact sync use-case dependencies.
 	contactsSyncService woocontactservice.Service
+	// ordersSyncService defines order sync use-case dependencies.
+	ordersSyncService wooorderservice.Service
 	// handler defines HTTP route adapter dependencies.
 	handler *http.Handler
 	// scheduler defines optional cron scheduler dependencies.
 	scheduler corecron.Scheduler
 	// schedulerEntryID defines optional scheduled sync entry identifiers.
-	schedulerEntryID corecron.EntryID
+	contactsSchedulerEntryID corecron.EntryID
+	// ordersSchedulerEntryID defines optional scheduled order-sync entry identifiers.
+	ordersSchedulerEntryID corecron.EntryID
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
 	// mutex guards scheduler lifecycle state.
@@ -53,11 +62,21 @@ type Loader interface {
 }
 
 // New creates WooCommerce modules with sync service, adapters, and route handlers.
-func New(cfg Config, contactService contactapplication.Service, scheduler corecron.Scheduler, providedLogger *zap.Logger, publishers ...port.IntegrationEventPublisher) (*Module, error) {
+func New(
+	cfg Config,
+	contactService contactapplication.Service,
+	orderService ordersapplication.Service,
+	scheduler corecron.Scheduler,
+	providedLogger *zap.Logger,
+	publishers ...port.IntegrationEventPublisher,
+) (*Module, error) {
 	if contactService == nil {
 		return nil, ErrNilContactService
 	}
-	if cfg.SyncContacts && scheduler == nil {
+	if orderService == nil {
+		return nil, ErrNilOrderService
+	}
+	if (cfg.SyncContacts || cfg.SyncOrders) && scheduler == nil {
 		return nil, ErrNilSchedulerWhenEnabled
 	}
 
@@ -94,7 +113,30 @@ func New(cfg Config, contactService contactapplication.Service, scheduler corecr
 		return nil, err
 	}
 
-	handler, err := http.NewHandler(contactSyncService)
+	orderUpserter, err := ordersadapter.NewUpserter(orderService, contactService)
+	if err != nil {
+		return nil, err
+	}
+
+	orderSyncService, err := wooorderservice.NewService(
+		wooorderservice.SyncConfig{
+			Enabled:     cfg.SyncOrders,
+			PageSize:    cfg.SyncPageSize,
+			WorkerCount: cfg.SyncWorkers,
+		},
+		source,
+		orderUpserter,
+		resolvePublisher(publishers),
+		logger,
+		wooorderservice.CircuitBreakers{
+			Source: newSourceCircuitBreaker(cfg, logger),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	handler, err := http.NewHandler(contactSyncService, orderSyncService)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +144,7 @@ func New(cfg Config, contactService contactapplication.Service, scheduler corecr
 	return &Module{
 		cfg:                 cfg,
 		contactsSyncService: contactSyncService,
+		ordersSyncService:   orderSyncService,
 		handler:             handler,
 		scheduler:           scheduler,
 		logger:              logger,

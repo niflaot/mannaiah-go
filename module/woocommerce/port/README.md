@@ -5,6 +5,7 @@
 ## Contracts
 - Order source retrieval (`OrderSource`).
 - Contact upsert target behavior (`ContactSyncTarget`).
+- Order upsert target behavior (`OrderSyncTarget`).
 - Integration event publication (`IntegrationEventPublisher`).
 
 ## Key Methods / Endpoints / Events
@@ -12,6 +13,7 @@
   - `port.OrderSource.Validate(ctx)`
   - `port.OrderSource.ListOrders(ctx, page, pageSize)`
   - `port.ContactSyncTarget.UpsertByEmail(ctx, command)`
+  - `port.OrderSyncTarget.UpsertByIdentifier(ctx, command)`
   - `port.IntegrationEventPublisher.Publish(ctx, event)`
 - Endpoints: none in this package.
 - Events: transport event envelopes for sync lifecycle publication.

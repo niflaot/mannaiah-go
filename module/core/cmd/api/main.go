@@ -184,14 +184,14 @@ func run(ctx context.Context, envFile string) error {
 	}
 
 	var wooScheduler corecron.Scheduler
-	if wooCfg.SyncContacts {
+	if wooCfg.SyncContacts || wooCfg.SyncOrders {
 		wooScheduler, err = corecron.NewScheduler(cronCfg, logger)
 		if err != nil {
 			return fmt.Errorf("create woocommerce scheduler: %w", err)
 		}
 	}
 
-	wooModule, err := woocommerce.New(wooCfg, contactsModule.Service(), wooScheduler, logger, wooPublisher)
+	wooModule, err := woocommerce.New(wooCfg, contactsModule.Service(), ordersModule.Service(), wooScheduler, logger, wooPublisher)
 	if err != nil {
 		return fmt.Errorf("initialize woocommerce module: %w", err)
 	}

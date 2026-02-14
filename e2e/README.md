@@ -11,6 +11,7 @@
 - Includes benchmark coverage for hot persistence paths under module-level benchmark suites.
 - Includes scheduler configuration and execution validation for the core cron package.
 - Includes WooCommerce sync flows (manual endpoint + integration availability behavior).
+- Includes WooCommerce order-sync flows (contact fallback + status/comment mapping).
 - Includes WooCommerce outage fail-fast validation through circuit-breaker behavior.
 - Includes assets upload/CRUD, nested folder operations, and product-gallery asset-reference validation.
 
@@ -58,6 +59,7 @@
   - `PATCH /variations/:id`
   - `DELETE /variations/:id`
   - `POST /woo/sync/contacts`
+  - `POST /woo/sync/orders`
 - Events:
   - `contacts.v1.created`
   - `contacts.v1.updated`
@@ -68,3 +70,4 @@
   - `asset_folders.v1.updated`
   - `asset_folders.v1.deleted`
   - `woocommerce.v1.contacts.sync.completed`
+  - `woocommerce.v1.orders.sync.completed`

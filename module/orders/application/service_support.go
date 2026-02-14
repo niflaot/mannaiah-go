@@ -76,6 +76,7 @@ func (s *OrderService) resolveItem(ctx context.Context, command CreateItemComman
 		AlternateName:    strings.TrimSpace(command.AlternateName),
 		Quantity:         command.Quantity,
 		ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved,
+		Metadata:         command.Metadata,
 	}
 	if s.productResolver == nil {
 		return item, nil

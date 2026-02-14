@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -92,7 +93,14 @@ func toShippingRecord(orderID string, shipping ordersdomain.ShippingAddress) ord
 }
 
 // toOrderEntity maps root and child storage rows to order aggregate values.
-func toOrderEntity(record orderRecord, items []orderItemRecord, statuses []orderStatusRecord, shipping *orderShippingAddressRecord) ordersdomain.Order {
+func toOrderEntity(
+	record orderRecord,
+	items []orderItemRecord,
+	statuses []orderStatusRecord,
+	shipping *orderShippingAddressRecord,
+	orderMetadata map[string]string,
+	itemMetadata map[uint]map[string]string,
+) ordersdomain.Order {
 	entity := ordersdomain.Order{
 		ID:              strings.TrimSpace(record.ID),
 		Identifier:      strings.TrimSpace(record.Identifier),
@@ -102,8 +110,9 @@ func toOrderEntity(record orderRecord, items []orderItemRecord, statuses []order
 		CreatedAt:       record.CreatedAt,
 		UpdatedAt:       record.UpdatedAt,
 		StatusHistory:   toStatusEntries(statuses),
-		Items:           toItemEntities(items),
+		Items:           toItemEntities(items, itemMetadata),
 		ShippingAddress: ordersdomain.ShippingAddress{},
+		Metadata:        orderMetadata,
 	}
 	if shipping != nil {
 		entity.HasCustomShippingAddress = true
@@ -120,7 +129,7 @@ func toOrderEntity(record orderRecord, items []orderItemRecord, statuses []order
 }
 
 // toItemEntities maps storage item rows to order item aggregate values.
-func toItemEntities(rows []orderItemRecord) []ordersdomain.Item {
+func toItemEntities(rows []orderItemRecord, metadata map[uint]map[string]string) []ordersdomain.Item {
 	items := make([]ordersdomain.Item, 0, len(rows))
 	for _, row := range rows {
 		item := ordersdomain.Item{
@@ -128,6 +137,7 @@ func toItemEntities(rows []orderItemRecord) []ordersdomain.Item {
 			AlternateName:    strings.TrimSpace(row.AlternateName),
 			Quantity:         row.Quantity,
 			ResolutionSource: ordersdomain.ItemResolutionSource(strings.TrimSpace(row.ResolutionSource)),
+			Metadata:         metadata[row.ID],
 		}
 		if row.ProductID != nil {
 			item.ProductID = strings.TrimSpace(*row.ProductID)
@@ -136,6 +146,59 @@ func toItemEntities(rows []orderItemRecord) []ordersdomain.Item {
 	}
 
 	return items
+}
+
+// toOrderMetadataRecords maps order metadata maps to storage rows.
+func toOrderMetadataRecords(orderID string, metadata map[string]string) []orderMetadataRecord {
+	keys := normalizedMetadataKeys(metadata)
+	rows := make([]orderMetadataRecord, 0, len(keys))
+	for _, key := range keys {
+		rows = append(rows, orderMetadataRecord{
+			OrderID: strings.TrimSpace(orderID),
+			Key:     key,
+			Value:   strings.TrimSpace(metadata[key]),
+		})
+	}
+
+	return rows
+}
+
+// toOrderItemMetadataRecords maps order-item metadata maps to storage rows.
+func toOrderItemMetadataRecords(itemRows []orderItemRecord, items []ordersdomain.Item) []orderItemMetadataRecord {
+	rows := make([]orderItemMetadataRecord, 0)
+	for index := range itemRows {
+		if index >= len(items) || itemRows[index].ID == 0 {
+			continue
+		}
+		keys := normalizedMetadataKeys(items[index].Metadata)
+		for _, key := range keys {
+			rows = append(rows, orderItemMetadataRecord{
+				OrderItemID: itemRows[index].ID,
+				Key:         key,
+				Value:       strings.TrimSpace(items[index].Metadata[key]),
+			})
+		}
+	}
+
+	return rows
+}
+
+// normalizedMetadataKeys normalizes metadata keys and returns sorted key values.
+func normalizedMetadataKeys(metadata map[string]string) []string {
+	if len(metadata) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+		keys = append(keys, trimmed)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // toStatusEntries maps storage status rows to order status aggregate values.
