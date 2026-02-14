@@ -15,6 +15,7 @@ import (
 	"mannaiah/module/contacts"
 	corehttp "mannaiah/module/core/http"
 	corewatermill "mannaiah/module/core/messaging/watermill"
+	"mannaiah/module/orders"
 	"mannaiah/module/products"
 )
 
@@ -115,6 +116,8 @@ type contactsE2EHarness struct {
 	assetsModule *assets.Module
 	// productsModule defines products module runtime dependency.
 	productsModule *products.Module
+	// ordersModule defines orders module runtime dependency.
+	ordersModule *orders.Module
 	// createdEvents defines created-event capture channel.
 	createdEvents chan contactEventRecord
 	// updatedEvents defines updated-event capture channel.

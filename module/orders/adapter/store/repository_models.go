@@ -1,0 +1,99 @@
+package store
+
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// orderRecord defines order root persistence schema.
+type orderRecord struct {
+	// ID defines order identifiers.
+	ID string `gorm:"primaryKey;size:64"`
+	// Identifier defines external order identifiers.
+	Identifier string `gorm:"size:255;not null;index:idx_orders_realm_identifier,priority:2,unique"`
+	// Realm defines order realm values.
+	Realm string `gorm:"size:128;not null;index:idx_orders_realm_identifier,priority:1,unique"`
+	// ContactID defines linked customer identifiers.
+	ContactID string `gorm:"size:64;not null;index"`
+	// CurrentStatus defines current status values.
+	CurrentStatus string `gorm:"size:32;not null;index"`
+	// CurrentStatusAuthor defines current status author values.
+	CurrentStatusAuthor string `gorm:"size:255;not null"`
+	// CurrentStatusDescription defines current status description values.
+	CurrentStatusDescription string `gorm:"type:text"`
+	// CurrentStatusAt defines current status timestamps.
+	CurrentStatusAt time.Time `gorm:"not null"`
+	// CreatedAt defines creation timestamps.
+	CreatedAt time.Time
+	// UpdatedAt defines update timestamps.
+	UpdatedAt time.Time
+	// DeletedAt defines soft-delete timestamps.
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+// orderItemRecord defines order-item persistence rows.
+type orderItemRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_items_order_position,priority:1"`
+	// Position defines stable item ordering.
+	Position int `gorm:"not null;index;uniqueIndex:idx_order_items_order_position,priority:2"`
+	// SKU defines item SKU values.
+	SKU string `gorm:"size:255;not null;index"`
+	// AlternateName defines item alternate-name values.
+	AlternateName string `gorm:"size:255;index"`
+	// Quantity defines item quantity values.
+	Quantity int `gorm:"not null"`
+	// ProductID defines resolved product identifiers.
+	ProductID *string `gorm:"size:64;index"`
+	// ResolutionSource defines item resolution-source values.
+	ResolutionSource string `gorm:"size:64;not null"`
+}
+
+// orderStatusRecord defines order status-history persistence rows.
+type orderStatusRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_status_order_position,priority:1"`
+	// Position defines stable history ordering.
+	Position int `gorm:"not null;index;uniqueIndex:idx_order_status_order_position,priority:2"`
+	// Status defines status values.
+	Status string `gorm:"size:32;not null;index"`
+	// Author defines status author values.
+	Author string `gorm:"size:255;not null"`
+	// Description defines status description values.
+	Description string `gorm:"type:text"`
+	// OccurredAt defines status timestamps.
+	OccurredAt time.Time `gorm:"not null;index"`
+}
+
+// orderShippingAddressRecord defines optional shipping-address rows.
+type orderShippingAddressRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;uniqueIndex"`
+	// Address defines shipping address line 1 values.
+	Address string `gorm:"size:512;not null"`
+	// Address2 defines shipping address line 2 values.
+	Address2 string `gorm:"size:512"`
+	// Phone defines shipping phone values.
+	Phone string `gorm:"size:64"`
+	// CityCode defines shipping city-code values.
+	CityCode string `gorm:"size:64;not null"`
+}
+
+// TableName defines storage table names.
+func (orderRecord) TableName() string { return "orders" }
+
+// TableName defines storage table names.
+func (orderItemRecord) TableName() string { return "order_items" }
+
+// TableName defines storage table names.
+func (orderStatusRecord) TableName() string { return "order_status_history" }
+
+// TableName defines storage table names.
+func (orderShippingAddressRecord) TableName() string { return "order_shipping_addresses" }

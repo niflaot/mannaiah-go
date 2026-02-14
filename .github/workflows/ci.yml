@@ -20,6 +20,7 @@ jobs:
           - module/core
           - module/auth
           - module/contacts
+          - module/orders
           - module/assets
           - module/products
           - module/woocommerce

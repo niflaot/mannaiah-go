@@ -24,6 +24,7 @@ require (
 	mannaiah/module/assets v0.0.0
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
+	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
 	mannaiah/module/woocommerce v0.0.0
 )
@@ -128,5 +129,7 @@ replace mannaiah/module/assets => ../assets
 replace mannaiah/module/auth => ../auth
 
 replace mannaiah/module/products => ../products
+
+replace mannaiah/module/orders => ../orders
 
 replace mannaiah/module/woocommerce => ../woocommerce

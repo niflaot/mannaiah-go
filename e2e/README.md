@@ -38,6 +38,10 @@
   - `GET /products/:id`
   - `PATCH /products/:id`
   - `DELETE /products/:id`
+  - `POST /orders`
+  - `GET /orders`
+  - `GET /orders/:id`
+  - `PATCH /orders/:id/status`
   - `POST /assets`
   - `GET /assets`
   - `GET /assets/:id`

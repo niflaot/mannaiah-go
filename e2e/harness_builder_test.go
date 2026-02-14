@@ -19,6 +19,9 @@ import (
 	corehttp "mannaiah/module/core/http"
 	coremsgplatform "mannaiah/module/core/messaging/platform"
 	corewatermill "mannaiah/module/core/messaging/watermill"
+	"mannaiah/module/orders"
+	ordercontacts "mannaiah/module/orders/adapter/contacts"
+	orderproducts "mannaiah/module/orders/adapter/products"
 	"mannaiah/module/products"
 )
 
@@ -121,6 +124,21 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	}
 	productsModule.SetAuthorizer(authModule)
 
+	tracer.Step("initialize orders module")
+	orderCustomerSource, err := ordercontacts.NewSource(contactsModule.Service())
+	if err != nil {
+		t.Fatalf("ordercontacts.NewSource() error = %v", err)
+	}
+	orderProductResolver, err := orderproducts.NewResolver(db)
+	if err != nil {
+		t.Fatalf("orderproducts.NewResolver() error = %v", err)
+	}
+	ordersModule, err := orders.New(db, orderCustomerSource, orderProductResolver)
+	if err != nil {
+		t.Fatalf("orders.New() error = %v", err)
+	}
+	ordersModule.SetAuthorizer(authModule)
+
 	tracer.Step("initialize http server")
 	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8011}, tracer.logger)
 	if err != nil {
@@ -130,6 +148,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	server.RegisterRoutes(authModule.RegisterRoutes)
 	server.RegisterRoutes(assetsModule.RegisterRoutes)
 	server.RegisterRoutes(productsModule.RegisterRoutes)
+	server.RegisterRoutes(ordersModule.RegisterRoutes)
 
 	return &contactsE2EHarness{
 		tracer:             tracer,
@@ -144,6 +163,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 		contactsModule:     contactsModule,
 		assetsModule:       assetsModule,
 		productsModule:     productsModule,
+		ordersModule:       ordersModule,
 		createdEvents:      createdEvents,
 		updatedEvents:      updatedEvents,
 		assetCreatedEvents: assetCreatedEvents,

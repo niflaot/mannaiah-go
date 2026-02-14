@@ -27,6 +27,9 @@ import (
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
+	"mannaiah/module/orders"
+	ordercontacts "mannaiah/module/orders/adapter/contacts"
+	orderproducts "mannaiah/module/orders/adapter/products"
 	"mannaiah/module/products"
 	"mannaiah/module/woocommerce"
 	wooevent "mannaiah/module/woocommerce/adapter/event"
@@ -161,6 +164,23 @@ func run(ctx context.Context, envFile string) error {
 	productsModule.SetAuthorizer(authModule)
 	if err := productsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load products module: %w", err)
+	}
+
+	orderCustomerSource, err := ordercontacts.NewSource(contactsModule.Service())
+	if err != nil {
+		return fmt.Errorf("create order customer source: %w", err)
+	}
+	orderProductResolver, err := orderproducts.NewResolver(db)
+	if err != nil {
+		return fmt.Errorf("create order product resolver: %w", err)
+	}
+	ordersModule, err := orders.New(db, orderCustomerSource, orderProductResolver)
+	if err != nil {
+		return fmt.Errorf("initialize orders module: %w", err)
+	}
+	ordersModule.SetAuthorizer(authModule)
+	if err := ordersModule.Load(runtime); err != nil {
+		return fmt.Errorf("load orders module: %w", err)
 	}
 
 	var wooScheduler corecron.Scheduler

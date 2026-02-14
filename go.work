@@ -6,6 +6,7 @@ use (
 	./module/auth
 	./module/contacts
 	./module/core
+	./module/orders
 	./module/products
 	./module/woocommerce
 )
