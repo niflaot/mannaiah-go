@@ -46,10 +46,28 @@ type orderItemRecord struct {
 	AlternateName string `gorm:"size:255;index"`
 	// Quantity defines item quantity values.
 	Quantity int `gorm:"not null"`
+	// Value defines item monetary value values.
+	Value float64 `gorm:"not null;default:0"`
 	// ProductID defines resolved product identifiers.
 	ProductID *string `gorm:"size:64;index"`
 	// ResolutionSource defines item resolution-source values.
 	ResolutionSource string `gorm:"size:64;not null"`
+}
+
+// orderShippingChargeRecord defines shipping-charge persistence rows.
+type orderShippingChargeRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_shipping_charges_order_position,priority:1"`
+	// Position defines stable shipping-charge ordering.
+	Position int `gorm:"not null;index;uniqueIndex:idx_order_shipping_charges_order_position,priority:2"`
+	// MethodID defines shipping method identifier values.
+	MethodID string `gorm:"size:128;index"`
+	// MethodTitle defines shipping method title values.
+	MethodTitle string `gorm:"size:255"`
+	// Price defines shipping price values.
+	Price float64 `gorm:"not null;default:0"`
 }
 
 // orderStatusRecord defines order status-history persistence rows.
@@ -121,6 +139,9 @@ func (orderStatusRecord) TableName() string { return "order_status_history" }
 
 // TableName defines storage table names.
 func (orderShippingAddressRecord) TableName() string { return "order_shipping_addresses" }
+
+// TableName defines storage table names.
+func (orderShippingChargeRecord) TableName() string { return "order_shipping_charges" }
 
 // TableName defines storage table names.
 func (orderMetadataRecord) TableName() string { return "order_metadata" }

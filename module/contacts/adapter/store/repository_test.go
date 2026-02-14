@@ -107,6 +107,42 @@ func TestRepositoryUpdatePersistsCreatedAt(t *testing.T) {
 	}
 }
 
+// TestRepositoryUpdateMetadataOnlyPersistsMetadata verifies metadata-only updates without base-row changes.
+func TestRepositoryUpdateMetadataOnlyPersistsMetadata(t *testing.T) {
+	repository := newRepositoryForTest(t)
+
+	entity := &domain.Contact{
+		Email:     "metadata-only@example.com",
+		FirstName: "Metadata",
+		LastName:  "Only",
+		Metadata:  map[string]string{"sync.source": "woocommerce"},
+	}
+	if err := repository.Create(context.Background(), entity); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	stored, err := repository.GetByID(context.Background(), entity.ID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	stored.Metadata = map[string]string{
+		"sync.source":  "woocommerce",
+		"sync.orderId": "1023001",
+	}
+
+	if err := repository.Update(context.Background(), stored); err != nil {
+		t.Fatalf("Update() metadata-only error = %v", err)
+	}
+
+	updated, err := repository.GetByID(context.Background(), entity.ID)
+	if err != nil {
+		t.Fatalf("GetByID() after update error = %v", err)
+	}
+	if updated.Metadata["sync.orderId"] != "1023001" {
+		t.Fatalf("Metadata[sync.orderId] = %q, want %q", updated.Metadata["sync.orderId"], "1023001")
+	}
+}
+
 // TestRepositoryListPaginationAndExclusions verifies list pagination counts filtered totals after exclusions.
 func TestRepositoryListPaginationAndExclusions(t *testing.T) {
 	repository := newRepositoryForTest(t)

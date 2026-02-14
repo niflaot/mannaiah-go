@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -11,14 +12,21 @@ import (
 )
 
 // collectCommandsFromOrders maps order payload values into deduplicated order commands.
-func collectCommandsFromOrders(orders []port.WooOrder, commandIndexByIdentifier map[string]int, commands []port.OrderSyncCommand, summary *SyncSummary) []port.OrderSyncCommand {
+func collectCommandsFromOrders(
+	orders []port.WooOrder,
+	commandIndexByIdentifier map[string]int,
+	commands []port.OrderSyncCommand,
+	summary *SyncSummary,
+	logger *zap.Logger,
+) []port.OrderSyncCommand {
 	if commandIndexByIdentifier == nil {
 		commandIndexByIdentifier = map[string]int{}
 	}
 
 	for _, order := range orders {
-		command, shouldProcess := mapOrderToCommand(order)
+		command, shouldProcess, reason := mapOrderToCommand(order)
 		if !shouldProcess {
+			logSkippedOrder(logger, order, reason)
 			summary.Skipped++
 			continue
 		}
@@ -26,6 +34,7 @@ func collectCommandsFromOrders(orders []port.WooOrder, commandIndexByIdentifier 
 		key := strings.TrimSpace(command.Realm) + "::" + strings.TrimSpace(command.Identifier)
 		if index, seen := commandIndexByIdentifier[key]; seen {
 			mergeOrderSyncCommand(&commands[index], command)
+			logSkippedOrder(logger, order, "duplicate_identifier_merged")
 			summary.Skipped++
 			continue
 		}
@@ -35,6 +44,39 @@ func collectCommandsFromOrders(orders []port.WooOrder, commandIndexByIdentifier 
 	}
 
 	return commands
+}
+
+// logSkippedOrder logs order skip reasons with non-sensitive diagnostic fields.
+func logSkippedOrder(logger *zap.Logger, order port.WooOrder, reason mapOrderSkipReason) {
+	if logger == nil {
+		return
+	}
+
+	reasonValue := strings.TrimSpace(string(reason))
+	if reasonValue == "" {
+		reasonValue = "unknown_skip_reason"
+	}
+	logger.Warn(
+		"woocommerce order skipped",
+		zap.String("reason", reasonValue),
+		zap.String("order_ref", resolveOrderReference(order)),
+		zap.String("status", strings.TrimSpace(order.Status)),
+		zap.Int("item_count", len(order.Items)),
+	)
+}
+
+// resolveOrderReference resolves order reference values for non-sensitive diagnostics.
+func resolveOrderReference(order port.WooOrder) string {
+	if order.ID > 0 {
+		return strconv.Itoa(order.ID)
+	}
+
+	value := strings.TrimSpace(order.Metadata["integration.woocommerce.order_id"])
+	if value != "" {
+		return value
+	}
+
+	return "unknown"
 }
 
 // mergeOrderSyncCommand merges duplicate order commands with latest status and additive comments/metadata.

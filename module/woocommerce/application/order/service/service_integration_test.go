@@ -126,7 +126,7 @@ func TestSyncOrdersSuccess(t *testing.T) {
 							ShippingAddressLine2: "B",
 							ShippingCityCode:     "11001",
 							Items: []port.WooOrderItem{
-								{SKU: "SKU-1", Name: "Item 1", Quantity: 1, Metadata: map[string]string{"foo": "bar"}},
+								{SKU: "SKU-1", Name: "Item 1", Quantity: 1, Value: 12000},
 							},
 							CreatedAt: time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC),
 						},
@@ -252,7 +252,7 @@ func TestSyncOrdersBreakerOpen(t *testing.T) {
 
 // TestMapOrderToCommand verifies order mapping behavior.
 func TestMapOrderToCommand(t *testing.T) {
-	command, ok := mapOrderToCommand(port.WooOrder{
+	command, ok, reason := mapOrderToCommand(port.WooOrder{
 		ID:                   9,
 		Status:               "processing",
 		BillingEmail:         "test@example.com",
@@ -265,8 +265,11 @@ func TestMapOrderToCommand(t *testing.T) {
 		ShippingAddressLine2: "B",
 		ShippingCityCode:     "11001",
 		Items: []port.WooOrderItem{
-			{SKU: "SKU-1", Name: "Item", Quantity: 1, Metadata: map[string]string{"k": "v"}},
-			{SKU: "", Name: "Ignored", Quantity: 1},
+			{SKU: "SKU-1", Name: "Item", Quantity: 1, Value: 20000},
+			{SKU: "", Name: "Ignored", Quantity: 1, Value: 10000},
+		},
+		ShippingCharges: []port.WooOrderShippingCharge{
+			{MethodID: "flat_rate", MethodTitle: "Flat Rate", Price: 9000},
 		},
 		Comments: []port.WooOrderComment{
 			{Author: "system", Description: "comment", OccurredAt: time.Now().UTC()},
@@ -276,16 +279,28 @@ func TestMapOrderToCommand(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected mapped command")
 	}
+	if reason != "" {
+		t.Fatalf("reason = %q, want empty", reason)
+	}
 	if command.Identifier != "9" {
 		t.Fatalf("command.Identifier = %q, want %q", command.Identifier, "9")
 	}
-	if len(command.Items) != 1 || command.Items[0].SKU != "SKU-1" {
-		t.Fatalf("command.Items = %+v, want one SKU item", command.Items)
+	if len(command.Items) != 2 {
+		t.Fatalf("len(command.Items) = %d, want 2", len(command.Items))
 	}
-	if command.ShippingAddress != nil {
-		t.Fatalf("expected nil shipping address when same as billing")
+	if command.Items[0].SKU != "SKU-1" || command.Items[1].Name != "Ignored" {
+		t.Fatalf("command.Items = %+v, want sku and quota/name rows", command.Items)
 	}
-	if command.Metadata["integration.source"] != "woocommerce" {
-		t.Fatalf("command.Metadata[integration.source] = %q, want %q", command.Metadata["integration.source"], "woocommerce")
+	if command.Items[0].Value != 20000 || command.Items[1].Value != 10000 {
+		t.Fatalf("command.Items values = %+v, want mapped value rows", command.Items)
+	}
+	if command.ShippingAddress == nil || command.ShippingAddress.Address != "A" {
+		t.Fatalf("expected billing snapshot address, got %+v", command.ShippingAddress)
+	}
+	if command.Metadata != nil {
+		t.Fatalf("command.Metadata = %+v, want nil", command.Metadata)
+	}
+	if len(command.ShippingCharges) != 1 || command.ShippingCharges[0].MethodID != "flat_rate" {
+		t.Fatalf("command.ShippingCharges = %+v, want one flat_rate row", command.ShippingCharges)
 	}
 }

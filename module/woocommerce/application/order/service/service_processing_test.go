@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -42,7 +44,7 @@ func TestCollectCommandsFromOrders(t *testing.T) {
 			BillingFirstName: "No",
 			BillingLastName:  "Item",
 		},
-	}, map[string]int{}, nil, summary)
+	}, map[string]int{}, nil, summary, zap.NewNop())
 
 	if len(commands) != 1 {
 		t.Fatalf("len(commands) = %d, want 1", len(commands))
@@ -52,6 +54,73 @@ func TestCollectCommandsFromOrders(t *testing.T) {
 	}
 	if commands[0].Status != "completed" {
 		t.Fatalf("merged command status = %q, want %q", commands[0].Status, "completed")
+	}
+}
+
+// TestCollectCommandsFromOrdersLogsSkipReasons verifies skip warning log behavior with non-sensitive context.
+func TestCollectCommandsFromOrdersLogsSkipReasons(t *testing.T) {
+	core, entries := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	summary := &SyncSummary{}
+	commands := collectCommandsFromOrders(
+		[]port.WooOrder{
+			{
+				ID:               1001,
+				Status:           "processing",
+				BillingEmail:     "dup@example.com",
+				BillingFirstName: "First",
+				BillingLastName:  "Last",
+				Items:            []port.WooOrderItem{{SKU: "SKU-1", Quantity: 1}},
+			},
+			{
+				ID:               1001,
+				Status:           "completed",
+				BillingEmail:     "dup@example.com",
+				BillingFirstName: "First",
+				BillingLastName:  "Last",
+				Items:            []port.WooOrderItem{{SKU: "SKU-1", Quantity: 1}},
+			},
+			{
+				ID:               1002,
+				Status:           "processing",
+				BillingEmail:     "",
+				BillingFirstName: "No",
+				BillingLastName:  "Email",
+				Items:            []port.WooOrderItem{{SKU: "SKU-2", Quantity: 1}},
+			},
+		},
+		map[string]int{},
+		nil,
+		summary,
+		logger,
+	)
+
+	if len(commands) != 1 {
+		t.Fatalf("len(commands) = %d, want 1", len(commands))
+	}
+	if summary.Skipped != 2 {
+		t.Fatalf("summary.Skipped = %d, want 2", summary.Skipped)
+	}
+
+	logs := entries.All()
+	if len(logs) != 2 {
+		t.Fatalf("len(logs) = %d, want 2", len(logs))
+	}
+	if logs[0].Message != "woocommerce order skipped" || logs[1].Message != "woocommerce order skipped" {
+		t.Fatalf("unexpected log messages: %+v", logs)
+	}
+	if logs[0].ContextMap()["reason"] != "duplicate_identifier_merged" {
+		t.Fatalf("logs[0].reason = %v, want duplicate_identifier_merged", logs[0].ContextMap()["reason"])
+	}
+	if logs[1].ContextMap()["reason"] != string(skipReasonMissingContactEmail) {
+		t.Fatalf("logs[1].reason = %v, want %s", logs[1].ContextMap()["reason"], skipReasonMissingContactEmail)
+	}
+	if logs[0].ContextMap()["order_ref"] != "1001" || logs[1].ContextMap()["order_ref"] != "1002" {
+		t.Fatalf("unexpected order_ref values: %v / %v", logs[0].ContextMap()["order_ref"], logs[1].ContextMap()["order_ref"])
+	}
+	if _, exists := logs[0].ContextMap()["billing_email"]; exists {
+		t.Fatalf("expected no sensitive billing_email field in logs")
 	}
 }
 

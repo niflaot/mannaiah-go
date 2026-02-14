@@ -13,7 +13,7 @@ import (
 
 // toOrderRecord maps order aggregate values to root storage records.
 func toOrderRecord(order ordersdomain.Order) orderRecord {
-	status := latestStatusEntry(order)
+	status := latestStatusEntry(order.StatusHistory)
 
 	return orderRecord{
 		ID:                       strings.TrimSpace(order.ID),
@@ -29,17 +29,17 @@ func toOrderRecord(order ordersdomain.Order) orderRecord {
 	}
 }
 
-// latestStatusEntry resolves the latest status entry from order history values.
-func latestStatusEntry(order ordersdomain.Order) ordersdomain.StatusEntry {
-	if len(order.StatusHistory) == 0 {
+// latestStatusEntry resolves the latest status entry from ordered status history values.
+func latestStatusEntry(statuses []ordersdomain.StatusEntry) ordersdomain.StatusEntry {
+	if len(statuses) == 0 {
 		return ordersdomain.StatusEntry{
-			Status:     order.CurrentStatus,
+			Status:     ordersdomain.StatusCreated,
 			Author:     "system",
 			OccurredAt: time.Now().UTC(),
 		}
 	}
 
-	return order.StatusHistory[len(order.StatusHistory)-1]
+	return statuses[len(statuses)-1]
 }
 
 // toOrderItemRecords maps order items to storage child rows.
@@ -56,6 +56,7 @@ func toOrderItemRecords(orderID string, items []ordersdomain.Item) []orderItemRe
 			SKU:              strings.TrimSpace(item.SKU),
 			AlternateName:    strings.TrimSpace(item.AlternateName),
 			Quantity:         item.Quantity,
+			Value:            item.Value,
 			ProductID:        productID,
 			ResolutionSource: strings.TrimSpace(string(item.ResolutionSource)),
 		})
@@ -81,6 +82,22 @@ func toOrderStatusRecords(orderID string, statuses []ordersdomain.StatusEntry) [
 	return rows
 }
 
+// toShippingChargeRecords maps shipping charge values to storage rows.
+func toShippingChargeRecords(orderID string, values []ordersdomain.ShippingCharge) []orderShippingChargeRecord {
+	rows := make([]orderShippingChargeRecord, 0, len(values))
+	for index, value := range values {
+		rows = append(rows, orderShippingChargeRecord{
+			OrderID:      strings.TrimSpace(orderID),
+			Position:     index,
+			MethodID:     strings.TrimSpace(value.MethodID),
+			MethodTitle:  strings.TrimSpace(value.MethodTitle),
+			Price:        value.Price,
+		})
+	}
+
+	return rows
+}
+
 // toShippingRecord maps shipping address values to storage rows.
 func toShippingRecord(orderID string, shipping ordersdomain.ShippingAddress) orderShippingAddressRecord {
 	return orderShippingAddressRecord{
@@ -98,20 +115,22 @@ func toOrderEntity(
 	items []orderItemRecord,
 	statuses []orderStatusRecord,
 	shipping *orderShippingAddressRecord,
+	shippingCharges []orderShippingChargeRecord,
 	orderMetadata map[string]string,
-	itemMetadata map[uint]map[string]string,
 ) ordersdomain.Order {
+	resolvedStatus := resolveCurrentStatus(record, statuses)
 	entity := ordersdomain.Order{
 		ID:              strings.TrimSpace(record.ID),
 		Identifier:      strings.TrimSpace(record.Identifier),
 		Realm:           strings.TrimSpace(record.Realm),
 		ContactID:       strings.TrimSpace(record.ContactID),
-		CurrentStatus:   ordersdomain.Status(strings.TrimSpace(record.CurrentStatus)),
+		CurrentStatus:   resolvedStatus.Status,
 		CreatedAt:       record.CreatedAt,
 		UpdatedAt:       record.UpdatedAt,
 		StatusHistory:   toStatusEntries(statuses),
-		Items:           toItemEntities(items, itemMetadata),
+		Items:           toItemEntities(items),
 		ShippingAddress: ordersdomain.ShippingAddress{},
+		ShippingCharges: toShippingCharges(shippingCharges),
 		Metadata:        orderMetadata,
 	}
 	if shipping != nil {
@@ -128,16 +147,36 @@ func toOrderEntity(
 	return entity
 }
 
+// resolveCurrentStatus resolves current status values from status history rows with root fallback values.
+func resolveCurrentStatus(record orderRecord, statuses []orderStatusRecord) ordersdomain.StatusEntry {
+	if len(statuses) > 0 {
+		last := statuses[len(statuses)-1]
+		return ordersdomain.StatusEntry{
+			Status:      ordersdomain.Status(strings.TrimSpace(last.Status)),
+			Author:      strings.TrimSpace(last.Author),
+			Description: strings.TrimSpace(last.Description),
+			OccurredAt:  last.OccurredAt.UTC(),
+		}
+	}
+
+	return ordersdomain.StatusEntry{
+		Status:      ordersdomain.Status(strings.TrimSpace(record.CurrentStatus)),
+		Author:      strings.TrimSpace(record.CurrentStatusAuthor),
+		Description: strings.TrimSpace(record.CurrentStatusDescription),
+		OccurredAt:  record.CurrentStatusAt.UTC(),
+	}
+}
+
 // toItemEntities maps storage item rows to order item aggregate values.
-func toItemEntities(rows []orderItemRecord, metadata map[uint]map[string]string) []ordersdomain.Item {
+func toItemEntities(rows []orderItemRecord) []ordersdomain.Item {
 	items := make([]ordersdomain.Item, 0, len(rows))
 	for _, row := range rows {
 		item := ordersdomain.Item{
 			SKU:              strings.TrimSpace(row.SKU),
 			AlternateName:    strings.TrimSpace(row.AlternateName),
 			Quantity:         row.Quantity,
+			Value:            row.Value,
 			ResolutionSource: ordersdomain.ItemResolutionSource(strings.TrimSpace(row.ResolutionSource)),
-			Metadata:         metadata[row.ID],
 		}
 		if row.ProductID != nil {
 			item.ProductID = strings.TrimSpace(*row.ProductID)
@@ -146,6 +185,24 @@ func toItemEntities(rows []orderItemRecord, metadata map[uint]map[string]string)
 	}
 
 	return items
+}
+
+// toShippingCharges maps storage shipping-charge rows to order aggregate values.
+func toShippingCharges(rows []orderShippingChargeRecord) []ordersdomain.ShippingCharge {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	values := make([]ordersdomain.ShippingCharge, 0, len(rows))
+	for _, row := range rows {
+		values = append(values, ordersdomain.ShippingCharge{
+			MethodID:    strings.TrimSpace(row.MethodID),
+			MethodTitle: strings.TrimSpace(row.MethodTitle),
+			Price:       row.Price,
+		})
+	}
+
+	return values
 }
 
 // toOrderMetadataRecords maps order metadata maps to storage rows.
@@ -158,26 +215,6 @@ func toOrderMetadataRecords(orderID string, metadata map[string]string) []orderM
 			Key:     key,
 			Value:   strings.TrimSpace(metadata[key]),
 		})
-	}
-
-	return rows
-}
-
-// toOrderItemMetadataRecords maps order-item metadata maps to storage rows.
-func toOrderItemMetadataRecords(itemRows []orderItemRecord, items []ordersdomain.Item) []orderItemMetadataRecord {
-	rows := make([]orderItemMetadataRecord, 0)
-	for index := range itemRows {
-		if index >= len(items) || itemRows[index].ID == 0 {
-			continue
-		}
-		keys := normalizedMetadataKeys(items[index].Metadata)
-		for _, key := range keys {
-			rows = append(rows, orderItemMetadataRecord{
-				OrderItemID: itemRows[index].ID,
-				Key:         key,
-				Value:       strings.TrimSpace(items[index].Metadata[key]),
-			})
-		}
 	}
 
 	return rows

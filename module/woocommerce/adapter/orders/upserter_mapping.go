@@ -24,6 +24,7 @@ func toCreateCommand(
 		Author:          syncStatusAuthor,
 		Description:     syncStatusDescription,
 		ShippingAddress: toShippingAddress(command.ShippingAddress),
+		ShippingCharges: toShippingCharges(command.ShippingCharges),
 		Metadata:        normalizeMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
 	}
@@ -34,7 +35,8 @@ func toCreateItems(items []port.OrderSyncItem) []ordersapplication.CreateItemCom
 	result := make([]ordersapplication.CreateItemCommand, 0, len(items))
 	for _, item := range items {
 		sku := strings.TrimSpace(item.SKU)
-		if sku == "" {
+		alternateName := strings.TrimSpace(item.Name)
+		if sku == "" && alternateName == "" {
 			continue
 		}
 
@@ -45,9 +47,9 @@ func toCreateItems(items []port.OrderSyncItem) []ordersapplication.CreateItemCom
 
 		result = append(result, ordersapplication.CreateItemCommand{
 			SKU:           sku,
-			AlternateName: strings.TrimSpace(item.Name),
+			AlternateName: alternateName,
 			Quantity:      quantity,
-			Metadata:      normalizeMetadata(item.Metadata),
+			Value:         item.Value,
 		})
 	}
 
@@ -71,6 +73,32 @@ func toShippingAddress(value *port.OrderSyncShippingAddress) *ordersapplication.
 	}
 
 	return command
+}
+
+// toShippingCharges maps sync shipping charge values to create command shipping-charge values.
+func toShippingCharges(values []port.OrderSyncShippingCharge) []ordersapplication.ShippingChargeCommand {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]ordersapplication.ShippingChargeCommand, 0, len(values))
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodID)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		if methodID == "" && methodTitle == "" && value.Price == 0 {
+			continue
+		}
+		rows = append(rows, ordersapplication.ShippingChargeCommand{
+			MethodID:    methodID,
+			MethodTitle: methodTitle,
+			Price:       value.Price,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
 }
 
 // mapOrderStatus maps WooCommerce source status values to order-domain status values.

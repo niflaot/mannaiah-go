@@ -198,7 +198,14 @@ func (r *Repository) Update(ctx context.Context, contact *domain.Contact) error 
 			return wrapWriteError("update", updateTx.Error)
 		}
 		if updateTx.RowsAffected == 0 {
-			return port.ErrNotFound
+			var existingRows int64
+			existsTx := tx.Model(&contactRecord{}).Where("id = ?", record.ID).Count(&existingRows)
+			if existsTx.Error != nil {
+				return fmt.Errorf("check contact record existence: %w", existsTx.Error)
+			}
+			if existingRows == 0 {
+				return port.ErrNotFound
+			}
 		}
 		if err := replaceContactMetadata(tx, record.ID, contact.Metadata); err != nil {
 			return err

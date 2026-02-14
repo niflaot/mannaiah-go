@@ -64,7 +64,7 @@ func (m *ordersServiceMock) Create(ctx context.Context, command ordersapplicatio
 			SKU:           strings.TrimSpace(item.SKU),
 			AlternateName: strings.TrimSpace(item.AlternateName),
 			Quantity:      item.Quantity,
-			Metadata:      cloneMetadata(item.Metadata),
+			Value:         item.Value,
 		})
 	}
 	if command.ShippingAddress != nil {
@@ -74,6 +74,14 @@ func (m *ordersServiceMock) Create(ctx context.Context, command ordersapplicatio
 			Phone:    strings.TrimSpace(command.ShippingAddress.Phone),
 			CityCode: strings.TrimSpace(command.ShippingAddress.CityCode),
 		}
+	}
+	entity.ShippingCharges = make([]ordersdomain.ShippingCharge, 0, len(command.ShippingCharges))
+	for _, charge := range command.ShippingCharges {
+		entity.ShippingCharges = append(entity.ShippingCharges, ordersdomain.ShippingCharge{
+			MethodID:    strings.TrimSpace(charge.MethodID),
+			MethodTitle: strings.TrimSpace(charge.MethodTitle),
+			Price:       charge.Price,
+		})
 	}
 
 	m.createCommands = append(m.createCommands, command)

@@ -40,7 +40,12 @@ func TestUpsertByIdentifierCreate(t *testing.T) {
 				SKU:      "SKU-1",
 				Name:     "Blue Shirt",
 				Quantity: 2,
-				Metadata: map[string]string{"size": "L"},
+				Value:    25000,
+			},
+			{
+				SKU:      "",
+				Name:     "Cuota 1/3",
+				Quantity: 1,
 			},
 		},
 		Metadata: map[string]string{"integration.source": "woocommerce"},
@@ -68,8 +73,14 @@ func TestUpsertByIdentifierCreate(t *testing.T) {
 	if command.CreatedAt == nil || !command.CreatedAt.UTC().Equal(createdAt) {
 		t.Fatalf("createCommand.CreatedAt = %v, want %v", command.CreatedAt, createdAt)
 	}
-	if len(command.Items) != 1 || command.Items[0].AlternateName != "Blue Shirt" {
-		t.Fatalf("createCommand.Items = %+v, want alternateName mapping", command.Items)
+	if len(command.Items) != 2 {
+		t.Fatalf("len(createCommand.Items) = %d, want 2", len(command.Items))
+	}
+	if command.Items[0].SKU != "SKU-1" || command.Items[0].AlternateName != "Blue Shirt" {
+		t.Fatalf("createCommand.Items[0] = %+v, want sku and alternateName mapping", command.Items[0])
+	}
+	if command.Items[1].SKU != "" || command.Items[1].AlternateName != "Cuota 1/3" {
+		t.Fatalf("createCommand.Items[1] = %+v, want quota/non-sku item mapping", command.Items[1])
 	}
 	if command.ShippingAddress == nil || command.ShippingAddress.Address != "Ship Street" {
 		t.Fatalf("createCommand.ShippingAddress = %+v, want mapped shipping address", command.ShippingAddress)

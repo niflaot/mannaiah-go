@@ -31,8 +31,8 @@ type CreateItemCommand struct {
 	AlternateName string
 	// Quantity defines ordered quantity values.
 	Quantity int
-	// Metadata defines item metadata values.
-	Metadata map[string]string
+	// Value defines item monetary value values.
+	Value float64
 }
 
 // ShippingAddressCommand defines shipping-address command values.
@@ -45,6 +45,16 @@ type ShippingAddressCommand struct {
 	Phone string
 	// CityCode defines shipping city-code values.
 	CityCode string
+}
+
+// ShippingChargeCommand defines shipping-charge command values.
+type ShippingChargeCommand struct {
+	// MethodID defines shipping method identifier values.
+	MethodID string
+	// MethodTitle defines shipping method display title values.
+	MethodTitle string
+	// Price defines shipping price values.
+	Price float64
 }
 
 // CreateCommand defines order creation payload values.
@@ -65,6 +75,8 @@ type CreateCommand struct {
 	Description string
 	// ShippingAddress defines optional explicit shipping-address values.
 	ShippingAddress *ShippingAddressCommand
+	// ShippingCharges defines shipping charge values.
+	ShippingCharges []ShippingChargeCommand
 	// Metadata defines order metadata values.
 	Metadata map[string]string
 	// CreatedAt defines optional source creation timestamps.
@@ -194,6 +206,7 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		Items:         items,
 		CurrentStatus: initialStatus,
 		StatusHistory: []ordersdomain.StatusEntry{entry},
+		ShippingCharges: normalizeShippingCharges(command.ShippingCharges),
 		Metadata:      command.Metadata,
 	}
 	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {

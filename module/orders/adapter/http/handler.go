@@ -46,8 +46,8 @@ type createItemRequest struct {
 	AlternateName string `json:"alternateName"`
 	// Quantity defines ordered quantity values.
 	Quantity int `json:"quantity"`
-	// Metadata defines item metadata values.
-	Metadata map[string]string `json:"metadata"`
+	// Value defines item monetary value values.
+	Value float64 `json:"value"`
 }
 
 // shippingAddressRequest defines request payload for shipping-address values.
@@ -60,6 +60,16 @@ type shippingAddressRequest struct {
 	Phone string `json:"phone"`
 	// CityCode defines shipping city-code values.
 	CityCode string `json:"cityCode"`
+}
+
+// shippingChargeRequest defines request payload for shipping charge values.
+type shippingChargeRequest struct {
+	// MethodID defines shipping method identifier values.
+	MethodID string `json:"methodId"`
+	// MethodTitle defines shipping method display title values.
+	MethodTitle string `json:"methodTitle"`
+	// Price defines shipping price values.
+	Price float64 `json:"price"`
 }
 
 // createRequest defines request payload for order creation.
@@ -80,6 +90,8 @@ type createRequest struct {
 	Description string `json:"description"`
 	// ShippingAddress defines optional explicit shipping-address values.
 	ShippingAddress *shippingAddressRequest `json:"shippingAddress"`
+	// ShippingCharges defines shipping charge values.
+	ShippingCharges []shippingChargeRequest `json:"shippingCharges"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata"`
 }
@@ -160,6 +172,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		Author:        request.Author,
 		Description:   request.Description,
 		Items:         mapCreateItems(request.Items),
+		ShippingCharges: mapShippingCharges(request.ShippingCharges),
 		Metadata:      request.Metadata,
 	}
 	if request.ShippingAddress != nil {
@@ -239,7 +252,21 @@ func mapCreateItems(items []createItemRequest) []ordersapplication.CreateItemCom
 			SKU:           item.SKU,
 			AlternateName: item.AlternateName,
 			Quantity:      item.Quantity,
-			Metadata:      item.Metadata,
+			Value:         item.Value,
+		})
+	}
+
+	return result
+}
+
+// mapShippingCharges maps shipping-charge request payloads to application command values.
+func mapShippingCharges(values []shippingChargeRequest) []ordersapplication.ShippingChargeCommand {
+	result := make([]ordersapplication.ShippingChargeCommand, 0, len(values))
+	for _, value := range values {
+		result = append(result, ordersapplication.ShippingChargeCommand{
+			MethodID:    value.MethodID,
+			MethodTitle: value.MethodTitle,
+			Price:       value.Price,
 		})
 	}
 
@@ -326,7 +353,7 @@ func (h *Handler) mapError(err error) error {
 		errors.Is(err, ordersdomain.ErrRealmRequired) ||
 		errors.Is(err, ordersdomain.ErrContactIDRequired) ||
 		errors.Is(err, ordersdomain.ErrItemsRequired) ||
-		errors.Is(err, ordersdomain.ErrItemSKURequired) ||
+		errors.Is(err, ordersdomain.ErrItemIdentifierRequired) ||
 		errors.Is(err, ordersdomain.ErrItemQuantityInvalid) ||
 		errors.Is(err, ordersdomain.ErrStatusInvalid) ||
 		errors.Is(err, ordersdomain.ErrStatusAuthorRequired) {

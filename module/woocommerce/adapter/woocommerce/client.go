@@ -165,15 +165,16 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 			ShippingFirstName:      strings.TrimSpace(item.Shipping.FirstName),
 			ShippingLastName:       strings.TrimSpace(item.Shipping.LastName),
 			ShippingCompany:        strings.TrimSpace(item.Shipping.Company),
-			ShippingAddressLine1:   strings.TrimSpace(item.Shipping.Address1),
-			ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
-			ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
-			Items:                  mapSDKOrderItems(item.LineItems),
-			Comments:               mapSDKOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
-			CreatedAt:              parseWooOrderTime(item.DateCreated),
-			Metadata:               metadata,
-		})
-	}
+				ShippingAddressLine1:   strings.TrimSpace(item.Shipping.Address1),
+				ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
+				ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
+				Items:                  mapSDKOrderItems(item.LineItems),
+				ShippingCharges:        mapSDKShippingCharges(item.ShippingLines),
+				Comments:               mapSDKOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
+				CreatedAt:              parseWooOrderTime(item.DateCreated),
+				Metadata:               metadata,
+			})
+		}
 
 	if err := ctx.Err(); err != nil {
 		return nil, false, err

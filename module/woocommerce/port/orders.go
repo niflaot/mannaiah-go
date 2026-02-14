@@ -13,8 +13,8 @@ type OrderSyncItem struct {
 	Name string
 	// Quantity defines item quantity values.
 	Quantity int
-	// Metadata defines item metadata values.
-	Metadata map[string]string
+	// Value defines item monetary value values.
+	Value float64
 }
 
 // OrderSyncShippingAddress defines order shipping-address sync values.
@@ -27,6 +27,16 @@ type OrderSyncShippingAddress struct {
 	Phone string
 	// CityCode defines shipping city-code values.
 	CityCode string
+}
+
+// OrderSyncShippingCharge defines order shipping charge sync values.
+type OrderSyncShippingCharge struct {
+	// MethodID defines shipping method identifier values.
+	MethodID string
+	// MethodTitle defines shipping method title values.
+	MethodTitle string
+	// Price defines shipping price values.
+	Price float64
 }
 
 // OrderSyncComment defines order comment sync values.
@@ -53,6 +63,8 @@ type OrderSyncCommand struct {
 	Contact ContactSyncCommand
 	// ShippingAddress defines optional custom shipping-address values.
 	ShippingAddress *OrderSyncShippingAddress
+	// ShippingCharges defines order shipping charge values.
+	ShippingCharges []OrderSyncShippingCharge
 	// Items defines order item values.
 	Items []OrderSyncItem
 	// Metadata defines order metadata values.

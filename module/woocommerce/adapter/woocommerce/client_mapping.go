@@ -13,27 +13,16 @@ func mapSDKOrderItems(values []wcentity.LineItem) []port.WooOrderItem {
 	items := make([]port.WooOrderItem, 0, len(values))
 	for _, value := range values {
 		sku := strings.TrimSpace(value.SKU)
-		if sku == "" {
+		name := strings.TrimSpace(value.Name)
+		if sku == "" && name == "" {
 			continue
-		}
-
-		metadata := map[string]string{}
-		for _, meta := range value.MetaData {
-			key := strings.TrimSpace(meta.Key)
-			if key == "" {
-				continue
-			}
-			metadata[key] = strings.TrimSpace(meta.Value)
-		}
-		if len(metadata) == 0 {
-			metadata = nil
 		}
 
 		items = append(items, port.WooOrderItem{
 			SKU:      sku,
-			Name:     strings.TrimSpace(value.Name),
+			Name:     name,
 			Quantity: value.Quantity,
-			Metadata: metadata,
+			Value:    value.Total,
 		})
 	}
 
@@ -45,31 +34,58 @@ func mapRawOrderItems(values []rawLineItem) []port.WooOrderItem {
 	items := make([]port.WooOrderItem, 0, len(values))
 	for _, value := range values {
 		sku := strings.TrimSpace(value.SKU)
-		if sku == "" {
+		name := strings.TrimSpace(value.Name)
+		if sku == "" && name == "" {
 			continue
-		}
-
-		metadata := map[string]string{}
-		for _, meta := range value.MetaData {
-			key := strings.TrimSpace(meta.Key)
-			if key == "" {
-				continue
-			}
-			metadata[key] = normalizeMetadataValue(meta.Value)
-		}
-		if len(metadata) == 0 {
-			metadata = nil
 		}
 
 		items = append(items, port.WooOrderItem{
 			SKU:      sku,
-			Name:     strings.TrimSpace(value.Name),
+			Name:     name,
 			Quantity: value.Quantity,
-			Metadata: metadata,
+			Value:    value.Total,
 		})
 	}
 
 	return items
+}
+
+// mapSDKShippingCharges maps SDK shipping-line values to transport shipping charge values.
+func mapSDKShippingCharges(values []wcentity.ShippingLine) []port.WooOrderShippingCharge {
+	charges := make([]port.WooOrderShippingCharge, 0, len(values))
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodId)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		if methodID == "" && methodTitle == "" && value.Total == 0 {
+			continue
+		}
+		charges = append(charges, port.WooOrderShippingCharge{
+			MethodID:    methodID,
+			MethodTitle: methodTitle,
+			Price:       value.Total,
+		})
+	}
+
+	return charges
+}
+
+// mapRawShippingCharges maps raw shipping-line values to transport shipping charge values.
+func mapRawShippingCharges(values []rawShippingLine) []port.WooOrderShippingCharge {
+	charges := make([]port.WooOrderShippingCharge, 0, len(values))
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodID)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		if methodID == "" && methodTitle == "" && value.Total == 0 {
+			continue
+		}
+		charges = append(charges, port.WooOrderShippingCharge{
+			MethodID:    methodID,
+			MethodTitle: methodTitle,
+			Price:       value.Total,
+		})
+	}
+
+	return charges
 }
 
 // mapSDKOrderComments maps SDK customer-note values to transport order comment values.

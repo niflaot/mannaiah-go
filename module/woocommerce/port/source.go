@@ -13,8 +13,18 @@ type WooOrderItem struct {
 	Name string
 	// Quantity defines order item quantity values.
 	Quantity int
-	// Metadata defines item metadata values.
-	Metadata map[string]string
+	// Value defines item monetary value values.
+	Value float64
+}
+
+// WooOrderShippingCharge defines WooCommerce order shipping charge values.
+type WooOrderShippingCharge struct {
+	// MethodID defines shipping method identifier values.
+	MethodID string
+	// MethodTitle defines shipping method title values.
+	MethodTitle string
+	// Price defines shipping price values.
+	Price float64
 }
 
 // WooOrderComment defines WooCommerce order comment values.
@@ -75,6 +85,8 @@ type WooOrder struct {
 	ShippingCityCode string
 	// Items defines order item values.
 	Items []WooOrderItem
+	// ShippingCharges defines order shipping charge values.
+	ShippingCharges []WooOrderShippingCharge
 	// Comments defines order comment values.
 	Comments []WooOrderComment
 	// Metadata defines order metadata values keyed by metadata key.

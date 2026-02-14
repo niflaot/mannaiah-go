@@ -200,8 +200,8 @@ func TestCreateResolvesItemsAndShipping(t *testing.T) {
 	}
 }
 
-// TestCreateStoresCustomShippingOnlyWhenDifferent verifies custom-shipping comparison behavior.
-func TestCreateStoresCustomShippingOnlyWhenDifferent(t *testing.T) {
+// TestCreateStoresExplicitShippingSnapshot verifies explicit shipping snapshot behavior.
+func TestCreateStoresExplicitShippingSnapshot(t *testing.T) {
 	repository := repositoryMock{
 		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
@@ -240,8 +240,8 @@ func TestCreateStoresCustomShippingOnlyWhenDifferent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if order.HasCustomShippingAddress {
-		t.Fatalf("order.HasCustomShippingAddress = %v, want %v", order.HasCustomShippingAddress, false)
+	if !order.HasCustomShippingAddress {
+		t.Fatalf("order.HasCustomShippingAddress = %v, want %v", order.HasCustomShippingAddress, true)
 	}
 }
 

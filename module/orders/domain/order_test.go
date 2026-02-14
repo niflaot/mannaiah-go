@@ -12,7 +12,7 @@ func TestOrderNormalize(t *testing.T) {
 		Realm:      " woocommerce ",
 		ContactID:  " c-1 ",
 		Items: []Item{
-			{SKU: " SKU-1 ", AlternateName: " Name ", ProductID: " p-1 ", ResolutionSource: " sku ", Metadata: map[string]string{" sku.note ": " value "}},
+			{SKU: " SKU-1 ", AlternateName: " Name ", ProductID: " p-1 ", ResolutionSource: " sku ", Value: 12000},
 		},
 		CurrentStatus: " CREATED ",
 		StatusHistory: []StatusEntry{
@@ -26,6 +26,9 @@ func TestOrderNormalize(t *testing.T) {
 		},
 		Metadata: map[string]string{
 			" source ": " woo ",
+		},
+		ShippingCharges: []ShippingCharge{
+			{MethodID: " flat_rate ", MethodTitle: " Flat Rate ", Price: 10000},
 		},
 	}
 
@@ -46,8 +49,8 @@ func TestOrderNormalize(t *testing.T) {
 	if entity.Metadata["source"] != "woo" {
 		t.Fatalf("Metadata[source] = %q, want %q", entity.Metadata["source"], "woo")
 	}
-	if entity.Items[0].Metadata["sku.note"] != "value" {
-		t.Fatalf("Items[0].Metadata[sku.note] = %q, want %q", entity.Items[0].Metadata["sku.note"], "value")
+	if entity.ShippingCharges[0].MethodID != "flat_rate" {
+		t.Fatalf("ShippingCharges[0].MethodID = %q, want %q", entity.ShippingCharges[0].MethodID, "flat_rate")
 	}
 }
 
@@ -68,6 +71,21 @@ func TestOrderValidate(t *testing.T) {
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
+	validAlternateName := Order{
+		Identifier: "ORD-ALT",
+		Realm:      "woocommerce",
+		ContactID:  "c-1",
+		Items: []Item{
+			{AlternateName: "Quota Payment", Quantity: 1},
+		},
+		CurrentStatus: StatusCreated,
+		StatusHistory: []StatusEntry{
+			{Status: StatusCreated, Author: "system"},
+		},
+	}
+	if err := validAlternateName.Validate(); err != nil {
+		t.Fatalf("Validate() alternate-name error = %v", err)
+	}
 
 	cases := []struct {
 		name string
@@ -78,11 +96,11 @@ func TestOrderValidate(t *testing.T) {
 		{name: "realm", item: Order{Identifier: "i", ContactID: "c", Items: []Item{{SKU: "sku", Quantity: 1}}, CurrentStatus: StatusCreated}, err: ErrRealmRequired},
 		{name: "contact", item: Order{Identifier: "i", Realm: "x", Items: []Item{{SKU: "sku", Quantity: 1}}, CurrentStatus: StatusCreated}, err: ErrContactIDRequired},
 		{name: "items", item: Order{Identifier: "i", Realm: "x", ContactID: "c", CurrentStatus: StatusCreated}, err: ErrItemsRequired},
-		{name: "item sku", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{Quantity: 1}}, CurrentStatus: StatusCreated}, err: ErrItemSKURequired},
+		{name: "item identifier", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{Quantity: 1}}, CurrentStatus: StatusCreated}, err: ErrItemIdentifierRequired},
 		{name: "item qty", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 0}}, CurrentStatus: StatusCreated}, err: ErrItemQuantityInvalid},
 		{name: "status", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: "bad"}, err: ErrStatusInvalid},
 		{name: "status author", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, StatusHistory: []StatusEntry{{Status: StatusCreated}}}, err: ErrStatusAuthorRequired},
-		{name: "metadata invalid", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1, Metadata: map[string]string{"k": string(make([]byte, 2050))}}}, CurrentStatus: StatusCreated}, err: ErrInvalidMetadata},
+		{name: "metadata invalid", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, Metadata: map[string]string{"k": string(make([]byte, 2050))}}, err: ErrInvalidMetadata},
 	}
 
 	for _, testCase := range cases {

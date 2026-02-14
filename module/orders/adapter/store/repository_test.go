@@ -32,13 +32,11 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 			{
 				SKU:              "SKU-1",
 				Quantity:         2,
+				Value:            25000,
 				ProductID:        "product-1",
 				ResolutionSource: ordersdomain.ItemResolutionSourceSKU,
-				Metadata: map[string]string{
-					"color": "red",
-				},
 			},
-			{SKU: "SKU-2", AlternateName: "Fallback", Quantity: 1, ResolutionSource: ordersdomain.ItemResolutionSourceAlternateName},
+			{SKU: "SKU-2", AlternateName: "Fallback", Quantity: 1, Value: 10000, ResolutionSource: ordersdomain.ItemResolutionSourceAlternateName},
 		},
 		CurrentStatus: ordersdomain.StatusCreated,
 		StatusHistory: []ordersdomain.StatusEntry{
@@ -50,6 +48,9 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 			Address2: "Apt 2",
 			Phone:    "3000000",
 			CityCode: "11001",
+		},
+		ShippingCharges: []ordersdomain.ShippingCharge{
+			{MethodID: "flat_rate", MethodTitle: "Flat Rate", Price: 15000},
 		},
 		Metadata: map[string]string{
 			"integration.source": "woocommerce",
@@ -81,8 +82,11 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 	if stored.Metadata["integration.source"] != "woocommerce" {
 		t.Fatalf("stored.Metadata[integration.source] = %q, want %q", stored.Metadata["integration.source"], "woocommerce")
 	}
-	if stored.Items[0].Metadata["color"] != "red" {
-		t.Fatalf("stored.Items[0].Metadata[color] = %q, want %q", stored.Items[0].Metadata["color"], "red")
+	if stored.Items[0].Value != 25000 {
+		t.Fatalf("stored.Items[0].Value = %v, want %v", stored.Items[0].Value, 25000.0)
+	}
+	if len(stored.ShippingCharges) != 1 || stored.ShippingCharges[0].MethodID != "flat_rate" {
+		t.Fatalf("stored.ShippingCharges = %+v, want one flat_rate row", stored.ShippingCharges)
 	}
 
 	nextStatus := ordersdomain.StatusEntry{
@@ -284,7 +288,7 @@ func newOrderForTest(identifier string, realm string, contactID string) *ordersd
 		Identifier:    identifier,
 		Realm:         realm,
 		ContactID:     contactID,
-		Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1, ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved}},
+		Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1, Value: 10000, ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved}},
 		CurrentStatus: ordersdomain.StatusCreated,
 		StatusHistory: []ordersdomain.StatusEntry{
 			{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()},

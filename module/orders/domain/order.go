@@ -15,8 +15,8 @@ var (
 	ErrContactIDRequired = errors.New("order contact id is required")
 	// ErrItemsRequired is returned when order items are empty.
 	ErrItemsRequired = errors.New("order items are required")
-	// ErrItemSKURequired is returned when order item SKUs are empty.
-	ErrItemSKURequired = errors.New("order item sku is required")
+	// ErrItemIdentifierRequired is returned when order items do not contain SKU or alternate-name values.
+	ErrItemIdentifierRequired = errors.New("order item sku or alternateName is required")
 	// ErrItemQuantityInvalid is returned when order item quantities are invalid.
 	ErrItemQuantityInvalid = errors.New("order item quantity must be greater than zero")
 	// ErrStatusInvalid is returned when order statuses are not supported.
@@ -63,12 +63,12 @@ type Item struct {
 	AlternateName string `json:"alternateName"`
 	// Quantity defines ordered-quantity values.
 	Quantity int `json:"quantity"`
+	// Value defines item monetary value values.
+	Value float64 `json:"value"`
 	// ProductID defines resolved product identifiers.
 	ProductID string `json:"productId,omitempty"`
 	// ResolutionSource defines item resolution origin values.
 	ResolutionSource ItemResolutionSource `json:"resolutionSource"`
-	// Metadata defines item metadata values.
-	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // StatusEntry defines order-status history values.
@@ -95,6 +95,16 @@ type ShippingAddress struct {
 	CityCode string `json:"cityCode"`
 }
 
+// ShippingCharge defines order shipping-charge values.
+type ShippingCharge struct {
+	// MethodID defines shipping method identifier values.
+	MethodID string `json:"methodId"`
+	// MethodTitle defines shipping method display title values.
+	MethodTitle string `json:"methodTitle"`
+	// Price defines shipping price values.
+	Price float64 `json:"price"`
+}
+
 // Order defines normalized order aggregate values.
 type Order struct {
 	// ID defines unique order identifiers.
@@ -115,6 +125,8 @@ type Order struct {
 	ShippingAddress ShippingAddress `json:"shippingAddress"`
 	// HasCustomShippingAddress reports whether shipping was explicitly provided for this order.
 	HasCustomShippingAddress bool `json:"hasCustomShippingAddress"`
+	// ShippingCharges defines shipping charge values.
+	ShippingCharges []ShippingCharge `json:"shippingCharges,omitempty"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt defines creation timestamps.
@@ -141,7 +153,16 @@ func (o *Order) Normalize() {
 		o.Items[index].AlternateName = strings.TrimSpace(o.Items[index].AlternateName)
 		o.Items[index].ProductID = strings.TrimSpace(o.Items[index].ProductID)
 		o.Items[index].ResolutionSource = ItemResolutionSource(strings.TrimSpace(string(o.Items[index].ResolutionSource)))
-		o.Items[index].Metadata = normalizeMetadata(o.Items[index].Metadata)
+		if o.Items[index].Value < 0 {
+			o.Items[index].Value = 0
+		}
+	}
+	for index := range o.ShippingCharges {
+		o.ShippingCharges[index].MethodID = strings.TrimSpace(o.ShippingCharges[index].MethodID)
+		o.ShippingCharges[index].MethodTitle = strings.TrimSpace(o.ShippingCharges[index].MethodTitle)
+		if o.ShippingCharges[index].Price < 0 {
+			o.ShippingCharges[index].Price = 0
+		}
 	}
 	for index := range o.StatusHistory {
 		o.StatusHistory[index].Status = Status(strings.TrimSpace(string(o.StatusHistory[index].Status)))
@@ -166,14 +187,11 @@ func (o Order) Validate() error {
 		return ErrItemsRequired
 	}
 	for _, item := range o.Items {
-		if strings.TrimSpace(item.SKU) == "" {
-			return ErrItemSKURequired
+		if strings.TrimSpace(item.SKU) == "" && strings.TrimSpace(item.AlternateName) == "" {
+			return ErrItemIdentifierRequired
 		}
 		if item.Quantity <= 0 {
 			return ErrItemQuantityInvalid
-		}
-		if !isValidMetadata(item.Metadata) {
-			return ErrInvalidMetadata
 		}
 	}
 	if err := validateStatus(o.CurrentStatus); err != nil {

@@ -81,7 +81,7 @@ func TestNewHandlerRejectsNilService(t *testing.T) {
 func TestOrderEndpoints(t *testing.T) {
 	handler := newHandlerForTest(t, serviceMock{
 		createFn: func(ctx context.Context, command ordersapplication.CreateCommand) (*ordersdomain.Order, error) {
-			if command.Items[0].SKU != "SKU-1" || command.ShippingAddress == nil || command.Metadata["source"] != "woo" || command.Items[0].Metadata["color"] != "blue" {
+			if command.Items[0].SKU != "SKU-1" || command.ShippingAddress == nil || command.Metadata["source"] != "woo" || command.Items[0].Value != 12000 || len(command.ShippingCharges) != 1 || command.ShippingCharges[0].MethodID != "flat_rate" {
 				t.Fatalf("unexpected create command: %+v", command)
 			}
 			return &ordersdomain.Order{ID: "o-1", Identifier: command.Identifier, Realm: command.Realm}, nil
@@ -110,7 +110,7 @@ func TestOrderEndpoints(t *testing.T) {
 	})
 	server := newHTTPServerForHandler(t, handler)
 
-	createReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/orders", bytes.NewBufferString(`{"identifier":"wo-1","realm":"woocommerce","contactId":"c-1","metadata":{"source":"woo"},"items":[{"sku":"SKU-1","quantity":1,"metadata":{"color":"blue"}}],"shippingAddress":{"address":"A","cityCode":"11001"}}`))
+	createReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/orders", bytes.NewBufferString(`{"identifier":"wo-1","realm":"woocommerce","contactId":"c-1","metadata":{"source":"woo"},"items":[{"sku":"SKU-1","quantity":1,"value":12000}],"shippingAddress":{"address":"A","cityCode":"11001"},"shippingCharges":[{"methodId":"flat_rate","methodTitle":"Flat Rate","price":9000}]}`))
 	createReq.Header.Set("Content-Type", "application/json")
 	createResp := runRequest(t, server, createReq)
 	if createResp.StatusCode != stdhttp.StatusCreated {
@@ -183,7 +183,7 @@ func TestMapErrorVariants(t *testing.T) {
 		ordersdomain.ErrRealmRequired,
 		ordersdomain.ErrContactIDRequired,
 		ordersdomain.ErrItemsRequired,
-		ordersdomain.ErrItemSKURequired,
+		ordersdomain.ErrItemIdentifierRequired,
 		ordersdomain.ErrItemQuantityInvalid,
 		ordersdomain.ErrStatusInvalid,
 		ordersdomain.ErrStatusAuthorRequired,

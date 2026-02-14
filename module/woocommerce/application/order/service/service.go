@@ -177,7 +177,7 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 			break
 		}
 
-		pendingCommands = collectCommandsFromOrders(orders, commandIndexByIdentifier, pendingCommands, summary)
+		pendingCommands = collectCommandsFromOrders(orders, commandIndexByIdentifier, pendingCommands, summary, s.logger)
 
 		if !hasNext {
 			break

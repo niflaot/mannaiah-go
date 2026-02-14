@@ -17,6 +17,7 @@ func OpenAPISpec() *openapi3.T {
 		"OrderStatusUpdate":  &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
 		"OrderItem":          &openapi3.SchemaRef{Value: orderItemSchema()},
 		"OrderShipping":      &openapi3.SchemaRef{Value: orderShippingSchema()},
+		"OrderShippingCharge": &openapi3.SchemaRef{Value: orderShippingChargeSchema()},
 		"OrderStatusEntry":   &openapi3.SchemaRef{Value: orderStatusEntrySchema()},
 		"Order":              &openapi3.SchemaRef{Value: orderSchema()},
 		"OrderListResponse":  &openapi3.SchemaRef{Value: orderListResponseSchema()},
@@ -202,6 +203,7 @@ func orderCreateSchema() *openapi3.Schema {
 		WithProperty("author", openapi3.NewStringSchema()).
 		WithProperty("description", openapi3.NewStringSchema()).
 		WithProperty("shippingAddress", orderShippingSchema()).
+		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
 		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"identifier", "realm", "contactId", "items"})
 }
@@ -227,6 +229,7 @@ func orderSchema() *openapi3.Schema {
 		WithProperty("statusHistory", openapi3.NewArraySchema().WithItems(orderStatusEntrySchema())).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("hasCustomShippingAddress", openapi3.NewBoolSchema()).
+		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
 		WithProperty("metadata", metadataSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
@@ -238,10 +241,10 @@ func orderItemSchema() *openapi3.Schema {
 		WithProperty("sku", openapi3.NewStringSchema()).
 		WithProperty("alternateName", openapi3.NewStringSchema()).
 		WithProperty("quantity", openapi3.NewIntegerSchema()).
+		WithProperty("value", openapi3.NewFloat64Schema()).
 		WithProperty("productId", openapi3.NewStringSchema()).
 		WithProperty("resolutionSource", openapi3.NewStringSchema()).
-		WithProperty("metadata", metadataSchema()).
-		WithRequired([]string{"sku", "quantity"})
+		WithRequired([]string{"quantity"})
 }
 
 // orderStatusEntrySchema returns schema for order status history payloads.
@@ -261,6 +264,14 @@ func orderShippingSchema() *openapi3.Schema {
 		WithProperty("address2", openapi3.NewStringSchema()).
 		WithProperty("phone", openapi3.NewStringSchema()).
 		WithProperty("cityCode", openapi3.NewStringSchema())
+}
+
+// orderShippingChargeSchema returns schema for shipping-charge payloads.
+func orderShippingChargeSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("methodId", openapi3.NewStringSchema()).
+		WithProperty("methodTitle", openapi3.NewStringSchema()).
+		WithProperty("price", openapi3.NewFloat64Schema())
 }
 
 // orderStatusSchema returns enum schema for supported order statuses.

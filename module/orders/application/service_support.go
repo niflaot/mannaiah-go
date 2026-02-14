@@ -75,8 +75,8 @@ func (s *OrderService) resolveItem(ctx context.Context, command CreateItemComman
 		SKU:              strings.TrimSpace(command.SKU),
 		AlternateName:    strings.TrimSpace(command.AlternateName),
 		Quantity:         command.Quantity,
+		Value:            command.Value,
 		ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved,
-		Metadata:         command.Metadata,
 	}
 	if s.productResolver == nil {
 		return item, nil
@@ -118,7 +118,7 @@ func applyShipping(order *ordersdomain.Order, customer *ordersport.Customer, shi
 
 	custom := normalizeShippingCommand(*shipping)
 	order.ShippingAddress = custom
-	order.HasCustomShippingAddress = !shippingEqual(custom, billing)
+	order.HasCustomShippingAddress = true
 }
 
 // enrichShippingWithBilling applies billing fallbacks when custom shipping rows are absent.
@@ -165,6 +165,36 @@ func shippingEqual(left ordersdomain.ShippingAddress, right ordersdomain.Shippin
 		strings.TrimSpace(left.Address2) == strings.TrimSpace(right.Address2) &&
 		strings.TrimSpace(left.Phone) == strings.TrimSpace(right.Phone) &&
 		strings.TrimSpace(left.CityCode) == strings.TrimSpace(right.CityCode)
+}
+
+// normalizeShippingCharges normalizes shipping charge command values.
+func normalizeShippingCharges(values []ShippingChargeCommand) []ordersdomain.ShippingCharge {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]ordersdomain.ShippingCharge, 0, len(values))
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodID)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		if methodID == "" && methodTitle == "" && value.Price == 0 {
+			continue
+		}
+		price := value.Price
+		if price < 0 {
+			price = 0
+		}
+		rows = append(rows, ordersdomain.ShippingCharge{
+			MethodID:    methodID,
+			MethodTitle: methodTitle,
+			Price:       price,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
 }
 
 // validateStatusEntry validates status-entry values.

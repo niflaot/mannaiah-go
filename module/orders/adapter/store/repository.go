@@ -46,8 +46,8 @@ func (r *Repository) EnsureSchema(ctx context.Context) error {
 		&orderItemRecord{},
 		&orderStatusRecord{},
 		&orderShippingAddressRecord{},
+		&orderShippingChargeRecord{},
 		&orderMetadataRecord{},
-		&orderItemMetadataRecord{},
 	); err != nil {
 		return fmt.Errorf("migrate order schema: %w", err)
 	}
@@ -73,6 +73,7 @@ func (r *Repository) Create(ctx context.Context, order *ordersdomain.Order) erro
 	}
 	itemRows := toOrderItemRecords(record.ID, entity.Items)
 	statusRows := toOrderStatusRecords(record.ID, entity.StatusHistory)
+	shippingChargeRows := toShippingChargeRecords(record.ID, entity.ShippingCharges)
 	orderMetadataRows := toOrderMetadataRecords(record.ID, entity.Metadata)
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -94,10 +95,9 @@ func (r *Repository) Create(ctx context.Context, order *ordersdomain.Order) erro
 				return fmt.Errorf("create order status records: %w", err)
 			}
 		}
-		itemMetadataRows := toOrderItemMetadataRecords(itemRows, entity.Items)
-		if len(itemMetadataRows) > 0 {
-			if err := tx.Create(&itemMetadataRows).Error; err != nil {
-				return fmt.Errorf("create order item metadata records: %w", err)
+		if len(shippingChargeRows) > 0 {
+			if err := tx.Create(&shippingChargeRows).Error; err != nil {
+				return fmt.Errorf("create order shipping charge records: %w", err)
 			}
 		}
 		if entity.HasCustomShippingAddress {
@@ -134,7 +134,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*ordersdomain.Orde
 		return nil, fmt.Errorf("get order record: %w", err)
 	}
 
-	itemMap, statusMap, shippingMap, orderMetadataMap, itemMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, []string{trimmedID})
+	itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, []string{trimmedID})
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*ordersdomain.Orde
 		copyValue := value
 		shipping = &copyValue
 	}
-	entity := toOrderEntity(row, itemMap[trimmedID], statusMap[trimmedID], shipping, orderMetadataMap[trimmedID], itemMetadataMap)
+	entity := toOrderEntity(row, itemMap[trimmedID], statusMap[trimmedID], shipping, shippingChargeMap[trimmedID], orderMetadataMap[trimmedID])
 
 	return &entity, nil
 }
@@ -167,12 +167,12 @@ func (r *Repository) List(ctx context.Context, query ordersport.ListQuery) ([]or
 	}
 
 	orderIDs := collectOrderIDs(rows)
-	itemMap, statusMap, shippingMap, orderMetadataMap, itemMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, orderIDs)
+	itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, orderIDs)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return mapRowsToEntities(rows, itemMap, statusMap, shippingMap, orderMetadataMap, itemMetadataMap), total, nil
+	return mapRowsToEntities(rows, itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap), total, nil
 }
 
 // AppendStatus appends status rows and updates order current status values.
