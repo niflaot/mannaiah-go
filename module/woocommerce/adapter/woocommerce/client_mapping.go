@@ -50,6 +50,44 @@ func mapRawOrderItems(values []rawLineItem) []port.WooOrderItem {
 	return items
 }
 
+// mapSDKFeeItems maps SDK fee-line values to transport order item values.
+func mapSDKFeeItems(values []wcentity.FeeLine) []port.WooOrderItem {
+	items := make([]port.WooOrderItem, 0, len(values))
+	for _, value := range values {
+		name := strings.TrimSpace(value.Name)
+		if name == "" {
+			continue
+		}
+
+		items = append(items, port.WooOrderItem{
+			Name:     name,
+			Quantity: 1,
+			Value:    float64(value.Total),
+		})
+	}
+
+	return items
+}
+
+// mapRawFeeItems maps raw fee-line values to transport order item values.
+func mapRawFeeItems(values []rawFeeLine) []port.WooOrderItem {
+	items := make([]port.WooOrderItem, 0, len(values))
+	for _, value := range values {
+		name := strings.TrimSpace(value.Name)
+		if name == "" {
+			continue
+		}
+
+		items = append(items, port.WooOrderItem{
+			Name:     name,
+			Quantity: 1,
+			Value:    float64(value.Total),
+		})
+	}
+
+	return items
+}
+
 // mapSDKShippingCharges maps SDK shipping-line values to transport shipping charge values.
 func mapSDKShippingCharges(values []wcentity.ShippingLine) []port.WooOrderShippingCharge {
 	charges := make([]port.WooOrderShippingCharge, 0, len(values))
@@ -105,7 +143,7 @@ func mapSDKOrderComments(customerNote string, dateModified string, dateCreated s
 
 	return []port.WooOrderComment{
 		{
-			Author:      "system",
+			Author:      "woocommerce_sync",
 			Description: description,
 			OccurredAt:  occurredAt,
 		},

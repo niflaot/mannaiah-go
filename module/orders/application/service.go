@@ -91,6 +91,10 @@ type UpdateStatusCommand struct {
 	Author string
 	// Description defines status description values.
 	Description string
+	// NoteOwner defines optional note owner values associated with this status transition.
+	NoteOwner string
+	// Note defines optional note text values associated with this status transition.
+	Note string
 	// OccurredAt defines optional status timestamp values.
 	OccurredAt *time.Time
 }
@@ -200,14 +204,14 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		OccurredAt:  time.Now().UTC(),
 	}
 	order := &ordersdomain.Order{
-		Identifier:    strings.TrimSpace(command.Identifier),
-		Realm:         strings.TrimSpace(command.Realm),
-		ContactID:     strings.TrimSpace(command.ContactID),
-		Items:         items,
-		CurrentStatus: initialStatus,
-		StatusHistory: []ordersdomain.StatusEntry{entry},
+		Identifier:      strings.TrimSpace(command.Identifier),
+		Realm:           strings.TrimSpace(command.Realm),
+		ContactID:       strings.TrimSpace(command.ContactID),
+		Items:           items,
+		CurrentStatus:   initialStatus,
+		StatusHistory:   []ordersdomain.StatusEntry{entry},
 		ShippingCharges: normalizeShippingCharges(command.ShippingCharges),
-		Metadata:      command.Metadata,
+		Metadata:        command.Metadata,
 	}
 	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {
 		order.CreatedAt = command.CreatedAt.UTC()
@@ -294,6 +298,8 @@ func (s *OrderService) UpdateStatus(ctx context.Context, id string, command Upda
 		Status:      command.Status,
 		Author:      strings.TrimSpace(command.Author),
 		Description: strings.TrimSpace(command.Description),
+		NoteOwner:   strings.TrimSpace(command.NoteOwner),
+		Note:        strings.TrimSpace(command.Note),
 		OccurredAt:  time.Now().UTC(),
 	}
 	if command.OccurredAt != nil && !command.OccurredAt.IsZero() {

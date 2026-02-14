@@ -13,16 +13,16 @@ const (
 func OpenAPISpec() *openapi3.T {
 	components := openapi3.NewComponents()
 	components.Schemas = openapi3.Schemas{
-		"OrderCreate":        &openapi3.SchemaRef{Value: orderCreateSchema()},
-		"OrderStatusUpdate":  &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
-		"OrderItem":          &openapi3.SchemaRef{Value: orderItemSchema()},
-		"OrderShipping":      &openapi3.SchemaRef{Value: orderShippingSchema()},
+		"OrderCreate":         &openapi3.SchemaRef{Value: orderCreateSchema()},
+		"OrderStatusUpdate":   &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
+		"OrderItem":           &openapi3.SchemaRef{Value: orderItemSchema()},
+		"OrderShipping":       &openapi3.SchemaRef{Value: orderShippingSchema()},
 		"OrderShippingCharge": &openapi3.SchemaRef{Value: orderShippingChargeSchema()},
-		"OrderStatusEntry":   &openapi3.SchemaRef{Value: orderStatusEntrySchema()},
-		"Order":              &openapi3.SchemaRef{Value: orderSchema()},
-		"OrderListResponse":  &openapi3.SchemaRef{Value: orderListResponseSchema()},
-		"OrderListMeta":      &openapi3.SchemaRef{Value: orderListMetaSchema()},
-		"OrderStatusEnumRef": &openapi3.SchemaRef{Value: orderStatusSchema()},
+		"OrderStatusEntry":    &openapi3.SchemaRef{Value: orderStatusEntrySchema()},
+		"Order":               &openapi3.SchemaRef{Value: orderSchema()},
+		"OrderListResponse":   &openapi3.SchemaRef{Value: orderListResponseSchema()},
+		"OrderListMeta":       &openapi3.SchemaRef{Value: orderListMetaSchema()},
+		"OrderStatusEnumRef":  &openapi3.SchemaRef{Value: orderStatusSchema()},
 	}
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
@@ -214,6 +214,8 @@ func orderStatusUpdateSchema() *openapi3.Schema {
 		WithProperty("status", orderStatusSchema()).
 		WithProperty("author", openapi3.NewStringSchema()).
 		WithProperty("description", openapi3.NewStringSchema()).
+		WithProperty("noteOwner", openapi3.NewStringSchema()).
+		WithProperty("note", openapi3.NewStringSchema()).
 		WithRequired([]string{"status", "author"})
 }
 
@@ -253,6 +255,8 @@ func orderStatusEntrySchema() *openapi3.Schema {
 		WithProperty("status", orderStatusSchema()).
 		WithProperty("author", openapi3.NewStringSchema()).
 		WithProperty("description", openapi3.NewStringSchema()).
+		WithProperty("noteOwner", openapi3.NewStringSchema()).
+		WithProperty("note", openapi3.NewStringSchema()).
 		WithProperty("occurredAt", openapi3.NewDateTimeSchema()).
 		WithRequired([]string{"status", "author", "occurredAt"})
 }

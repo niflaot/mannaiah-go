@@ -28,13 +28,19 @@ func (u *Upserter) appendCommentStatuses(
 	hasChanges := false
 
 	for _, comment := range sorted {
-		author := strings.TrimSpace(comment.Author)
-		if author == "" {
-			author = syncStatusAuthor
+		noteOwner := strings.TrimSpace(comment.Owner)
+		if noteOwner == "" {
+			noteOwner = strings.TrimSpace(comment.Author)
+		}
+		if noteOwner == "" {
+			noteOwner = syncNoteOwner
 		}
 
-		description := strings.TrimSpace(comment.Description)
-		if description == "" {
+		note := strings.TrimSpace(comment.Note)
+		if note == "" {
+			note = strings.TrimSpace(comment.Description)
+		}
+		if note == "" {
 			continue
 		}
 
@@ -42,14 +48,16 @@ func (u *Upserter) appendCommentStatuses(
 		if occurredAt.IsZero() {
 			occurredAt = time.Now().UTC()
 		}
-		if hasStatusEntry(current.StatusHistory, status, author, description, occurredAt) {
+		if hasStatusEntry(current.StatusHistory, status, syncStatusAuthor, syncStatusDescription, noteOwner, note, occurredAt) {
 			continue
 		}
 
 		next, updateErr := u.orderService.UpdateStatus(ctx, current.ID, ordersapplication.UpdateStatusCommand{
 			Status:      status,
-			Author:      author,
-			Description: description,
+			Author:      syncStatusAuthor,
+			Description: syncStatusDescription,
+			NoteOwner:   noteOwner,
+			Note:        note,
 			OccurredAt:  &occurredAt,
 		})
 		if updateErr != nil {
@@ -87,6 +95,8 @@ func hasStatusEntry(
 	status ordersdomain.Status,
 	author string,
 	description string,
+	noteOwner string,
+	note string,
 	occurredAt time.Time,
 ) bool {
 	for _, entry := range history {
@@ -97,6 +107,12 @@ func hasStatusEntry(
 			continue
 		}
 		if strings.TrimSpace(entry.Description) != strings.TrimSpace(description) {
+			continue
+		}
+		if strings.TrimSpace(entry.NoteOwner) != strings.TrimSpace(noteOwner) {
+			continue
+		}
+		if strings.TrimSpace(entry.Note) != strings.TrimSpace(note) {
 			continue
 		}
 		if entry.OccurredAt.UTC().Equal(occurredAt.UTC()) {

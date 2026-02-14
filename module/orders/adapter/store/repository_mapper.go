@@ -75,6 +75,8 @@ func toOrderStatusRecords(orderID string, statuses []ordersdomain.StatusEntry) [
 			Status:      strings.TrimSpace(string(entry.Status)),
 			Author:      strings.TrimSpace(entry.Author),
 			Description: strings.TrimSpace(entry.Description),
+			NoteOwner:   strings.TrimSpace(entry.NoteOwner),
+			Note:        strings.TrimSpace(entry.Note),
 			OccurredAt:  entry.OccurredAt.UTC(),
 		})
 	}
@@ -87,11 +89,11 @@ func toShippingChargeRecords(orderID string, values []ordersdomain.ShippingCharg
 	rows := make([]orderShippingChargeRecord, 0, len(values))
 	for index, value := range values {
 		rows = append(rows, orderShippingChargeRecord{
-			OrderID:      strings.TrimSpace(orderID),
-			Position:     index,
-			MethodID:     strings.TrimSpace(value.MethodID),
-			MethodTitle:  strings.TrimSpace(value.MethodTitle),
-			Price:        value.Price,
+			OrderID:     strings.TrimSpace(orderID),
+			Position:    index,
+			MethodID:    strings.TrimSpace(value.MethodID),
+			MethodTitle: strings.TrimSpace(value.MethodTitle),
+			Price:       value.Price,
 		})
 	}
 
@@ -155,6 +157,8 @@ func resolveCurrentStatus(record orderRecord, statuses []orderStatusRecord) orde
 			Status:      ordersdomain.Status(strings.TrimSpace(last.Status)),
 			Author:      strings.TrimSpace(last.Author),
 			Description: strings.TrimSpace(last.Description),
+			NoteOwner:   strings.TrimSpace(last.NoteOwner),
+			Note:        strings.TrimSpace(last.Note),
 			OccurredAt:  last.OccurredAt.UTC(),
 		}
 	}
@@ -246,6 +250,8 @@ func toStatusEntries(rows []orderStatusRecord) []ordersdomain.StatusEntry {
 			Status:      ordersdomain.Status(strings.TrimSpace(row.Status)),
 			Author:      strings.TrimSpace(row.Author),
 			Description: strings.TrimSpace(row.Description),
+			NoteOwner:   strings.TrimSpace(row.NoteOwner),
+			Note:        strings.TrimSpace(row.Note),
 			OccurredAt:  row.OccurredAt,
 		})
 	}

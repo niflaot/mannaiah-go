@@ -148,6 +148,8 @@ func (m *ordersServiceMock) UpdateStatus(ctx context.Context, id string, command
 		Status:      command.Status,
 		Author:      strings.TrimSpace(command.Author),
 		Description: strings.TrimSpace(command.Description),
+		NoteOwner:   strings.TrimSpace(command.NoteOwner),
+		Note:        strings.TrimSpace(command.Note),
 		OccurredAt:  occurredAt,
 	})
 

@@ -67,6 +67,12 @@ func TestValidateAndListOrders(t *testing.T) {
 						},
 					},
 				},
+				"fee_lines": []map[string]any{
+					{
+						"name":  "Cuotas",
+						"total": "137000",
+					},
+				},
 				"customer_note": "packed by warehouse",
 				"meta_data": []map[string]any{
 					{"key": "_billing_document", "value": "998877"},
@@ -110,8 +116,8 @@ func TestValidateAndListOrders(t *testing.T) {
 	if orders[0].ShippingAddressLine1 != "Street 2" {
 		t.Fatalf("orders[0].ShippingAddressLine1 = %q, want %q", orders[0].ShippingAddressLine1, "Street 2")
 	}
-	if len(orders[0].Items) != 1 || orders[0].Items[0].SKU != "SKU-1" {
-		t.Fatalf("orders[0].Items = %+v, want one sku row", orders[0].Items)
+	if len(orders[0].Items) != 2 || orders[0].Items[0].SKU != "SKU-1" || orders[0].Items[1].Name != "Cuotas" {
+		t.Fatalf("orders[0].Items = %+v, want sku row + fee row", orders[0].Items)
 	}
 	if len(orders[0].Comments) != 1 || orders[0].Comments[0].Description != "packed by warehouse" {
 		t.Fatalf("orders[0].Comments = %+v, want customer note comment", orders[0].Comments)

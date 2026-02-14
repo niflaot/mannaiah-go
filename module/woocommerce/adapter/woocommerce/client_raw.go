@@ -45,6 +45,14 @@ type rawShippingLine struct {
 	Total flexibleFloat64 `json:"total"`
 }
 
+// rawFeeLine defines tolerant raw order fee-line payload values.
+type rawFeeLine struct {
+	// Name defines fee-line display-name values.
+	Name string `json:"name"`
+	// Total defines fee-line total values.
+	Total flexibleFloat64 `json:"total"`
+}
+
 // listOrdersRaw performs tolerant order decoding for metadata values unsupported by SDK structs.
 func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
 	query := url.Values{}
@@ -107,6 +115,7 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 		CustomerNote  string            `json:"customer_note"`
 		LineItems     []rawLineItem     `json:"line_items"`
 		ShippingLines []rawShippingLine `json:"shipping_lines"`
+		FeeLines      []rawFeeLine      `json:"fee_lines"`
 		MetaData      []rawMeta         `json:"meta_data"`
 	}
 
@@ -148,7 +157,7 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 			ShippingAddressLine1:   strings.TrimSpace(item.Shipping.Address1),
 			ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
 			ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
-			Items:                  mapRawOrderItems(item.LineItems),
+			Items:                  append(mapRawOrderItems(item.LineItems), mapRawFeeItems(item.FeeLines)...),
 			ShippingCharges:        mapRawShippingCharges(item.ShippingLines),
 			Comments:               mapRawOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
 			CreatedAt:              parseWooOrderTime(item.DateCreated),

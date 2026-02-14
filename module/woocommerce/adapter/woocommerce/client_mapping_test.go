@@ -38,3 +38,32 @@ func TestMapRawOrderItemsIncludesQuotaRows(t *testing.T) {
 	}
 }
 
+// TestMapSDKFeeItemsIncludesQuotaRows verifies SDK fee-line mapping behavior for non-product order lines.
+func TestMapSDKFeeItemsIncludesQuotaRows(t *testing.T) {
+	items := mapSDKFeeItems([]wcentity.FeeLine{
+		{Name: "Cuotas", Total: 137000},
+		{Name: " ", Total: 1000},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].Name != "Cuotas" || items[0].Quantity != 1 || items[0].Value != 137000 {
+		t.Fatalf("items[0] = %+v, want mapped fee line", items[0])
+	}
+}
+
+// TestMapRawFeeItemsIncludesQuotaRows verifies raw fee-line mapping behavior for non-product order lines.
+func TestMapRawFeeItemsIncludesQuotaRows(t *testing.T) {
+	items := mapRawFeeItems([]rawFeeLine{
+		{Name: "Cuotas", Total: 137000},
+		{Name: " ", Total: 1000},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].Name != "Cuotas" || items[0].Quantity != 1 || items[0].Value != 137000 {
+		t.Fatalf("items[0] = %+v, want mapped fee line", items[0])
+	}
+}

@@ -88,8 +88,11 @@ func TestMapOrderCommentsDefaultAuthor(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("len(comments) = %d, want 1", len(comments))
 	}
-	if comments[0].Author != "system" {
-		t.Fatalf("comments[0].Author = %q, want %q", comments[0].Author, "system")
+	if comments[0].Owner != syncNoteOwner {
+		t.Fatalf("comments[0].Owner = %q, want %q", comments[0].Owner, syncNoteOwner)
+	}
+	if comments[0].Note != "note" {
+		t.Fatalf("comments[0].Note = %q, want %q", comments[0].Note, "note")
 	}
 }
 

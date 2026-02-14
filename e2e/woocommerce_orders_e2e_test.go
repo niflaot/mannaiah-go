@@ -112,7 +112,7 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 		t.Fatalf("payload.updated = %v, want %v", payload["updated"], float64(1))
 	}
 
-	harness.tracer.Step("verify order status and comment status history")
+	harness.tracer.Step("verify order status and synchronized note history")
 	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/orders/"+orderID, ordersReadToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
@@ -124,8 +124,8 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 	if !ok || len(history) < 3 {
 		t.Fatalf("statusHistory = %v, want at least 3 entries", payload["statusHistory"])
 	}
-	if !containsStatusDescription(history, "Delivered by carrier") {
-		t.Fatalf("expected status history comment entry")
+	if !containsStatusNote(history, "woocommerce_sync", "Delivered by carrier") {
+		t.Fatalf("expected status history note entry")
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
@@ -201,15 +201,16 @@ func newWooOrdersSyncServer(t *testing.T) (*httptest.Server, func(status string,
 	return server, setState
 }
 
-// containsStatusDescription reports whether status-history payload values contain description values.
-func containsStatusDescription(values []any, description string) bool {
+// containsStatusNote reports whether status-history payload values contain note owner and note values.
+func containsStatusNote(values []any, noteOwner string, note string) bool {
 	for _, raw := range values {
 		row, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
-		value, _ := row["description"].(string)
-		if value == description {
+		ownerValue, _ := row["noteOwner"].(string)
+		noteValue, _ := row["note"].(string)
+		if ownerValue == noteOwner && noteValue == note {
 			return true
 		}
 	}

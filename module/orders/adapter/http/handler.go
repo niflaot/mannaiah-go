@@ -104,6 +104,10 @@ type updateStatusRequest struct {
 	Author string `json:"author"`
 	// Description defines status description values.
 	Description string `json:"description"`
+	// NoteOwner defines optional note owner values.
+	NoteOwner string `json:"noteOwner"`
+	// Note defines optional note values.
+	Note string `json:"note"`
 }
 
 // listMeta defines list response pagination metadata.
@@ -165,15 +169,15 @@ func (h *Handler) create(ctx corehttp.Context) error {
 	}
 
 	command := ordersapplication.CreateCommand{
-		Identifier:    request.Identifier,
-		Realm:         request.Realm,
-		ContactID:     request.ContactID,
-		InitialStatus: request.InitialStatus,
-		Author:        request.Author,
-		Description:   request.Description,
-		Items:         mapCreateItems(request.Items),
+		Identifier:      request.Identifier,
+		Realm:           request.Realm,
+		ContactID:       request.ContactID,
+		InitialStatus:   request.InitialStatus,
+		Author:          request.Author,
+		Description:     request.Description,
+		Items:           mapCreateItems(request.Items),
 		ShippingCharges: mapShippingCharges(request.ShippingCharges),
-		Metadata:      request.Metadata,
+		Metadata:        request.Metadata,
 	}
 	if request.ShippingAddress != nil {
 		command.ShippingAddress = &ordersapplication.ShippingAddressCommand{
@@ -236,6 +240,8 @@ func (h *Handler) updateStatus(ctx corehttp.Context) error {
 		Status:      request.Status,
 		Author:      request.Author,
 		Description: request.Description,
+		NoteOwner:   request.NoteOwner,
+		Note:        request.Note,
 	})
 	if err != nil {
 		return h.mapError(err)

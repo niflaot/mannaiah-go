@@ -79,6 +79,10 @@ type StatusEntry struct {
 	Author string `json:"author"`
 	// Description defines optional status-description values.
 	Description string `json:"description,omitempty"`
+	// NoteOwner defines optional note owner values associated with this status transition.
+	NoteOwner string `json:"noteOwner,omitempty"`
+	// Note defines optional note text values associated with this status transition.
+	Note string `json:"note,omitempty"`
 	// OccurredAt defines status transition timestamps.
 	OccurredAt time.Time `json:"occurredAt"`
 }
@@ -168,6 +172,8 @@ func (o *Order) Normalize() {
 		o.StatusHistory[index].Status = Status(strings.TrimSpace(string(o.StatusHistory[index].Status)))
 		o.StatusHistory[index].Author = strings.TrimSpace(o.StatusHistory[index].Author)
 		o.StatusHistory[index].Description = strings.TrimSpace(o.StatusHistory[index].Description)
+		o.StatusHistory[index].NoteOwner = strings.TrimSpace(o.StatusHistory[index].NoteOwner)
+		o.StatusHistory[index].Note = strings.TrimSpace(o.StatusHistory[index].Note)
 	}
 	o.Metadata = normalizeMetadata(o.Metadata)
 }

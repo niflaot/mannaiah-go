@@ -84,6 +84,10 @@ type orderStatusRecord struct {
 	Author string `gorm:"size:255;not null"`
 	// Description defines status description values.
 	Description string `gorm:"type:text"`
+	// NoteOwner defines optional note owner values.
+	NoteOwner string `gorm:"size:255"`
+	// Note defines optional note values.
+	Note string `gorm:"type:text"`
 	// OccurredAt defines status timestamps.
 	OccurredAt time.Time `gorm:"not null;index"`
 }

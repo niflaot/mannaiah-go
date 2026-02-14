@@ -199,6 +199,8 @@ func (r *Repository) AppendStatus(ctx context.Context, id string, entry ordersdo
 			Status:      strings.TrimSpace(string(entry.Status)),
 			Author:      strings.TrimSpace(entry.Author),
 			Description: strings.TrimSpace(entry.Description),
+			NoteOwner:   strings.TrimSpace(entry.NoteOwner),
+			Note:        strings.TrimSpace(entry.Note),
 			OccurredAt:  entry.OccurredAt.UTC(),
 		}
 		if err := tx.Create(&statusRow).Error; err != nil {

@@ -19,9 +19,11 @@ const (
 	// defaultRealm defines default order realm values for WooCommerce syncs.
 	defaultRealm = "woocommerce"
 	// syncStatusAuthor defines status-entry author values used by WooCommerce sync updates.
-	syncStatusAuthor = "system"
+	syncStatusAuthor = "woocommerce_sync"
 	// syncStatusDescription defines default status-entry description values used by WooCommerce sync updates.
 	syncStatusDescription = "WooCommerce Sync"
+	// syncNoteOwner defines default note owner values used for WooCommerce synchronized notes.
+	syncNoteOwner = "woocommerce_sync"
 )
 
 var (
