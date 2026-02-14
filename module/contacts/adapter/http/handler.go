@@ -60,6 +60,8 @@ type createRequest struct {
 	AddressExtra string `json:"addressExtra"`
 	// CityCode defines city code values.
 	CityCode string `json:"cityCode"`
+	// Metadata defines optional contact metadata values.
+	Metadata map[string]string `json:"metadata"`
 }
 
 // updateRequest defines request payload for contact updates.
@@ -84,6 +86,8 @@ type updateRequest struct {
 	AddressExtra *string `json:"addressExtra"`
 	// CityCode defines optional city code updates.
 	CityCode *string `json:"cityCode"`
+	// Metadata defines optional metadata updates.
+	Metadata *map[string]string `json:"metadata"`
 }
 
 // listMeta defines list response pagination metadata.
@@ -156,6 +160,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		Address:        request.Address,
 		AddressExtra:   request.AddressExtra,
 		CityCode:       request.CityCode,
+		Metadata:       request.Metadata,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -215,6 +220,7 @@ func (h *Handler) update(ctx corehttp.Context) error {
 		Address:        request.Address,
 		AddressExtra:   request.AddressExtra,
 		CityCode:       request.CityCode,
+		Metadata:       request.Metadata,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -244,12 +250,14 @@ func parseListQuery(ctx corehttp.Context) (port.ListQuery, error) {
 	}
 
 	return port.ListQuery{
-		Page:       page,
-		Limit:      limit,
-		OrderBy:    strings.TrimSpace(ctx.Query("orderBy", "")),
-		OrderDir:   strings.TrimSpace(ctx.Query("orderDir", "")),
-		Email:      strings.TrimSpace(ctx.Query("email", "")),
-		ExcludeIDs: parseExcludedIDs(ctx.Query("excludeIds", "")),
+		Page:          page,
+		Limit:         limit,
+		OrderBy:       strings.TrimSpace(ctx.Query("orderBy", "")),
+		OrderDir:      strings.TrimSpace(ctx.Query("orderDir", "")),
+		Email:         strings.TrimSpace(ctx.Query("email", "")),
+		ExcludeIDs:    parseExcludedIDs(ctx.Query("excludeIds", "")),
+		MetadataKey:   strings.TrimSpace(ctx.Query("metadataKey", "")),
+		MetadataValue: strings.TrimSpace(ctx.Query("metadataValue", "")),
 	}, nil
 }
 
@@ -319,7 +327,7 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, application.ErrInvalidID) {
 		return corehttp.NewAppError(400, "invalid_contact_id", err)
 	}
-	if errors.Is(err, domain.ErrEmailRequired) || errors.Is(err, domain.ErrInvalidNameCombination) || errors.Is(err, domain.ErrIncompletePersonalName) {
+	if errors.Is(err, domain.ErrEmailRequired) || errors.Is(err, domain.ErrInvalidNameCombination) || errors.Is(err, domain.ErrIncompletePersonalName) || errors.Is(err, domain.ErrInvalidMetadata) {
 		return corehttp.NewAppError(400, "invalid_contact", err)
 	}
 	if errors.Is(err, port.ErrDuplicateEmail) {

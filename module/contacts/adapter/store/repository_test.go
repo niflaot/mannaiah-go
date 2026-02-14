@@ -23,7 +23,12 @@ func TestNewRepositoryRejectsNilDB(t *testing.T) {
 func TestRepositoryCRUDLifecycle(t *testing.T) {
 	repository := newRepositoryForTest(t)
 
-	entity := &domain.Contact{Email: "john@example.com", FirstName: "John", LastName: "Doe"}
+	entity := &domain.Contact{
+		Email:     "john@example.com",
+		FirstName: "John",
+		LastName:  "Doe",
+		Metadata:  map[string]string{"marketing.consent": "true"},
+	}
 	if err := repository.Create(context.Background(), entity); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -38,10 +43,14 @@ func TestRepositoryCRUDLifecycle(t *testing.T) {
 	if stored.Email != "john@example.com" {
 		t.Fatalf("Email = %q, want %q", stored.Email, "john@example.com")
 	}
+	if stored.Metadata["marketing.consent"] != "true" {
+		t.Fatalf("Metadata[marketing.consent] = %q, want %q", stored.Metadata["marketing.consent"], "true")
+	}
 
 	stored.LegalName = "Acme SAS"
 	stored.FirstName = ""
 	stored.LastName = ""
+	stored.Metadata = map[string]string{"marketing.consent": "false", "marketing.consentDate": "2026-02-14"}
 	if err := repository.Update(context.Background(), stored); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -52,6 +61,9 @@ func TestRepositoryCRUDLifecycle(t *testing.T) {
 	}
 	if updated.LegalName != "Acme SAS" {
 		t.Fatalf("LegalName = %q, want %q", updated.LegalName, "Acme SAS")
+	}
+	if updated.Metadata["marketing.consent"] != "false" {
+		t.Fatalf("Metadata[marketing.consent] = %q, want %q", updated.Metadata["marketing.consent"], "false")
 	}
 
 	if err := repository.Delete(context.Background(), entity.ID); err != nil {
@@ -120,6 +132,47 @@ func TestRepositoryListFiltersByEmail(t *testing.T) {
 	}
 	if rows[0].Email != "y@example.com" {
 		t.Fatalf("Email = %q, want %q", rows[0].Email, "y@example.com")
+	}
+}
+
+// TestRepositoryListFiltersByMetadata verifies metadata filtering behavior.
+func TestRepositoryListFiltersByMetadata(t *testing.T) {
+	repository := newRepositoryForTest(t)
+
+	if err := repository.Create(context.Background(), &domain.Contact{
+		Email:     "consent-yes@example.com",
+		FirstName: "Yes",
+		LastName:  "Consent",
+		Metadata: map[string]string{
+			"marketing.consent":     "true",
+			"marketing.consentDate": "2026-02-14",
+		},
+	}); err != nil {
+		t.Fatalf("Create(consent yes) error = %v", err)
+	}
+	if err := repository.Create(context.Background(), &domain.Contact{
+		Email:     "consent-no@example.com",
+		FirstName: "No",
+		LastName:  "Consent",
+		Metadata: map[string]string{
+			"marketing.consent": "false",
+		},
+	}); err != nil {
+		t.Fatalf("Create(consent no) error = %v", err)
+	}
+
+	rows, total, err := repository.List(context.Background(), port.ListQuery{
+		MetadataKey:   "marketing.consent",
+		MetadataValue: "true",
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if total != 1 || len(rows) != 1 {
+		t.Fatalf("unexpected metadata-filtered result: total=%d len=%d", total, len(rows))
+	}
+	if rows[0].Email != "consent-yes@example.com" {
+		t.Fatalf("rows[0].Email = %q, want %q", rows[0].Email, "consent-yes@example.com")
 	}
 }
 

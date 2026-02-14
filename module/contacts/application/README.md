@@ -11,6 +11,8 @@
   - `(*application.ContactService).List(ctx, query)`
   - `(*application.ContactService).Update(ctx, id, command)`
   - `(*application.ContactService).Delete(ctx, id)`
+- Contact payload capability:
+  - supports `metadata` (`map[string]string`) in create/update flows.
 - Endpoints: none in this package.
 - Events:
   - emits integration event `contacts.v1.created` on successful create

@@ -80,7 +80,7 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 
 // EnsureSchema migrates contact persistence schema.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(&contactRecord{}); err != nil {
+	if err := r.db.WithContext(ctx).AutoMigrate(&contactRecord{}, &contactMetadataRecord{}); err != nil {
 		return fmt.Errorf("migrate contact schema: %w", err)
 	}
 
@@ -94,25 +94,46 @@ func (r *Repository) Create(ctx context.Context, contact *domain.Contact) error 
 		record.ID = generateID()
 	}
 
-	if err := r.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return wrapWriteError("create", err)
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return wrapWriteError("create", err)
+		}
+		if err := replaceContactMetadata(tx, record.ID, contact.Metadata); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	*contact = toDomain(record)
+	latest, err := r.GetByID(ctx, record.ID)
+	if err != nil {
+		return err
+	}
+	*contact = *latest
+
 	return nil
 }
 
 // GetByID retrieves a contact entity by id.
 func (r *Repository) GetByID(ctx context.Context, id string) (*domain.Contact, error) {
+	trimmedID := strings.TrimSpace(id)
+
 	var record contactRecord
-	if err := r.db.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&record, "id = ?", trimmedID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("get contact record: %w", err)
 	}
 
-	entity := toDomain(record)
+	metadataMap, err := loadMetadataByContactIDs(ctx, r.db, []string{trimmedID})
+	if err != nil {
+		return nil, err
+	}
+
+	entity := toDomain(record, metadataMap[trimmedID])
 	return &entity, nil
 }
 
@@ -134,9 +155,18 @@ func (r *Repository) List(ctx context.Context, query port.ListQuery) ([]domain.C
 		return nil, 0, fmt.Errorf("list contact records: %w", err)
 	}
 
+	contactIDs := make([]string, 0, len(records))
+	for _, record := range records {
+		contactIDs = append(contactIDs, record.ID)
+	}
+	metadataMap, err := loadMetadataByContactIDs(ctx, r.db, contactIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	result := make([]domain.Contact, 0, len(records))
 	for _, record := range records {
-		result = append(result, toDomain(record))
+		result = append(result, toDomain(record, metadataMap[record.ID]))
 	}
 
 	return result, total, nil
@@ -149,24 +179,34 @@ func (r *Repository) Update(ctx context.Context, contact *domain.Contact) error 
 	}
 
 	record := toRecord(*contact)
-	tx := r.db.WithContext(ctx).Model(&contactRecord{}).Where("id = ?", record.ID).Updates(map[string]any{
-		"document_type":   record.DocumentType,
-		"document_number": record.DocumentNumber,
-		"document_key":    buildDocumentKey(record.DocumentType, record.DocumentNumber),
-		"legal_name":      record.LegalName,
-		"first_name":      record.FirstName,
-		"last_name":       record.LastName,
-		"email":           record.Email,
-		"phone":           record.Phone,
-		"address":         record.Address,
-		"address_extra":   record.AddressExtra,
-		"city_code":       record.CityCode,
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		updateTx := tx.Model(&contactRecord{}).Where("id = ?", record.ID).Updates(map[string]any{
+			"document_type":   record.DocumentType,
+			"document_number": record.DocumentNumber,
+			"document_key":    buildDocumentKey(record.DocumentType, record.DocumentNumber),
+			"legal_name":      record.LegalName,
+			"first_name":      record.FirstName,
+			"last_name":       record.LastName,
+			"email":           record.Email,
+			"phone":           record.Phone,
+			"address":         record.Address,
+			"address_extra":   record.AddressExtra,
+			"city_code":       record.CityCode,
+		})
+		if updateTx.Error != nil {
+			return wrapWriteError("update", updateTx.Error)
+		}
+		if updateTx.RowsAffected == 0 {
+			return port.ErrNotFound
+		}
+		if err := replaceContactMetadata(tx, record.ID, contact.Metadata); err != nil {
+			return err
+		}
+
+		return nil
 	})
-	if tx.Error != nil {
-		return wrapWriteError("update", tx.Error)
-	}
-	if tx.RowsAffected == 0 {
-		return port.ErrNotFound
+	if err != nil {
+		return err
 	}
 
 	latest, err := r.GetByID(ctx, record.ID)
@@ -180,15 +220,22 @@ func (r *Repository) Update(ctx context.Context, contact *domain.Contact) error 
 
 // Delete soft-deletes a contact by id.
 func (r *Repository) Delete(ctx context.Context, id string) error {
-	tx := r.db.WithContext(ctx).Delete(&contactRecord{}, "id = ?", id)
-	if tx.Error != nil {
-		return fmt.Errorf("delete contact record: %w", tx.Error)
-	}
-	if tx.RowsAffected == 0 {
-		return port.ErrNotFound
-	}
+	trimmedID := strings.TrimSpace(id)
 
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		deleteTx := tx.Delete(&contactRecord{}, "id = ?", trimmedID)
+		if deleteTx.Error != nil {
+			return fmt.Errorf("delete contact record: %w", deleteTx.Error)
+		}
+		if deleteTx.RowsAffected == 0 {
+			return port.ErrNotFound
+		}
+		if err := tx.Where("contact_id = ?", trimmedID).Delete(&contactMetadataRecord{}).Error; err != nil {
+			return fmt.Errorf("delete contact metadata records: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // applyListQuery applies list filtering and exclusion options.
@@ -196,6 +243,18 @@ func applyListQuery(tx *gorm.DB, query port.ListQuery) *gorm.DB {
 	next := tx
 	if strings.TrimSpace(query.Email) != "" {
 		next = next.Where("email = ?", strings.TrimSpace(query.Email))
+	}
+	trimmedMetadataKey := strings.TrimSpace(query.MetadataKey)
+	trimmedMetadataValue := strings.TrimSpace(query.MetadataValue)
+	if trimmedMetadataKey != "" || trimmedMetadataValue != "" {
+		subQuery := tx.Session(&gorm.Session{NewDB: true}).Model(&contactMetadataRecord{}).Select("contact_id")
+		if trimmedMetadataKey != "" {
+			subQuery = subQuery.Where("`key` = ?", trimmedMetadataKey)
+		}
+		if trimmedMetadataValue != "" {
+			subQuery = subQuery.Where("`value` = ?", trimmedMetadataValue)
+		}
+		next = next.Where("id IN (?)", subQuery)
 	}
 	if len(query.ExcludeIDs) > 0 {
 		next = next.Where("id NOT IN ?", query.ExcludeIDs)
@@ -247,30 +306,33 @@ func normalizeOrder(orderBy string, orderDir string) (string, string) {
 
 // toRecord maps domain contact entities to persistence records.
 func toRecord(contact domain.Contact) contactRecord {
-	documentType := strings.TrimSpace(string(contact.DocumentType))
-	documentNumber := strings.TrimSpace(contact.DocumentNumber)
+	normalized := contact
+	normalized.Normalize()
+
+	documentType := strings.TrimSpace(string(normalized.DocumentType))
+	documentNumber := strings.TrimSpace(normalized.DocumentNumber)
 
 	return contactRecord{
-		ID:             strings.TrimSpace(contact.ID),
+		ID:             strings.TrimSpace(normalized.ID),
 		DocumentType:   documentType,
 		DocumentNumber: documentNumber,
 		DocumentKey:    buildDocumentKey(documentType, documentNumber),
-		LegalName:      strings.TrimSpace(contact.LegalName),
-		FirstName:      strings.TrimSpace(contact.FirstName),
-		LastName:       strings.TrimSpace(contact.LastName),
-		Email:          strings.TrimSpace(contact.Email),
-		Phone:          strings.TrimSpace(contact.Phone),
-		Address:        strings.TrimSpace(contact.Address),
-		AddressExtra:   strings.TrimSpace(contact.AddressExtra),
-		CityCode:       strings.TrimSpace(contact.CityCode),
-		CreatedAt:      contact.CreatedAt,
-		UpdatedAt:      contact.UpdatedAt,
+		LegalName:      strings.TrimSpace(normalized.LegalName),
+		FirstName:      strings.TrimSpace(normalized.FirstName),
+		LastName:       strings.TrimSpace(normalized.LastName),
+		Email:          strings.TrimSpace(normalized.Email),
+		Phone:          strings.TrimSpace(normalized.Phone),
+		Address:        strings.TrimSpace(normalized.Address),
+		AddressExtra:   strings.TrimSpace(normalized.AddressExtra),
+		CityCode:       strings.TrimSpace(normalized.CityCode),
+		CreatedAt:      normalized.CreatedAt,
+		UpdatedAt:      normalized.UpdatedAt,
 	}
 }
 
 // toDomain maps persistence records to domain contact entities.
-func toDomain(record contactRecord) domain.Contact {
-	return domain.Contact{
+func toDomain(record contactRecord, metadata map[string]string) domain.Contact {
+	entity := domain.Contact{
 		ID:             record.ID,
 		DocumentType:   domain.DocumentType(record.DocumentType),
 		DocumentNumber: record.DocumentNumber,
@@ -282,9 +344,13 @@ func toDomain(record contactRecord) domain.Contact {
 		Address:        record.Address,
 		AddressExtra:   record.AddressExtra,
 		CityCode:       record.CityCode,
+		Metadata:       metadata,
 		CreatedAt:      record.CreatedAt,
 		UpdatedAt:      record.UpdatedAt,
 	}
+	entity.Normalize()
+
+	return entity
 }
 
 // generateID creates a random contact identifier.

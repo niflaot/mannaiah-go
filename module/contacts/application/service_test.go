@@ -77,6 +77,9 @@ func TestCreatePersistsContact(t *testing.T) {
 	svc, err := NewService(repositoryMock{
 		createFn: func(ctx context.Context, contact *domain.Contact) error {
 			created = true
+			if contact.Metadata["marketing.consent"] != "true" {
+				t.Fatalf("contact.Metadata[marketing.consent] = %q, want %q", contact.Metadata["marketing.consent"], "true")
+			}
 			contact.ID = "c-1"
 			return nil
 		},
@@ -89,7 +92,11 @@ func TestCreatePersistsContact(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
-	result, createErr := svc.Create(context.Background(), CreateCommand{Email: "john@example.com", LegalName: "Acme"})
+	result, createErr := svc.Create(context.Background(), CreateCommand{
+		Email:     "john@example.com",
+		LegalName: "Acme",
+		Metadata:  map[string]string{" marketing.consent ": " true "},
+	})
 	if createErr != nil {
 		t.Fatalf("Create() error = %v", createErr)
 	}
@@ -166,6 +173,9 @@ func TestUpdateAppliesPatch(t *testing.T) {
 		},
 		updateFn: func(ctx context.Context, contact *domain.Contact) error {
 			updated = true
+			if contact.Metadata["marketing.consent"] != "true" {
+				t.Fatalf("contact.Metadata[marketing.consent] = %q, want %q", contact.Metadata["marketing.consent"], "true")
+			}
 			return nil
 		},
 		deleteFn: func(ctx context.Context, id string) error { return nil },
@@ -175,7 +185,8 @@ func TestUpdateAppliesPatch(t *testing.T) {
 	}
 
 	newEmail := "next@example.com"
-	result, updateErr := svc.Update(context.Background(), "c-1", UpdateCommand{Email: &newEmail})
+	metadata := map[string]string{" marketing.consent ": " true "}
+	result, updateErr := svc.Update(context.Background(), "c-1", UpdateCommand{Email: &newEmail, Metadata: &metadata})
 	if updateErr != nil {
 		t.Fatalf("Update() error = %v", updateErr)
 	}
@@ -184,6 +195,23 @@ func TestUpdateAppliesPatch(t *testing.T) {
 	}
 	if result.Email != "next@example.com" {
 		t.Fatalf("Email = %q, want %q", result.Email, "next@example.com")
+	}
+}
+
+// TestCreateValidatesMetadata verifies metadata validation on create.
+func TestCreateValidatesMetadata(t *testing.T) {
+	svc, err := NewService(repositoryMock{createFn: func(ctx context.Context, contact *domain.Contact) error { return nil }})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	_, createErr := svc.Create(context.Background(), CreateCommand{
+		Email:     "john@example.com",
+		LegalName: "Acme",
+		Metadata:  map[string]string{"marketing.consent": string(make([]byte, 2049))},
+	})
+	if !errors.Is(createErr, domain.ErrInvalidMetadata) {
+		t.Fatalf("Create() error = %v, want ErrInvalidMetadata", createErr)
 	}
 }
 

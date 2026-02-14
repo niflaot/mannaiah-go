@@ -25,6 +25,33 @@ func TestOpenAPISpec(t *testing.T) {
 	if contactsPath.Post == nil || contactsPath.Post.Responses == nil || contactsPath.Post.Responses.Status(409) == nil {
 		t.Fatalf("expected conflict response on contacts create operation")
 	}
+	if contactsPath.Get == nil || len(contactsPath.Get.Parameters) < 1 {
+		t.Fatalf("expected list contact query parameters")
+	}
+	hasMetadataKey := false
+	hasMetadataValue := false
+	for _, parameter := range contactsPath.Get.Parameters {
+		if parameter == nil || parameter.Value == nil {
+			continue
+		}
+		if parameter.Value.Name == "metadataKey" {
+			hasMetadataKey = true
+		}
+		if parameter.Value.Name == "metadataValue" {
+			hasMetadataValue = true
+		}
+	}
+	if !hasMetadataKey || !hasMetadataValue {
+		t.Fatalf("expected metadataKey and metadataValue query parameters")
+	}
+	createSchema := spec.Components.Schemas["ContactCreate"].Value
+	if createSchema == nil || createSchema.Properties["metadata"] == nil {
+		t.Fatalf("expected metadata property on ContactCreate schema")
+	}
+	updateSchema := spec.Components.Schemas["ContactUpdate"].Value
+	if updateSchema == nil || updateSchema.Properties["metadata"] == nil {
+		t.Fatalf("expected metadata property on ContactUpdate schema")
+	}
 
 	contactByIDPath := spec.Paths.Value("/contacts/{id}")
 	if contactByIDPath == nil || contactByIDPath.Patch == nil || contactByIDPath.Patch.Responses == nil || contactByIDPath.Patch.Responses.Status(409) == nil {

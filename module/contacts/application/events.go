@@ -45,6 +45,8 @@ type ContactEventPayload struct {
 	AddressExtra string `json:"addressExtra"`
 	// CityCode defines city code values.
 	CityCode string `json:"cityCode"`
+	// Metadata defines optional contact metadata values.
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines update timestamps.
@@ -116,6 +118,7 @@ func toContactEventPayload(contact domain.Contact) ContactEventPayload {
 		Address:        contact.Address,
 		AddressExtra:   contact.AddressExtra,
 		CityCode:       contact.CityCode,
+		Metadata:       contact.Metadata,
 		CreatedAt:      contact.CreatedAt,
 		UpdatedAt:      contact.UpdatedAt,
 	}

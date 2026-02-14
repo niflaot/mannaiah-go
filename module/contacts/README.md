@@ -20,11 +20,12 @@
   - `(*contacts.Module).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /contacts`
-  - `GET /contacts`
+  - `GET /contacts` (supports `metadataKey` and `metadataValue` filters)
   - `GET /contacts/:id`
   - `PATCH /contacts/:id`
   - `DELETE /contacts/:id`
   - Conflict behavior: `POST/PATCH` return `409` when `email` or `(documentType, documentNumber)` already exists.
+  - Metadata behavior: contacts support `metadata: map[string]string` in create/update/get/list payloads.
 - Events:
   - domain events: `contacts.contact.created`, `contacts.contact.updated`
   - integration events: `contacts.v1.created`, `contacts.v1.updated`

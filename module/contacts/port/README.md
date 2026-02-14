@@ -6,7 +6,7 @@
 - Methods:
   - `port.Repository.Create(ctx, contact)`
   - `port.Repository.GetByID(ctx, id)`
-  - `port.Repository.List(ctx, query)`
+  - `port.Repository.List(ctx, query)` (`query` supports metadata filters via `MetadataKey` and `MetadataValue`)
   - `port.Repository.Update(ctx, contact)`
   - `port.Repository.Delete(ctx, id)`
   - `port.IntegrationEventPublisher.Publish(ctx, event)`

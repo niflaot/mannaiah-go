@@ -35,7 +35,13 @@ func TestResolvePublisherFallback(t *testing.T) {
 
 // TestBuildContactCreatedIntegrationEvent verifies created-event integration mapping.
 func TestBuildContactCreatedIntegrationEvent(t *testing.T) {
-	event := buildContactCreatedIntegrationEvent(domain.NewContactCreatedEvent(domain.Contact{ID: "c-1", Email: "a@example.com", LegalName: "Acme", CreatedAt: time.Now().UTC()}))
+	event := buildContactCreatedIntegrationEvent(domain.NewContactCreatedEvent(domain.Contact{
+		ID:        "c-1",
+		Email:     "a@example.com",
+		LegalName: "Acme",
+		Metadata:  map[string]string{"marketing.consent": "true"},
+		CreatedAt: time.Now().UTC(),
+	}))
 	if event.Topic != TopicContactCreated {
 		t.Fatalf("Topic = %q, want %q", event.Topic, TopicContactCreated)
 	}
@@ -51,6 +57,9 @@ func TestBuildContactCreatedIntegrationEvent(t *testing.T) {
 	}
 	if payload.ID != "c-1" {
 		t.Fatalf("payload ID = %q, want %q", payload.ID, "c-1")
+	}
+	if payload.Metadata["marketing.consent"] != "true" {
+		t.Fatalf("payload.Metadata[marketing.consent] = %q, want %q", payload.Metadata["marketing.consent"], "true")
 	}
 }
 

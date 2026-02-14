@@ -87,6 +87,8 @@ func listContactsOperation() *openapi3.Operation {
 			queryParameter("orderBy", "Field to order by (e.g., createdAt, legalName)", openapi3.NewStringSchema()),
 			queryParameter("orderDir", "Order direction (asc or desc)", orderDirectionSchema()),
 			queryParameter("email", "Filter by email", openapi3.NewStringSchema()),
+			queryParameter("metadataKey", "Filter by metadata key", openapi3.NewStringSchema()),
+			queryParameter("metadataValue", "Filter by metadata value", openapi3.NewStringSchema()),
 			queryParameter("excludeIds", "Comma-separated list of IDs to exclude", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
@@ -226,6 +228,7 @@ func contactCreateSchema() *openapi3.Schema {
 		WithProperty("address", openapi3.NewStringSchema()).
 		WithProperty("addressExtra", openapi3.NewStringSchema()).
 		WithProperty("cityCode", openapi3.NewStringSchema()).
+		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"email"})
 }
 
@@ -241,7 +244,8 @@ func contactUpdateSchema() *openapi3.Schema {
 		WithProperty("phone", openapi3.NewStringSchema()).
 		WithProperty("address", openapi3.NewStringSchema()).
 		WithProperty("addressExtra", openapi3.NewStringSchema()).
-		WithProperty("cityCode", openapi3.NewStringSchema())
+		WithProperty("cityCode", openapi3.NewStringSchema()).
+		WithProperty("metadata", metadataSchema())
 }
 
 // documentTypeSchema returns the document-type enum schema used by contact contracts.
@@ -249,4 +253,9 @@ func documentTypeSchema() *openapi3.Schema {
 	schema := openapi3.NewStringSchema()
 	schema.Enum = []any{"CC", "CE", "TI", "PAS", "NIT", "OTHER"}
 	return schema
+}
+
+// metadataSchema returns the metadata object schema used by contact contracts.
+func metadataSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().WithAdditionalProperties(openapi3.NewStringSchema())
 }

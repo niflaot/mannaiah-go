@@ -6,6 +6,10 @@ Uniqueness constraints are enforced at the database layer for high-performance, 
 - unique `email`
 - unique normalized `(documentType, documentNumber)` when both values are present
 
+Metadata is persisted in normalized relation storage:
+- `contacts` root table
+- `contact_metadata` key-value table (`contact_id`, `key`, `value`)
+
 ## Key Methods / Endpoints / Events
 - Methods:
   - `store.NewRepository(db)`

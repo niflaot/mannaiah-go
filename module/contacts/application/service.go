@@ -40,6 +40,8 @@ type CreateCommand struct {
 	AddressExtra string
 	// CityCode defines city code values.
 	CityCode string
+	// Metadata defines optional contact metadata values.
+	Metadata map[string]string
 }
 
 // UpdateCommand defines command-side contact update payload.
@@ -64,6 +66,8 @@ type UpdateCommand struct {
 	AddressExtra *string
 	// CityCode defines optional city code updates.
 	CityCode *string
+	// Metadata defines optional metadata updates.
+	Metadata *map[string]string
 }
 
 // ListResult defines paginated query output for contact listings.
@@ -137,7 +141,9 @@ func (s *ContactService) Create(ctx context.Context, command CreateCommand) (*do
 		Address:        strings.TrimSpace(command.Address),
 		AddressExtra:   strings.TrimSpace(command.AddressExtra),
 		CityCode:       strings.TrimSpace(command.CityCode),
+		Metadata:       cloneMetadata(command.Metadata),
 	}
+	entity.Normalize()
 	if err := entity.Validate(); err != nil {
 		return nil, err
 	}
@@ -243,7 +249,11 @@ func (s *ContactService) Update(ctx context.Context, id string, command UpdateCo
 	if command.CityCode != nil {
 		entity.CityCode = strings.TrimSpace(*command.CityCode)
 	}
+	if command.Metadata != nil {
+		entity.Metadata = cloneMetadata(*command.Metadata)
+	}
 
+	entity.Normalize()
 	if err := entity.Validate(); err != nil {
 		return nil, err
 	}
@@ -269,4 +279,18 @@ func (s *ContactService) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// cloneMetadata creates shallow copies for metadata maps.
+func cloneMetadata(metadata map[string]string) map[string]string {
+	if metadata == nil {
+		return nil
+	}
+
+	result := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		result[key] = value
+	}
+
+	return result
 }

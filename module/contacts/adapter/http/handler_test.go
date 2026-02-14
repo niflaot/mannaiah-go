@@ -90,7 +90,10 @@ func TestNewHandlerRejectsNilService(t *testing.T) {
 func TestHandlerCreateEndpoint(t *testing.T) {
 	handler := newHandlerForTest(t, serviceMock{
 		createFn: func(ctx context.Context, command application.CreateCommand) (*domain.Contact, error) {
-			return &domain.Contact{ID: "c-1", Email: command.Email, LegalName: command.LegalName}, nil
+			if command.Metadata["marketing.consent"] != "true" {
+				t.Fatalf("command.Metadata[marketing.consent] = %q, want %q", command.Metadata["marketing.consent"], "true")
+			}
+			return &domain.Contact{ID: "c-1", Email: command.Email, LegalName: command.LegalName, Metadata: command.Metadata}, nil
 		},
 		getFn:  func(ctx context.Context, id string) (*domain.Contact, error) { return nil, nil },
 		listFn: func(ctx context.Context, query port.ListQuery) (*application.ListResult, error) { return nil, nil },
@@ -101,7 +104,7 @@ func TestHandlerCreateEndpoint(t *testing.T) {
 	})
 	server := newHTTPServerForHandler(t, handler)
 
-	body := bytes.NewBufferString(`{"email":"john@example.com","legalName":"Acme"}`)
+	body := bytes.NewBufferString(`{"email":"john@example.com","legalName":"Acme","metadata":{"marketing.consent":"true"}}`)
 	req, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/contacts", body)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -122,7 +125,7 @@ func TestHandlerListEndpoint(t *testing.T) {
 		createFn: func(ctx context.Context, command application.CreateCommand) (*domain.Contact, error) { return nil, nil },
 		getFn:    func(ctx context.Context, id string) (*domain.Contact, error) { return nil, nil },
 		listFn: func(ctx context.Context, query port.ListQuery) (*application.ListResult, error) {
-			if query.Page != 1 || query.Limit != 2 || query.ExcludeIDs[0] != "x" {
+			if query.Page != 1 || query.Limit != 2 || query.ExcludeIDs[0] != "x" || query.MetadataKey != "marketing.consent" || query.MetadataValue != "true" {
 				t.Fatalf("unexpected query: %+v", query)
 			}
 			return &application.ListResult{Data: []domain.Contact{{ID: "c-1", Email: "a@example.com", LegalName: "Acme"}}, Page: 1, Limit: 2, Total: 1, TotalPages: 1}, nil
@@ -134,7 +137,7 @@ func TestHandlerListEndpoint(t *testing.T) {
 	})
 	server := newHTTPServerForHandler(t, handler)
 
-	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?page=1&limit=2&excludeIds=x", nil)
+	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?page=1&limit=2&excludeIds=x&metadataKey=marketing.consent&metadataValue=true", nil)
 	resp := runRequest(t, server, req)
 	if resp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, stdhttp.StatusOK)
@@ -157,7 +160,10 @@ func TestHandlerFindOneUpdateDeleteEndpoints(t *testing.T) {
 			return nil, nil
 		},
 		updateFn: func(ctx context.Context, id string, command application.UpdateCommand) (*domain.Contact, error) {
-			return &domain.Contact{ID: id, Email: "b@example.com", LegalName: "Acme"}, nil
+			if command.Metadata == nil || (*command.Metadata)["marketing.consent"] != "false" {
+				t.Fatalf("command.Metadata = %#v, want marketing.consent=false", command.Metadata)
+			}
+			return &domain.Contact{ID: id, Email: "b@example.com", LegalName: "Acme", Metadata: *command.Metadata}, nil
 		},
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 	})
@@ -169,7 +175,7 @@ func TestHandlerFindOneUpdateDeleteEndpoints(t *testing.T) {
 		t.Fatalf("GET status = %d, want %d", getResp.StatusCode, stdhttp.StatusOK)
 	}
 
-	updateReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/contacts/c-1", bytes.NewBufferString(`{"email":"b@example.com"}`))
+	updateReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/contacts/c-1", bytes.NewBufferString(`{"email":"b@example.com","metadata":{"marketing.consent":"false"}}`))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateResp := runRequest(t, server, updateReq)
 	if updateResp.StatusCode != stdhttp.StatusOK {

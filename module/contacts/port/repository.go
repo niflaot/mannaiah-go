@@ -32,6 +32,10 @@ type ListQuery struct {
 	Email string
 	// ExcludeIDs defines ids excluded from result and total count.
 	ExcludeIDs []string
+	// MetadataKey defines optional metadata-key filters.
+	MetadataKey string
+	// MetadataValue defines optional metadata-value filters.
+	MetadataValue string
 }
 
 // Repository defines persistence behavior required by contact use cases.

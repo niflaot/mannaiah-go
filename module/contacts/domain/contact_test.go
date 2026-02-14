@@ -36,3 +36,35 @@ func TestContactValidateSuccess(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+// TestContactNormalizeMetadata verifies metadata normalization behavior.
+func TestContactNormalizeMetadata(t *testing.T) {
+	entity := &Contact{
+		Email:     "a@example.com",
+		LegalName: "Acme",
+		Metadata: map[string]string{
+			" marketing.consent ": " true ",
+			"":                    "ignored",
+		},
+	}
+	entity.Normalize()
+
+	if entity.Metadata["marketing.consent"] != "true" {
+		t.Fatalf("entity.Metadata[marketing.consent] = %q, want %q", entity.Metadata["marketing.consent"], "true")
+	}
+	if _, exists := entity.Metadata[""]; exists {
+		t.Fatalf("expected empty metadata key to be removed")
+	}
+}
+
+// TestContactValidateMetadata verifies metadata validation behavior.
+func TestContactValidateMetadata(t *testing.T) {
+	err := (Contact{
+		Email:     "a@example.com",
+		LegalName: "Acme",
+		Metadata:  map[string]string{"": "x"},
+	}).Validate()
+	if !errors.Is(err, ErrInvalidMetadata) {
+		t.Fatalf("Validate() error = %v, want ErrInvalidMetadata", err)
+	}
+}

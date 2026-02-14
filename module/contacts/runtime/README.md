@@ -18,7 +18,7 @@
   - `(*runtime.Module).Load(loader)`
 - Endpoints:
   - `POST /contacts`
-  - `GET /contacts`
+  - `GET /contacts` (supports metadata query filters: `metadataKey`, `metadataValue`)
   - `GET /contacts/{id}`
   - `PATCH /contacts/{id}`
   - `DELETE /contacts/{id}`

@@ -35,7 +35,7 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("create contact with manage scope")
-	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"john@example.com","legalName":"John Co","documentType":"CC","documentNumber":"100"}`))
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"john@example.com","legalName":"John Co","documentType":"CC","documentNumber":"100","metadata":{"marketing.consent":"true","marketing.consentDate":"2026-02-14"}}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
@@ -48,6 +48,13 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	createdEvent := harness.AwaitCreatedEvent(t)
 	if createdEvent.Payload["id"] != contactID {
 		t.Fatalf("created event payload id = %v, want %q", createdEvent.Payload["id"], contactID)
+	}
+	createdMetadata, ok := createdEvent.Payload["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected created metadata payload")
+	}
+	if createdMetadata["marketing.consent"] != "true" {
+		t.Fatalf("created metadata marketing.consent = %v, want %q", createdMetadata["marketing.consent"], "true")
 	}
 	if createdEvent.Metadata[coremsgbus.MetadataSchemaVersion] != "v1" {
 		t.Fatalf("created event schema version = %q, want %q", createdEvent.Metadata[coremsgbus.MetadataSchemaVersion], "v1")
@@ -79,9 +86,16 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	if payload["email"] != "john@example.com" {
 		t.Fatalf("payload.email = %v, want %q", payload["email"], "john@example.com")
 	}
+	loadedMetadata, ok := payload["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected contact metadata payload")
+	}
+	if loadedMetadata["marketing.consent"] != "true" {
+		t.Fatalf("payload.metadata.marketing.consent = %v, want %q", loadedMetadata["marketing.consent"], "true")
+	}
 
 	harness.tracer.Step("update contact with manage scope")
-	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/contacts/"+contactID, manageToken, []byte(`{"email":"john.updated@example.com"}`))
+	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/contacts/"+contactID, manageToken, []byte(`{"email":"john.updated@example.com","metadata":{"marketing.consent":"false","marketing.consentDate":"2026-02-15"}}`))
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
@@ -94,8 +108,25 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	if updatedEvent.Payload["id"] != contactID {
 		t.Fatalf("updated event payload id = %v, want %q", updatedEvent.Payload["id"], contactID)
 	}
+	updatedMetadata, ok := updatedEvent.Payload["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected updated metadata payload")
+	}
+	if updatedMetadata["marketing.consent"] != "false" {
+		t.Fatalf("updated metadata marketing.consent = %v, want %q", updatedMetadata["marketing.consent"], "false")
+	}
 	if updatedEvent.Metadata[coremsgbus.MetadataSchemaVersion] != "v1" {
 		t.Fatalf("updated event schema version = %q, want %q", updatedEvent.Metadata[coremsgbus.MetadataSchemaVersion], "v1")
+	}
+
+	harness.tracer.Step("list contacts by metadata filters")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/contacts?page=1&limit=10&metadataKey=marketing.consent&metadataValue=false", readToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	data, ok := payload["data"].([]any)
+	if !ok || len(data) != 1 {
+		t.Fatalf("payload.data = %v, want one row", payload["data"])
 	}
 
 	harness.tracer.Step("list contacts excluding created id")
@@ -131,5 +162,5 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(12)
+	harness.tracer.AssertStepCount(13)
 }
