@@ -155,10 +155,10 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers order endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/orders", h.protect("orders:manage", h.create))
+	router.Post("/orders", h.protect("orders:create", h.create))
 	router.Get("/orders", h.protect("orders:read", h.findAll))
 	router.Get("/orders/:id", h.protect("orders:read", h.findOne))
-	router.Patch("/orders/:id/status", h.protect("orders:manage", h.updateStatus))
+	router.Patch("/orders/:id/status", h.protect("orders:update", h.updateStatus))
 }
 
 // create handles order creation endpoints.

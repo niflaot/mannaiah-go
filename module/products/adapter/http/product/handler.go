@@ -98,11 +98,11 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers product CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/products", h.protect("products:manage", h.create))
+	router.Post("/products", h.protect("products:create", h.create))
 	router.Get("/products", h.protect("products:read", h.findAll))
 	router.Get("/products/:id", h.protect("products:read", h.findOne))
-	router.Patch("/products/:id", h.protect("products:manage", h.update))
-	router.Delete("/products/:id", h.protect("products:manage", h.remove))
+	router.Patch("/products/:id", h.protect("products:update", h.update))
+	router.Delete("/products/:id", h.protect("products:delete", h.remove))
 }
 
 // create handles product creation endpoints.
