@@ -281,7 +281,15 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 					{
 						"name":     "Fallback Product",
 						"sku":      "SKU-RAW-1",
-						"quantity": 1,
+						"quantity": "2",
+						"total":    "129900.50",
+					},
+				},
+				"shipping_lines": []map[string]any{
+					{
+						"method_id":    "flat_rate",
+						"method_title": "Flat rate",
+						"total":        "9900",
 					},
 				},
 				"customer_note": "raw note",
@@ -320,6 +328,15 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 	if len(orders[0].Items) != 1 || orders[0].Items[0].SKU != "SKU-RAW-1" {
 		t.Fatalf("orders[0].Items = %+v, want one raw sku row", orders[0].Items)
 	}
+	if orders[0].Items[0].Quantity != 2 {
+		t.Fatalf("orders[0].Items[0].Quantity = %d, want %d", orders[0].Items[0].Quantity, 2)
+	}
+	if orders[0].Items[0].Value != 129900.50 {
+		t.Fatalf("orders[0].Items[0].Value = %f, want %f", orders[0].Items[0].Value, 129900.50)
+	}
+	if len(orders[0].ShippingCharges) != 1 || orders[0].ShippingCharges[0].Price != 9900 {
+		t.Fatalf("orders[0].ShippingCharges = %+v, want one parsed shipping row", orders[0].ShippingCharges)
+	}
 	if len(orders[0].Comments) != 1 || orders[0].Comments[0].Description != "raw note" {
 		t.Fatalf("orders[0].Comments = %+v, want raw note comment", orders[0].Comments)
 	}
@@ -328,6 +345,35 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 	}
 	if orders[0].CreatedAt.UTC().Format(time.RFC3339) != "2024-04-10T12:30:00Z" {
 		t.Fatalf("orders[0].CreatedAt = %v, want %q", orders[0].CreatedAt, "2024-04-10T12:30:00Z")
+	}
+}
+
+// TestParseFlexibleNumber verifies tolerant JSON number parsing behavior.
+func TestParseFlexibleNumber(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    float64
+		wantErr bool
+	}{
+		{name: "number literal", input: "123.5", want: 123.5},
+		{name: "quoted number", input: "\"456\"", want: 456},
+		{name: "blank quoted", input: "\"\"", want: 0},
+		{name: "null", input: "null", want: 0},
+		{name: "invalid", input: "\"abc\"", wantErr: true},
+	}
+
+	for _, test := range tests {
+		got, err := parseFlexibleNumber(test.input)
+		if (err != nil) != test.wantErr {
+			t.Fatalf("%s: parseFlexibleNumber(%q) error=%v, wantErr=%t", test.name, test.input, err, test.wantErr)
+		}
+		if test.wantErr {
+			continue
+		}
+		if got != test.want {
+			t.Fatalf("%s: parseFlexibleNumber(%q)=%f, want %f", test.name, test.input, got, test.want)
+		}
 	}
 }
 

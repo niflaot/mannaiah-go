@@ -28,11 +28,11 @@ type rawLineItem struct {
 	// SKU defines line-item SKU values.
 	SKU string `json:"sku"`
 	// Quantity defines line-item quantity values.
-	Quantity int `json:"quantity"`
+	Quantity flexibleInt `json:"quantity"`
 	// MetaData defines line-item metadata values.
 	MetaData []rawMeta `json:"meta_data"`
 	// Total defines line-item total values.
-	Total float64 `json:"total"`
+	Total flexibleFloat64 `json:"total"`
 }
 
 // rawShippingLine defines tolerant raw order shipping-line payload values.
@@ -42,7 +42,7 @@ type rawShippingLine struct {
 	// MethodID defines shipping method identifier values.
 	MethodID string `json:"method_id"`
 	// Total defines shipping total values.
-	Total float64 `json:"total"`
+	Total flexibleFloat64 `json:"total"`
 }
 
 // listOrdersRaw performs tolerant order decoding for metadata values unsupported by SDK structs.
@@ -104,11 +104,11 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 			Address2  string `json:"address_2"`
 			City      string `json:"city"`
 		} `json:"shipping"`
-			CustomerNote string        `json:"customer_note"`
-			LineItems    []rawLineItem `json:"line_items"`
-			ShippingLines []rawShippingLine `json:"shipping_lines"`
-			MetaData     []rawMeta     `json:"meta_data"`
-		}
+		CustomerNote  string            `json:"customer_note"`
+		LineItems     []rawLineItem     `json:"line_items"`
+		ShippingLines []rawShippingLine `json:"shipping_lines"`
+		MetaData      []rawMeta         `json:"meta_data"`
+	}
 
 	var payload []rawOrder
 	if decodeErr := json.NewDecoder(response.Body).Decode(&payload); decodeErr != nil {
@@ -146,13 +146,13 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 			ShippingCompany:        strings.TrimSpace(item.Shipping.Company),
 			ShippingPhone:          strings.TrimSpace(item.Shipping.Phone),
 			ShippingAddressLine1:   strings.TrimSpace(item.Shipping.Address1),
-				ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
-				ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
-				Items:                  mapRawOrderItems(item.LineItems),
-				ShippingCharges:        mapRawShippingCharges(item.ShippingLines),
-				Comments:               mapRawOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
-				CreatedAt:              parseWooOrderTime(item.DateCreated),
-				Metadata:               metadata,
+			ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
+			ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
+			Items:                  mapRawOrderItems(item.LineItems),
+			ShippingCharges:        mapRawShippingCharges(item.ShippingLines),
+			Comments:               mapRawOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
+			CreatedAt:              parseWooOrderTime(item.DateCreated),
+			Metadata:               metadata,
 		})
 	}
 

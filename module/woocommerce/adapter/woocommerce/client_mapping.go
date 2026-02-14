@@ -21,8 +21,8 @@ func mapSDKOrderItems(values []wcentity.LineItem) []port.WooOrderItem {
 		items = append(items, port.WooOrderItem{
 			SKU:      sku,
 			Name:     name,
-			Quantity: value.Quantity,
-			Value:    value.Total,
+			Quantity: int(value.Quantity),
+			Value:    float64(value.Total),
 		})
 	}
 
@@ -42,8 +42,8 @@ func mapRawOrderItems(values []rawLineItem) []port.WooOrderItem {
 		items = append(items, port.WooOrderItem{
 			SKU:      sku,
 			Name:     name,
-			Quantity: value.Quantity,
-			Value:    value.Total,
+			Quantity: int(value.Quantity),
+			Value:    float64(value.Total),
 		})
 	}
 
@@ -62,7 +62,7 @@ func mapSDKShippingCharges(values []wcentity.ShippingLine) []port.WooOrderShippi
 		charges = append(charges, port.WooOrderShippingCharge{
 			MethodID:    methodID,
 			MethodTitle: methodTitle,
-			Price:       value.Total,
+			Price:       float64(value.Total),
 		})
 	}
 
@@ -81,7 +81,7 @@ func mapRawShippingCharges(values []rawShippingLine) []port.WooOrderShippingChar
 		charges = append(charges, port.WooOrderShippingCharge{
 			MethodID:    methodID,
 			MethodTitle: methodTitle,
-			Price:       value.Total,
+			Price:       float64(value.Total),
 		})
 	}
 
