@@ -1,6 +1,9 @@
 package port
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // UpsertOutcome defines contact upsert outcomes.
 type UpsertOutcome string
@@ -36,6 +39,10 @@ type ContactSyncCommand struct {
 	DocumentType string
 	// DocumentNumber defines contact document number values.
 	DocumentNumber string
+	// CreatedAt defines source-based contact creation timestamps.
+	CreatedAt *time.Time
+	// Metadata defines contact metadata values produced by sync behavior.
+	Metadata map[string]string
 }
 
 // ContactSyncTarget defines upsert behavior required by WooCommerce sync services.

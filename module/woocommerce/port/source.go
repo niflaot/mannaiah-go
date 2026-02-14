@@ -1,6 +1,9 @@
 package port
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // WooOrder defines order data retrieved from WooCommerce.
 type WooOrder struct {
@@ -22,6 +25,8 @@ type WooOrder struct {
 	BillingAddress2 string
 	// BillingCity defines order billing city values.
 	BillingCity string
+	// CreatedAt defines order creation timestamps.
+	CreatedAt time.Time
 	// Metadata defines order metadata values keyed by metadata key.
 	Metadata map[string]string
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	contactapplication "mannaiah/module/contacts/application"
 	contactdomain "mannaiah/module/contacts/domain"
@@ -43,8 +44,10 @@ func (u *Upserter) UpsertByEmail(ctx context.Context, command port.ContactSyncCo
 	if err != nil {
 		return "", err
 	}
+	normalizedMetadata := normalizeSyncMetadata(command.Metadata)
 
 	if existing == nil {
+		createdAt := cloneTimePointer(command.CreatedAt)
 		if _, createErr := u.service.Create(ctx, contactapplication.CreateCommand{
 			Email:          strings.TrimSpace(command.Email),
 			FirstName:      strings.TrimSpace(command.FirstName),
@@ -56,6 +59,8 @@ func (u *Upserter) UpsertByEmail(ctx context.Context, command port.ContactSyncCo
 			CityCode:       strings.TrimSpace(command.CityCode),
 			DocumentType:   contactdomain.DocumentType(strings.TrimSpace(command.DocumentType)),
 			DocumentNumber: strings.TrimSpace(command.DocumentNumber),
+			CreatedAt:      createdAt,
+			Metadata:       normalizedMetadata,
 		}); createErr != nil {
 			if !isDuplicateCreateError(createErr) {
 				return "", fmt.Errorf("create contact for woocommerce sync: %w", createErr)
@@ -68,10 +73,10 @@ func (u *Upserter) UpsertByEmail(ctx context.Context, command port.ContactSyncCo
 			if latest == nil {
 				return "", fmt.Errorf("create contact for woocommerce sync: %w", createErr)
 			}
-			if !hasMeaningfulChange(*latest, command) {
+			if !hasMeaningfulChange(*latest, command, normalizedMetadata) {
 				return port.UpsertOutcomeUnchanged, nil
 			}
-			if err := u.updateExisting(ctx, latest.ID, command); err != nil {
+			if err := u.updateExisting(ctx, *latest, command, normalizedMetadata); err != nil {
 				return "", err
 			}
 
@@ -81,11 +86,11 @@ func (u *Upserter) UpsertByEmail(ctx context.Context, command port.ContactSyncCo
 		return port.UpsertOutcomeCreated, nil
 	}
 
-	if !hasMeaningfulChange(*existing, command) {
+	if !hasMeaningfulChange(*existing, command, normalizedMetadata) {
 		return port.UpsertOutcomeUnchanged, nil
 	}
 
-	if err := u.updateExisting(ctx, existing.ID, command); err != nil {
+	if err := u.updateExisting(ctx, *existing, command, normalizedMetadata); err != nil {
 		return "", err
 	}
 	return port.UpsertOutcomeUpdated, nil
@@ -110,8 +115,9 @@ func (u *Upserter) findByEmail(ctx context.Context, email string) (*contactdomai
 }
 
 // updateExisting applies update payload values to existing contacts.
-func (u *Upserter) updateExisting(ctx context.Context, id string, command port.ContactSyncCommand) error {
-	_, err := u.service.Update(ctx, id, contactapplication.UpdateCommand{
+func (u *Upserter) updateExisting(ctx context.Context, existing contactdomain.Contact, command port.ContactSyncCommand, normalizedMetadata map[string]string) error {
+	mergedMetadata := mergeMetadata(existing.Metadata, normalizedMetadata)
+	updateCommand := contactapplication.UpdateCommand{
 		Email:          pointer(strings.TrimSpace(command.Email)),
 		FirstName:      pointer(strings.TrimSpace(command.FirstName)),
 		LastName:       pointer(strings.TrimSpace(command.LastName)),
@@ -122,7 +128,15 @@ func (u *Upserter) updateExisting(ctx context.Context, id string, command port.C
 		CityCode:       pointer(strings.TrimSpace(command.CityCode)),
 		DocumentType:   documentTypePointer(command.DocumentType),
 		DocumentNumber: pointer(strings.TrimSpace(command.DocumentNumber)),
-	})
+	}
+	if len(mergedMetadata) > 0 {
+		updateCommand.Metadata = &mergedMetadata
+	}
+	if shouldUpdateCreatedAt(existing.CreatedAt, command.CreatedAt) {
+		updateCommand.CreatedAt = cloneTimePointer(command.CreatedAt)
+	}
+
+	_, err := u.service.Update(ctx, existing.ID, updateCommand)
 	if err != nil {
 		return fmt.Errorf("update contact for woocommerce sync: %w", err)
 	}
@@ -138,7 +152,7 @@ func isDuplicateCreateError(err error) bool {
 }
 
 // hasMeaningfulChange reports whether non-document fields changed between existing contacts and sync commands.
-func hasMeaningfulChange(existing contactdomain.Contact, command port.ContactSyncCommand) bool {
+func hasMeaningfulChange(existing contactdomain.Contact, command port.ContactSyncCommand, normalizedMetadata map[string]string) bool {
 	if strings.ToLower(strings.TrimSpace(existing.Email)) != strings.ToLower(strings.TrimSpace(command.Email)) {
 		return true
 	}
@@ -146,6 +160,9 @@ func hasMeaningfulChange(existing contactdomain.Contact, command port.ContactSyn
 		return true
 	}
 	if strings.TrimSpace(existing.LastName) != strings.TrimSpace(command.LastName) {
+		return true
+	}
+	if strings.TrimSpace(existing.LegalName) != strings.TrimSpace(command.LegalName) {
 		return true
 	}
 	if strings.TrimSpace(existing.Phone) != strings.TrimSpace(command.Phone) {
@@ -158,6 +175,12 @@ func hasMeaningfulChange(existing contactdomain.Contact, command port.ContactSyn
 		return true
 	}
 	if strings.TrimSpace(existing.CityCode) != strings.TrimSpace(command.CityCode) {
+		return true
+	}
+	if shouldUpdateCreatedAt(existing.CreatedAt, command.CreatedAt) {
+		return true
+	}
+	if !metadataEqual(existing.Metadata, mergeMetadata(existing.Metadata, normalizedMetadata)) {
 		return true
 	}
 
@@ -174,4 +197,79 @@ func documentTypePointer(value string) *contactdomain.DocumentType {
 // pointer returns a pointer for value.
 func pointer(value string) *string {
 	return &value
+}
+
+// normalizeSyncMetadata normalizes sync metadata maps.
+func normalizeSyncMetadata(metadata map[string]string) map[string]string {
+	if len(metadata) == 0 {
+		return nil
+	}
+
+	normalized := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			continue
+		}
+		normalized[trimmedKey] = strings.TrimSpace(value)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
+}
+
+// mergeMetadata merges sync metadata into existing contact metadata values.
+func mergeMetadata(existing map[string]string, syncMetadata map[string]string) map[string]string {
+	if len(existing) == 0 && len(syncMetadata) == 0 {
+		return nil
+	}
+
+	merged := make(map[string]string, len(existing)+len(syncMetadata))
+	for key, value := range existing {
+		merged[key] = value
+	}
+	for key, value := range syncMetadata {
+		merged[key] = value
+	}
+
+	return merged
+}
+
+// metadataEqual compares metadata maps.
+func metadataEqual(left map[string]string, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	for key, value := range left {
+		if right[key] != value {
+			return false
+		}
+	}
+
+	return true
+}
+
+// shouldUpdateCreatedAt reports whether sync commands should update existing creation timestamps.
+func shouldUpdateCreatedAt(existing time.Time, candidate *time.Time) bool {
+	if candidate == nil || candidate.IsZero() {
+		return false
+	}
+	if existing.IsZero() {
+		return true
+	}
+
+	return candidate.UTC().Before(existing.UTC())
+}
+
+// cloneTimePointer clones time pointer values.
+func cloneTimePointer(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+
+	copied := value.UTC()
+	return &copied
 }

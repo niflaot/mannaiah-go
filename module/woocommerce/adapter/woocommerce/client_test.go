@@ -37,7 +37,8 @@ func TestValidateAndListOrders(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(writer).Encode([]map[string]any{
 			{
-				"id": 10,
+				"id":           10,
+				"date_created": "2024-03-01T08:00:00Z",
 				"billing": map[string]any{
 					"email":      "john@example.com",
 					"first_name": "John",
@@ -85,6 +86,9 @@ func TestValidateAndListOrders(t *testing.T) {
 	}
 	if orders[0].Metadata["_billing_document"] != "998877" {
 		t.Fatalf("orders[0].Metadata[_billing_document] = %q, want %q", orders[0].Metadata["_billing_document"], "998877")
+	}
+	if orders[0].CreatedAt.UTC().Format(time.RFC3339) != "2024-03-01T08:00:00Z" {
+		t.Fatalf("orders[0].CreatedAt = %v, want %q", orders[0].CreatedAt, "2024-03-01T08:00:00Z")
 	}
 }
 
@@ -233,7 +237,8 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(writer).Encode([]map[string]any{
 			{
-				"id": 42,
+				"id":           42,
+				"date_created": "2024-04-10T12:30:00Z",
 				"billing": map[string]any{
 					"email":      "array.meta@example.com",
 					"first_name": "Array",
@@ -271,6 +276,9 @@ func TestListOrdersMetadataArrayFallback(t *testing.T) {
 	if orders[0].Metadata["_full_payment_orders"] != "1021898" {
 		t.Fatalf("metadata[_full_payment_orders] = %q, want %q", orders[0].Metadata["_full_payment_orders"], "1021898")
 	}
+	if orders[0].CreatedAt.UTC().Format(time.RFC3339) != "2024-04-10T12:30:00Z" {
+		t.Fatalf("orders[0].CreatedAt = %v, want %q", orders[0].CreatedAt, "2024-04-10T12:30:00Z")
+	}
 }
 
 // TestShouldUseRawOrderFallback verifies fallback detection markers.
@@ -302,5 +310,24 @@ func TestCompactError(t *testing.T) {
 	truncated := compactError(longErr, 10)
 	if !strings.HasSuffix(truncated, "...") {
 		t.Fatalf("expected truncated value to end with ellipsis, got %q", truncated)
+	}
+}
+
+// TestParseWooOrderTime verifies WooCommerce order date parsing behavior.
+func TestParseWooOrderTime(t *testing.T) {
+	if !parseWooOrderTime("2024-03-01T08:00:00Z").Equal(time.Date(2024, time.March, 1, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("parseWooOrderTime(rfc3339) should parse UTC values")
+	}
+	if !parseWooOrderTime("2024-03-01 08:00:00").Equal(time.Date(2024, time.March, 1, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("parseWooOrderTime(sql-like) should parse fallback layouts")
+	}
+	if !parseWooOrderTime("2024-03-01T08:00:00-05:00").Equal(time.Date(2024, time.March, 1, 13, 0, 0, 0, time.UTC)) {
+		t.Fatalf("parseWooOrderTime(offset) should normalize to UTC")
+	}
+	if !parseWooOrderTime(" ").IsZero() {
+		t.Fatalf("parseWooOrderTime(blank) should return zero time")
+	}
+	if !parseWooOrderTime("invalid").IsZero() {
+		t.Fatalf("parseWooOrderTime(invalid) should return zero time")
 	}
 }

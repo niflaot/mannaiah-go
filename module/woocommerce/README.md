@@ -5,6 +5,7 @@
 ## Scope
 - WooCommerce adapter and sync orchestration.
 - Contact synchronization from WooCommerce orders into the contacts module.
+- Contact `createdAt` alignment with oldest WooCommerce order dates per email.
 - Manual and scheduled sync triggers.
 - Integration events for sync lifecycle visibility.
 - Configurable circuit-breaker protection for WooCommerce source outages.

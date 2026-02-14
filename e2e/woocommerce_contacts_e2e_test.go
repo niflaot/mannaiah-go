@@ -91,6 +91,28 @@ func TestWooCommerceContactsSyncE2E(t *testing.T) {
 	if meta["total"] != float64(2) {
 		t.Fatalf("meta.total = %v, want %v", meta["total"], float64(2))
 	}
+	data, ok := payload["data"].([]any)
+	if !ok {
+		t.Fatalf("expected contacts data payload")
+	}
+	contact := findContactByEmail(t, data, "woo.one@example.com")
+	createdAt, _ := contact["createdAt"].(string)
+	if createdAt != "2024-03-01T08:00:00Z" {
+		t.Fatalf("woo.one createdAt = %q, want %q", createdAt, "2024-03-01T08:00:00Z")
+	}
+	metadata, ok := contact["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected woo.one metadata payload")
+	}
+	if metadata["integration.source"] != "woocommerce" {
+		t.Fatalf("woo.one metadata integration.source = %v, want %q", metadata["integration.source"], "woocommerce")
+	}
+	if metadata["integration.woocommerce.oldest_order_id"] != "1001" {
+		t.Fatalf("woo.one metadata oldest_order_id = %v, want %q", metadata["integration.woocommerce.oldest_order_id"], "1001")
+	}
+	if metadata["integration.woocommerce.oldest_order_created_at"] != "2024-03-01T08:00:00Z" {
+		t.Fatalf("woo.one metadata oldest_order_created_at = %v, want %q", metadata["integration.woocommerce.oldest_order_created_at"], "2024-03-01T08:00:00Z")
+	}
 
 	harness.tracer.Step("assert e2e trace logs")
 	harness.tracer.AssertStepCount(8)
@@ -335,11 +357,12 @@ func newWooOrdersServer(t *testing.T) *httptest.Server {
 		writer.Header().Set("Content-Type", "application/json")
 		switch page {
 		case "1":
-			writer.Header().Set("X-Wp-Total", "2")
-			writer.Header().Set("X-Wp-Totalpages", "1")
+			writer.Header().Set("X-Wp-Total", "3")
+			writer.Header().Set("X-Wp-Totalpages", "2")
 			_ = json.NewEncoder(writer).Encode([]map[string]any{
 				{
-					"id": 1001,
+					"id":           1002,
+					"date_created": "2024-03-03T10:00:00Z",
 					"billing": map[string]any{
 						"email":      "woo.one@example.com",
 						"first_name": "Woo",
@@ -354,7 +377,29 @@ func newWooOrdersServer(t *testing.T) *httptest.Server {
 					},
 				},
 				{
-					"id": 1002,
+					"id":           1001,
+					"date_created": "2024-03-01T08:00:00Z",
+					"billing": map[string]any{
+						"email":      "woo.one@example.com",
+						"first_name": "Woo",
+						"last_name":  "One",
+						"phone":      "111",
+						"address_1":  "Street 1",
+						"address_2":  "Suite 1",
+						"city":       "Bogota",
+					},
+					"meta_data": []map[string]any{
+						{"key": "_billing_document", "value": "12345"},
+					},
+				},
+			})
+		case "2":
+			writer.Header().Set("X-Wp-Total", "3")
+			writer.Header().Set("X-Wp-Totalpages", "2")
+			_ = json.NewEncoder(writer).Encode([]map[string]any{
+				{
+					"id":           1003,
+					"date_created": "2024-03-02T09:30:00Z",
 					"billing": map[string]any{
 						"email":      "woo.two@example.com",
 						"first_name": "Woo",
@@ -367,8 +412,8 @@ func newWooOrdersServer(t *testing.T) *httptest.Server {
 				},
 			})
 		default:
-			writer.Header().Set("X-Wp-Total", "2")
-			writer.Header().Set("X-Wp-Totalpages", "1")
+			writer.Header().Set("X-Wp-Total", "3")
+			writer.Header().Set("X-Wp-Totalpages", "2")
 			_ = json.NewEncoder(writer).Encode([]map[string]any{})
 		}
 	}))
@@ -445,4 +490,22 @@ func newWooOrdersPageFailureServer(t *testing.T) *httptest.Server {
 			})
 		}
 	}))
+}
+
+// findContactByEmail resolves a contact row from list payload values by email.
+func findContactByEmail(t *testing.T, rows []any, email string) map[string]any {
+	t.Helper()
+
+	for _, row := range rows {
+		typed, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+		if typedEmail, _ := typed["email"].(string); typedEmail == email {
+			return typed
+		}
+	}
+
+	t.Fatalf("contact with email %q not found in payload", email)
+	return nil
 }

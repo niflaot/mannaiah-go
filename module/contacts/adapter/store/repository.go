@@ -192,6 +192,7 @@ func (r *Repository) Update(ctx context.Context, contact *domain.Contact) error 
 			"address":         record.Address,
 			"address_extra":   record.AddressExtra,
 			"city_code":       record.CityCode,
+			"created_at":      record.CreatedAt,
 		})
 		if updateTx.Error != nil {
 			return wrapWriteError("update", updateTx.Error)

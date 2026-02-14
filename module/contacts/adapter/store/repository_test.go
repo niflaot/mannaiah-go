@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 	"mannaiah/module/contacts/domain"
@@ -71,6 +72,38 @@ func TestRepositoryCRUDLifecycle(t *testing.T) {
 	}
 	if _, err := repository.GetByID(context.Background(), entity.ID); !errors.Is(err, port.ErrNotFound) {
 		t.Fatalf("GetByID() after delete error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestRepositoryUpdatePersistsCreatedAt verifies created_at update persistence behavior.
+func TestRepositoryUpdatePersistsCreatedAt(t *testing.T) {
+	repository := newRepositoryForTest(t)
+
+	entity := &domain.Contact{
+		Email:     "created-at@example.com",
+		FirstName: "Created",
+		LastName:  "At",
+	}
+	if err := repository.Create(context.Background(), entity); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	stored, err := repository.GetByID(context.Background(), entity.ID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+
+	expectedCreatedAt := stored.CreatedAt.UTC().Add(-24 * time.Hour).Truncate(time.Second)
+	stored.CreatedAt = expectedCreatedAt
+	if err := repository.Update(context.Background(), stored); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	updated, err := repository.GetByID(context.Background(), entity.ID)
+	if err != nil {
+		t.Fatalf("GetByID() after update error = %v", err)
+	}
+	if !updated.CreatedAt.UTC().Equal(expectedCreatedAt) {
+		t.Fatalf("updated.CreatedAt = %v, want %v", updated.CreatedAt.UTC(), expectedCreatedAt)
 	}
 }
 

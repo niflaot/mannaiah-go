@@ -7,6 +7,8 @@
 - Orchestrate paginated WooCommerce order retrieval.
 - Map order billing fields into contact upsert commands.
 - Perform concurrent contact upserts with run-wide email deduplication.
+- Preserve the oldest WooCommerce order creation date per email as contact `createdAt`.
+- Attach stable sync metadata (source + oldest-order markers) for downstream filtering/auditing.
 - Apply optional circuit-breaker fail-fast behavior for source and upsert dependencies.
 - Emit integration lifecycle events through `application/contact/event`.
 

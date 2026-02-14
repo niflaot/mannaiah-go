@@ -162,6 +162,7 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 			BillingAddress1:  strings.TrimSpace(item.Billing.Address1),
 			BillingAddress2:  strings.TrimSpace(item.Billing.Address2),
 			BillingCity:      strings.TrimSpace(item.Billing.City),
+			CreatedAt:        parseWooOrderTime(item.DateCreated),
 			Metadata:         metadata,
 		})
 	}
@@ -213,8 +214,9 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 		Value any    `json:"value"`
 	}
 	type rawOrder struct {
-		ID      int `json:"id"`
-		Billing struct {
+		ID          int    `json:"id"`
+		DateCreated string `json:"date_created"`
+		Billing     struct {
 			Email     string `json:"email"`
 			FirstName string `json:"first_name"`
 			LastName  string `json:"last_name"`
@@ -253,6 +255,7 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 			BillingAddress1:  strings.TrimSpace(item.Billing.Address1),
 			BillingAddress2:  strings.TrimSpace(item.Billing.Address2),
 			BillingCity:      strings.TrimSpace(item.Billing.City),
+			CreatedAt:        parseWooOrderTime(item.DateCreated),
 			Metadata:         metadata,
 		})
 	}
@@ -333,6 +336,29 @@ func compactError(err error, limit int) string {
 	}
 
 	return value[:limit] + "..."
+}
+
+// parseWooOrderTime parses WooCommerce order date values.
+func parseWooOrderTime(value string) time.Time {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return time.Time{}
+	}
+
+	layouts := [...]string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		parsed, err := time.Parse(layout, trimmed)
+		if err == nil {
+			return parsed.UTC()
+		}
+	}
+
+	return time.Time{}
 }
 
 // validateConfig validates WooCommerce client configuration values.

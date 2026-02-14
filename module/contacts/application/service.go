@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"mannaiah/module/contacts/domain"
 	"mannaiah/module/contacts/port"
@@ -42,6 +43,8 @@ type CreateCommand struct {
 	CityCode string
 	// Metadata defines optional contact metadata values.
 	Metadata map[string]string
+	// CreatedAt defines optional contact creation timestamps.
+	CreatedAt *time.Time
 }
 
 // UpdateCommand defines command-side contact update payload.
@@ -68,6 +71,8 @@ type UpdateCommand struct {
 	CityCode *string
 	// Metadata defines optional metadata updates.
 	Metadata *map[string]string
+	// CreatedAt defines optional creation timestamp updates.
+	CreatedAt *time.Time
 }
 
 // ListResult defines paginated query output for contact listings.
@@ -142,6 +147,10 @@ func (s *ContactService) Create(ctx context.Context, command CreateCommand) (*do
 		AddressExtra:   strings.TrimSpace(command.AddressExtra),
 		CityCode:       strings.TrimSpace(command.CityCode),
 		Metadata:       cloneMetadata(command.Metadata),
+	}
+	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {
+		createdAt := command.CreatedAt.UTC()
+		entity.CreatedAt = createdAt
 	}
 	entity.Normalize()
 	if err := entity.Validate(); err != nil {
@@ -251,6 +260,9 @@ func (s *ContactService) Update(ctx context.Context, id string, command UpdateCo
 	}
 	if command.Metadata != nil {
 		entity.Metadata = cloneMetadata(*command.Metadata)
+	}
+	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {
+		entity.CreatedAt = command.CreatedAt.UTC()
 	}
 
 	entity.Normalize()

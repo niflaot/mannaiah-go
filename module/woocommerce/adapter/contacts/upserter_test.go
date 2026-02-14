@@ -5,6 +5,7 @@ import (
 	errorspkg "errors"
 	"fmt"
 	"testing"
+	"time"
 
 	contactapplication "mannaiah/module/contacts/application"
 	contactdomain "mannaiah/module/contacts/domain"
@@ -111,6 +112,8 @@ func TestUpsertByEmailCreate(t *testing.T) {
 		LastName:       "User",
 		DocumentType:   "CC",
 		DocumentNumber: "1234",
+		CreatedAt:      timePointer(time.Date(2024, time.March, 10, 10, 0, 0, 0, time.UTC)),
+		Metadata:       map[string]string{"integration.source": "woocommerce"},
 	})
 	if upsertErr != nil {
 		t.Fatalf("UpsertByEmail() error = %v", upsertErr)
@@ -124,13 +127,26 @@ func TestUpsertByEmailCreate(t *testing.T) {
 	if mock.created[0].DocumentType != contactdomain.DocumentTypeCC {
 		t.Fatalf("created.DocumentType = %q, want %q", mock.created[0].DocumentType, contactdomain.DocumentTypeCC)
 	}
+	if mock.created[0].CreatedAt == nil || mock.created[0].CreatedAt.UTC().Format(time.RFC3339) != "2024-03-10T10:00:00Z" {
+		t.Fatalf("created.CreatedAt = %v, want %q", mock.created[0].CreatedAt, "2024-03-10T10:00:00Z")
+	}
+	if mock.created[0].Metadata["integration.source"] != "woocommerce" {
+		t.Fatalf("created.Metadata[integration.source] = %q, want %q", mock.created[0].Metadata["integration.source"], "woocommerce")
+	}
 }
 
 // TestUpsertByEmailUpdate verifies update-path behavior.
 func TestUpsertByEmailUpdate(t *testing.T) {
 	mock := &serviceMock{
 		listResult: &contactapplication.ListResult{
-			Data: []contactdomain.Contact{{ID: "contact-1", Email: "existing@example.com", FirstName: "Old", LastName: "User"}},
+			Data: []contactdomain.Contact{{
+				ID:        "contact-1",
+				Email:     "existing@example.com",
+				FirstName: "Old",
+				LastName:  "User",
+				CreatedAt: time.Date(2024, time.March, 12, 10, 0, 0, 0, time.UTC),
+				Metadata:  map[string]string{"marketing.consent": "true"},
+			}},
 		},
 	}
 	upserter, err := NewUpserter(mock)
@@ -146,6 +162,12 @@ func TestUpsertByEmailUpdate(t *testing.T) {
 		Address:      "Street 1",
 		AddressExtra: "Suite 1",
 		CityCode:     "110111",
+		CreatedAt:    timePointer(time.Date(2024, time.March, 10, 9, 0, 0, 0, time.UTC)),
+		Metadata: map[string]string{
+			"integration.source":                              "woocommerce",
+			"integration.woocommerce.oldest_order_id":         "1001",
+			"integration.woocommerce.oldest_order_created_at": "2024-03-10T09:00:00Z",
+		},
 	})
 	if upsertErr != nil {
 		t.Fatalf("UpsertByEmail() error = %v", upsertErr)
@@ -155,6 +177,18 @@ func TestUpsertByEmailUpdate(t *testing.T) {
 	}
 	if len(mock.updateIDs) != 1 || mock.updateIDs[0] != "contact-1" {
 		t.Fatalf("updateIDs = %v, want [contact-1]", mock.updateIDs)
+	}
+	if len(mock.updates) != 1 {
+		t.Fatalf("len(updates) = %d, want %d", len(mock.updates), 1)
+	}
+	if mock.updates[0].CreatedAt == nil || mock.updates[0].CreatedAt.UTC().Format(time.RFC3339) != "2024-03-10T09:00:00Z" {
+		t.Fatalf("updates[0].CreatedAt = %v, want %q", mock.updates[0].CreatedAt, "2024-03-10T09:00:00Z")
+	}
+	if mock.updates[0].Metadata == nil || (*mock.updates[0].Metadata)["marketing.consent"] != "true" {
+		t.Fatalf("updates[0].Metadata should preserve existing values")
+	}
+	if (*mock.updates[0].Metadata)["integration.woocommerce.oldest_order_id"] != "1001" {
+		t.Fatalf("updates[0].Metadata[oldest_order_id] = %q, want %q", (*mock.updates[0].Metadata)["integration.woocommerce.oldest_order_id"], "1001")
 	}
 }
 
@@ -354,13 +388,39 @@ func TestPrivateHelpers(t *testing.T) {
 		t.Fatalf("documentTypePointer(empty) should map empty values")
 	}
 
-	if !hasMeaningfulChange(contactdomain.Contact{Email: "old@example.com"}, port.ContactSyncCommand{Email: "new@example.com"}) {
+	if !hasMeaningfulChange(contactdomain.Contact{Email: "old@example.com"}, port.ContactSyncCommand{Email: "new@example.com"}, nil) {
 		t.Fatalf("hasMeaningfulChange() should detect email changes")
 	}
 	if hasMeaningfulChange(
 		contactdomain.Contact{Email: "same@example.com", FirstName: "A", LastName: "B", Phone: "1", Address: "a", AddressExtra: "b", CityCode: "c", DocumentType: contactdomain.DocumentTypeCC, DocumentNumber: "1"},
 		port.ContactSyncCommand{Email: "same@example.com", FirstName: "A", LastName: "B", Phone: "1", Address: "a", AddressExtra: "b", CityCode: "c", DocumentType: "CE", DocumentNumber: "2"},
+		nil,
 	) {
 		t.Fatalf("hasMeaningfulChange() should ignore document-only changes")
 	}
+	if !shouldUpdateCreatedAt(
+		time.Date(2024, time.March, 12, 10, 0, 0, 0, time.UTC),
+		timePointer(time.Date(2024, time.March, 10, 10, 0, 0, 0, time.UTC)),
+	) {
+		t.Fatalf("shouldUpdateCreatedAt() should update when candidate is older")
+	}
+	merged := mergeMetadata(map[string]string{"a": "1"}, map[string]string{"b": "2"})
+	if len(merged) != 2 || merged["a"] != "1" || merged["b"] != "2" {
+		t.Fatalf("mergeMetadata() should merge maps")
+	}
+	if !metadataEqual(map[string]string{"x": "1"}, map[string]string{"x": "1"}) {
+		t.Fatalf("metadataEqual() should match equal maps")
+	}
+	if metadataEqual(map[string]string{"x": "1"}, map[string]string{"x": "2"}) {
+		t.Fatalf("metadataEqual() should detect differences")
+	}
+	normalized := normalizeSyncMetadata(map[string]string{"  ": "x", " source ": " woo "})
+	if len(normalized) != 1 || normalized["source"] != "woo" {
+		t.Fatalf("normalizeSyncMetadata() = %#v, want source=woo", normalized)
+	}
+}
+
+// timePointer returns time pointers for fixtures.
+func timePointer(value time.Time) *time.Time {
+	return &value
 }

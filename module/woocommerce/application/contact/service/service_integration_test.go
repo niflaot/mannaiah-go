@@ -5,6 +5,7 @@ import (
 	errorspkg "errors"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 	woocontactevent "mannaiah/module/woocommerce/application/contact/event"
@@ -86,12 +87,16 @@ func TestSyncContactsSuccess(t *testing.T) {
 					BillingAddress1:  "Street 1",
 					BillingAddress2:  "Suite 1",
 					BillingCity:      "Bogota",
+					CreatedAt:        mustTimeFromRFC3339(t, "2024-03-04T10:00:00Z"),
+					ID:               1002,
 					Metadata:         map[string]string{billingDocumentMetaKey: "1234"},
 				},
 				{
 					BillingEmail:     "john@example.com",
 					BillingFirstName: "John",
 					BillingLastName:  "Doe",
+					CreatedAt:        mustTimeFromRFC3339(t, "2024-03-01T08:00:00Z"),
+					ID:               1001,
 				},
 				{
 					BillingEmail:     "mary@example.com",
@@ -173,6 +178,15 @@ func TestSyncContactsSuccess(t *testing.T) {
 	}
 	if johnCommand.DocumentType != "CC" {
 		t.Fatalf("john document type = %q, want %q", johnCommand.DocumentType, "CC")
+	}
+	if johnCommand.CreatedAt == nil || johnCommand.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00") != "2024-03-01T08:00:00Z" {
+		t.Fatalf("john createdAt = %v, want %q", johnCommand.CreatedAt, "2024-03-01T08:00:00Z")
+	}
+	if johnCommand.Metadata[syncMetadataOldestOrderIDKey] != "1001" {
+		t.Fatalf("john metadata oldest_order_id = %q, want %q", johnCommand.Metadata[syncMetadataOldestOrderIDKey], "1001")
+	}
+	if johnCommand.Metadata[syncMetadataOldestOrderAtKey] != "2024-03-01T08:00:00Z" {
+		t.Fatalf("john metadata oldest_order_created_at = %q, want %q", johnCommand.Metadata[syncMetadataOldestOrderAtKey], "2024-03-01T08:00:00Z")
 	}
 }
 
@@ -355,4 +369,16 @@ func TestSyncContactsContextCancel(t *testing.T) {
 	if _, syncErr := service.SyncContacts(ctx, "manual"); !errorspkg.Is(syncErr, ErrIntegrationUnavailable) {
 		t.Fatalf("SyncContacts() error = %v, want ErrIntegrationUnavailable", syncErr)
 	}
+}
+
+// mustTimeFromRFC3339 parses RFC3339 time values for test fixtures.
+func mustTimeFromRFC3339(t *testing.T, value string) time.Time {
+	t.Helper()
+
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatalf("time.Parse(%q) error = %v", value, err)
+	}
+
+	return parsed
 }

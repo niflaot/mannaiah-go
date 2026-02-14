@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"mannaiah/module/contacts/domain"
 	"mannaiah/module/contacts/port"
@@ -74,11 +75,15 @@ func TestCreateValidatesDomainRules(t *testing.T) {
 // TestCreatePersistsContact verifies successful creation writes through repository.
 func TestCreatePersistsContact(t *testing.T) {
 	created := false
+	expectedCreatedAt := time.Date(2024, time.March, 10, 10, 0, 0, 0, time.UTC)
 	svc, err := NewService(repositoryMock{
 		createFn: func(ctx context.Context, contact *domain.Contact) error {
 			created = true
 			if contact.Metadata["marketing.consent"] != "true" {
 				t.Fatalf("contact.Metadata[marketing.consent] = %q, want %q", contact.Metadata["marketing.consent"], "true")
+			}
+			if !contact.CreatedAt.Equal(expectedCreatedAt) {
+				t.Fatalf("contact.CreatedAt = %v, want %v", contact.CreatedAt, expectedCreatedAt)
 			}
 			contact.ID = "c-1"
 			return nil
@@ -96,6 +101,7 @@ func TestCreatePersistsContact(t *testing.T) {
 		Email:     "john@example.com",
 		LegalName: "Acme",
 		Metadata:  map[string]string{" marketing.consent ": " true "},
+		CreatedAt: &expectedCreatedAt,
 	})
 	if createErr != nil {
 		t.Fatalf("Create() error = %v", createErr)
@@ -160,8 +166,9 @@ func TestListNormalizesPagination(t *testing.T) {
 
 // TestUpdateAppliesPatch verifies partial updates and validation before persistence.
 func TestUpdateAppliesPatch(t *testing.T) {
-	record := &domain.Contact{ID: "c-1", Email: "a@example.com", FirstName: "John", LastName: "Doe"}
+	record := &domain.Contact{ID: "c-1", Email: "a@example.com", FirstName: "John", LastName: "Doe", CreatedAt: time.Date(2024, time.March, 12, 10, 0, 0, 0, time.UTC)}
 	updated := false
+	expectedCreatedAt := time.Date(2024, time.March, 10, 10, 0, 0, 0, time.UTC)
 
 	svc, err := NewService(repositoryMock{
 		createFn: func(ctx context.Context, contact *domain.Contact) error { return nil },
@@ -176,6 +183,9 @@ func TestUpdateAppliesPatch(t *testing.T) {
 			if contact.Metadata["marketing.consent"] != "true" {
 				t.Fatalf("contact.Metadata[marketing.consent] = %q, want %q", contact.Metadata["marketing.consent"], "true")
 			}
+			if !contact.CreatedAt.Equal(expectedCreatedAt) {
+				t.Fatalf("contact.CreatedAt = %v, want %v", contact.CreatedAt, expectedCreatedAt)
+			}
 			return nil
 		},
 		deleteFn: func(ctx context.Context, id string) error { return nil },
@@ -186,7 +196,7 @@ func TestUpdateAppliesPatch(t *testing.T) {
 
 	newEmail := "next@example.com"
 	metadata := map[string]string{" marketing.consent ": " true "}
-	result, updateErr := svc.Update(context.Background(), "c-1", UpdateCommand{Email: &newEmail, Metadata: &metadata})
+	result, updateErr := svc.Update(context.Background(), "c-1", UpdateCommand{Email: &newEmail, Metadata: &metadata, CreatedAt: &expectedCreatedAt})
 	if updateErr != nil {
 		t.Fatalf("Update() error = %v", updateErr)
 	}

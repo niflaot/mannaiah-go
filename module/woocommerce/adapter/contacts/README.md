@@ -7,6 +7,8 @@
 - Create contacts when missing.
 - Update contacts when present.
 - Handle duplicate-create races through find-and-update fallback.
+- Merge sync metadata into existing contact metadata without dropping non-sync keys.
+- Backfill older WooCommerce order timestamps into contact `createdAt` when needed.
 
 ## Key Methods / Endpoints / Events
 - Methods:

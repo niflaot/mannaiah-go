@@ -13,6 +13,7 @@ import (
 
 // TestMapOrderToCommand verifies order-to-command mapping behavior.
 func TestMapOrderToCommand(t *testing.T) {
+	orderCreatedAt := time.Date(2024, time.January, 2, 3, 4, 5, 0, time.UTC)
 	command, shouldProcess := mapOrderToCommand(port.WooOrder{
 		BillingEmail:     " user@example.com ",
 		BillingFirstName: "First",
@@ -21,6 +22,8 @@ func TestMapOrderToCommand(t *testing.T) {
 		BillingAddress1:  "Street 1",
 		BillingAddress2:  "Suite 1",
 		BillingCity:      "Bogota",
+		CreatedAt:        orderCreatedAt,
+		ID:               9001,
 		Metadata:         map[string]string{billingDocumentMetaKey: "  98765 "},
 	})
 	if !shouldProcess {
@@ -34,6 +37,18 @@ func TestMapOrderToCommand(t *testing.T) {
 	}
 	if command.DocumentType != "CC" {
 		t.Fatalf("command.DocumentType = %q, want %q", command.DocumentType, "CC")
+	}
+	if command.CreatedAt == nil || !command.CreatedAt.Equal(orderCreatedAt) {
+		t.Fatalf("command.CreatedAt = %v, want %v", command.CreatedAt, orderCreatedAt)
+	}
+	if command.Metadata[syncMetadataSourceKey] != syncMetadataSourceValue {
+		t.Fatalf("command.Metadata[source] = %q, want %q", command.Metadata[syncMetadataSourceKey], syncMetadataSourceValue)
+	}
+	if command.Metadata[syncMetadataOldestOrderIDKey] != "9001" {
+		t.Fatalf("command.Metadata[oldest_order_id] = %q, want %q", command.Metadata[syncMetadataOldestOrderIDKey], "9001")
+	}
+	if command.Metadata[syncMetadataOldestOrderAtKey] != "2024-01-02T03:04:05Z" {
+		t.Fatalf("command.Metadata[oldest_order_created_at] = %q, want %q", command.Metadata[syncMetadataOldestOrderAtKey], "2024-01-02T03:04:05Z")
 	}
 
 	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "   "})
@@ -54,6 +69,40 @@ func TestMapOrderToCommand(t *testing.T) {
 	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "user@example.com", BillingFirstName: "", BillingLastName: "Doe", BillingCompany: ""})
 	if shouldProcess {
 		t.Fatalf("expected order without personal names and company to be skipped")
+	}
+}
+
+// TestCollectCommandsFromOrdersKeepsOldestCreatedAt verifies duplicate-email command merge behavior.
+func TestCollectCommandsFromOrdersKeepsOldestCreatedAt(t *testing.T) {
+	summary := &SyncSummary{}
+	commandIndexByEmail := map[string]int{}
+	commands := collectCommandsFromOrders([]port.WooOrder{
+		{
+			ID:               1002,
+			BillingEmail:     "same@example.com",
+			BillingFirstName: "Same",
+			BillingLastName:  "User",
+			CreatedAt:        time.Date(2024, time.March, 10, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:               1001,
+			BillingEmail:     "same@example.com",
+			BillingFirstName: "Same",
+			BillingLastName:  "User",
+			CreatedAt:        time.Date(2024, time.March, 8, 9, 0, 0, 0, time.UTC),
+		},
+	}, commandIndexByEmail, nil, summary)
+	if len(commands) != 1 {
+		t.Fatalf("len(commands) = %d, want %d", len(commands), 1)
+	}
+	if commands[0].CreatedAt == nil || commands[0].CreatedAt.UTC().Format(time.RFC3339) != "2024-03-08T09:00:00Z" {
+		t.Fatalf("commands[0].CreatedAt = %v, want %q", commands[0].CreatedAt, "2024-03-08T09:00:00Z")
+	}
+	if commands[0].Metadata[syncMetadataOldestOrderIDKey] != "1001" {
+		t.Fatalf("commands[0].Metadata[oldest_order_id] = %q, want %q", commands[0].Metadata[syncMetadataOldestOrderIDKey], "1001")
+	}
+	if summary.Skipped != 1 {
+		t.Fatalf("summary.Skipped = %d, want %d", summary.Skipped, 1)
 	}
 }
 
@@ -148,7 +197,8 @@ func TestProcessCommandsContextTimeout(t *testing.T) {
 	summary := &SyncSummary{}
 	commands := collectCommandsFromOrders(
 		[]port.WooOrder{{BillingEmail: "timeout@example.com", BillingFirstName: "Time", BillingLastName: "Out"}},
-		map[string]struct{}{},
+		map[string]int{},
+		nil,
 		summary,
 	)
 	if processErr := service.processCommands(ctx, commands, summary); !errorspkg.Is(processErr, context.DeadlineExceeded) {

@@ -162,7 +162,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 		return nil, err
 	}
 
-	seenEmails := map[string]struct{}{}
+	commandIndexByEmail := map[string]int{}
 	pendingCommands := make([]port.ContactSyncCommand, 0)
 	page := 1
 	for {
@@ -182,7 +182,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			break
 		}
 
-		pendingCommands = append(pendingCommands, collectCommandsFromOrders(orders, seenEmails, summary)...)
+		pendingCommands = collectCommandsFromOrders(orders, commandIndexByEmail, pendingCommands, summary)
 
 		if !hasNext {
 			break

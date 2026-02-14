@@ -1,9 +1,18 @@
 package service
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"mannaiah/module/woocommerce/port"
+)
+
+const (
+	syncMetadataSourceKey        = "integration.source"
+	syncMetadataSourceValue      = "woocommerce"
+	syncMetadataOldestOrderIDKey = "integration.woocommerce.oldest_order_id"
+	syncMetadataOldestOrderAtKey = "integration.woocommerce.oldest_order_created_at"
 )
 
 // mapOrderToCommand maps WooCommerce orders into contact upsert command values.
@@ -31,6 +40,7 @@ func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
 	if !hasPersonalName {
 		legalName = company
 	}
+	createdAt := resolveCreatedAt(order.CreatedAt)
 
 	return port.ContactSyncCommand{
 		Email:          email,
@@ -43,6 +53,8 @@ func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
 		CityCode:       strings.TrimSpace(order.BillingCity),
 		DocumentType:   documentType,
 		DocumentNumber: documentNumber,
+		CreatedAt:      createdAt,
+		Metadata:       buildSyncMetadata(order.ID, createdAt),
 	}, true
 }
 
@@ -65,4 +77,29 @@ func normalizePhone(value string) string {
 	}
 
 	return "+57" + normalized
+}
+
+// resolveCreatedAt resolves non-zero source timestamps to UTC pointers.
+func resolveCreatedAt(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+
+	resolved := value.UTC()
+	return &resolved
+}
+
+// buildSyncMetadata resolves sync metadata values stored on synchronized contacts.
+func buildSyncMetadata(orderID int, createdAt *time.Time) map[string]string {
+	metadata := map[string]string{
+		syncMetadataSourceKey: syncMetadataSourceValue,
+	}
+	if orderID > 0 {
+		metadata[syncMetadataOldestOrderIDKey] = strconv.Itoa(orderID)
+	}
+	if createdAt != nil {
+		metadata[syncMetadataOldestOrderAtKey] = createdAt.UTC().Format(time.RFC3339)
+	}
+
+	return metadata
 }
