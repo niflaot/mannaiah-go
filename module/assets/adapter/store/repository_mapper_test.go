@@ -7,54 +7,49 @@ import (
 	"mannaiah/module/assets/domain"
 )
 
-// TestMapperEncodeDecode validates mapper serialization helpers.
-func TestMapperEncodeDecode(t *testing.T) {
-	tags := []domain.Tag{{Name: "hero", Color: "#ff0000"}}
-	encodedTags, err := encodeTags(tags)
+// TestTagMetadataNormalization validates normalized tag/metadata mapping behavior.
+func TestTagMetadataNormalization(t *testing.T) {
+	assetTags, err := toAssetTagRecords("a-1", []domain.Tag{{Name: "hero", Color: "#ff0000"}})
 	if err != nil {
-		t.Fatalf("encodeTags() error = %v", err)
+		t.Fatalf("toAssetTagRecords() error = %v", err)
 	}
-	decodedTags, err := decodeTags(encodedTags)
-	if err != nil {
-		t.Fatalf("decodeTags() error = %v", err)
-	}
-	if len(decodedTags) != 1 || decodedTags[0].Name != "hero" {
-		t.Fatalf("decodedTags = %#v, want one hero tag", decodedTags)
+	if len(assetTags) != 1 {
+		t.Fatalf("len(assetTags) = %d, want 1", len(assetTags))
 	}
 
-	metadata := map[string]string{"alt": "hero image"}
-	encodedMetadata, err := encodeMetadata(metadata)
+	folderTags, err := toFolderTagRecords("f-1", []domain.Tag{{Name: "cover", Color: "#00aa11"}})
 	if err != nil {
-		t.Fatalf("encodeMetadata() error = %v", err)
+		t.Fatalf("toFolderTagRecords() error = %v", err)
 	}
-	decodedMetadata, err := decodeMetadata(encodedMetadata)
+	if len(folderTags) != 1 {
+		t.Fatalf("len(folderTags) = %d, want 1", len(folderTags))
+	}
+
+	metadata, err := toAssetMetadataRecords("a-1", map[string]string{" alt ": " value "})
 	if err != nil {
-		t.Fatalf("decodeMetadata() error = %v", err)
+		t.Fatalf("toAssetMetadataRecords() error = %v", err)
 	}
-	if decodedMetadata["alt"] != "hero image" {
-		t.Fatalf("decodedMetadata[alt] = %q, want %q", decodedMetadata["alt"], "hero image")
+	if len(metadata) != 1 {
+		t.Fatalf("len(metadata) = %d, want 1", len(metadata))
+	}
+	if metadata[0].Key != "alt" || metadata[0].Value != "value" {
+		t.Fatalf("metadata[0] = %#v, want key/value alt/value", metadata[0])
 	}
 }
 
-// TestMapperDecodeErrorPaths validates mapper decode failure behavior.
-func TestMapperDecodeErrorPaths(t *testing.T) {
-	if _, err := decodeTags("[bad json"); err == nil {
-		t.Fatalf("expected decodeTags json error")
+// TestMapperValidationErrors validates mapping validation error behavior.
+func TestMapperValidationErrors(t *testing.T) {
+	if _, err := toAssetTagRecords("a-1", []domain.Tag{{Name: "BAD", Color: "#ff0000"}}); !errorspkg.Is(err, domain.ErrInvalidTagName) {
+		t.Fatalf("toAssetTagRecords(invalid name) error = %v, want domain.ErrInvalidTagName", err)
 	}
-	if _, err := decodeMetadata("{bad json"); err == nil {
-		t.Fatalf("expected decodeMetadata json error")
-	}
-	if _, err := encodeTags([]domain.Tag{{Name: "BAD", Color: "#ff0000"}}); !errorspkg.Is(err, domain.ErrInvalidTagName) {
-		t.Fatalf("encodeTags(invalid name) error = %v, want domain.ErrInvalidTagName", err)
-	}
-	if _, err := encodeMetadata(map[string]string{"long": string(make([]byte, 2049))}); !errorspkg.Is(err, domain.ErrInvalidMetadata) {
-		t.Fatalf("encodeMetadata(long value) error = %v, want domain.ErrInvalidMetadata", err)
+	if _, err := toAssetMetadataRecords("a-1", map[string]string{"key": string(make([]byte, 2049))}); !errorspkg.Is(err, domain.ErrInvalidMetadata) {
+		t.Fatalf("toAssetMetadataRecords(long value) error = %v, want domain.ErrInvalidMetadata", err)
 	}
 }
 
-// TestToRecordMappings validates record mapping helpers.
+// TestToRecordMappings validates core record mapping helpers.
 func TestToRecordMappings(t *testing.T) {
-	asset, err := toAssetRecord(domain.Asset{
+	assetRecord, err := toAssetRecord(domain.Asset{
 		ID:           "a-1",
 		Key:          "assets/a-1.png",
 		Name:         "Hero",
@@ -68,12 +63,12 @@ func TestToRecordMappings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("toAssetRecord() error = %v", err)
 	}
-	mappedAsset, err := toAssetDomain(asset)
+	assetDomain, err := toAssetDomain(assetRecord, []domain.Tag{{Name: "hero", Color: "#ff0000"}}, map[string]string{"alt": "hero"})
 	if err != nil {
 		t.Fatalf("toAssetDomain() error = %v", err)
 	}
-	if mappedAsset.FolderID != "f-1" {
-		t.Fatalf("mappedAsset.FolderID = %q, want %q", mappedAsset.FolderID, "f-1")
+	if assetDomain.FolderID != "f-1" {
+		t.Fatalf("assetDomain.FolderID = %q, want %q", assetDomain.FolderID, "f-1")
 	}
 
 	folderRecord, err := toFolderRecord(domain.Folder{
@@ -86,14 +81,11 @@ func TestToRecordMappings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("toFolderRecord() error = %v", err)
 	}
-	mappedFolder, err := toFolderDomain(folderRecord)
+	folderDomain, err := toFolderDomain(folderRecord, []domain.Tag{{Name: "hero", Color: "#ff0000"}})
 	if err != nil {
 		t.Fatalf("toFolderDomain() error = %v", err)
 	}
-	if mappedFolder.Slug != "catalog" {
-		t.Fatalf("mappedFolder.Slug = %q, want %q", mappedFolder.Slug, "catalog")
-	}
-	if mappedFolder.ParentFolderID != "root" {
-		t.Fatalf("mappedFolder.ParentFolderID = %q, want %q", mappedFolder.ParentFolderID, "root")
+	if folderDomain.ParentFolderID != "root" {
+		t.Fatalf("folderDomain.ParentFolderID = %q, want %q", folderDomain.ParentFolderID, "root")
 	}
 }

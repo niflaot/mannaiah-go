@@ -28,32 +28,49 @@ func (r *Repository) CreateFolder(ctx context.Context, folder *domain.Folder) er
 		}
 	}
 
-	if err := r.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return fmt.Errorf("create folder record: %w", err)
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return fmt.Errorf("create folder record: %w", err)
+		}
+		if err := replaceFolderTags(tx, record.ID, folder.Tags); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	mapped, err := toFolderDomain(record)
+	loaded, err := r.GetFolderByID(ctx, record.ID)
 	if err != nil {
 		return err
 	}
-	*folder = mapped
+	*folder = *loaded
+
 	return nil
 }
 
 // GetFolderByID loads folder metadata rows by id.
 func (r *Repository) GetFolderByID(ctx context.Context, id string) (*domain.Folder, error) {
+	trimmedID := strings.TrimSpace(id)
+
 	var record folderRecord
-	if err := r.db.WithContext(ctx).First(&record, "id = ?", strings.TrimSpace(id)).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&record, "id = ?", trimmedID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("get folder record: %w", err)
 	}
 
-	entity, err := toFolderDomain(record)
+	tagMap, err := loadFolderTagMap(r.db.WithContext(ctx), []string{trimmedID})
 	if err != nil {
 		return nil, err
 	}
+	entity, err := toFolderDomain(record, tagMap[trimmedID])
+	if err != nil {
+		return nil, err
+	}
+
 	return &entity, nil
 }
 
@@ -75,9 +92,18 @@ func (r *Repository) ListFolders(ctx context.Context, query port.ListQuery) (*po
 		return nil, fmt.Errorf("list folder records: %w", err)
 	}
 
+	folderIDs := make([]string, 0, len(records))
+	for _, record := range records {
+		folderIDs = append(folderIDs, record.ID)
+	}
+	tagMap, err := loadFolderTagMap(r.db.WithContext(ctx), folderIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	data := make([]domain.Folder, 0, len(records))
 	for _, record := range records {
-		mapped, mapErr := toFolderDomain(record)
+		mapped, mapErr := toFolderDomain(record, tagMap[record.ID])
 		if mapErr != nil {
 			return nil, mapErr
 		}
@@ -126,11 +152,9 @@ func (r *Repository) UpdateFolder(ctx context.Context, id string, update port.Fo
 			}
 		}
 		if update.Tags != nil {
-			encodedTags, encodeErr := encodeTags(*update.Tags)
-			if encodeErr != nil {
-				return encodeErr
+			if err := replaceFolderTags(tx, trimmedID, *update.Tags); err != nil {
+				return err
 			}
-			record.TagsJSON = encodedTags
 		}
 
 		if saveErr := tx.Save(&record).Error; saveErr != nil {
@@ -175,6 +199,9 @@ func (r *Repository) SoftDeleteFolder(ctx context.Context, id string) error {
 			Where("deleted_at IS NULL").
 			Update("folder_id", nil).Error; err != nil {
 			return fmt.Errorf("detach assets from folder: %w", err)
+		}
+		if err := tx.Where("folder_id IN ?", folderIDs).Delete(&folderTagRecord{}).Error; err != nil {
+			return fmt.Errorf("delete folder tags: %w", err)
 		}
 
 		return nil

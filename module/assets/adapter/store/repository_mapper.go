@@ -1,8 +1,7 @@
 package store
 
 import (
-	"encoding/json"
-	"fmt"
+	"sort"
 	"strings"
 
 	"mannaiah/module/assets/domain"
@@ -15,15 +14,6 @@ func toAssetRecord(asset domain.Asset) (assetRecord, error) {
 		return assetRecord{}, err
 	}
 
-	tags, err := encodeTags(asset.Tags)
-	if err != nil {
-		return assetRecord{}, err
-	}
-	metadata, err := encodeMetadata(asset.Metadata)
-	if err != nil {
-		return assetRecord{}, err
-	}
-
 	record := assetRecord{
 		ID:           asset.ID,
 		Key:          asset.Key,
@@ -31,8 +21,6 @@ func toAssetRecord(asset domain.Asset) (assetRecord, error) {
 		OriginalName: asset.OriginalName,
 		MimeType:     asset.MimeType,
 		Size:         asset.Size,
-		TagsJSON:     tags,
-		MetadataJSON: metadata,
 	}
 	if asset.FolderID != "" {
 		folderID := asset.FolderID
@@ -42,17 +30,8 @@ func toAssetRecord(asset domain.Asset) (assetRecord, error) {
 	return record, nil
 }
 
-// toAssetDomain maps persistence records into domain assets.
-func toAssetDomain(record assetRecord) (domain.Asset, error) {
-	tags, err := decodeTags(record.TagsJSON)
-	if err != nil {
-		return domain.Asset{}, err
-	}
-	metadata, err := decodeMetadata(record.MetadataJSON)
-	if err != nil {
-		return domain.Asset{}, err
-	}
-
+// toAssetDomain maps persistence records and relations into domain assets.
+func toAssetDomain(record assetRecord, tags []domain.Tag, metadata map[string]string) (domain.Asset, error) {
 	entity := domain.Asset{
 		ID:           record.ID,
 		Key:          record.Key,
@@ -74,6 +53,9 @@ func toAssetDomain(record assetRecord) (domain.Asset, error) {
 		entity.DeletedAt = &deletedAt
 	}
 	entity.Normalize()
+	if err := entity.ValidateCreate(); err != nil {
+		return domain.Asset{}, err
+	}
 
 	return entity, nil
 }
@@ -85,16 +67,10 @@ func toFolderRecord(folder domain.Folder) (folderRecord, error) {
 		return folderRecord{}, err
 	}
 
-	tags, err := encodeTags(folder.Tags)
-	if err != nil {
-		return folderRecord{}, err
-	}
-
 	record := folderRecord{
-		ID:       folder.ID,
-		Name:     folder.Name,
-		Slug:     folder.Slug,
-		TagsJSON: tags,
+		ID:   folder.ID,
+		Name: folder.Name,
+		Slug: folder.Slug,
 	}
 	if folder.ParentFolderID != "" {
 		parentID := folder.ParentFolderID
@@ -104,13 +80,8 @@ func toFolderRecord(folder domain.Folder) (folderRecord, error) {
 	return record, nil
 }
 
-// toFolderDomain maps persistence records into domain folders.
-func toFolderDomain(record folderRecord) (domain.Folder, error) {
-	tags, err := decodeTags(record.TagsJSON)
-	if err != nil {
-		return domain.Folder{}, err
-	}
-
+// toFolderDomain maps persistence records and relations into domain folders.
+func toFolderDomain(record folderRecord, tags []domain.Tag) (domain.Folder, error) {
 	entity := domain.Folder{
 		ID:             record.ID,
 		Name:           record.Name,
@@ -129,86 +100,102 @@ func toFolderDomain(record folderRecord) (domain.Folder, error) {
 		entity.DeletedAt = &deletedAt
 	}
 	entity.Normalize()
+	if err := entity.ValidateCreate(); err != nil {
+		return domain.Folder{}, err
+	}
 
 	return entity, nil
 }
 
-// encodeTags serializes domain tags for persistence.
-func encodeTags(tags []domain.Tag) (string, error) {
-	if tags == nil {
-		tags = []domain.Tag{}
-	}
-	if err := validateAndNormalizeTags(tags); err != nil {
-		return "", err
-	}
-
-	encoded, err := json.Marshal(tags)
+// toAssetTagRecords maps domain tags into normalized asset-tag rows.
+func toAssetTagRecords(assetID string, tags []domain.Tag) ([]assetTagRecord, error) {
+	normalized, err := normalizeAndValidateTags(tags)
 	if err != nil {
-		return "", fmt.Errorf("marshal tags: %w", err)
-	}
-
-	return string(encoded), nil
-}
-
-// decodeTags deserializes persisted tag values.
-func decodeTags(raw string) ([]domain.Tag, error) {
-	if raw == "" {
-		return []domain.Tag{}, nil
-	}
-
-	decoded := make([]domain.Tag, 0)
-	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal tags: %w", err)
-	}
-	if err := validateAndNormalizeTags(decoded); err != nil {
 		return nil, err
 	}
 
-	return decoded, nil
+	records := make([]assetTagRecord, 0, len(normalized))
+	for _, value := range normalized {
+		records = append(records, assetTagRecord{
+			AssetID: strings.TrimSpace(assetID),
+			Name:    value.Name,
+			Color:   value.Color,
+		})
+	}
+
+	return records, nil
 }
 
-// encodeMetadata serializes asset metadata for persistence.
-func encodeMetadata(metadata map[string]string) (string, error) {
+// toFolderTagRecords maps domain tags into normalized folder-tag rows.
+func toFolderTagRecords(folderID string, tags []domain.Tag) ([]folderTagRecord, error) {
+	normalized, err := normalizeAndValidateTags(tags)
+	if err != nil {
+		return nil, err
+	}
+
+	records := make([]folderTagRecord, 0, len(normalized))
+	for _, value := range normalized {
+		records = append(records, folderTagRecord{
+			FolderID: strings.TrimSpace(folderID),
+			Name:     value.Name,
+			Color:    value.Color,
+		})
+	}
+
+	return records, nil
+}
+
+// toAssetMetadataRecords maps metadata maps into normalized rows.
+func toAssetMetadataRecords(assetID string, metadata map[string]string) ([]assetMetadataRecord, error) {
 	normalized := normalizeMetadata(metadata)
 	if err := validateMetadata(normalized); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	encoded, err := json.Marshal(normalized)
-	if err != nil {
-		return "", fmt.Errorf("marshal metadata: %w", err)
+	keys := make([]string, 0, len(normalized))
+	for key := range normalized {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	records := make([]assetMetadataRecord, 0, len(keys))
+	for _, key := range keys {
+		records = append(records, assetMetadataRecord{
+			AssetID: strings.TrimSpace(assetID),
+			Key:     key,
+			Value:   normalized[key],
+		})
 	}
 
-	return string(encoded), nil
+	return records, nil
 }
 
-// decodeMetadata deserializes persisted metadata values.
-func decodeMetadata(raw string) (map[string]string, error) {
-	if raw == "" {
-		return map[string]string{}, nil
+// toDomainTags maps normalized rows into domain tags.
+func toDomainTags[T interface {
+	getName() string
+	getColor() string
+}](values []T) []domain.Tag {
+	tags := make([]domain.Tag, 0, len(values))
+	for _, value := range values {
+		tags = append(tags, domain.Tag{Name: value.getName(), Color: value.getColor()})
 	}
 
-	decoded := map[string]string{}
-	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal metadata: %w", err)
-	}
+	return tags
+}
 
-	normalized := normalizeMetadata(decoded)
-	if err := validateMetadata(normalized); err != nil {
+// normalizeAndValidateTags canonicalizes and validates tag arrays.
+func normalizeAndValidateTags(tags []domain.Tag) ([]domain.Tag, error) {
+	normalized := make([]domain.Tag, len(tags))
+	copy(normalized, tags)
+	for index := range normalized {
+		normalized[index].Name = trim(normalized[index].Name)
+		normalized[index].Color = trim(normalized[index].Color)
+	}
+	if err := domain.ValidateTagsForStore(normalized); err != nil {
 		return nil, err
 	}
 
 	return normalized, nil
-}
-
-// validateAndNormalizeTags canonicalizes and validates tag arrays.
-func validateAndNormalizeTags(tags []domain.Tag) error {
-	for index := range tags {
-		tags[index].Name = trim(tags[index].Name)
-		tags[index].Color = trim(tags[index].Color)
-	}
-
-	return domain.ValidateTagsForStore(tags)
 }
 
 // normalizeMetadata canonicalizes metadata keys and values.
@@ -243,4 +230,34 @@ func validateMetadata(metadata map[string]string) error {
 // trim normalizes string values by trimming whitespace.
 func trim(value string) string {
 	return strings.TrimSpace(value)
+}
+
+// getName returns tag names from asset tag rows.
+func (r assetTagRecord) getName() string {
+	return r.Name
+}
+
+// getColor returns tag colors from asset tag rows.
+func (r assetTagRecord) getColor() string {
+	return r.Color
+}
+
+// getName returns tag names from folder tag rows.
+func (r folderTagRecord) getName() string {
+	return r.Name
+}
+
+// getColor returns tag colors from folder tag rows.
+func (r folderTagRecord) getColor() string {
+	return r.Color
+}
+
+// toDomainMetadata maps normalized metadata rows into metadata maps.
+func toDomainMetadata(records []assetMetadataRecord) map[string]string {
+	metadata := make(map[string]string, len(records))
+	for _, record := range records {
+		metadata[record.Key] = record.Value
+	}
+
+	return metadata
 }

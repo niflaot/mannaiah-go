@@ -319,6 +319,95 @@ func TestNormalizePagination(t *testing.T) {
 	}
 }
 
+// TestEnsureSchemaMigratesLegacyJSONRelations verifies legacy JSON migration into normalized tables.
+func TestEnsureSchemaMigratesLegacyJSONRelations(t *testing.T) {
+	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("coredb.Open() error = %v", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+	})
+
+	ctx := context.Background()
+	if err := db.WithContext(ctx).Exec(`
+		CREATE TABLE assets (
+			id TEXT PRIMARY KEY,
+			key TEXT NOT NULL,
+			name TEXT NOT NULL,
+			original_name TEXT NOT NULL,
+			folder_id TEXT,
+			mime_type TEXT NOT NULL,
+			size INTEGER NOT NULL,
+			tags_json TEXT,
+			metadata_json TEXT,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME
+		);
+	`).Error; err != nil {
+		t.Fatalf("create legacy assets table error = %v", err)
+	}
+	if err := db.WithContext(ctx).Exec(`
+		CREATE TABLE asset_folders (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL,
+			parent_folder_id TEXT,
+			tags_json TEXT,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME
+		);
+	`).Error; err != nil {
+		t.Fatalf("create legacy asset_folders table error = %v", err)
+	}
+	if err := db.WithContext(ctx).Exec(`
+		INSERT INTO asset_folders (id, name, slug, tags_json, created_at, updated_at)
+		VALUES ('f-1', 'Folder', 'folder', '[{"name":"hero","color":"#ff0000"}]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+	`).Error; err != nil {
+		t.Fatalf("insert legacy folder row error = %v", err)
+	}
+	if err := db.WithContext(ctx).Exec(`
+		INSERT INTO assets (id, key, name, original_name, folder_id, mime_type, size, tags_json, metadata_json, created_at, updated_at)
+		VALUES ('a-1', 'assets/a-1.png', 'Asset', 'a-1.png', 'f-1', 'image/png', 10, '[{"name":"hero","color":"#ff0000"}]', '{"alt":"hero"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+	`).Error; err != nil {
+		t.Fatalf("insert legacy asset row error = %v", err)
+	}
+
+	repository, err := NewRepository(db)
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	if err := repository.EnsureSchema(ctx); err != nil {
+		t.Fatalf("EnsureSchema() error = %v", err)
+	}
+
+	asset, err := repository.GetByID(ctx, "a-1")
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if len(asset.Tags) != 1 || asset.Tags[0].Name != "hero" {
+		t.Fatalf("asset.Tags = %#v, want one hero tag", asset.Tags)
+	}
+	if asset.Metadata["alt"] != "hero" {
+		t.Fatalf("asset.Metadata[alt] = %q, want %q", asset.Metadata["alt"], "hero")
+	}
+
+	folder, err := repository.GetFolderByID(ctx, "f-1")
+	if err != nil {
+		t.Fatalf("GetFolderByID() error = %v", err)
+	}
+	if len(folder.Tags) != 1 || folder.Tags[0].Name != "hero" {
+		t.Fatalf("folder.Tags = %#v, want one hero tag", folder.Tags)
+	}
+}
+
 // newRepositoryForTest creates a repository bound to in-memory sqlite.
 func newRepositoryForTest(t *testing.T) *Repository {
 	t.Helper()

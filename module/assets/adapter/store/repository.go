@@ -37,10 +37,6 @@ type assetRecord struct {
 	MimeType string `gorm:"size:255;not null"`
 	// Size defines object size in bytes.
 	Size int64 `gorm:"not null"`
-	// TagsJSON defines serialized tag values.
-	TagsJSON string `gorm:"type:text"`
-	// MetadataJSON defines serialized metadata values.
-	MetadataJSON string `gorm:"type:text"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
@@ -59,8 +55,6 @@ type folderRecord struct {
 	Slug string `gorm:"size:191;uniqueIndex:idx_asset_folders_slug;not null"`
 	// ParentFolderID defines optional parent-folder identifiers for nested folders.
 	ParentFolderID *string `gorm:"size:64;index"`
-	// TagsJSON defines serialized tag values.
-	TagsJSON string `gorm:"type:text"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
@@ -79,6 +73,57 @@ func (folderRecord) TableName() string {
 	return "asset_folders"
 }
 
+// assetTagRecord defines normalized asset tag rows.
+type assetTagRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// AssetID defines owning asset identifiers.
+	AssetID string `gorm:"size:64;not null;index;uniqueIndex:idx_asset_tags_asset_name,priority:1"`
+	// Name defines lowercase tag labels.
+	Name string `gorm:"size:64;not null;uniqueIndex:idx_asset_tags_asset_name,priority:2"`
+	// Color defines lowercase hex color values.
+	Color string `gorm:"size:7;not null"`
+}
+
+// TableName defines storage table names.
+func (assetTagRecord) TableName() string {
+	return "asset_tags"
+}
+
+// assetMetadataRecord defines normalized asset metadata rows.
+type assetMetadataRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// AssetID defines owning asset identifiers.
+	AssetID string `gorm:"size:64;not null;index;uniqueIndex:idx_asset_metadata_asset_key,priority:1"`
+	// Key defines metadata keys.
+	Key string `gorm:"size:128;not null;uniqueIndex:idx_asset_metadata_asset_key,priority:2"`
+	// Value defines metadata values.
+	Value string `gorm:"type:text;not null"`
+}
+
+// TableName defines storage table names.
+func (assetMetadataRecord) TableName() string {
+	return "asset_metadata"
+}
+
+// folderTagRecord defines normalized folder tag rows.
+type folderTagRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// FolderID defines owning folder identifiers.
+	FolderID string `gorm:"size:64;not null;index;uniqueIndex:idx_folder_tags_folder_name,priority:1"`
+	// Name defines lowercase tag labels.
+	Name string `gorm:"size:64;not null;uniqueIndex:idx_folder_tags_folder_name,priority:2"`
+	// Color defines lowercase hex color values.
+	Color string `gorm:"size:7;not null"`
+}
+
+// TableName defines storage table names.
+func (folderTagRecord) TableName() string {
+	return "folder_tags"
+}
+
 var (
 	// _ ensures Repository satisfies asset repository contracts.
 	_ port.Repository = (*Repository)(nil)
@@ -95,8 +140,17 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 
 // EnsureSchema migrates asset persistence schema.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(&folderRecord{}, &assetRecord{}); err != nil {
+	if err := r.db.WithContext(ctx).AutoMigrate(
+		&folderRecord{},
+		&assetRecord{},
+		&assetTagRecord{},
+		&assetMetadataRecord{},
+		&folderTagRecord{},
+	); err != nil {
 		return fmt.Errorf("migrate asset schema: %w", err)
+	}
+	if err := r.migrateLegacyRelations(ctx); err != nil {
+		return err
 	}
 
 	return nil

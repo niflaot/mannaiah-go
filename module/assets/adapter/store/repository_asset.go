@@ -18,22 +18,37 @@ func (r *Repository) Create(ctx context.Context, asset *domain.Asset) error {
 		return err
 	}
 
-	if err := r.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return fmt.Errorf("create asset record: %w", err)
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return fmt.Errorf("create asset record: %w", err)
+		}
+		if err := replaceAssetTags(tx, record.ID, asset.Tags); err != nil {
+			return err
+		}
+		if err := replaceAssetMetadata(tx, record.ID, asset.Metadata); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	mapped, err := toAssetDomain(record)
+	loaded, err := r.GetByID(ctx, record.ID)
 	if err != nil {
 		return err
 	}
-	*asset = mapped
+	*asset = *loaded
+
 	return nil
 }
 
 // GetByID retrieves asset rows by id.
 func (r *Repository) GetByID(ctx context.Context, id string) (*domain.Asset, error) {
+	trimmedID := strings.TrimSpace(id)
+
 	var record assetRecord
-	if err := r.db.WithContext(ctx).First(&record, "id = ?", strings.TrimSpace(id)).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&record, "id = ?", trimmedID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, port.ErrNotFound
 		}
@@ -41,10 +56,20 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*domain.Asset, err
 		return nil, fmt.Errorf("get asset record: %w", err)
 	}
 
-	entity, err := toAssetDomain(record)
+	tagMap, err := loadAssetTagMap(r.db.WithContext(ctx), []string{trimmedID})
 	if err != nil {
 		return nil, err
 	}
+	metadataMap, err := loadAssetMetadataMap(r.db.WithContext(ctx), []string{trimmedID})
+	if err != nil {
+		return nil, err
+	}
+
+	entity, err := toAssetDomain(record, tagMap[trimmedID], metadataMap[trimmedID])
+	if err != nil {
+		return nil, err
+	}
+
 	return &entity, nil
 }
 
@@ -65,9 +90,22 @@ func (r *Repository) List(ctx context.Context, query port.ListQuery) (*port.Page
 		return nil, fmt.Errorf("list asset records: %w", err)
 	}
 
+	assetIDs := make([]string, 0, len(records))
+	for _, record := range records {
+		assetIDs = append(assetIDs, record.ID)
+	}
+	tagMap, err := loadAssetTagMap(r.db.WithContext(ctx), assetIDs)
+	if err != nil {
+		return nil, err
+	}
+	metadataMap, err := loadAssetMetadataMap(r.db.WithContext(ctx), assetIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	result := make([]domain.Asset, 0, len(records))
 	for _, record := range records {
-		mapped, mapErr := toAssetDomain(record)
+		mapped, mapErr := toAssetDomain(record, tagMap[record.ID], metadataMap[record.ID])
 		if mapErr != nil {
 			return nil, mapErr
 		}
@@ -114,18 +152,14 @@ func (r *Repository) Update(ctx context.Context, id string, update port.AssetUpd
 			}
 		}
 		if update.Tags != nil {
-			encodedTags, err := encodeTags(*update.Tags)
-			if err != nil {
+			if err := replaceAssetTags(tx, trimmedID, *update.Tags); err != nil {
 				return err
 			}
-			record.TagsJSON = encodedTags
 		}
 		if update.Metadata != nil {
-			encodedMetadata, err := encodeMetadata(*update.Metadata)
-			if err != nil {
+			if err := replaceAssetMetadata(tx, trimmedID, *update.Metadata); err != nil {
 				return err
 			}
-			record.MetadataJSON = encodedMetadata
 		}
 
 		if err := tx.Save(&record).Error; err != nil {
@@ -149,15 +183,25 @@ func (r *Repository) Update(ctx context.Context, id string, update port.AssetUpd
 
 // SoftDelete soft-deletes asset metadata rows.
 func (r *Repository) SoftDelete(ctx context.Context, id string) error {
-	tx := r.db.WithContext(ctx).Delete(&assetRecord{}, "id = ?", strings.TrimSpace(id))
-	if tx.Error != nil {
-		return fmt.Errorf("soft delete asset record: %w", tx.Error)
-	}
-	if tx.RowsAffected == 0 {
-		return port.ErrNotFound
-	}
+	trimmedID := strings.TrimSpace(id)
 
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		deleteTx := tx.Delete(&assetRecord{}, "id = ?", trimmedID)
+		if deleteTx.Error != nil {
+			return fmt.Errorf("soft delete asset record: %w", deleteTx.Error)
+		}
+		if deleteTx.RowsAffected == 0 {
+			return port.ErrNotFound
+		}
+		if err := tx.Where("asset_id = ?", trimmedID).Delete(&assetTagRecord{}).Error; err != nil {
+			return fmt.Errorf("delete asset tag records: %w", err)
+		}
+		if err := tx.Where("asset_id = ?", trimmedID).Delete(&assetMetadataRecord{}).Error; err != nil {
+			return fmt.Errorf("delete asset metadata records: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // applyAssetListFilters applies list search filters across relevant columns.

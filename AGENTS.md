@@ -43,6 +43,10 @@
 - Keep code modular, reusable, and self-explanatory.
 - For third-party integrations, prefer maintained libraries/SDKs behind adapters instead of custom protocol clients unless there is a justified gap.
 - For external or unstable dependencies (remote APIs, cache, database connections, auth/JWKS), use configurable circuit breakers where practical, and test open-state graceful degradation behavior.
+- For SQL-backed persistence, prefer normalized relational schemas by default:
+  - avoid storing queryable business structures as opaque JSON/text blobs when they can be modeled as relational child tables
+  - enforce integrity with explicit keys/indexes/uniqueness constraints where applicable
+  - when denormalization is intentionally chosen for performance, document the rationale and add consistency safeguards/tests
 - Reduce file complexity through composition and package splitting:
   - avoid concentrating multiple responsibilities in a single file
   - split long services/stores into focused collaborators (for example, constructor/config, operations, mapping/validation, resilience helpers)
