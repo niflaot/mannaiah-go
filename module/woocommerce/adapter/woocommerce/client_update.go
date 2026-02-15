@@ -2,11 +2,12 @@ package woocommerce
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	wc "github.com/jmolboy/woocommerce-go"
 	wcentity "github.com/jmolboy/woocommerce-go/entity"
+	messagingplatform "mannaiah/module/core/messaging/platform"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -21,36 +22,63 @@ func (c *Client) UpdateOrderFromMainstream(ctx context.Context, command port.Mai
 		return err
 	}
 
-	request, err := c.toUpdateOrderRequest(ctx, command)
+	request, err := c.toUpdateOrderRawRequest(ctx, command)
 	if err != nil {
 		return err
 	}
-	if _, err := c.client.Services.Order.Update(orderID, request); err != nil {
-		return fmt.Errorf("update woocommerce order %d: %w", orderID, err)
+	if len(request) == 0 {
+		return nil
 	}
 
+	if err := c.updateOrderRaw(ctx, orderID, request); err != nil {
+		wrapped := fmt.Errorf("update woocommerce order %d: %w", orderID, err)
+		if isWooClientError(err) {
+			return messagingplatform.NonRetriable(wrapped)
+		}
+		return wrapped
+	}
 	return nil
 }
 
-// toUpdateOrderRequest maps mainstream order update commands to WooCommerce SDK requests.
-func (c *Client) toUpdateOrderRequest(ctx context.Context, command port.MainstreamOrderUpdateCommand) (wc.UpdateOrderRequest, error) {
+// toUpdateOrderRawRequest maps mainstream order update commands to WooCommerce raw update payloads.
+func (c *Client) toUpdateOrderRawRequest(ctx context.Context, command port.MainstreamOrderUpdateCommand) (map[string]any, error) {
 	lineItems, feeLines, err := c.resolveOrderItemsForUpdate(ctx, command.Items)
 	if err != nil {
-		return wc.UpdateOrderRequest{}, err
+		return nil, err
 	}
 
-	request := wc.UpdateOrderRequest{
-		LineItems:     lineItems,
-		ShippingLines: mapShippingLinesForUpdate(command.ShippingCharges),
-		FeeLines:      feeLines,
+	request := map[string]any{}
+
+	mappedLineItems := mapLineItemsForRawUpdate(lineItems)
+	if len(mappedLineItems) > 0 {
+		request["line_items"] = mappedLineItems
+	}
+
+	mappedShippingLines := mapShippingLinesForRawUpdate(mapShippingLinesForUpdate(command.ShippingCharges))
+	if len(mappedShippingLines) > 0 {
+		request["shipping_lines"] = mappedShippingLines
+	}
+
+	mappedFeeLines := mapFeeLinesForRawUpdate(feeLines)
+	if len(mappedFeeLines) > 0 {
+		request["fee_lines"] = mappedFeeLines
 	}
 
 	if command.ShippingAddress != nil {
 		shipping := mapShippingAddressForUpdate(*command.ShippingAddress)
-		request.Shipping = &shipping
+		request["shipping"] = map[string]any{
+			"address_1": strings.TrimSpace(shipping.Address1),
+			"address_2": strings.TrimSpace(shipping.Address2),
+			"city":      strings.TrimSpace(shipping.City),
+		}
 
 		billing := mapBillingAddressForUpdate(*command.ShippingAddress)
-		request.Billing = &billing
+		request["billing"] = map[string]any{
+			"address_1": strings.TrimSpace(billing.Address1),
+			"address_2": strings.TrimSpace(billing.Address2),
+			"city":      strings.TrimSpace(billing.City),
+			"phone":     strings.TrimSpace(billing.Phone),
+		}
 	}
 
 	return request, nil
@@ -130,6 +158,98 @@ func (c *Client) resolveWooProductIDBySKU(ctx context.Context, sku string) (int,
 	}
 
 	return resolvedID, nil
+}
+
+// isWooClientError reports whether WooCommerce client errors are HTTP 4xx and should not be retried.
+func isWooClientError(err error) bool {
+	var apiErr *wooAPIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode >= 400 && apiErr.StatusCode < 500
+	}
+
+	return false
+}
+
+// mapLineItemsForRawUpdate maps SDK line-item values to WooCommerce raw update payload values.
+func mapLineItemsForRawUpdate(values []wcentity.LineItem) []map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		if value.ProductId <= 0 {
+			continue
+		}
+
+		quantity := value.Quantity
+		if quantity <= 0 {
+			quantity = 1
+		}
+
+		rows = append(rows, map[string]any{
+			"product_id": value.ProductId,
+			"quantity":   quantity,
+			"total":      formatWooDecimal(value.Total),
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
+}
+
+// mapShippingLinesForRawUpdate maps SDK shipping-line values to WooCommerce raw update payload values.
+func mapShippingLinesForRawUpdate(values []wcentity.ShippingLine) []map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodId)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		if methodID == "" && methodTitle == "" {
+			continue
+		}
+
+		rows = append(rows, map[string]any{
+			"method_id":    methodID,
+			"method_title": methodTitle,
+			"total":        formatWooDecimal(value.Total),
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
+}
+
+// mapFeeLinesForRawUpdate maps SDK fee-line values to WooCommerce raw update payload values.
+func mapFeeLinesForRawUpdate(values []wcentity.FeeLine) []map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		name := strings.TrimSpace(value.Name)
+		if name == "" {
+			continue
+		}
+
+		rows = append(rows, map[string]any{
+			"name":  name,
+			"total": formatWooDecimal(value.Total),
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
 }
 
 // mapShippingLinesForUpdate maps shipping charge payload values to WooCommerce shipping-line values.

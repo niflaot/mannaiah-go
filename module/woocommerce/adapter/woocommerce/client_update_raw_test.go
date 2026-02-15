@@ -3,12 +3,14 @@ package woocommerce
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	messagingplatform "mannaiah/module/core/messaging/platform"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -120,5 +122,132 @@ func TestResolveOrderItemsForUpdateUsesRawSKUResolution(t *testing.T) {
 	}
 	if len(feeLines) != 1 || feeLines[0].Name != "SKU-MISSING" || feeLines[0].Total != 8000 {
 		t.Fatalf("feeLines = %+v, want one fallback fee row", feeLines)
+	}
+}
+
+// TestUpdateOrderFromMainstreamUsesRawPayload verifies WooCommerce raw update payload mapping behavior.
+func TestUpdateOrderFromMainstreamUsesRawPayload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/wp-json/wc/v3/products":
+			sku := strings.TrimSpace(request.URL.Query().Get("sku"))
+			writer.WriteHeader(http.StatusOK)
+			if sku == "SKU-1" {
+				_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 901}})
+				return
+			}
+			_ = json.NewEncoder(writer).Encode([]map[string]any{})
+		case "/wp-json/wc/v3/orders/1023650":
+			if request.Method != http.MethodPut {
+				t.Fatalf("request.Method = %q, want %q", request.Method, http.MethodPut)
+			}
+			body, err := io.ReadAll(request.Body)
+			if err != nil {
+				t.Fatalf("ReadAll(request.Body) error = %v", err)
+			}
+
+			payload := map[string]any{}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Fatalf("json.Unmarshal() error = %v", err)
+			}
+
+			lineItems, _ := payload["line_items"].([]any)
+			if len(lineItems) != 1 {
+				t.Fatalf("line_items length = %d, want %d", len(lineItems), 1)
+			}
+			firstLineItem, _ := lineItems[0].(map[string]any)
+			if firstLineItem["product_id"].(float64) != 901 {
+				t.Fatalf("line_items[0].product_id = %v, want %d", firstLineItem["product_id"], 901)
+			}
+			if firstLineItem["total"] != "120000.00" {
+				t.Fatalf("line_items[0].total = %v, want %q", firstLineItem["total"], "120000.00")
+			}
+
+			feeLines, _ := payload["fee_lines"].([]any)
+			if len(feeLines) != 1 {
+				t.Fatalf("fee_lines length = %d, want %d", len(feeLines), 1)
+			}
+			firstFeeLine, _ := feeLines[0].(map[string]any)
+			if firstFeeLine["name"] != "Quota" {
+				t.Fatalf("fee_lines[0].name = %v, want %q", firstFeeLine["name"], "Quota")
+			}
+
+			shippingLines, _ := payload["shipping_lines"].([]any)
+			if len(shippingLines) != 1 {
+				t.Fatalf("shipping_lines length = %d, want %d", len(shippingLines), 1)
+			}
+			firstShippingLine, _ := shippingLines[0].(map[string]any)
+			if firstShippingLine["total"] != "9000.00" {
+				t.Fatalf("shipping_lines[0].total = %v, want %q", firstShippingLine["total"], "9000.00")
+			}
+
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write([]byte(`{"id":1023650}`))
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:        server.URL,
+		consumerKey:    "key",
+		consumerSecret: "secret",
+		timeout:        time.Second,
+		verifySSL:      true,
+	}
+
+	err := client.UpdateOrderFromMainstream(context.Background(), port.MainstreamOrderUpdateCommand{
+		Identifier: "1023650",
+		Items: []port.OrderSyncItem{
+			{SKU: "SKU-1", Quantity: 2, Value: 120000},
+			{Name: "Quota", Quantity: 1, Value: 15000},
+		},
+		ShippingCharges: []port.OrderSyncShippingCharge{
+			{MethodID: "flat_rate", MethodTitle: "Flat Rate", Price: 9000},
+		},
+		ShippingAddress: &port.OrderSyncShippingAddress{
+			Address:  "Street 1",
+			Address2: "Apt 2",
+			Phone:    "3001234567",
+			CityCode: "11001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateOrderFromMainstream() error = %v", err)
+	}
+}
+
+// TestUpdateOrderFromMainstreamMarks4xxNonRetriable verifies non-retriable error classification for WooCommerce 4xx failures.
+func TestUpdateOrderFromMainstreamMarks4xxNonRetriable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/wp-json/wc/v3/orders/1023650" {
+			writer.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(`{"code":"rest_invalid_param","message":"Parámetro(s) no válido(s): line_items, shipping_lines"}`))
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:        server.URL,
+		consumerKey:    "key",
+		consumerSecret: "secret",
+		timeout:        time.Second,
+		verifySSL:      true,
+	}
+
+	err := client.UpdateOrderFromMainstream(context.Background(), port.MainstreamOrderUpdateCommand{
+		Identifier: "1023650",
+		ShippingCharges: []port.OrderSyncShippingCharge{
+			{MethodID: "flat_rate", MethodTitle: "Flat Rate", Price: 9000},
+		},
+	})
+	if err == nil {
+		t.Fatalf("UpdateOrderFromMainstream() error = nil, want non-nil")
+	}
+	if !messagingplatform.IsNonRetriable(err) {
+		t.Fatalf("expected non-retriable error, got %v", err)
 	}
 }
