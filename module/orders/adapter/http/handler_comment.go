@@ -28,7 +28,7 @@ func (h *Handler) addComment(ctx corehttp.Context) error {
 		Author:   request.Author,
 		Comment:  request.Comment,
 		Internal: request.Internal,
-		Source:   request.Source,
+		Source:   resolveCommandSource(ctx, request.Source),
 	})
 	if err != nil {
 		return h.mapError(err)

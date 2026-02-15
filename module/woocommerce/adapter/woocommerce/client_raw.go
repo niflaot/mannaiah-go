@@ -69,16 +69,7 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 		return nil, false, fmt.Errorf("create raw orders request: %w", requestErr)
 	}
 
-	httpClient := &http.Client{
-		Timeout: c.timeout,
-	}
-	if !c.verifySSL {
-		httpClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
-
-	response, responseErr := httpClient.Do(request)
+	response, responseErr := c.rawHTTPClient().Do(request)
 	if responseErr != nil {
 		return nil, false, fmt.Errorf("execute raw orders request: %w", responseErr)
 	}
@@ -168,4 +159,18 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 	totalPages, _ := strconv.Atoi(response.Header.Get("X-Wp-Totalpages"))
 	isLastPage := page >= totalPages && totalPages > 0
 	return result, resolveHasNextPage(page, pageSize, len(result), totalPages, isLastPage), nil
+}
+
+// rawHTTPClient resolves HTTP clients for tolerant raw WooCommerce endpoint calls.
+func (c *Client) rawHTTPClient() *http.Client {
+	httpClient := &http.Client{
+		Timeout: c.timeout,
+	}
+	if !c.verifySSL {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	return httpClient
 }

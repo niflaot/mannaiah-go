@@ -3,7 +3,6 @@ package woocommerce
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	wc "github.com/jmolboy/woocommerce-go"
@@ -125,19 +124,12 @@ func (c *Client) resolveWooProductIDBySKU(ctx context.Context, sku string) (int,
 		return 0, err
 	}
 
-	params := wc.ProductsQueryParams{SKU: strings.TrimSpace(sku)}
-	params.Page = 1
-	params.PerPage = 1
-
-	items, _, _, _, err := c.client.Services.Product.All(params)
+	resolvedID, err := c.resolveWooProductIDBySKURaw(ctx, strings.TrimSpace(sku))
 	if err != nil {
 		return 0, fmt.Errorf("resolve woocommerce product by sku %q: %w", sku, err)
 	}
-	if len(items) == 0 {
-		return 0, nil
-	}
 
-	return items[0].ID, nil
+	return resolvedID, nil
 }
 
 // mapShippingLinesForUpdate maps shipping charge payload values to WooCommerce shipping-line values.
@@ -187,19 +179,4 @@ func mapBillingAddressForUpdate(value port.OrderSyncShippingAddress) wcentity.Bi
 		City:     strings.TrimSpace(value.CityCode),
 		Phone:    strings.TrimSpace(value.Phone),
 	}
-}
-
-// parseWooOrderID parses WooCommerce numeric order identifiers.
-func parseWooOrderID(value string) (int, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return 0, fmt.Errorf("resolve woocommerce order id: empty identifier")
-	}
-
-	id, err := strconv.Atoi(trimmed)
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("resolve woocommerce order id from identifier %q", trimmed)
-	}
-
-	return id, nil
 }

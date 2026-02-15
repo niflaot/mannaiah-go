@@ -28,7 +28,7 @@ func (h *Handler) update(ctx corehttp.Context) error {
 		Items:           mapOptionalCreateItems(request.Items),
 		ShippingAddress: mapOptionalShippingAddress(request.ShippingAddress),
 		ShippingCharges: mapOptionalShippingCharges(request.ShippingCharges),
-		Source:          request.Source,
+		Source:          resolveCommandSource(ctx, request.Source),
 	}
 	entity, err := h.service.Update(ctx.Context(), ctx.Params("id"), command)
 	if err != nil {

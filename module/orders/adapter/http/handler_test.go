@@ -3,7 +3,9 @@ package http
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	stdhttp "net/http"
 	"testing"
 
@@ -116,7 +118,7 @@ func TestOrderEndpoints(t *testing.T) {
 			}, nil
 		},
 		updateFn: func(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
-			if command.ShippingAddress == nil || command.ShippingAddress.CityCode != "05001" {
+			if command.ShippingAddress == nil || command.ShippingAddress.CityCode != "05001" || command.Source != "woocommerce_plugin" {
 				t.Fatalf("unexpected update command: %+v", command)
 			}
 			return &ordersdomain.Order{ID: id, Identifier: "wo-1"}, nil
@@ -157,6 +159,7 @@ func TestOrderEndpoints(t *testing.T) {
 
 	updateOrderReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/orders/o-1", bytes.NewBufferString(`{"shippingAddress":{"address":"Street 1","cityCode":"05001"}}`))
 	updateOrderReq.Header.Set("Content-Type", "application/json")
+	updateOrderReq.Header.Set("X-Sync-Source", "woocommerce_plugin")
 	updateOrderResp := runRequest(t, server, updateOrderReq)
 	if updateOrderResp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("PATCH /orders/:id status = %d, want %d", updateOrderResp.StatusCode, stdhttp.StatusOK)
@@ -302,6 +305,54 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 	if forbiddenResp.StatusCode != stdhttp.StatusForbidden {
 		t.Fatalf("status = %d, want %d", forbiddenResp.StatusCode, stdhttp.StatusForbidden)
 	}
+}
+
+// TestResolveCommandSource verifies payload and header source resolution behavior.
+func TestResolveCommandSource(t *testing.T) {
+	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8161}, nil)
+	if err != nil {
+		t.Fatalf("corehttp.New() error = %v", err)
+	}
+	server.RegisterRoutes(func(router corehttp.Router) {
+		router.Get("/source", func(ctx corehttp.Context) error {
+			return ctx.JSON(map[string]string{
+				"body":   resolveCommandSource(ctx, "body_source"),
+				"header": resolveCommandSource(ctx, ""),
+			})
+		})
+	})
+
+	request, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/source", nil)
+	request.Header.Set("X-Sync-Source", "header_source")
+	response := runRequest(t, server, request)
+	if response.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("GET /source status = %d, want %d", response.StatusCode, stdhttp.StatusOK)
+	}
+
+	body := decodeJSONBody(t, response)
+	if body["body"] != "body_source" {
+		t.Fatalf("body source = %q, want %q", body["body"], "body_source")
+	}
+	if body["header"] != "header_source" {
+		t.Fatalf("header source = %q, want %q", body["header"], "header_source")
+	}
+}
+
+// decodeJSONBody decodes response bodies to JSON map payloads.
+func decodeJSONBody(t *testing.T, response *stdhttp.Response) map[string]string {
+	t.Helper()
+
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("ReadAll(response.Body) error = %v", err)
+	}
+
+	result := map[string]string{}
+	if err := json.Unmarshal(payload, &result); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	return result
 }
 
 // newHandlerForTest creates handlers for tests.

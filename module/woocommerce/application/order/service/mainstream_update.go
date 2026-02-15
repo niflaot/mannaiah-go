@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -46,6 +47,14 @@ func (s *MainstreamUpdateService) HandleOrderEvent(ctx context.Context, payload 
 		return nil
 	}
 	if strings.TrimSpace(payload.Identifier) == "" {
+		return nil
+	}
+	if !isWooNumericIdentifier(payload.Identifier) {
+		s.logger.Debug(
+			"skip woocommerce outbound update for non-numeric identifier",
+			zap.String("identifier", strings.TrimSpace(payload.Identifier)),
+			zap.String("realm", strings.TrimSpace(payload.Realm)),
+		)
 		return nil
 	}
 
@@ -118,6 +127,17 @@ func isLoopSource(source string) bool {
 	}
 
 	return strings.HasPrefix(normalized, "woocommerce")
+}
+
+// isWooNumericIdentifier reports whether identifier values are valid WooCommerce numeric order identifiers.
+func isWooNumericIdentifier(identifier string) bool {
+	trimmed := strings.TrimSpace(identifier)
+	if trimmed == "" {
+		return false
+	}
+
+	value, err := strconv.Atoi(trimmed)
+	return err == nil && value > 0
 }
 
 // executeOptionalBreaker executes operations behind optional circuit breakers.

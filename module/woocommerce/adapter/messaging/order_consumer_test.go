@@ -109,7 +109,7 @@ func TestHandleErrors(t *testing.T) {
 	if err := registrar.handlers[ordersport.TopicOrderCreated](context.Background(), bus.Message{
 		Topic:   ordersport.TopicOrderCreated,
 		Payload: []byte(`{"identifier":"1001","realm":"woocommerce"}`),
-	}); err != nil {
-		t.Fatalf("handler() error = %v, want nil", err)
+	}); err == nil {
+		t.Fatalf("handler() error = nil, want non-nil")
 	}
 }

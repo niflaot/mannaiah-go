@@ -7,6 +7,8 @@ const (
 	ordersTag = "orders"
 	// bearerSecurityScheme defines the OpenAPI security scheme key used for bearer auth.
 	bearerSecurityScheme = "orders_bearer"
+	// syncSourceHeader defines optional request headers used to resolve mutation source values.
+	syncSourceHeader = "X-Sync-Source"
 )
 
 // OpenAPISpec returns order-module OpenAPI documentation.
@@ -87,6 +89,9 @@ func createOrderOperation() *openapi3.Operation {
 		Summary:     "Create a new order",
 		Tags:        []string{ordersTag},
 		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
+		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCreate"),
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(201, responseWithDescription("The order has been successfully created.")),
@@ -151,6 +156,7 @@ func updateOrderOperation() *openapi3.Operation {
 		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderUpdate"),
 		Responses: openapi3.NewResponses(
@@ -172,6 +178,7 @@ func updateOrderStatusOperation() *openapi3.Operation {
 		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderStatusUpdate"),
 		Responses: openapi3.NewResponses(
@@ -193,6 +200,7 @@ func addOrderCommentOperation() *openapi3.Operation {
 		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCommentCreate"),
 		Responses: openapi3.NewResponses(
@@ -244,6 +252,16 @@ func pathParameter(name, description string, schema *openapi3.Schema) *openapi3.
 			WithDescription(description).
 			WithSchema(schema),
 	}
+}
+
+// headerParameter builds optional header-parameter OpenAPI definitions.
+func headerParameter(name, description string, schema *openapi3.Schema) *openapi3.ParameterRef {
+	parameter := openapi3.NewHeaderParameter(name).
+		WithDescription(description).
+		WithSchema(schema)
+	parameter.Required = false
+
+	return &openapi3.ParameterRef{Value: parameter}
 }
 
 // orderCreateSchema returns request schema for order creation payloads.

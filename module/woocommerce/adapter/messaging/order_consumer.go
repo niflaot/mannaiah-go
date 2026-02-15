@@ -81,7 +81,7 @@ func (c *OrderConsumer) handleMessage(ctx context.Context, topic string, message
 
 	if err := c.handler.HandleOrderEvent(ctx, payload); err != nil {
 		c.logger.Warn("handle order integration event failed", zap.String("topic", topic), zap.Error(err))
-		return nil
+		return err
 	}
 
 	return nil

@@ -51,6 +51,9 @@ func TestHandleOrderEventSkipsNonWooAndLoopSources(t *testing.T) {
 	if err := service.HandleOrderEvent(context.Background(), ordersport.OrderEventPayload{Realm: "woocommerce", Source: "woocommerce_sync", Identifier: "1001"}); err != nil {
 		t.Fatalf("HandleOrderEvent(loop-source) error = %v", err)
 	}
+	if err := service.HandleOrderEvent(context.Background(), ordersport.OrderEventPayload{Realm: "woocommerce", Identifier: "internal-1"}); err != nil {
+		t.Fatalf("HandleOrderEvent(non-numeric-identifier) error = %v", err)
+	}
 	if destination.command.Identifier != "" {
 		t.Fatalf("unexpected command capture: %+v", destination.command)
 	}
@@ -113,3 +116,15 @@ func TestHandleOrderEventErrors(t *testing.T) {
 	}
 }
 
+// TestIsWooNumericIdentifier verifies WooCommerce numeric identifier checks.
+func TestIsWooNumericIdentifier(t *testing.T) {
+	if !isWooNumericIdentifier("1001") {
+		t.Fatalf("isWooNumericIdentifier(1001) = false, want true")
+	}
+	if isWooNumericIdentifier("internal-1") {
+		t.Fatalf("isWooNumericIdentifier(internal-1) = true, want false")
+	}
+	if isWooNumericIdentifier("0") {
+		t.Fatalf("isWooNumericIdentifier(0) = true, want false")
+	}
+}

@@ -20,6 +20,11 @@ var (
 	ErrInvalidQuery = errors.New("invalid query parameters")
 )
 
+const (
+	// syncSourceHeader defines optional request headers used to resolve mutation source values.
+	syncSourceHeader = "X-Sync-Source"
+)
+
 // Authorizer defines authentication and authorization behavior required by order endpoints.
 type Authorizer interface {
 	// Require authenticates and authorizes requests using required permissions.
@@ -184,7 +189,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		Items:           mapCreateItems(request.Items),
 		ShippingCharges: mapShippingCharges(request.ShippingCharges),
 		Metadata:        request.Metadata,
-		Source:          request.Source,
+		Source:          resolveCommandSource(ctx, request.Source),
 	}
 	if request.ShippingAddress != nil {
 		command.ShippingAddress = &ordersapplication.ShippingAddressCommand{
@@ -249,13 +254,23 @@ func (h *Handler) updateStatus(ctx corehttp.Context) error {
 		Description: request.Description,
 		NoteOwner:   request.NoteOwner,
 		Note:        request.Note,
-		Source:      request.Source,
+		Source:      resolveCommandSource(ctx, request.Source),
 	})
 	if err != nil {
 		return h.mapError(err)
 	}
 
 	return ctx.Status(200).JSON(entity)
+}
+
+// resolveCommandSource resolves mutation source values from request payload and headers.
+func resolveCommandSource(ctx corehttp.Context, source string) string {
+	trimmed := strings.TrimSpace(source)
+	if trimmed != "" {
+		return trimmed
+	}
+
+	return strings.TrimSpace(ctx.GetHeader(syncSourceHeader, ""))
 }
 
 // mapCreateItems maps request item payloads to application command values.
