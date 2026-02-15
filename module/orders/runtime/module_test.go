@@ -26,7 +26,7 @@ func (customerSourceProbe) GetByID(ctx context.Context, id string) (*ordersport.
 // TestNewAndRegisterRoutes verifies module wiring and route registration.
 func TestNewAndRegisterRoutes(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db, customerSourceProbe{})
+	module, err := New(db, customerSourceProbe{}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -62,10 +62,10 @@ func TestRegisterRoutesNilModule(t *testing.T) {
 func TestNewValidation(t *testing.T) {
 	db := newDBForTest(t)
 
-	if _, err := New(nil, customerSourceProbe{}); !errors.Is(err, ordersstore.ErrNilDB) {
+	if _, err := New(nil, customerSourceProbe{}, nil); !errors.Is(err, ordersstore.ErrNilDB) {
 		t.Fatalf("New(nil) error = %v, want ErrNilDB", err)
 	}
-	if _, err := New(db, nil); !errors.Is(err, ordersapplication.ErrNilCustomerSource) {
+	if _, err := New(db, nil, nil); !errors.Is(err, ordersapplication.ErrNilCustomerSource) {
 		t.Fatalf("New(nil customer source) error = %v, want ErrNilCustomerSource", err)
 	}
 }
@@ -92,7 +92,7 @@ func (l *loaderProbe) AddOpenAPISpec(spec *openapi3.T) error {
 // TestModuleLoad verifies module self-loading behavior for routes and OpenAPI specs.
 func TestModuleLoad(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db, customerSourceProbe{})
+	module, err := New(db, customerSourceProbe{}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -123,7 +123,7 @@ func (failingLoaderProbe) AddOpenAPISpec(spec *openapi3.T) error {
 // TestModuleLoadError verifies loader merge failures are returned.
 func TestModuleLoadError(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db, customerSourceProbe{})
+	module, err := New(db, customerSourceProbe{}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -136,7 +136,7 @@ func TestModuleLoadError(t *testing.T) {
 // TestModuleLoadNilLoader verifies nil loader behavior.
 func TestModuleLoadNilLoader(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db, customerSourceProbe{})
+	module, err := New(db, customerSourceProbe{}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -149,7 +149,7 @@ func TestModuleLoadNilLoader(t *testing.T) {
 // TestSetAuthorizer verifies optional authorizer wiring behavior.
 func TestSetAuthorizer(t *testing.T) {
 	db := newDBForTest(t)
-	module, err := New(db, customerSourceProbe{})
+	module, err := New(db, customerSourceProbe{}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

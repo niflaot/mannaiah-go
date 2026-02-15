@@ -23,10 +23,12 @@
 - `adapter/orders`: orders upsert adapter via orders + contacts application services.
 - `adapter/http`: protected sync endpoint adapters.
 - `adapter/event`: core messaging publication adapter.
+- `adapter/messaging`: cross-module order integration event consumer adapter.
 
 ## Key Methods / Endpoints / Events
 - Methods:
   - `woocommerce.New(cfg, contactService, orderService, scheduler, logger, publishers...)`
+  - `woocommerce.NewWithMessaging(cfg, contactService, orderService, scheduler, logger, registrar, publishers...)`
   - `(*woocommerce.Module).Load(loader)`
   - `(*woocommerce.Module).Start(ctx)`
   - `(*woocommerce.Module).Stop(ctx)`
@@ -41,3 +43,7 @@
   - `woocommerce.v1.orders.sync.started`
   - `woocommerce.v1.orders.sync.completed`
   - `woocommerce.v1.orders.sync.failed`
+  - Consumes:
+    - `orders.v1.created`
+    - `orders.v1.updated`
+    - `orders.v1.status.updated`

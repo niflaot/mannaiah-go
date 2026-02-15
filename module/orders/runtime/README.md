@@ -4,7 +4,7 @@
 
 ## Key Methods / Endpoints / Events
 - Methods:
-  - `runtime.New(db, customerSource, resolvers...)`
+  - `runtime.New(db, customerSource, publisher, resolvers...)`
   - `(*runtime.Module).RegisterRoutes(router)`
   - `(*runtime.Module).SetAuthorizer(authorizer)`
   - `(*runtime.Module).Service()`
@@ -14,5 +14,9 @@
   - `POST /orders`
   - `GET /orders`
   - `GET /orders/:id`
+  - `PATCH /orders/:id`
   - `PATCH /orders/:id/status`
-- Events: none in this package.
+- Events:
+  - `orders.v1.created`
+  - `orders.v1.updated`
+  - `orders.v1.status.updated`

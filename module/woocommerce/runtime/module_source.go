@@ -12,8 +12,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// orderGateway defines WooCommerce source and destination behavior used by runtime composition.
+type orderGateway interface {
+	port.OrderSource
+	port.OrderDestination
+}
+
 // newSource creates WooCommerce order source adapters from module config values.
-func newSource(cfg Config) (port.OrderSource, error) {
+func newSource(cfg Config) (orderGateway, error) {
 	return wooadapter.NewClient(wooadapter.Config{
 		URL:            cfg.URL,
 		ConsumerKey:    cfg.ConsumerKey,
@@ -60,4 +66,9 @@ func (f failingSource) Validate(ctx context.Context) error {
 // ListOrders returns startup validation failures.
 func (f failingSource) ListOrders(ctx context.Context, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
 	return nil, false, f.err
+}
+
+// UpdateOrderFromMainstream returns startup validation failures.
+func (f failingSource) UpdateOrderFromMainstream(ctx context.Context, command port.MainstreamOrderUpdateCommand) error {
+	return f.err
 }

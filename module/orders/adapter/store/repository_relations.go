@@ -175,7 +175,20 @@ func applyListQuery(tx *gorm.DB, query ordersport.ListQuery) *gorm.DB {
 		next = next.Where("identifier = ?", value)
 	}
 	if value := strings.TrimSpace(string(query.Status)); value != "" {
-		next = next.Where("current_status = ?", value)
+		next = next.Where(
+			`EXISTS (
+				SELECT 1
+				FROM order_status_history AS osh
+				WHERE osh.order_id = orders.id
+					AND osh.position = (
+						SELECT COALESCE(MAX(inner_osh.position), -1)
+						FROM order_status_history AS inner_osh
+						WHERE inner_osh.order_id = orders.id
+					)
+					AND osh.status = ?
+			)`,
+			value,
+		)
 	}
 
 	return next

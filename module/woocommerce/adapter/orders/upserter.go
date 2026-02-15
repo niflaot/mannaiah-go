@@ -145,6 +145,7 @@ func (u *Upserter) updateExisting(
 			Author:      syncStatusAuthor,
 			Description: syncStatusDescription,
 			OccurredAt:  command.CreatedAt,
+			Source:      syncStatusAuthor,
 		})
 		if err != nil {
 			return "", fmt.Errorf("update order status for woocommerce sync: %w", err)

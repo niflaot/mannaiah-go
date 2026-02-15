@@ -59,6 +59,7 @@ func (u *Upserter) appendCommentStatuses(
 			NoteOwner:   noteOwner,
 			Note:        note,
 			OccurredAt:  &occurredAt,
+			Source:      syncStatusAuthor,
 		})
 		if updateErr != nil {
 			return false, order, fmt.Errorf("append woocommerce order comment status: %w", updateErr)

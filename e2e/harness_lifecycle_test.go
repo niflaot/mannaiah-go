@@ -14,18 +14,18 @@ func (h *contactsE2EHarness) Close(t *testing.T) {
 	h.tracer.Step("shutdown messaging context")
 	h.messagingCancel()
 
+	h.tracer.Step("close messaging platform")
+	if err := h.messaging.Close(); err != nil {
+		t.Fatalf("messaging.Close() error = %v", err)
+	}
+
 	select {
 	case err := <-h.messagingErrs:
 		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("messaging.Run() error = %v", err)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatalf("messaging shutdown timeout")
-	}
-
-	h.tracer.Step("close messaging platform")
-	if err := h.messaging.Close(); err != nil {
-		t.Fatalf("messaging.Close() error = %v", err)
 	}
 
 	h.tracer.Step("close database handle")

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	ordersevent "mannaiah/module/orders/application/event"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
 )
@@ -21,6 +22,8 @@ var (
 	ErrInvalidID = errors.New("order id is required")
 	// ErrStatusAuthorRequired is returned when update-status author values are empty.
 	ErrStatusAuthorRequired = errors.New("order status author is required")
+	// ErrEmptyOrderUpdate is returned when update commands do not include mutable fields.
+	ErrEmptyOrderUpdate = errors.New("order update command requires at least one mutable field")
 )
 
 // CreateItemCommand defines order-item creation payload values.
@@ -81,6 +84,20 @@ type CreateCommand struct {
 	Metadata map[string]string
 	// CreatedAt defines optional source creation timestamps.
 	CreatedAt *time.Time
+	// Source defines mutation source values.
+	Source string
+}
+
+// UpdateCommand defines mutable update payload values.
+type UpdateCommand struct {
+	// Items defines optional order item values.
+	Items *[]CreateItemCommand
+	// ShippingAddress defines optional explicit shipping-address values.
+	ShippingAddress *ShippingAddressCommand
+	// ShippingCharges defines optional shipping charge values.
+	ShippingCharges *[]ShippingChargeCommand
+	// Source defines mutation source values.
+	Source string
 }
 
 // UpdateStatusCommand defines status-update payload values.
@@ -97,6 +114,8 @@ type UpdateStatusCommand struct {
 	Note string
 	// OccurredAt defines optional status timestamp values.
 	OccurredAt *time.Time
+	// Source defines mutation source values.
+	Source string
 }
 
 // ListQuery defines list payload values.
@@ -133,6 +152,8 @@ type ListResult struct {
 type Service interface {
 	// Create creates order aggregate values.
 	Create(ctx context.Context, command CreateCommand) (*ordersdomain.Order, error)
+	// Update updates mutable order aggregate values.
+	Update(ctx context.Context, id string, command UpdateCommand) (*ordersdomain.Order, error)
 	// Get resolves order aggregate values by identifiers.
 	Get(ctx context.Context, id string) (*ordersdomain.Order, error)
 	// List lists paginated order aggregate values.
@@ -149,6 +170,8 @@ type OrderService struct {
 	customerSource ordersport.CustomerSource
 	// productResolver defines product lookup dependencies.
 	productResolver ordersport.ProductResolver
+	// publisher defines integration event publication dependencies.
+	publisher ordersport.IntegrationEventPublisher
 }
 
 var (
@@ -158,6 +181,16 @@ var (
 
 // NewService creates order application services.
 func NewService(repository ordersport.Repository, customerSource ordersport.CustomerSource, resolvers ...ordersport.ProductResolver) (*OrderService, error) {
+	return NewServiceWithPublisher(repository, customerSource, nil, resolvers...)
+}
+
+// NewServiceWithPublisher creates order application services with integration event publishing support.
+func NewServiceWithPublisher(
+	repository ordersport.Repository,
+	customerSource ordersport.CustomerSource,
+	publisher ordersport.IntegrationEventPublisher,
+	resolvers ...ordersport.ProductResolver,
+) (*OrderService, error) {
 	if repository == nil {
 		return nil, ErrNilRepository
 	}
@@ -174,6 +207,7 @@ func NewService(repository ordersport.Repository, customerSource ordersport.Cust
 		repository:      repository,
 		customerSource:  customerSource,
 		productResolver: productResolver,
+		publisher:       ordersevent.ResolvePublisher(publisher),
 	}, nil
 }
 
@@ -226,6 +260,12 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		return nil, fmt.Errorf("create order: %w", err)
 	}
 	s.enrichShippingWithBilling(ctx, order)
+	if err := s.publisher.Publish(
+		ctx,
+		ordersevent.BuildOrderCreatedIntegrationEvent(*order, command.Source),
+	); err != nil {
+		return nil, fmt.Errorf("publish order created event: %w", err)
+	}
 
 	return order, nil
 }
@@ -317,6 +357,12 @@ func (s *OrderService) UpdateStatus(ctx context.Context, id string, command Upda
 		return nil, fmt.Errorf("update order status: %w", err)
 	}
 	s.enrichShippingWithBilling(ctx, entity)
+	if err := s.publisher.Publish(
+		ctx,
+		ordersevent.BuildOrderStatusUpdatedIntegrationEvent(*entity, command.Source),
+	); err != nil {
+		return nil, fmt.Errorf("publish order status updated event: %w", err)
+	}
 
 	return entity, nil
 }

@@ -107,6 +107,11 @@ func (m *raceOrderServiceMock) List(ctx context.Context, query ordersapplication
 	return result, nil
 }
 
+// Update updates mutable order rows.
+func (m *raceOrderServiceMock) Update(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
 // UpdateStatus returns updated order rows.
 func (m *raceOrderServiceMock) UpdateStatus(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 	return &ordersdomain.Order{

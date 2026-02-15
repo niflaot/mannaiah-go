@@ -30,7 +30,12 @@ type Loader interface {
 }
 
 // New creates an orders module with schema migration and adapter wiring.
-func New(db *gorm.DB, customerSource ordersport.CustomerSource, resolvers ...ordersport.ProductResolver) (*Module, error) {
+func New(
+	db *gorm.DB,
+	customerSource ordersport.CustomerSource,
+	publisher ordersport.IntegrationEventPublisher,
+	resolvers ...ordersport.ProductResolver,
+) (*Module, error) {
 	repository, err := ordersstore.NewRepository(db)
 	if err != nil {
 		return nil, err
@@ -39,7 +44,7 @@ func New(db *gorm.DB, customerSource ordersport.CustomerSource, resolvers ...ord
 		return nil, fmt.Errorf("ensure orders schema: %w", err)
 	}
 
-	service, err := ordersapplication.NewService(repository, customerSource, resolvers...)
+	service, err := ordersapplication.NewServiceWithPublisher(repository, customerSource, publisher, resolvers...)
 	if err != nil {
 		return nil, err
 	}

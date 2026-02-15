@@ -37,6 +37,7 @@
   - DDD (Domain-Driven Design)
   - Hexagonal Architecture (ports and adapters)
   - TDD delivery workflow
+- Cross-module communication must use integration events through ports/adapters (orchestrated by core messaging) instead of direct module-to-module coupling.
 
 ## Code Quality
 - Prefer asynchronous/concurrent Go capabilities where they provide clear value.
@@ -47,6 +48,10 @@
   - avoid storing queryable business structures as opaque JSON/text blobs when they can be modeled as relational child tables
   - enforce integrity with explicit keys/indexes/uniqueness constraints where applicable
   - when denormalization is intentionally chosen for performance, document the rationale and add consistency safeguards/tests
+- For status-driven aggregates, treat append-only status history as source-of-truth:
+  - query/read current status from latest status history entry
+  - avoid relying on denormalized root-table status columns as authoritative values
+  - if root-table status columns are kept for indexing/performance, keep them synchronized and verify consistency in tests
 - Reduce file complexity through composition and package splitting:
   - avoid concentrating multiple responsibilities in a single file
   - split long services/stores into focused collaborators (for example, constructor/config, operations, mapping/validation, resilience helpers)

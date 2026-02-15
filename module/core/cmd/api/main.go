@@ -29,6 +29,7 @@ import (
 	"mannaiah/module/core/swagger"
 	"mannaiah/module/orders"
 	ordercontacts "mannaiah/module/orders/adapter/contacts"
+	orderevent "mannaiah/module/orders/adapter/event"
 	orderproducts "mannaiah/module/orders/adapter/products"
 	"mannaiah/module/products"
 	"mannaiah/module/woocommerce"
@@ -126,6 +127,10 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create assets integration publisher: %w", err)
 	}
+	orderPublisher, err := orderevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		return fmt.Errorf("create orders integration publisher: %w", err)
+	}
 	wooPublisher, err := wooevent.NewPublisher(messaging.Publisher())
 	if err != nil {
 		return fmt.Errorf("create woocommerce integration publisher: %w", err)
@@ -174,7 +179,7 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create order product resolver: %w", err)
 	}
-	ordersModule, err := orders.New(db, orderCustomerSource, orderProductResolver)
+	ordersModule, err := orders.NewWithPublisher(db, orderCustomerSource, orderPublisher, orderProductResolver)
 	if err != nil {
 		return fmt.Errorf("initialize orders module: %w", err)
 	}
@@ -191,7 +196,15 @@ func run(ctx context.Context, envFile string) error {
 		}
 	}
 
-	wooModule, err := woocommerce.New(wooCfg, contactsModule.Service(), ordersModule.Service(), wooScheduler, logger, wooPublisher)
+	wooModule, err := woocommerce.NewWithMessaging(
+		wooCfg,
+		contactsModule.Service(),
+		ordersModule.Service(),
+		wooScheduler,
+		logger,
+		messaging.Registrar(),
+		wooPublisher,
+	)
 	if err != nil {
 		return fmt.Errorf("initialize woocommerce module: %w", err)
 	}

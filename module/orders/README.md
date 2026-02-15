@@ -5,10 +5,15 @@
 ## Key Methods / Endpoints / Events
 - Methods:
   - `orders.New(db, customerSource, resolvers...)`
+  - `orders.NewWithPublisher(db, customerSource, publisher, resolvers...)`
   - `orders.OpenAPISpec()`
 - Endpoints:
   - `POST /orders`
   - `GET /orders`
   - `GET /orders/:id`
+  - `PATCH /orders/:id`
   - `PATCH /orders/:id/status`
-- Events: none in this module yet.
+- Events:
+  - `orders.v1.created`
+  - `orders.v1.updated`
+  - `orders.v1.status.updated`

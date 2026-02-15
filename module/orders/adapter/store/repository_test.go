@@ -113,6 +113,32 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 	if total != 1 || len(rows) != 1 {
 		t.Fatalf("List() result = total:%d len:%d, want total:1 len:1", total, len(rows))
 	}
+
+	entity.Items = []ordersdomain.Item{
+		{SKU: "SKU-3", Quantity: 3, Value: 30000, ResolutionSource: ordersdomain.ItemResolutionSourceSKU},
+	}
+	entity.ShippingAddress = ordersdomain.ShippingAddress{
+		Address:  "Street Updated",
+		Address2: "Apt Updated",
+		Phone:    "3111111",
+		CityCode: "05001",
+	}
+	entity.ShippingCharges = []ordersdomain.ShippingCharge{
+		{MethodID: "pickup", MethodTitle: "Pickup", Price: 0},
+	}
+	if err := repository.Update(ctx, entity); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	updatedEntity, err := repository.GetByID(ctx, entity.ID)
+	if err != nil {
+		t.Fatalf("GetByID(after update) error = %v", err)
+	}
+	if len(updatedEntity.Items) != 1 || updatedEntity.Items[0].SKU != "SKU-3" {
+		t.Fatalf("updatedEntity.Items = %+v, want one SKU-3 item", updatedEntity.Items)
+	}
+	if updatedEntity.ShippingAddress.CityCode != "05001" {
+		t.Fatalf("updatedEntity.ShippingAddress.CityCode = %q, want %q", updatedEntity.ShippingAddress.CityCode, "05001")
+	}
 }
 
 // TestRepositoryCreateRejectsDuplicateIdentifier verifies realm+identifier uniqueness behavior.
@@ -137,6 +163,9 @@ func TestRepositoryNotFoundPaths(t *testing.T) {
 
 	if _, err := repository.GetByID(ctx, "missing"); !errors.Is(err, ordersport.ErrNotFound) {
 		t.Fatalf("GetByID() error = %v, want ErrNotFound", err)
+	}
+	if err := repository.Update(ctx, &ordersdomain.Order{ID: "missing", Identifier: "id", Realm: "realm", ContactID: "contact", Items: []ordersdomain.Item{{SKU: "SKU", Quantity: 1}}, CurrentStatus: ordersdomain.StatusCreated, StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}}}); !errors.Is(err, ordersport.ErrNotFound) {
+		t.Fatalf("Update() error = %v, want ErrNotFound", err)
 	}
 	if _, err := repository.AppendStatus(ctx, "missing", ordersdomain.StatusEntry{
 		Status:     ordersdomain.StatusCreated,
@@ -250,6 +279,9 @@ func TestRepositoryErrorPathsOnClosedDB(t *testing.T) {
 	}
 	if err := repository.Create(context.Background(), newOrderForTest("x", "y", "c")); err == nil {
 		t.Fatalf("expected Create() error on closed db")
+	}
+	if err := repository.Update(context.Background(), newOrderForTest("x", "y", "c")); err == nil {
+		t.Fatalf("expected Update() error on closed db")
 	}
 	if _, err := repository.GetByID(context.Background(), "x"); err == nil {
 		t.Fatalf("expected GetByID() error on closed db")

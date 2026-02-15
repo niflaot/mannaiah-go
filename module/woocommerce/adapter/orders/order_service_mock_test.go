@@ -128,6 +128,49 @@ func (m *ordersServiceMock) List(ctx context.Context, query ordersapplication.Li
 	}, nil
 }
 
+// Update updates mutable order rows.
+func (m *ordersServiceMock) Update(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+	entity, ok := m.orders[strings.TrimSpace(id)]
+	if !ok {
+		return nil, ordersport.ErrNotFound
+	}
+
+	if command.Items != nil {
+		entity.Items = make([]ordersdomain.Item, 0, len(*command.Items))
+		for _, item := range *command.Items {
+			entity.Items = append(entity.Items, ordersdomain.Item{
+				SKU:           strings.TrimSpace(item.SKU),
+				AlternateName: strings.TrimSpace(item.AlternateName),
+				Quantity:      item.Quantity,
+				Value:         item.Value,
+			})
+		}
+	}
+	if command.ShippingAddress != nil {
+		entity.HasCustomShippingAddress = true
+		entity.ShippingAddress = ordersdomain.ShippingAddress{
+			Address:  strings.TrimSpace(command.ShippingAddress.Address),
+			Address2: strings.TrimSpace(command.ShippingAddress.Address2),
+			Phone:    strings.TrimSpace(command.ShippingAddress.Phone),
+			CityCode: strings.TrimSpace(command.ShippingAddress.CityCode),
+		}
+	}
+	if command.ShippingCharges != nil {
+		entity.ShippingCharges = make([]ordersdomain.ShippingCharge, 0, len(*command.ShippingCharges))
+		for _, charge := range *command.ShippingCharges {
+			entity.ShippingCharges = append(entity.ShippingCharges, ordersdomain.ShippingCharge{
+				MethodID:    strings.TrimSpace(charge.MethodID),
+				MethodTitle: strings.TrimSpace(charge.MethodTitle),
+				Price:       charge.Price,
+			})
+		}
+	}
+
+	m.orders[entity.ID] = entity
+	copied := entity
+	return &copied, nil
+}
+
 // UpdateStatus appends status history rows.
 func (m *ordersServiceMock) UpdateStatus(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 	if m.updateStatusErr != nil {

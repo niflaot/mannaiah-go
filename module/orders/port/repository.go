@@ -34,6 +34,8 @@ type ListQuery struct {
 type Repository interface {
 	// Create persists order aggregate values.
 	Create(ctx context.Context, order *ordersdomain.Order) error
+	// Update persists mutable order aggregate values.
+	Update(ctx context.Context, order *ordersdomain.Order) error
 	// GetByID retrieves order aggregate values by identifier.
 	GetByID(ctx context.Context, id string) (*ordersdomain.Order, error)
 	// List retrieves paginated order rows with total values.

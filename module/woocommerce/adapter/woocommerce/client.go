@@ -54,6 +54,8 @@ type Client struct {
 var (
 	// _ ensures Client satisfies WooCommerce source contracts.
 	_ port.OrderSource = (*Client)(nil)
+	// _ ensures Client satisfies WooCommerce destination contracts.
+	_ port.OrderDestination = (*Client)(nil)
 )
 
 // NewClient creates WooCommerce order source adapters.

@@ -14,6 +14,7 @@ import (
 	contactport "mannaiah/module/contacts/port"
 	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
+	"mannaiah/module/core/messaging/bus"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
 )
@@ -64,6 +65,11 @@ func (orderServiceMock) List(ctx context.Context, query ordersapplication.ListQu
 	return &ordersapplication.ListResult{}, nil
 }
 
+// Update updates mutable order rows.
+func (orderServiceMock) Update(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
 // UpdateStatus updates order status rows.
 func (orderServiceMock) UpdateStatus(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 	return &ordersdomain.Order{ID: id, CurrentStatus: command.Status}, nil
@@ -85,6 +91,18 @@ type schedulerMock struct {
 	startCalled bool
 	// stopCalled reports stop-operation calls.
 	stopCalled bool
+}
+
+// registrarMock defines message-registrar behavior for module tests.
+type registrarMock struct {
+	// topics defines registered topic values.
+	topics []string
+}
+
+// AddHandler stores registered topic values.
+func (m *registrarMock) AddHandler(topic string, handler bus.Handler) error {
+	m.topics = append(m.topics, topic)
+	return nil
 }
 
 // Add registers jobs.
@@ -165,20 +183,20 @@ func (authorizerMock) IsForbidden(err error) bool {
 
 // TestNewValidation verifies constructor validation behavior.
 func TestNewValidation(t *testing.T) {
-	if _, err := New(Config{}, nil, orderServiceMock{}, nil, nil); !errorspkg.Is(err, ErrNilContactService) {
+	if _, err := New(Config{}, nil, orderServiceMock{}, nil, nil, nil); !errorspkg.Is(err, ErrNilContactService) {
 		t.Fatalf("New(nil service) error = %v, want ErrNilContactService", err)
 	}
-	if _, err := New(Config{}, contactServiceMock{}, nil, nil, nil); !errorspkg.Is(err, ErrNilOrderService) {
+	if _, err := New(Config{}, contactServiceMock{}, nil, nil, nil, nil); !errorspkg.Is(err, ErrNilOrderService) {
 		t.Fatalf("New(nil order service) error = %v, want ErrNilOrderService", err)
 	}
-	if _, err := New(Config{SyncContacts: true}, contactServiceMock{}, orderServiceMock{}, nil, nil); !errorspkg.Is(err, ErrNilSchedulerWhenEnabled) {
+	if _, err := New(Config{SyncContacts: true}, contactServiceMock{}, orderServiceMock{}, nil, nil, nil); !errorspkg.Is(err, ErrNilSchedulerWhenEnabled) {
 		t.Fatalf("New(sync enabled nil scheduler) error = %v, want ErrNilSchedulerWhenEnabled", err)
 	}
 }
 
 // TestLoadRegisterRoutes verifies module route/spec registration behavior.
 func TestLoadRegisterRoutes(t *testing.T) {
-	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop())
+	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -195,9 +213,28 @@ func TestLoadRegisterRoutes(t *testing.T) {
 	}
 }
 
+// TestNewWithRegistrarRegistersOrderConsumers verifies cross-module order consumer registration behavior.
+func TestNewWithRegistrarRegistersOrderConsumers(t *testing.T) {
+	registrar := &registrarMock{}
+	module, err := New(Config{
+		URL:            "https://example.com",
+		ConsumerKey:    "key",
+		ConsumerSecret: "secret",
+	}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop(), registrar)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if module.orderEventConsumer == nil {
+		t.Fatalf("expected orderEventConsumer to be configured")
+	}
+	if len(registrar.topics) != 3 {
+		t.Fatalf("len(registrar.topics) = %d, want %d", len(registrar.topics), 3)
+	}
+}
+
 // TestRegisterRoutesServer verifies endpoint registration behavior.
 func TestRegisterRoutesServer(t *testing.T) {
-	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop())
+	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -229,7 +266,7 @@ func TestRegisterRoutesServer(t *testing.T) {
 
 // TestSetAuthorizer verifies optional authorizer wiring behavior.
 func TestSetAuthorizer(t *testing.T) {
-	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop())
+	module, err := New(Config{}, contactServiceMock{}, orderServiceMock{}, nil, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -246,7 +283,7 @@ func TestStartStopWithScheduler(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -294,7 +331,7 @@ func TestStartSchedulerError(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -313,7 +350,7 @@ func TestStopSchedulerError(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -337,7 +374,7 @@ func TestStartStopWithBothSchedulers(t *testing.T) {
 		URL:              "https://example.com",
 		ConsumerKey:      "key",
 		ConsumerSecret:   "secret",
-	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop())
+	}, contactServiceMock{}, orderServiceMock{}, scheduler, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

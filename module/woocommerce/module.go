@@ -3,6 +3,7 @@ package woocommerce
 import (
 	contactapplication "mannaiah/module/contacts/application"
 	corecron "mannaiah/module/core/cron"
+	"mannaiah/module/core/messaging/bus"
 	ordersapplication "mannaiah/module/orders/application"
 	"mannaiah/module/woocommerce/port"
 	wooruntime "mannaiah/module/woocommerce/runtime"
@@ -36,5 +37,18 @@ func New(
 	providedLogger *zap.Logger,
 	publishers ...port.IntegrationEventPublisher,
 ) (*Module, error) {
-	return wooruntime.New(cfg, contactService, orderService, scheduler, providedLogger, publishers...)
+	return wooruntime.New(cfg, contactService, orderService, scheduler, providedLogger, nil, publishers...)
+}
+
+// NewWithMessaging creates WooCommerce modules with messaging subscriptions for cross-module integrations.
+func NewWithMessaging(
+	cfg Config,
+	contactService contactapplication.Service,
+	orderService ordersapplication.Service,
+	scheduler corecron.Scheduler,
+	providedLogger *zap.Logger,
+	registrar bus.Registrar,
+	publishers ...port.IntegrationEventPublisher,
+) (*Module, error) {
+	return wooruntime.New(cfg, contactService, orderService, scheduler, providedLogger, registrar, publishers...)
 }

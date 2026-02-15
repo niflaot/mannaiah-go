@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	ordersevent "mannaiah/module/orders/application/event"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
 )
@@ -14,12 +15,31 @@ import (
 type repositoryMock struct {
 	// createFn defines create behavior.
 	createFn func(ctx context.Context, order *ordersdomain.Order) error
+	// updateFn defines update behavior.
+	updateFn func(ctx context.Context, order *ordersdomain.Order) error
 	// getByIDFn defines get behavior.
 	getByIDFn func(ctx context.Context, id string) (*ordersdomain.Order, error)
 	// listFn defines list behavior.
 	listFn func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error)
 	// appendStatusFn defines append-status behavior.
 	appendStatusFn func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error)
+}
+
+// publisherMock defines integration event publication behavior for service tests.
+type publisherMock struct {
+	// events defines captured integration event values.
+	events []ordersport.IntegrationEvent
+	// err defines publication errors.
+	err error
+}
+
+// Publish captures integration events.
+func (m *publisherMock) Publish(ctx context.Context, integrationEvent ordersport.IntegrationEvent) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.events = append(m.events, integrationEvent)
+	return nil
 }
 
 // TestUpdateStatusCustomOccurredAt verifies update-status timestamp override behavior.
@@ -29,6 +49,7 @@ func TestUpdateStatusCustomOccurredAt(t *testing.T) {
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{ID: id, ContactID: "c-1"}, nil
 		},
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
 		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
 			return nil, 0, nil
 		},
@@ -69,6 +90,11 @@ func TestUpdateStatusCustomOccurredAt(t *testing.T) {
 // Create executes mocked create behavior.
 func (m repositoryMock) Create(ctx context.Context, order *ordersdomain.Order) error {
 	return m.createFn(ctx, order)
+}
+
+// Update executes mocked update behavior.
+func (m repositoryMock) Update(ctx context.Context, order *ordersdomain.Order) error {
+	return m.updateFn(ctx, order)
 }
 
 // GetByID executes mocked get behavior.
@@ -132,6 +158,7 @@ func TestCreateResolvesItemsAndShipping(t *testing.T) {
 			return nil
 		},
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) { return nil, nil },
+		updateFn:  func(ctx context.Context, order *ordersdomain.Order) error { return nil },
 		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
 			return nil, 0, nil
 		},
@@ -204,6 +231,7 @@ func TestCreateResolvesItemsAndShipping(t *testing.T) {
 func TestCreateStoresExplicitShippingSnapshot(t *testing.T) {
 	repository := repositoryMock{
 		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
 			return nil, nil
 		},
@@ -249,6 +277,7 @@ func TestCreateStoresExplicitShippingSnapshot(t *testing.T) {
 func TestGetListAndUpdateStatus(t *testing.T) {
 	repository := repositoryMock{
 		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{ID: id, ContactID: "c-1", HasCustomShippingAddress: false}, nil
 		},
@@ -309,6 +338,9 @@ func TestServiceErrorBranches(t *testing.T) {
 		createFn: func(ctx context.Context, order *ordersdomain.Order) error {
 			return ordersport.ErrDuplicateIdentifier
 		},
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error {
+			return errors.New("update failed")
+		},
 		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
 			return nil, ordersport.ErrNotFound
 		},
@@ -348,5 +380,131 @@ func TestServiceErrorBranches(t *testing.T) {
 	}
 	if _, err := service.UpdateStatus(context.Background(), "o-1", UpdateStatusCommand{Status: ordersdomain.StatusCreated, Author: ""}); !errors.Is(err, ErrStatusAuthorRequired) {
 		t.Fatalf("UpdateStatus(empty author) error = %v, want ErrStatusAuthorRequired", err)
+	}
+	if _, err := service.Update(context.Background(), "", UpdateCommand{}); !errors.Is(err, ErrInvalidID) {
+		t.Fatalf("Update(empty id) error = %v, want ErrInvalidID", err)
+	}
+	if _, err := service.Update(context.Background(), "o-1", UpdateCommand{}); !errors.Is(err, ErrEmptyOrderUpdate) {
+		t.Fatalf("Update(empty command) error = %v, want ErrEmptyOrderUpdate", err)
+	}
+}
+
+// TestUpdateAndEventPublishing verifies update behavior and integration event publication.
+func TestUpdateAndEventPublishing(t *testing.T) {
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: entry.Status,
+				StatusHistory: []ordersdomain.StatusEntry{entry},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+			}, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id, Address: "A", CityCode: "11001"}, nil
+		},
+	}
+	publisher := &publisherMock{}
+	service, err := NewServiceWithPublisher(repository, customers, publisher)
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	items := []CreateItemCommand{{SKU: "SKU-2", Quantity: 2, Value: 22}}
+	charges := []ShippingChargeCommand{{MethodID: "flat_rate", MethodTitle: "Flat", Price: 9}}
+	updated, err := service.Update(context.Background(), "o-1", UpdateCommand{
+		Items:           &items,
+		ShippingCharges: &charges,
+		ShippingAddress: &ShippingAddressCommand{Address: "Street 1", CityCode: "11001"},
+		Source:          "mainstream",
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if len(updated.Items) != 1 || updated.Items[0].SKU != "SKU-2" {
+		t.Fatalf("updated.Items = %+v, want SKU-2 row", updated.Items)
+	}
+
+	_, err = service.UpdateStatus(context.Background(), "o-1", UpdateStatusCommand{
+		Status: ordersdomain.StatusCompleted,
+		Author: "system",
+		Source: "mainstream",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if len(publisher.events) != 2 {
+		t.Fatalf("len(publisher.events) = %d, want %d", len(publisher.events), 2)
+	}
+	if publisher.events[0].Topic != ordersport.TopicOrderUpdated {
+		t.Fatalf("events[0].Topic = %q, want %q", publisher.events[0].Topic, ordersport.TopicOrderUpdated)
+	}
+	if publisher.events[1].Topic != ordersport.TopicOrderStatusUpdated {
+		t.Fatalf("events[1].Topic = %q, want %q", publisher.events[1].Topic, ordersport.TopicOrderStatusUpdated)
+	}
+}
+
+// TestCreatePublishError verifies create behavior when event publication fails.
+func TestCreatePublishError(t *testing.T) {
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1"}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1"}, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id, Address: "A", CityCode: "11001"}, nil
+		},
+	}
+	service, err := NewServiceWithPublisher(repository, customers, &publisherMock{err: errors.New("publish failed")})
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	_, err = service.Create(context.Background(), CreateCommand{
+		Identifier: "id-1",
+		Realm:      "realm",
+		ContactID:  "c-1",
+		Items:      []CreateItemCommand{{SKU: "sku", Quantity: 1}},
+		Author:     "system",
+	})
+	if err == nil {
+		t.Fatalf("expected Create() error")
+	}
+}
+
+// TestEventBuilderSourceDefaults verifies event source default behavior through service publishing.
+func TestEventBuilderSourceDefaults(t *testing.T) {
+	if resolved := ordersevent.ResolveSource(""); resolved != ordersport.EventSourceAPI {
+		t.Fatalf("ResolveSource(empty) = %q, want %q", resolved, ordersport.EventSourceAPI)
 	}
 }

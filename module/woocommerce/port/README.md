@@ -4,6 +4,7 @@
 
 ## Contracts
 - Order source retrieval (`OrderSource`).
+- Order destination update behavior (`OrderDestination`).
 - Contact upsert target behavior (`ContactSyncTarget`).
 - Order upsert target behavior (`OrderSyncTarget`).
 - Integration event publication (`IntegrationEventPublisher`).
@@ -12,6 +13,8 @@
 - Methods:
   - `port.OrderSource.Validate(ctx)`
   - `port.OrderSource.ListOrders(ctx, page, pageSize)`
+  - `port.OrderDestination.Validate(ctx)`
+  - `port.OrderDestination.UpdateOrderFromMainstream(ctx, command)`
   - `port.ContactSyncTarget.UpsertByEmail(ctx, command)`
   - `port.OrderSyncTarget.UpsertByIdentifier(ctx, command)`
   - `port.IntegrationEventPublisher.Publish(ctx, event)`

@@ -11,7 +11,7 @@
 
 ## Key Methods / Endpoints / Events
 - Methods:
-  - `runtime.New(cfg, contactService, orderService, scheduler, logger, publishers...)`
+  - `runtime.New(cfg, contactService, orderService, scheduler, logger, registrar, publishers...)`
   - `(*runtime.Module).RegisterRoutes(router)`
   - `(*runtime.Module).SetAuthorizer(authorizer)`
   - `(*runtime.Module).OpenAPISpec()`
@@ -24,3 +24,7 @@
 - Events:
   - delegates lifecycle event emission to `application/contact/service`
   - delegates lifecycle event emission to `application/order/service`
+  - registers cross-module consumers for:
+    - `orders.v1.created`
+    - `orders.v1.updated`
+    - `orders.v1.status.updated`

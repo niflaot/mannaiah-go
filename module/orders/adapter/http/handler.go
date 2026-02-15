@@ -94,6 +94,8 @@ type createRequest struct {
 	ShippingCharges []shippingChargeRequest `json:"shippingCharges"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata"`
+	// Source defines optional mutation source values.
+	Source string `json:"source,omitempty"`
 }
 
 // updateStatusRequest defines request payload for status updates.
@@ -108,6 +110,8 @@ type updateStatusRequest struct {
 	NoteOwner string `json:"noteOwner"`
 	// Note defines optional note values.
 	Note string `json:"note"`
+	// Source defines optional mutation source values.
+	Source string `json:"source,omitempty"`
 }
 
 // listMeta defines list response pagination metadata.
@@ -158,6 +162,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/orders", h.protect("orders:create", h.create))
 	router.Get("/orders", h.protect("orders:read", h.findAll))
 	router.Get("/orders/:id", h.protect("orders:read", h.findOne))
+	router.Patch("/orders/:id", h.protect("orders:update", h.update))
 	router.Patch("/orders/:id/status", h.protect("orders:update", h.updateStatus))
 }
 
@@ -178,6 +183,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		Items:           mapCreateItems(request.Items),
 		ShippingCharges: mapShippingCharges(request.ShippingCharges),
 		Metadata:        request.Metadata,
+		Source:          request.Source,
 	}
 	if request.ShippingAddress != nil {
 		command.ShippingAddress = &ordersapplication.ShippingAddressCommand{
@@ -242,6 +248,7 @@ func (h *Handler) updateStatus(ctx corehttp.Context) error {
 		Description: request.Description,
 		NoteOwner:   request.NoteOwner,
 		Note:        request.Note,
+		Source:      request.Source,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -354,6 +361,7 @@ func (h *Handler) mapError(err error) error {
 		return corehttp.NewAppError(404, "order_customer_not_found", err)
 	}
 	if errors.Is(err, ErrInvalidQuery) ||
+		errors.Is(err, ordersapplication.ErrEmptyOrderUpdate) ||
 		errors.Is(err, ordersapplication.ErrStatusAuthorRequired) ||
 		errors.Is(err, ordersdomain.ErrIdentifierRequired) ||
 		errors.Is(err, ordersdomain.ErrRealmRequired) ||

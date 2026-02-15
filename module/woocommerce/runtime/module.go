@@ -9,9 +9,11 @@ import (
 	contactapplication "mannaiah/module/contacts/application"
 	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
+	"mannaiah/module/core/messaging/bus"
 	ordersapplication "mannaiah/module/orders/application"
 	contactsadapter "mannaiah/module/woocommerce/adapter/contacts"
 	"mannaiah/module/woocommerce/adapter/http"
+	woomessaging "mannaiah/module/woocommerce/adapter/messaging"
 	ordersadapter "mannaiah/module/woocommerce/adapter/orders"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	wooorderservice "mannaiah/module/woocommerce/application/order/service"
@@ -47,6 +49,8 @@ type Module struct {
 	ordersSchedulerEntryID corecron.EntryID
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
+	// orderEventConsumer defines optional cross-module order event consumer dependencies.
+	orderEventConsumer *woomessaging.OrderConsumer
 	// mutex guards scheduler lifecycle state.
 	mutex sync.Mutex
 	// started reports whether scheduler lifecycle start logic has completed.
@@ -68,6 +72,7 @@ func New(
 	orderService ordersapplication.Service,
 	scheduler corecron.Scheduler,
 	providedLogger *zap.Logger,
+	registrar bus.Registrar,
 	publishers ...port.IntegrationEventPublisher,
 ) (*Module, error) {
 	if contactService == nil {
@@ -136,6 +141,26 @@ func New(
 		return nil, err
 	}
 
+	var orderEventConsumer *woomessaging.OrderConsumer
+	if sourceErr == nil && registrar != nil {
+		mainstreamUpdateService, serviceErr := wooorderservice.NewMainstreamUpdateService(
+			source,
+			logger,
+			wooorderservice.CircuitBreakers{Source: newSourceCircuitBreaker(cfg, logger)},
+		)
+		if serviceErr != nil {
+			return nil, serviceErr
+		}
+
+		orderEventConsumer, err = woomessaging.NewOrderConsumer(mainstreamUpdateService, logger)
+		if err != nil {
+			return nil, err
+		}
+		if err := orderEventConsumer.Register(registrar); err != nil {
+			return nil, err
+		}
+	}
+
 	handler, err := http.NewHandler(contactSyncService, orderSyncService)
 	if err != nil {
 		return nil, err
@@ -148,6 +173,7 @@ func New(
 		handler:             handler,
 		scheduler:           scheduler,
 		logger:              logger,
+		orderEventConsumer:  orderEventConsumer,
 	}, nil
 }
 

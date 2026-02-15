@@ -14,6 +14,7 @@ func OpenAPISpec() *openapi3.T {
 	components := openapi3.NewComponents()
 	components.Schemas = openapi3.Schemas{
 		"OrderCreate":         &openapi3.SchemaRef{Value: orderCreateSchema()},
+		"OrderUpdate":         &openapi3.SchemaRef{Value: orderUpdateSchema()},
 		"OrderStatusUpdate":   &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
 		"OrderItem":           &openapi3.SchemaRef{Value: orderItemSchema()},
 		"OrderShipping":       &openapi3.SchemaRef{Value: orderShippingSchema()},
@@ -57,7 +58,8 @@ func ordersPathItem() *openapi3.PathItem {
 // orderByIDPathItem returns OpenAPI path operations for ID-scoped endpoints.
 func orderByIDPathItem() *openapi3.PathItem {
 	return &openapi3.PathItem{
-		Get: getOrderOperation(),
+		Get:   getOrderOperation(),
+		Patch: updateOrderOperation(),
 	}
 }
 
@@ -123,6 +125,27 @@ func getOrderOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Return the order.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Order not found.")),
+		),
+	}
+}
+
+// updateOrderOperation defines the OpenAPI operation for mutable order updates.
+func updateOrderOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "OrdersController_update",
+		Summary:     "Update order items and shipping fields",
+		Tags:        []string{ordersTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+		},
+		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderUpdate"),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("The order has been successfully updated.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Order not found.")),
@@ -204,8 +227,18 @@ func orderCreateSchema() *openapi3.Schema {
 		WithProperty("description", openapi3.NewStringSchema()).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
+		WithProperty("source", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"identifier", "realm", "contactId", "items"})
+}
+
+// orderUpdateSchema returns request schema for mutable order update payloads.
+func orderUpdateSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("items", openapi3.NewArraySchema().WithItems(orderItemSchema())).
+		WithProperty("shippingAddress", orderShippingSchema()).
+		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
+		WithProperty("source", openapi3.NewStringSchema())
 }
 
 // orderStatusUpdateSchema returns request schema for order status update payloads.
@@ -216,6 +249,7 @@ func orderStatusUpdateSchema() *openapi3.Schema {
 		WithProperty("description", openapi3.NewStringSchema()).
 		WithProperty("noteOwner", openapi3.NewStringSchema()).
 		WithProperty("note", openapi3.NewStringSchema()).
+		WithProperty("source", openapi3.NewStringSchema()).
 		WithRequired([]string{"status", "author"})
 }
 

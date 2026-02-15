@@ -12,5 +12,6 @@
   - `POST /orders`
   - `GET /orders`
   - `GET /orders/:id`
+  - `PATCH /orders/:id`
   - `PATCH /orders/:id/status`
 - Events: none in this package.

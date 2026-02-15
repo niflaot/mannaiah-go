@@ -21,6 +21,7 @@ import (
 	corewatermill "mannaiah/module/core/messaging/watermill"
 	"mannaiah/module/orders"
 	ordercontacts "mannaiah/module/orders/adapter/contacts"
+	orderevent "mannaiah/module/orders/adapter/event"
 	orderproducts "mannaiah/module/orders/adapter/products"
 	"mannaiah/module/products"
 )
@@ -103,6 +104,10 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	if err != nil {
 		t.Fatalf("assetevent.NewPublisher() error = %v", err)
 	}
+	orderPublisher, err := orderevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		t.Fatalf("orderevent.NewPublisher() error = %v", err)
+	}
 
 	contactsModule, err := contacts.New(db, publisher)
 	if err != nil {
@@ -133,7 +138,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	if err != nil {
 		t.Fatalf("orderproducts.NewResolver() error = %v", err)
 	}
-	ordersModule, err := orders.New(db, orderCustomerSource, orderProductResolver)
+	ordersModule, err := orders.NewWithPublisher(db, orderCustomerSource, orderPublisher, orderProductResolver)
 	if err != nil {
 		t.Fatalf("orders.New() error = %v", err)
 	}

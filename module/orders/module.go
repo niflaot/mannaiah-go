@@ -20,8 +20,22 @@ type Loader interface {
 }
 
 // New creates an orders module with schema migration and adapter wiring.
-func New(db *gorm.DB, customerSource ordersport.CustomerSource, resolvers ...ordersport.ProductResolver) (*Module, error) {
-	return ordersruntime.New(db, customerSource, resolvers...)
+func New(
+	db *gorm.DB,
+	customerSource ordersport.CustomerSource,
+	resolvers ...ordersport.ProductResolver,
+) (*Module, error) {
+	return ordersruntime.New(db, customerSource, nil, resolvers...)
+}
+
+// NewWithPublisher creates an orders module with schema migration, adapter wiring, and integration event publishing.
+func NewWithPublisher(
+	db *gorm.DB,
+	customerSource ordersport.CustomerSource,
+	publisher ordersport.IntegrationEventPublisher,
+	resolvers ...ordersport.ProductResolver,
+) (*Module, error) {
+	return ordersruntime.New(db, customerSource, publisher, resolvers...)
 }
 
 // OpenAPISpec returns order-module OpenAPI documentation.

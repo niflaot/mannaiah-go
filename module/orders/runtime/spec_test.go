@@ -17,6 +17,9 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Components == nil || spec.Components.Schemas["OrderCreate"] == nil {
 		t.Fatalf("expected OrderCreate schema")
 	}
+	if spec.Components == nil || spec.Components.Schemas["OrderUpdate"] == nil {
+		t.Fatalf("expected OrderUpdate schema")
+	}
 	if spec.Components == nil || spec.Components.SecuritySchemes[bearerSecurityScheme] == nil {
 		t.Fatalf("expected bearer security scheme")
 	}
@@ -30,5 +33,10 @@ func TestOpenAPISpec(t *testing.T) {
 	}
 	if ordersPath.Get == nil || len(ordersPath.Get.Parameters) < 1 {
 		t.Fatalf("expected list order query parameters")
+	}
+
+	orderByIDPath := spec.Paths.Value("/orders/{id}")
+	if orderByIDPath == nil || orderByIDPath.Patch == nil {
+		t.Fatalf("expected patch operation on /orders/{id}")
 	}
 }

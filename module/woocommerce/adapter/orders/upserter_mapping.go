@@ -27,6 +27,7 @@ func toCreateCommand(
 		ShippingCharges: toShippingCharges(command.ShippingCharges),
 		Metadata:        normalizeMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
+		Source:          syncStatusAuthor,
 	}
 }
 

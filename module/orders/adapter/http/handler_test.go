@@ -21,6 +21,8 @@ type serviceMock struct {
 	getFn func(ctx context.Context, id string) (*ordersdomain.Order, error)
 	// listFn defines list behavior.
 	listFn func(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error)
+	// updateFn defines update behavior.
+	updateFn func(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error)
 	// updateStatusFn defines update-status behavior.
 	updateStatusFn func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error)
 }
@@ -38,6 +40,11 @@ func (m serviceMock) Get(ctx context.Context, id string) (*ordersdomain.Order, e
 // List executes configured list behavior.
 func (m serviceMock) List(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error) {
 	return m.listFn(ctx, query)
+}
+
+// Update executes configured update behavior.
+func (m serviceMock) Update(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+	return m.updateFn(ctx, id, command)
 }
 
 // UpdateStatus executes configured update-status behavior.
@@ -101,6 +108,12 @@ func TestOrderEndpoints(t *testing.T) {
 				TotalPages: 1,
 			}, nil
 		},
+		updateFn: func(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+			if command.ShippingAddress == nil || command.ShippingAddress.CityCode != "05001" {
+				t.Fatalf("unexpected update command: %+v", command)
+			}
+			return &ordersdomain.Order{ID: id, Identifier: "wo-1"}, nil
+		},
 		updateStatusFn: func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 			if command.Status != ordersdomain.StatusCompleted || command.Author != "user" {
 				t.Fatalf("unexpected update-status command: %+v", command)
@@ -129,6 +142,13 @@ func TestOrderEndpoints(t *testing.T) {
 		t.Fatalf("GET /orders/:id status = %d, want %d", getResp.StatusCode, stdhttp.StatusOK)
 	}
 
+	updateOrderReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/orders/o-1", bytes.NewBufferString(`{"shippingAddress":{"address":"Street 1","cityCode":"05001"}}`))
+	updateOrderReq.Header.Set("Content-Type", "application/json")
+	updateOrderResp := runRequest(t, server, updateOrderReq)
+	if updateOrderResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("PATCH /orders/:id status = %d, want %d", updateOrderResp.StatusCode, stdhttp.StatusOK)
+	}
+
 	updateReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/orders/o-1/status", bytes.NewBufferString(`{"status":"COMPLETED","author":"user","description":"done"}`))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateResp := runRequest(t, server, updateReq)
@@ -149,6 +169,9 @@ func TestHandlerInvalidPayloadAndQuery(t *testing.T) {
 		listFn: func(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error) {
 			return &ordersapplication.ListResult{}, nil
 		},
+		updateFn: func(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id}, nil
+		},
 		updateStatusFn: func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{ID: id}, nil
 		},
@@ -167,6 +190,13 @@ func TestHandlerInvalidPayloadAndQuery(t *testing.T) {
 	if listResp.StatusCode != stdhttp.StatusBadRequest {
 		t.Fatalf("GET invalid query status = %d, want %d", listResp.StatusCode, stdhttp.StatusBadRequest)
 	}
+
+	updateReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/orders/o-1", bytes.NewBufferString("{invalid"))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateResp := runRequest(t, server, updateReq)
+	if updateResp.StatusCode != stdhttp.StatusBadRequest {
+		t.Fatalf("PATCH invalid payload status = %d, want %d", updateResp.StatusCode, stdhttp.StatusBadRequest)
+	}
 }
 
 // TestMapErrorVariants verifies direct error mapping branches.
@@ -179,6 +209,7 @@ func TestMapErrorVariants(t *testing.T) {
 		ordersport.ErrCustomerNotFound,
 		ErrInvalidQuery,
 		ordersapplication.ErrStatusAuthorRequired,
+		ordersapplication.ErrEmptyOrderUpdate,
 		ordersdomain.ErrIdentifierRequired,
 		ordersdomain.ErrRealmRequired,
 		ordersdomain.ErrContactIDRequired,
@@ -209,6 +240,9 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 		},
 		listFn: func(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error) {
 			return &ordersapplication.ListResult{}, nil
+		},
+		updateFn: func(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{}, nil
 		},
 		updateStatusFn: func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{}, nil
