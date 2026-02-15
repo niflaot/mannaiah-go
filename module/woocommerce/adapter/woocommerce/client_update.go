@@ -22,9 +22,13 @@ func (c *Client) UpdateOrderFromMainstream(ctx context.Context, command port.Mai
 		return err
 	}
 
-	request, err := c.toUpdateOrderRawRequest(ctx, command)
+	request, err := c.toUpdateOrderRawRequest(ctx, orderID, command)
 	if err != nil {
-		return err
+		wrapped := fmt.Errorf("build woocommerce order update %d request: %w", orderID, err)
+		if isWooClientError(err) {
+			return messagingplatform.NonRetriable(wrapped)
+		}
+		return wrapped
 	}
 	if len(request) == 0 {
 		return nil
@@ -41,25 +45,33 @@ func (c *Client) UpdateOrderFromMainstream(ctx context.Context, command port.Mai
 }
 
 // toUpdateOrderRawRequest maps mainstream order update commands to WooCommerce raw update payloads.
-func (c *Client) toUpdateOrderRawRequest(ctx context.Context, command port.MainstreamOrderUpdateCommand) (map[string]any, error) {
+func (c *Client) toUpdateOrderRawRequest(ctx context.Context, orderID int, command port.MainstreamOrderUpdateCommand) (map[string]any, error) {
 	lineItems, feeLines, err := c.resolveOrderItemsForUpdate(ctx, command.Items)
 	if err != nil {
 		return nil, err
 	}
+	state := wooOrderUpdateState{}
+	if len(lineItems) > 0 || len(feeLines) > 0 || len(command.ShippingCharges) > 0 {
+		resolvedState, stateErr := c.getOrderUpdateStateRaw(ctx, orderID)
+		if stateErr != nil {
+			return nil, fmt.Errorf("resolve woocommerce order update state %d: %w", orderID, stateErr)
+		}
+		state = resolvedState
+	}
 
 	request := map[string]any{}
 
-	mappedLineItems := mapLineItemsForRawUpdate(lineItems)
+	mappedLineItems := mapLineItemsForRawUpdate(lineItems, state.LineItems)
 	if len(mappedLineItems) > 0 {
 		request["line_items"] = mappedLineItems
 	}
 
-	mappedShippingLines := mapShippingLinesForRawUpdate(mapShippingLinesForUpdate(command.ShippingCharges))
+	mappedShippingLines := mapShippingLinesForRawUpdate(mapShippingLinesForUpdate(command.ShippingCharges), state.ShippingLines)
 	if len(mappedShippingLines) > 0 {
 		request["shipping_lines"] = mappedShippingLines
 	}
 
-	mappedFeeLines := mapFeeLinesForRawUpdate(feeLines)
+	mappedFeeLines := mapFeeLinesForRawUpdate(feeLines, state.FeeLines)
 	if len(mappedFeeLines) > 0 {
 		request["fee_lines"] = mappedFeeLines
 	}
@@ -171,13 +183,14 @@ func isWooClientError(err error) bool {
 }
 
 // mapLineItemsForRawUpdate maps SDK line-item values to WooCommerce raw update payload values.
-func mapLineItemsForRawUpdate(values []wcentity.LineItem) []map[string]any {
+func mapLineItemsForRawUpdate(values []wcentity.LineItem, existing []wooExistingLineItem) []map[string]any {
 	if len(values) == 0 {
 		return nil
 	}
 
 	rows := make([]map[string]any, 0, len(values))
-	for _, value := range values {
+	usedIDs := map[int]struct{}{}
+	for _, value := range mergeLineItems(values) {
 		if value.ProductId <= 0 {
 			continue
 		}
@@ -187,11 +200,19 @@ func mapLineItemsForRawUpdate(values []wcentity.LineItem) []map[string]any {
 			quantity = 1
 		}
 
-		rows = append(rows, map[string]any{
-			"product_id": value.ProductId,
-			"quantity":   quantity,
-			"total":      formatWooDecimal(value.Total),
-		})
+		if existingID, ok := matchExistingLineItemID(existing, usedIDs, value); ok {
+			rows = append(rows, map[string]any{
+				"id":       existingID,
+				"quantity": quantity,
+				"total":    formatWooDecimal(value.Total),
+			})
+		} else {
+			rows = append(rows, map[string]any{
+				"product_id": value.ProductId,
+				"quantity":   quantity,
+				"total":      formatWooDecimal(value.Total),
+			})
+		}
 	}
 	if len(rows) == 0 {
 		return nil
@@ -201,24 +222,34 @@ func mapLineItemsForRawUpdate(values []wcentity.LineItem) []map[string]any {
 }
 
 // mapShippingLinesForRawUpdate maps SDK shipping-line values to WooCommerce raw update payload values.
-func mapShippingLinesForRawUpdate(values []wcentity.ShippingLine) []map[string]any {
+func mapShippingLinesForRawUpdate(values []wcentity.ShippingLine, existing []wooExistingShippingLine) []map[string]any {
 	if len(values) == 0 {
 		return nil
 	}
 
 	rows := make([]map[string]any, 0, len(values))
-	for _, value := range values {
+	usedIDs := map[int]struct{}{}
+	for _, value := range mergeShippingLines(values) {
 		methodID := strings.TrimSpace(value.MethodId)
 		methodTitle := strings.TrimSpace(value.MethodTitle)
 		if methodID == "" && methodTitle == "" {
 			continue
 		}
 
-		rows = append(rows, map[string]any{
-			"method_id":    methodID,
-			"method_title": methodTitle,
-			"total":        formatWooDecimal(value.Total),
-		})
+		if existingID, ok := matchExistingShippingLineID(existing, usedIDs, methodID, methodTitle); ok {
+			rows = append(rows, map[string]any{
+				"id":           existingID,
+				"method_id":    methodID,
+				"method_title": methodTitle,
+				"total":        formatWooDecimal(value.Total),
+			})
+		} else {
+			rows = append(rows, map[string]any{
+				"method_id":    methodID,
+				"method_title": methodTitle,
+				"total":        formatWooDecimal(value.Total),
+			})
+		}
 	}
 	if len(rows) == 0 {
 		return nil
@@ -228,28 +259,204 @@ func mapShippingLinesForRawUpdate(values []wcentity.ShippingLine) []map[string]a
 }
 
 // mapFeeLinesForRawUpdate maps SDK fee-line values to WooCommerce raw update payload values.
-func mapFeeLinesForRawUpdate(values []wcentity.FeeLine) []map[string]any {
+func mapFeeLinesForRawUpdate(values []wcentity.FeeLine, existing []wooExistingFeeLine) []map[string]any {
 	if len(values) == 0 {
 		return nil
 	}
 
 	rows := make([]map[string]any, 0, len(values))
-	for _, value := range values {
+	usedIDs := map[int]struct{}{}
+	for _, value := range mergeFeeLines(values) {
 		name := strings.TrimSpace(value.Name)
 		if name == "" {
 			continue
 		}
 
-		rows = append(rows, map[string]any{
-			"name":  name,
-			"total": formatWooDecimal(value.Total),
-		})
+		if existingID, ok := matchExistingFeeLineID(existing, usedIDs, name); ok {
+			rows = append(rows, map[string]any{
+				"id":    existingID,
+				"name":  name,
+				"total": formatWooDecimal(value.Total),
+			})
+		} else {
+			rows = append(rows, map[string]any{
+				"name":  name,
+				"total": formatWooDecimal(value.Total),
+			})
+		}
 	}
 	if len(rows) == 0 {
 		return nil
 	}
 
 	return rows
+}
+
+// matchExistingLineItemID resolves existing line-item ids by SKU, product id, or name values.
+func matchExistingLineItemID(existing []wooExistingLineItem, usedIDs map[int]struct{}, value wcentity.LineItem) (int, bool) {
+	normalizedSKU := strings.ToLower(strings.TrimSpace(value.SKU))
+	normalizedName := strings.ToLower(strings.TrimSpace(value.Name))
+	for _, row := range existing {
+		if row.ID <= 0 {
+			continue
+		}
+		if _, used := usedIDs[row.ID]; used {
+			continue
+		}
+		if normalizedSKU != "" && strings.EqualFold(strings.TrimSpace(row.SKU), normalizedSKU) {
+			usedIDs[row.ID] = struct{}{}
+			return row.ID, true
+		}
+		if value.ProductId > 0 && row.ProductID == value.ProductId {
+			usedIDs[row.ID] = struct{}{}
+			return row.ID, true
+		}
+		if normalizedName != "" && strings.EqualFold(strings.TrimSpace(row.Name), normalizedName) {
+			usedIDs[row.ID] = struct{}{}
+			return row.ID, true
+		}
+	}
+
+	return 0, false
+}
+
+// matchExistingShippingLineID resolves existing shipping-line ids by method id and title values.
+func matchExistingShippingLineID(existing []wooExistingShippingLine, usedIDs map[int]struct{}, methodID string, methodTitle string) (int, bool) {
+	normalizedMethodID := strings.ToLower(strings.TrimSpace(methodID))
+	normalizedMethodTitle := strings.ToLower(strings.TrimSpace(methodTitle))
+	for _, row := range existing {
+		if row.ID <= 0 {
+			continue
+		}
+		if _, used := usedIDs[row.ID]; used {
+			continue
+		}
+		if normalizedMethodID != "" && strings.EqualFold(strings.TrimSpace(row.MethodID), normalizedMethodID) {
+			usedIDs[row.ID] = struct{}{}
+			return row.ID, true
+		}
+		if normalizedMethodTitle != "" && strings.EqualFold(strings.TrimSpace(row.MethodTitle), normalizedMethodTitle) {
+			usedIDs[row.ID] = struct{}{}
+			return row.ID, true
+		}
+	}
+
+	return 0, false
+}
+
+// matchExistingFeeLineID resolves existing fee-line ids by name values.
+func matchExistingFeeLineID(existing []wooExistingFeeLine, usedIDs map[int]struct{}, name string) (int, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	for _, row := range existing {
+		if row.ID <= 0 {
+			continue
+		}
+		if _, used := usedIDs[row.ID]; used {
+			continue
+		}
+		if normalized != "" && strings.EqualFold(strings.TrimSpace(row.Name), normalized) {
+			usedIDs[row.ID] = struct{}{}
+			return row.ID, true
+		}
+	}
+
+	return 0, false
+}
+
+// mergeLineItems merges duplicate line-item rows by SKU/product key values.
+func mergeLineItems(values []wcentity.LineItem) []wcentity.LineItem {
+	if len(values) == 0 {
+		return nil
+	}
+
+	merged := make([]wcentity.LineItem, 0, len(values))
+	indexByKey := map[string]int{}
+	for _, value := range values {
+		sku := strings.TrimSpace(value.SKU)
+		name := strings.TrimSpace(value.Name)
+		key := ""
+		switch {
+		case sku != "":
+			key = "sku:" + strings.ToLower(sku)
+		case value.ProductId > 0:
+			key = fmt.Sprintf("pid:%d", value.ProductId)
+		case name != "":
+			key = "name:" + strings.ToLower(name)
+		default:
+			continue
+		}
+
+		if index, ok := indexByKey[key]; ok {
+			merged[index].Quantity += value.Quantity
+			merged[index].Total += value.Total
+			continue
+		}
+
+		indexByKey[key] = len(merged)
+		merged = append(merged, value)
+	}
+
+	return merged
+}
+
+// mergeShippingLines merges duplicate shipping-line rows by method key values.
+func mergeShippingLines(values []wcentity.ShippingLine) []wcentity.ShippingLine {
+	if len(values) == 0 {
+		return nil
+	}
+
+	merged := make([]wcentity.ShippingLine, 0, len(values))
+	indexByKey := map[string]int{}
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodId)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		key := ""
+		switch {
+		case methodID != "":
+			key = "mid:" + strings.ToLower(methodID)
+		case methodTitle != "":
+			key = "mtitle:" + strings.ToLower(methodTitle)
+		default:
+			continue
+		}
+
+		if index, ok := indexByKey[key]; ok {
+			merged[index].Total += value.Total
+			continue
+		}
+
+		indexByKey[key] = len(merged)
+		merged = append(merged, value)
+	}
+
+	return merged
+}
+
+// mergeFeeLines merges duplicate fee-line rows by name values.
+func mergeFeeLines(values []wcentity.FeeLine) []wcentity.FeeLine {
+	if len(values) == 0 {
+		return nil
+	}
+
+	merged := make([]wcentity.FeeLine, 0, len(values))
+	indexByKey := map[string]int{}
+	for _, value := range values {
+		name := strings.TrimSpace(value.Name)
+		if name == "" {
+			continue
+		}
+
+		key := strings.ToLower(name)
+		if index, ok := indexByKey[key]; ok {
+			merged[index].Total += value.Total
+			continue
+		}
+
+		indexByKey[key] = len(merged)
+		merged = append(merged, value)
+	}
+
+	return merged
 }
 
 // mapShippingLinesForUpdate maps shipping charge payload values to WooCommerce shipping-line values.

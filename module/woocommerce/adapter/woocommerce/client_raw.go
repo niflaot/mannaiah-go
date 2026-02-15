@@ -60,14 +60,13 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 	query.Set("per_page", strconv.Itoa(pageSize))
 	query.Set("order", "asc")
 	query.Set("orderby", "id")
-	query.Set("consumer_key", c.consumerKey)
-	query.Set("consumer_secret", c.consumerSecret)
 
 	endpoint := c.baseURL + "/wp-json/wc/v3/orders?" + query.Encode()
 	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if requestErr != nil {
 		return nil, false, fmt.Errorf("create raw orders request: %w", requestErr)
 	}
+	c.applyWooAuth(request)
 
 	response, responseErr := c.rawHTTPClient().Do(request)
 	if responseErr != nil {

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // resolveWooProductIDBySKURaw resolves WooCommerce product IDs by SKU values using tolerant raw endpoint decoding.
@@ -28,14 +29,13 @@ func (c *Client) resolveWooProductIDBySKURaw(ctx context.Context, sku string) (i
 	query.Set("per_page", "1")
 	query.Set("sku", trimmedSKU)
 	query.Set("_fields", "id,sku")
-	query.Set("consumer_key", c.consumerKey)
-	query.Set("consumer_secret", c.consumerSecret)
 
 	endpoint := c.baseURL + "/wp-json/wc/v3/products?" + query.Encode()
 	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if requestErr != nil {
 		return 0, fmt.Errorf("create raw products request: %w", requestErr)
 	}
+	c.applyWooAuth(request)
 
 	response, responseErr := c.rawHTTPClient().Do(request)
 	if responseErr != nil {
@@ -78,6 +78,46 @@ func parseWooOrderID(value string) (int, error) {
 	}
 
 	return id, nil
+}
+
+// wooOrderUpdateState defines existing WooCommerce order rows used for idempotent update payload mapping.
+type wooOrderUpdateState struct {
+	// LineItems defines existing order line-item rows.
+	LineItems []wooExistingLineItem
+	// FeeLines defines existing order fee-line rows.
+	FeeLines []wooExistingFeeLine
+	// ShippingLines defines existing order shipping-line rows.
+	ShippingLines []wooExistingShippingLine
+}
+
+// wooExistingLineItem defines existing WooCommerce line-item row values.
+type wooExistingLineItem struct {
+	// ID defines line-item identifier values.
+	ID int
+	// SKU defines line-item SKU values.
+	SKU string
+	// Name defines line-item display-name values.
+	Name string
+	// ProductID defines line-item product identifier values.
+	ProductID int
+}
+
+// wooExistingFeeLine defines existing WooCommerce fee-line row values.
+type wooExistingFeeLine struct {
+	// ID defines fee-line identifier values.
+	ID int
+	// Name defines fee-line display-name values.
+	Name string
+}
+
+// wooExistingShippingLine defines existing WooCommerce shipping-line row values.
+type wooExistingShippingLine struct {
+	// ID defines shipping-line identifier values.
+	ID int
+	// MethodID defines method identifier values.
+	MethodID string
+	// MethodTitle defines method display-title values.
+	MethodTitle string
 }
 
 // wooAPIError defines WooCommerce raw API error values.
@@ -125,18 +165,20 @@ func (c *Client) updateOrderRaw(ctx context.Context, orderID int, payload map[st
 		return fmt.Errorf("marshal raw order update payload: %w", marshalErr)
 	}
 
-	query := url.Values{}
-	query.Set("consumer_key", c.consumerKey)
-	query.Set("consumer_secret", c.consumerSecret)
-	endpoint := fmt.Sprintf("%s/wp-json/wc/v3/orders/%d?%s", c.baseURL, orderID, query.Encode())
+	endpoint := fmt.Sprintf("%s/wp-json/wc/v3/orders/%d", c.baseURL, orderID)
 
 	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
 	if requestErr != nil {
 		return fmt.Errorf("create raw order update request: %w", requestErr)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	c.applyWooAuth(request)
 
-	response, responseErr := c.rawHTTPClient().Do(request)
+	httpClient := c.rawHTTPClient()
+	if httpClient.Timeout < 20*time.Second {
+		httpClient.Timeout = 20 * time.Second
+	}
+	response, responseErr := httpClient.Do(request)
 	if responseErr != nil {
 		return fmt.Errorf("execute raw order update request: %w", responseErr)
 	}
@@ -158,6 +200,109 @@ func (c *Client) updateOrderRaw(ctx context.Context, orderID int, payload map[st
 		Message:    message,
 		Body:       compactError(fmt.Errorf("%s", strings.TrimSpace(string(responseBody))), 280),
 	}
+}
+
+// getOrderUpdateStateRaw retrieves current WooCommerce order rows required for idempotent updates.
+func (c *Client) getOrderUpdateStateRaw(ctx context.Context, orderID int) (wooOrderUpdateState, error) {
+	if err := ctx.Err(); err != nil {
+		return wooOrderUpdateState{}, err
+	}
+
+	query := url.Values{}
+	query.Set("_fields", "id,line_items.id,line_items.sku,line_items.name,line_items.product_id,fee_lines.id,fee_lines.name,shipping_lines.id,shipping_lines.method_id,shipping_lines.method_title")
+	endpoint := fmt.Sprintf("%s/wp-json/wc/v3/orders/%d?%s", c.baseURL, orderID, query.Encode())
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if requestErr != nil {
+		return wooOrderUpdateState{}, fmt.Errorf("create raw order state request: %w", requestErr)
+	}
+	c.applyWooAuth(request)
+
+	response, responseErr := c.rawHTTPClient().Do(request)
+	if responseErr != nil {
+		return wooOrderUpdateState{}, fmt.Errorf("execute raw order state request: %w", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		responseBody, _ := io.ReadAll(response.Body)
+		message, code := parseWooErrorResponse(responseBody)
+		return wooOrderUpdateState{}, &wooAPIError{
+			StatusCode: response.StatusCode,
+			Code:       code,
+			Message:    message,
+			Body:       compactError(fmt.Errorf("%s", strings.TrimSpace(string(responseBody))), 280),
+		}
+	}
+
+	type rawOrderState struct {
+		// LineItems defines existing order line-item values.
+		LineItems []struct {
+			ID int `json:"id"`
+			// SKU defines existing line-item SKU values.
+			SKU string `json:"sku"`
+			// Name defines existing line-item name values.
+			Name string `json:"name"`
+			// ProductID defines existing line-item product-id values.
+			ProductID int `json:"product_id"`
+		} `json:"line_items"`
+		// FeeLines defines existing order fee-line values.
+		FeeLines []struct {
+			ID int `json:"id"`
+			// Name defines existing fee-line name values.
+			Name string `json:"name"`
+		} `json:"fee_lines"`
+		// ShippingLines defines existing order shipping-line values.
+		ShippingLines []struct {
+			ID int `json:"id"`
+			// MethodID defines existing shipping-line method identifier values.
+			MethodID string `json:"method_id"`
+			// MethodTitle defines existing shipping-line method title values.
+			MethodTitle string `json:"method_title"`
+		} `json:"shipping_lines"`
+	}
+
+	var payload rawOrderState
+	if decodeErr := json.NewDecoder(response.Body).Decode(&payload); decodeErr != nil {
+		return wooOrderUpdateState{}, fmt.Errorf("decode raw order state response: %w", decodeErr)
+	}
+
+	state := wooOrderUpdateState{
+		LineItems:     make([]wooExistingLineItem, 0, len(payload.LineItems)),
+		FeeLines:      make([]wooExistingFeeLine, 0, len(payload.FeeLines)),
+		ShippingLines: make([]wooExistingShippingLine, 0, len(payload.ShippingLines)),
+	}
+	for _, row := range payload.LineItems {
+		if row.ID <= 0 {
+			continue
+		}
+		state.LineItems = append(state.LineItems, wooExistingLineItem{
+			ID:        row.ID,
+			SKU:       strings.TrimSpace(row.SKU),
+			Name:      strings.TrimSpace(row.Name),
+			ProductID: row.ProductID,
+		})
+	}
+	for _, row := range payload.FeeLines {
+		if row.ID <= 0 {
+			continue
+		}
+		state.FeeLines = append(state.FeeLines, wooExistingFeeLine{
+			ID:   row.ID,
+			Name: strings.TrimSpace(row.Name),
+		})
+	}
+	for _, row := range payload.ShippingLines {
+		if row.ID <= 0 {
+			continue
+		}
+		state.ShippingLines = append(state.ShippingLines, wooExistingShippingLine{
+			ID:          row.ID,
+			MethodID:    strings.TrimSpace(row.MethodID),
+			MethodTitle: strings.TrimSpace(row.MethodTitle),
+		})
+	}
+
+	return state, nil
 }
 
 // parseWooErrorResponse parses WooCommerce error payload values.
@@ -183,4 +328,12 @@ func formatWooDecimal(value float64) string {
 	}
 
 	return strconv.FormatFloat(value, 'f', 2, 64)
+}
+
+// applyWooAuth applies WooCommerce authentication headers for raw endpoints.
+func (c *Client) applyWooAuth(request *http.Request) {
+	if request == nil {
+		return
+	}
+	request.SetBasicAuth(c.consumerKey, c.consumerSecret)
 }
