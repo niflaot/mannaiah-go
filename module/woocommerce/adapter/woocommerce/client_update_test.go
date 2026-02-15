@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	wcentity "github.com/jmolboy/woocommerce-go/entity"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -37,6 +38,34 @@ func TestMapShippingLinesForUpdate(t *testing.T) {
 	}
 	if lines[0].MethodId != "flat_rate" {
 		t.Fatalf("lines[0].MethodId = %q, want %q", lines[0].MethodId, "flat_rate")
+	}
+}
+
+// TestMapShippingLinesForRawUpdateFillsMethodIDFromExisting verifies method-id fallback behavior for existing shipping-line rows.
+func TestMapShippingLinesForRawUpdateFillsMethodIDFromExisting(t *testing.T) {
+	rows := mapShippingLinesForRawUpdate([]wcentity.ShippingLine{
+		{MethodId: "", MethodTitle: "Flat Rate", Total: 9000},
+	}, []wooExistingShippingLine{
+		{ID: 33, MethodID: "flat_rate", MethodTitle: "Flat Rate"},
+	})
+	if len(rows) != 1 {
+		t.Fatalf("len(rows) = %d, want %d", len(rows), 1)
+	}
+	if rows[0]["id"] != 33 {
+		t.Fatalf("rows[0][id] = %v, want %d", rows[0]["id"], 33)
+	}
+	if rows[0]["method_id"] != "flat_rate" {
+		t.Fatalf("rows[0][method_id] = %v, want %q", rows[0]["method_id"], "flat_rate")
+	}
+}
+
+// TestMapShippingLinesForRawUpdateSkipsRowsWithoutMethodID verifies invalid shipping-line omission behavior.
+func TestMapShippingLinesForRawUpdateSkipsRowsWithoutMethodID(t *testing.T) {
+	rows := mapShippingLinesForRawUpdate([]wcentity.ShippingLine{
+		{MethodId: "", MethodTitle: "Unknown Carrier", Total: 9000},
+	}, nil)
+	if len(rows) != 0 {
+		t.Fatalf("rows = %+v, want empty result", rows)
 	}
 }
 
@@ -86,4 +115,3 @@ func TestResolveOrderItemsForUpdateCanceledContext(t *testing.T) {
 		t.Fatalf("resolveOrderItemsForUpdate() error = %v, want context.Canceled", err)
 	}
 }
-

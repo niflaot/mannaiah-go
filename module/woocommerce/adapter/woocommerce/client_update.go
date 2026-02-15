@@ -236,19 +236,39 @@ func mapShippingLinesForRawUpdate(values []wcentity.ShippingLine, existing []woo
 			continue
 		}
 
-		if existingID, ok := matchExistingShippingLineID(existing, usedIDs, methodID, methodTitle); ok {
-			rows = append(rows, map[string]any{
-				"id":           existingID,
-				"method_id":    methodID,
-				"method_title": methodTitle,
-				"total":        formatWooDecimal(value.Total),
-			})
+		if existingLine, ok := matchExistingShippingLine(existing, usedIDs, methodID, methodTitle); ok {
+			if methodID == "" {
+				methodID = strings.TrimSpace(existingLine.MethodID)
+			}
+			if methodTitle == "" {
+				methodTitle = strings.TrimSpace(existingLine.MethodTitle)
+			}
+			if methodID == "" {
+				continue
+			}
+
+			row := map[string]any{
+				"id":        existingLine.ID,
+				"method_id": methodID,
+				"total":     formatWooDecimal(value.Total),
+			}
+			if methodTitle != "" {
+				row["method_title"] = methodTitle
+			}
+			rows = append(rows, row)
 		} else {
-			rows = append(rows, map[string]any{
-				"method_id":    methodID,
-				"method_title": methodTitle,
-				"total":        formatWooDecimal(value.Total),
-			})
+			if methodID == "" {
+				continue
+			}
+
+			row := map[string]any{
+				"method_id": methodID,
+				"total":     formatWooDecimal(value.Total),
+			}
+			if methodTitle != "" {
+				row["method_title"] = methodTitle
+			}
+			rows = append(rows, row)
 		}
 	}
 	if len(rows) == 0 {
@@ -320,8 +340,8 @@ func matchExistingLineItemID(existing []wooExistingLineItem, usedIDs map[int]str
 	return 0, false
 }
 
-// matchExistingShippingLineID resolves existing shipping-line ids by method id and title values.
-func matchExistingShippingLineID(existing []wooExistingShippingLine, usedIDs map[int]struct{}, methodID string, methodTitle string) (int, bool) {
+// matchExistingShippingLine resolves existing shipping-line values by method id and title values.
+func matchExistingShippingLine(existing []wooExistingShippingLine, usedIDs map[int]struct{}, methodID string, methodTitle string) (wooExistingShippingLine, bool) {
 	normalizedMethodID := strings.ToLower(strings.TrimSpace(methodID))
 	normalizedMethodTitle := strings.ToLower(strings.TrimSpace(methodTitle))
 	for _, row := range existing {
@@ -333,15 +353,15 @@ func matchExistingShippingLineID(existing []wooExistingShippingLine, usedIDs map
 		}
 		if normalizedMethodID != "" && strings.EqualFold(strings.TrimSpace(row.MethodID), normalizedMethodID) {
 			usedIDs[row.ID] = struct{}{}
-			return row.ID, true
+			return row, true
 		}
 		if normalizedMethodTitle != "" && strings.EqualFold(strings.TrimSpace(row.MethodTitle), normalizedMethodTitle) {
 			usedIDs[row.ID] = struct{}{}
-			return row.ID, true
+			return row, true
 		}
 	}
 
-	return 0, false
+	return wooExistingShippingLine{}, false
 }
 
 // matchExistingFeeLineID resolves existing fee-line ids by name values.
