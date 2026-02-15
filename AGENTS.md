@@ -48,10 +48,12 @@
   - avoid storing queryable business structures as opaque JSON/text blobs when they can be modeled as relational child tables
   - enforce integrity with explicit keys/indexes/uniqueness constraints where applicable
   - when denormalization is intentionally chosen for performance, document the rationale and add consistency safeguards/tests
-- For status-driven aggregates, treat append-only status history as source-of-truth:
-  - query/read current status from latest status history entry
-  - avoid relying on denormalized root-table status columns as authoritative values
-  - if root-table status columns are kept for indexing/performance, keep them synchronized and verify consistency in tests
+- For history/event-driven aggregates, apply this rule in all modules:
+  - Source-of-truth: child history/event tables are authoritative (not root-table snapshot columns).
+  - Read path: resolve "current/latest" state by querying latest history/event row with deterministic ordering (recommended: `occurred_at DESC, id DESC`).
+  - Write path: do not persist duplicated `current_*` / `latest_*` fields in transactional root tables when the same information exists in history/event rows.
+  - Filter path: status/state filters must be computed from history/event tables (subquery/join), not from root-table snapshot fields.
+  - Exception: if denormalized snapshots are needed for performance, place them in dedicated derived/materialized read models (outside transactional source tables), document rationale, and add consistency verification tests.
 - Reduce file complexity through composition and package splitting:
   - avoid concentrating multiple responsibilities in a single file
   - split long services/stores into focused collaborators (for example, constructor/config, operations, mapping/validation, resilience helpers)

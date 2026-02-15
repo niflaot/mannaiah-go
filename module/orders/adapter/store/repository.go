@@ -207,16 +207,6 @@ func (r *Repository) AppendStatus(ctx context.Context, id string, entry ordersdo
 			return fmt.Errorf("append order status record: %w", err)
 		}
 
-		updateTx := tx.Model(&orderRecord{}).Where("id = ?", trimmedID).Updates(map[string]any{
-			"current_status":             strings.TrimSpace(string(entry.Status)),
-			"current_status_author":      strings.TrimSpace(entry.Author),
-			"current_status_description": strings.TrimSpace(entry.Description),
-			"current_status_at":          entry.OccurredAt.UTC(),
-		})
-		if updateTx.Error != nil {
-			return fmt.Errorf("update order current status: %w", updateTx.Error)
-		}
-
 		return nil
 	})
 	if err != nil {

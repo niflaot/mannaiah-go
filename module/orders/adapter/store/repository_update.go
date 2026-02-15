@@ -32,8 +32,7 @@ func (r *Repository) Update(ctx context.Context, order *ordersdomain.Order) erro
 	shippingChargeRows := toShippingChargeRecords(entity.ID, entity.ShippingCharges)
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var existing orderRecord
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&existing, "id = ?", entity.ID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&orderRecord{}, "id = ?", entity.ID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ordersport.ErrNotFound
 			}
@@ -41,11 +40,7 @@ func (r *Repository) Update(ctx context.Context, order *ordersdomain.Order) erro
 		}
 
 		updateTx := tx.Model(&orderRecord{}).Where("id = ?", entity.ID).Updates(map[string]any{
-			"current_status":             strings.TrimSpace(string(entity.CurrentStatus)),
-			"current_status_author":      resolveCurrentStatusAuthor(entity.StatusHistory, existing),
-			"current_status_description": resolveCurrentStatusDescription(entity.StatusHistory, existing),
-			"current_status_at":          resolveCurrentStatusAt(entity.StatusHistory, existing),
-			"updated_at":                 time.Now().UTC(),
+			"updated_at": time.Now().UTC(),
 		})
 		if updateTx.Error != nil {
 			return fmt.Errorf("update order root record: %w", updateTx.Error)
@@ -92,31 +87,4 @@ func (r *Repository) Update(ctx context.Context, order *ordersdomain.Order) erro
 	*order = *latest
 
 	return nil
-}
-
-// resolveCurrentStatusAuthor resolves current-status author values.
-func resolveCurrentStatusAuthor(history []ordersdomain.StatusEntry, existing orderRecord) string {
-	if len(history) == 0 {
-		return strings.TrimSpace(existing.CurrentStatusAuthor)
-	}
-
-	return strings.TrimSpace(history[len(history)-1].Author)
-}
-
-// resolveCurrentStatusDescription resolves current-status description values.
-func resolveCurrentStatusDescription(history []ordersdomain.StatusEntry, existing orderRecord) string {
-	if len(history) == 0 {
-		return strings.TrimSpace(existing.CurrentStatusDescription)
-	}
-
-	return strings.TrimSpace(history[len(history)-1].Description)
-}
-
-// resolveCurrentStatusAt resolves current-status timestamp values.
-func resolveCurrentStatusAt(history []ordersdomain.StatusEntry, existing orderRecord) time.Time {
-	if len(history) == 0 {
-		return existing.CurrentStatusAt.UTC()
-	}
-
-	return history[len(history)-1].OccurredAt.UTC()
 }

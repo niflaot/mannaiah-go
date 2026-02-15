@@ -16,14 +16,6 @@ type orderRecord struct {
 	Realm string `gorm:"size:128;not null;index:idx_orders_realm_identifier,priority:1,unique"`
 	// ContactID defines linked customer identifiers.
 	ContactID string `gorm:"size:64;not null;index"`
-	// CurrentStatus defines current status values.
-	CurrentStatus string `gorm:"size:32;not null;index"`
-	// CurrentStatusAuthor defines current status author values.
-	CurrentStatusAuthor string `gorm:"size:255;not null"`
-	// CurrentStatusDescription defines current status description values.
-	CurrentStatusDescription string `gorm:"type:text"`
-	// CurrentStatusAt defines current status timestamps.
-	CurrentStatusAt time.Time `gorm:"not null"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
@@ -75,7 +67,7 @@ type orderStatusRecord struct {
 	// ID defines surrogate identifiers.
 	ID uint `gorm:"primaryKey"`
 	// OrderID defines owning order identifiers.
-	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_status_order_position,priority:1"`
+	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_status_order_position,priority:1;index:idx_order_status_order_occurred,priority:1"`
 	// Position defines stable history ordering.
 	Position int `gorm:"not null;index;uniqueIndex:idx_order_status_order_position,priority:2"`
 	// Status defines status values.
@@ -89,7 +81,7 @@ type orderStatusRecord struct {
 	// Note defines optional note values.
 	Note string `gorm:"type:text"`
 	// OccurredAt defines status timestamps.
-	OccurredAt time.Time `gorm:"not null;index"`
+	OccurredAt time.Time `gorm:"not null;index;index:idx_order_status_order_occurred,priority:2"`
 }
 
 // orderShippingAddressRecord defines optional shipping-address rows.

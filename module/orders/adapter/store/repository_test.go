@@ -229,6 +229,48 @@ func TestRepositoryListFilters(t *testing.T) {
 	}
 }
 
+// TestRepositoryCurrentStatusUsesLatestOccurredAt verifies current-status resolution from latest occurred-at values.
+func TestRepositoryCurrentStatusUsesLatestOccurredAt(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	ctx := context.Background()
+
+	latest := time.Now().UTC()
+	older := latest.Add(-2 * time.Hour)
+	entity := newOrderForTest("identifier-status-time", "woocommerce", "contact-status-time")
+	entity.StatusHistory = []ordersdomain.StatusEntry{
+		{Status: ordersdomain.StatusCompleted, Author: "system", OccurredAt: latest},
+		{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: older},
+	}
+	entity.CurrentStatus = ordersdomain.StatusCreated
+	if err := repository.Create(ctx, entity); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	stored, err := repository.GetByID(ctx, entity.ID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if stored.CurrentStatus != ordersdomain.StatusCompleted {
+		t.Fatalf("stored.CurrentStatus = %q, want %q", stored.CurrentStatus, ordersdomain.StatusCompleted)
+	}
+
+	rows, total, err := repository.List(ctx, ordersport.ListQuery{Status: ordersdomain.StatusCompleted})
+	if err != nil {
+		t.Fatalf("List(StatusCompleted) error = %v", err)
+	}
+	if total != 1 || len(rows) != 1 {
+		t.Fatalf("List(StatusCompleted) result = total:%d len:%d, want total:1 len:1", total, len(rows))
+	}
+
+	rows, total, err = repository.List(ctx, ordersport.ListQuery{Status: ordersdomain.StatusCreated})
+	if err != nil {
+		t.Fatalf("List(StatusCreated) error = %v", err)
+	}
+	if total != 0 || len(rows) != 0 {
+		t.Fatalf("List(StatusCreated) result = total:%d len:%d, want total:0 len:0", total, len(rows))
+	}
+}
+
 // TestRepositoryCreateWithoutCustomShipping verifies optional shipping-row behavior.
 func TestRepositoryCreateWithoutCustomShipping(t *testing.T) {
 	repository := newRepositoryForTest(t)

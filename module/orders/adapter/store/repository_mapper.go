@@ -13,33 +13,14 @@ import (
 
 // toOrderRecord maps order aggregate values to root storage records.
 func toOrderRecord(order ordersdomain.Order) orderRecord {
-	status := latestStatusEntry(order.StatusHistory)
-
 	return orderRecord{
-		ID:                       strings.TrimSpace(order.ID),
-		Identifier:               strings.TrimSpace(order.Identifier),
-		Realm:                    strings.TrimSpace(order.Realm),
-		ContactID:                strings.TrimSpace(order.ContactID),
-		CurrentStatus:            strings.TrimSpace(string(order.CurrentStatus)),
-		CurrentStatusAuthor:      strings.TrimSpace(status.Author),
-		CurrentStatusDescription: strings.TrimSpace(status.Description),
-		CurrentStatusAt:          status.OccurredAt,
-		CreatedAt:                order.CreatedAt,
-		UpdatedAt:                order.UpdatedAt,
+		ID:         strings.TrimSpace(order.ID),
+		Identifier: strings.TrimSpace(order.Identifier),
+		Realm:      strings.TrimSpace(order.Realm),
+		ContactID:  strings.TrimSpace(order.ContactID),
+		CreatedAt:  order.CreatedAt,
+		UpdatedAt:  order.UpdatedAt,
 	}
-}
-
-// latestStatusEntry resolves the latest status entry from ordered status history values.
-func latestStatusEntry(statuses []ordersdomain.StatusEntry) ordersdomain.StatusEntry {
-	if len(statuses) == 0 {
-		return ordersdomain.StatusEntry{
-			Status:     ordersdomain.StatusCreated,
-			Author:     "system",
-			OccurredAt: time.Now().UTC(),
-		}
-	}
-
-	return statuses[len(statuses)-1]
 }
 
 // toOrderItemRecords maps order items to storage child rows.
@@ -120,7 +101,7 @@ func toOrderEntity(
 	shippingCharges []orderShippingChargeRecord,
 	orderMetadata map[string]string,
 ) ordersdomain.Order {
-	resolvedStatus := resolveCurrentStatus(record, statuses)
+	resolvedStatus := resolveCurrentStatus(statuses)
 	entity := ordersdomain.Order{
 		ID:              strings.TrimSpace(record.ID),
 		Identifier:      strings.TrimSpace(record.Identifier),
@@ -149,26 +130,42 @@ func toOrderEntity(
 	return entity
 }
 
-// resolveCurrentStatus resolves current status values from status history rows with root fallback values.
-func resolveCurrentStatus(record orderRecord, statuses []orderStatusRecord) ordersdomain.StatusEntry {
-	if len(statuses) > 0 {
-		last := statuses[len(statuses)-1]
+// resolveCurrentStatus resolves current status values strictly from status-history rows.
+func resolveCurrentStatus(statuses []orderStatusRecord) ordersdomain.StatusEntry {
+	latest := latestStatusByOccurredAt(statuses)
+	if latest != nil {
 		return ordersdomain.StatusEntry{
-			Status:      ordersdomain.Status(strings.TrimSpace(last.Status)),
-			Author:      strings.TrimSpace(last.Author),
-			Description: strings.TrimSpace(last.Description),
-			NoteOwner:   strings.TrimSpace(last.NoteOwner),
-			Note:        strings.TrimSpace(last.Note),
-			OccurredAt:  last.OccurredAt.UTC(),
+			Status:      ordersdomain.Status(strings.TrimSpace(latest.Status)),
+			Author:      strings.TrimSpace(latest.Author),
+			Description: strings.TrimSpace(latest.Description),
+			NoteOwner:   strings.TrimSpace(latest.NoteOwner),
+			Note:        strings.TrimSpace(latest.Note),
+			OccurredAt:  latest.OccurredAt.UTC(),
 		}
 	}
 
 	return ordersdomain.StatusEntry{
-		Status:      ordersdomain.Status(strings.TrimSpace(record.CurrentStatus)),
-		Author:      strings.TrimSpace(record.CurrentStatusAuthor),
-		Description: strings.TrimSpace(record.CurrentStatusDescription),
-		OccurredAt:  record.CurrentStatusAt.UTC(),
+		Status:     ordersdomain.StatusCreated,
+		Author:     "system",
+		OccurredAt: time.Now().UTC(),
 	}
+}
+
+// latestStatusByOccurredAt returns the latest status row by occurred-at timestamp with deterministic ID tiebreakers.
+func latestStatusByOccurredAt(statuses []orderStatusRecord) *orderStatusRecord {
+	if len(statuses) == 0 {
+		return nil
+	}
+
+	latest := statuses[0]
+	for _, row := range statuses[1:] {
+		if row.OccurredAt.After(latest.OccurredAt) || (row.OccurredAt.Equal(latest.OccurredAt) && row.ID > latest.ID) {
+			latest = row
+		}
+	}
+
+	copyValue := latest
+	return &copyValue
 }
 
 // toItemEntities maps storage item rows to order item aggregate values.

@@ -77,7 +77,7 @@ func loadOrderStatusesByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []st
 	if err := db.WithContext(ctx).
 		Model(&orderStatusRecord{}).
 		Where("order_id IN ?", orderIDs).
-		Order("order_id ASC, position ASC").
+		Order("order_id ASC, occurred_at ASC, id ASC").
 		Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list order status records: %w", err)
 	}
@@ -177,16 +177,18 @@ func applyListQuery(tx *gorm.DB, query ordersport.ListQuery) *gorm.DB {
 	if value := strings.TrimSpace(string(query.Status)); value != "" {
 		next = next.Where(
 			`EXISTS (
-				SELECT 1
-				FROM order_status_history AS osh
-				WHERE osh.order_id = orders.id
-					AND osh.position = (
-						SELECT COALESCE(MAX(inner_osh.position), -1)
-						FROM order_status_history AS inner_osh
-						WHERE inner_osh.order_id = orders.id
-					)
-					AND osh.status = ?
-			)`,
+					SELECT 1
+					FROM order_status_history AS osh
+					WHERE osh.order_id = orders.id
+						AND osh.id = (
+							SELECT inner_osh.id
+							FROM order_status_history AS inner_osh
+							WHERE inner_osh.order_id = orders.id
+							ORDER BY inner_osh.occurred_at DESC, inner_osh.id DESC
+							LIMIT 1
+						)
+						AND osh.status = ?
+				)`,
 			value,
 		)
 	}
