@@ -112,7 +112,7 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 		t.Fatalf("payload.updated = %v, want %v", payload["updated"], float64(1))
 	}
 
-	harness.tracer.Step("verify order status and synchronized note history")
+	harness.tracer.Step("verify order status and synchronized order comments")
 	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/orders/"+orderID, ordersReadToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
@@ -121,11 +121,15 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 		t.Fatalf("order currentStatus = %v, want %q", payload["currentStatus"], "COMPLETED")
 	}
 	history, ok := payload["statusHistory"].([]any)
-	if !ok || len(history) < 3 {
-		t.Fatalf("statusHistory = %v, want at least 3 entries", payload["statusHistory"])
+	if !ok || len(history) < 2 {
+		t.Fatalf("statusHistory = %v, want at least 2 entries", payload["statusHistory"])
 	}
-	if !containsStatusNote(history, "woocommerce_sync", "Delivered by carrier") {
-		t.Fatalf("expected status history note entry")
+	comments, ok := payload["comments"].([]any)
+	if !ok || len(comments) < 1 {
+		t.Fatalf("comments = %v, want at least one comment entry", payload["comments"])
+	}
+	if !containsOrderComment(comments, "system", "Delivered by carrier", false) {
+		t.Fatalf("expected synchronized order comment entry")
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
@@ -201,16 +205,17 @@ func newWooOrdersSyncServer(t *testing.T) (*httptest.Server, func(status string,
 	return server, setState
 }
 
-// containsStatusNote reports whether status-history payload values contain note owner and note values.
-func containsStatusNote(values []any, noteOwner string, note string) bool {
+// containsOrderComment reports whether order-comment payload values contain matching values.
+func containsOrderComment(values []any, author string, comment string, internal bool) bool {
 	for _, raw := range values {
 		row, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
-		ownerValue, _ := row["noteOwner"].(string)
-		noteValue, _ := row["note"].(string)
-		if ownerValue == noteOwner && noteValue == note {
+		authorValue, _ := row["author"].(string)
+		commentValue, _ := row["comment"].(string)
+		internalValue, _ := row["internal"].(bool)
+		if authorValue == author && commentValue == comment && internalValue == internal {
 			return true
 		}
 	}

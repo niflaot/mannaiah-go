@@ -15,6 +15,7 @@ import (
 func loadRelationsByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []string) (
 	map[string][]orderItemRecord,
 	map[string][]orderStatusRecord,
+	map[string][]orderCommentRecord,
 	map[string]orderShippingAddressRecord,
 	map[string][]orderShippingChargeRecord,
 	map[string]map[string]string,
@@ -22,26 +23,30 @@ func loadRelationsByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []string
 ) {
 	itemMap, err := loadOrderItemsByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	statusMap, err := loadOrderStatusesByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	commentMap, err := loadOrderCommentsByOrderIDs(ctx, db, orderIDs)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	shippingMap, err := loadShippingByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	shippingChargeMap, err := loadShippingChargesByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	orderMetadataMap, err := loadOrderMetadataByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
-	return itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap, nil
+	return itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, nil
 }
 
 // loadOrderItemsByOrderIDs loads order-item rows grouped by order identifiers.
@@ -80,6 +85,28 @@ func loadOrderStatusesByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []st
 		Order("order_id ASC, occurred_at ASC, id ASC").
 		Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list order status records: %w", err)
+	}
+	for _, row := range rows {
+		result[row.OrderID] = append(result[row.OrderID], row)
+	}
+
+	return result, nil
+}
+
+// loadOrderCommentsByOrderIDs loads order-comment rows grouped by order identifiers.
+func loadOrderCommentsByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []string) (map[string][]orderCommentRecord, error) {
+	result := make(map[string][]orderCommentRecord, len(orderIDs))
+	if len(orderIDs) == 0 {
+		return result, nil
+	}
+
+	rows := make([]orderCommentRecord, 0)
+	if err := db.WithContext(ctx).
+		Model(&orderCommentRecord{}).
+		Where("order_id IN ?", orderIDs).
+		Order("order_id ASC, occurred_at ASC, id ASC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list order comment records: %w", err)
 	}
 	for _, row := range rows {
 		result[row.OrderID] = append(result[row.OrderID], row)
@@ -211,6 +238,7 @@ func mapRowsToEntities(
 	rows []orderRecord,
 	itemMap map[string][]orderItemRecord,
 	statusMap map[string][]orderStatusRecord,
+	commentMap map[string][]orderCommentRecord,
 	shippingMap map[string]orderShippingAddressRecord,
 	shippingChargeMap map[string][]orderShippingChargeRecord,
 	orderMetadataMap map[string]map[string]string,
@@ -222,7 +250,7 @@ func mapRowsToEntities(
 			copyValue := value
 			shipping = &copyValue
 		}
-		entities = append(entities, toOrderEntity(row, itemMap[row.ID], statusMap[row.ID], shipping, shippingChargeMap[row.ID], orderMetadataMap[row.ID]))
+		entities = append(entities, toOrderEntity(row, itemMap[row.ID], statusMap[row.ID], commentMap[row.ID], shipping, shippingChargeMap[row.ID], orderMetadataMap[row.ID]))
 	}
 
 	return entities

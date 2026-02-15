@@ -80,7 +80,7 @@ func TestMapOrderItemsAcceptsQuotaRows(t *testing.T) {
 func TestMapOrderCommentsDefaultAuthor(t *testing.T) {
 	comments := mapOrderComments(port.WooOrder{
 		Comments: []port.WooOrderComment{
-			{Author: "", Description: "note", OccurredAt: time.Date(2026, time.February, 14, 14, 0, 0, 0, time.UTC)},
+			{Author: "", Description: "note", Internal: true, OccurredAt: time.Date(2026, time.February, 14, 14, 0, 0, 0, time.UTC)},
 			{Author: "user", Description: "", OccurredAt: time.Now().UTC()},
 		},
 	})
@@ -88,11 +88,14 @@ func TestMapOrderCommentsDefaultAuthor(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("len(comments) = %d, want 1", len(comments))
 	}
-	if comments[0].Owner != syncNoteOwner {
-		t.Fatalf("comments[0].Owner = %q, want %q", comments[0].Owner, syncNoteOwner)
+	if comments[0].Author != syncCommentAuthor {
+		t.Fatalf("comments[0].Author = %q, want %q", comments[0].Author, syncCommentAuthor)
 	}
-	if comments[0].Note != "note" {
-		t.Fatalf("comments[0].Note = %q, want %q", comments[0].Note, "note")
+	if comments[0].Comment != "note" {
+		t.Fatalf("comments[0].Comment = %q, want %q", comments[0].Comment, "note")
+	}
+	if !comments[0].Internal {
+		t.Fatalf("comments[0].Internal = false, want true")
 	}
 }
 

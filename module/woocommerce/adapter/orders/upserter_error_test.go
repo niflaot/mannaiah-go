@@ -121,6 +121,26 @@ func (m *raceOrderServiceMock) UpdateStatus(ctx context.Context, id string, comm
 	}, nil
 }
 
+// AddComment appends comments to order rows.
+func (m *raceOrderServiceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+	occurredAt := time.Now().UTC()
+	if command.OccurredAt != nil && !command.OccurredAt.IsZero() {
+		occurredAt = command.OccurredAt.UTC()
+	}
+
+	return &ordersdomain.Order{
+		ID: id,
+		Comments: []ordersdomain.Comment{
+			{
+				Author:     command.Author,
+				Comment:    command.Comment,
+				Internal:   command.Internal,
+				OccurredAt: occurredAt,
+			},
+		},
+	}, nil
+}
+
 // TestCreateOrderDuplicateFallback verifies duplicate-create fallback behavior.
 func TestCreateOrderDuplicateFallback(t *testing.T) {
 	mock := &raceOrderServiceMock{

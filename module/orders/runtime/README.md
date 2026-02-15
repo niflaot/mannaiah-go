@@ -16,6 +16,7 @@
   - `GET /orders/:id`
   - `PATCH /orders/:id`
   - `PATCH /orders/:id/status`
+  - `POST /orders/:id/comments`
 - Events:
   - `orders.v1.created`
   - `orders.v1.updated`

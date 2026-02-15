@@ -12,11 +12,10 @@ import (
 	"mannaiah/module/woocommerce/port"
 )
 
-// appendCommentStatuses appends comment-derived status entries while preventing duplicate history rows.
-func (u *Upserter) appendCommentStatuses(
+// appendComments appends WooCommerce order comments while preventing duplicates.
+func (u *Upserter) appendComments(
 	ctx context.Context,
 	order ordersdomain.Order,
-	status ordersdomain.Status,
 	comments []port.OrderSyncComment,
 ) (changed bool, latest ordersdomain.Order, err error) {
 	if len(comments) == 0 {
@@ -27,42 +26,35 @@ func (u *Upserter) appendCommentStatuses(
 	current := order
 	hasChanges := false
 
-	for _, comment := range sorted {
-		noteOwner := strings.TrimSpace(comment.Owner)
-		if noteOwner == "" {
-			noteOwner = strings.TrimSpace(comment.Author)
-		}
-		if noteOwner == "" {
-			noteOwner = syncNoteOwner
+	for _, value := range sorted {
+		author := strings.TrimSpace(value.Author)
+		if author == "" {
+			author = syncCommentAuthor
 		}
 
-		note := strings.TrimSpace(comment.Note)
-		if note == "" {
-			note = strings.TrimSpace(comment.Description)
-		}
-		if note == "" {
+		comment := strings.TrimSpace(value.Comment)
+		if comment == "" {
 			continue
 		}
 
-		occurredAt := comment.OccurredAt.UTC()
+		occurredAt := value.OccurredAt.UTC()
 		if occurredAt.IsZero() {
 			occurredAt = time.Now().UTC()
 		}
-		if hasStatusEntry(current.StatusHistory, status, syncStatusAuthor, syncStatusDescription, noteOwner, note, occurredAt) {
+
+		if hasCommentEntry(current.Comments, author, comment, value.Internal, occurredAt) {
 			continue
 		}
 
-		next, updateErr := u.orderService.UpdateStatus(ctx, current.ID, ordersapplication.UpdateStatusCommand{
-			Status:      status,
-			Author:      syncStatusAuthor,
-			Description: syncStatusDescription,
-			NoteOwner:   noteOwner,
-			Note:        note,
-			OccurredAt:  &occurredAt,
-			Source:      syncStatusAuthor,
+		next, addErr := u.orderService.AddComment(ctx, current.ID, ordersapplication.AddCommentCommand{
+			Author:     author,
+			Comment:    comment,
+			Internal:   value.Internal,
+			OccurredAt: &occurredAt,
+			Source:     syncStatusAuthor,
 		})
-		if updateErr != nil {
-			return false, order, fmt.Errorf("append woocommerce order comment status: %w", updateErr)
+		if addErr != nil {
+			return false, order, fmt.Errorf("append woocommerce order comment: %w", addErr)
 		}
 
 		current = *next
@@ -90,30 +82,16 @@ func sortedComments(values []port.OrderSyncComment) []port.OrderSyncComment {
 	return sorted
 }
 
-// hasStatusEntry reports whether status history already contains the same status-author-description-timestamp tuple.
-func hasStatusEntry(
-	history []ordersdomain.StatusEntry,
-	status ordersdomain.Status,
-	author string,
-	description string,
-	noteOwner string,
-	note string,
-	occurredAt time.Time,
-) bool {
-	for _, entry := range history {
-		if entry.Status != status {
-			continue
-		}
+// hasCommentEntry reports whether comments already contain the same author-comment-internal-timestamp tuple.
+func hasCommentEntry(comments []ordersdomain.Comment, author string, comment string, internal bool, occurredAt time.Time) bool {
+	for _, entry := range comments {
 		if strings.TrimSpace(entry.Author) != strings.TrimSpace(author) {
 			continue
 		}
-		if strings.TrimSpace(entry.Description) != strings.TrimSpace(description) {
+		if strings.TrimSpace(entry.Comment) != strings.TrimSpace(comment) {
 			continue
 		}
-		if strings.TrimSpace(entry.NoteOwner) != strings.TrimSpace(noteOwner) {
-			continue
-		}
-		if strings.TrimSpace(entry.Note) != strings.TrimSpace(note) {
+		if entry.Internal != internal {
 			continue
 		}
 		if entry.OccurredAt.UTC().Equal(occurredAt.UTC()) {

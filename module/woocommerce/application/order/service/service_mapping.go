@@ -11,7 +11,7 @@ import (
 const (
 	syncMetadataSourceKey   = "integration.source"
 	syncMetadataSourceValue = "woocommerce"
-	syncNoteOwner           = "woocommerce_sync"
+	syncCommentAuthor       = "system"
 )
 
 // mapOrderSkipReason defines reason codes for skipped order rows.
@@ -192,19 +192,18 @@ func mapOrderComments(order port.WooOrder) []port.OrderSyncComment {
 	comments := make([]port.OrderSyncComment, 0, len(order.Comments))
 	for _, comment := range order.Comments {
 		author := strings.TrimSpace(comment.Author)
-		description := strings.TrimSpace(comment.Description)
-		if description == "" {
+		text := strings.TrimSpace(comment.Description)
+		if text == "" {
 			continue
 		}
 		if author == "" {
-			author = syncNoteOwner
+			author = syncCommentAuthor
 		}
 		comments = append(comments, port.OrderSyncComment{
-			Owner:       author,
-			Note:        description,
-			Author:      author,
-			Description: description,
-			OccurredAt:  comment.OccurredAt.UTC(),
+			Author:     author,
+			Comment:    text,
+			Internal:   comment.Internal,
+			OccurredAt: comment.OccurredAt.UTC(),
 		})
 	}
 

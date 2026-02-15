@@ -33,6 +33,8 @@ type WooOrderComment struct {
 	Author string
 	// Description defines comment text values.
 	Description string
+	// Internal reports whether comments are internal-only.
+	Internal bool
 	// OccurredAt defines comment timestamps.
 	OccurredAt time.Time
 }

@@ -75,6 +75,11 @@ func (orderServiceMock) UpdateStatus(ctx context.Context, id string, command ord
 	return &ordersdomain.Order{ID: id, CurrentStatus: command.Status}, nil
 }
 
+// AddComment appends order comment rows.
+func (orderServiceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
 // schedulerMock defines scheduler behavior for module tests.
 type schedulerMock struct {
 	// addErr defines add-operation errors.

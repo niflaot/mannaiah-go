@@ -17,6 +17,8 @@ func OpenAPISpec() *openapi3.T {
 		"OrderUpdate":         &openapi3.SchemaRef{Value: orderUpdateSchema()},
 		"OrderStatusUpdate":   &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
 		"OrderItem":           &openapi3.SchemaRef{Value: orderItemSchema()},
+		"OrderComment":        &openapi3.SchemaRef{Value: orderCommentSchema()},
+		"OrderCommentCreate":  &openapi3.SchemaRef{Value: orderCommentCreateSchema()},
 		"OrderShipping":       &openapi3.SchemaRef{Value: orderShippingSchema()},
 		"OrderShippingCharge": &openapi3.SchemaRef{Value: orderShippingChargeSchema()},
 		"OrderStatusEntry":    &openapi3.SchemaRef{Value: orderStatusEntrySchema()},
@@ -39,6 +41,7 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/orders", ordersPathItem()),
 			openapi3.WithPath("/orders/{id}", orderByIDPathItem()),
 			openapi3.WithPath("/orders/{id}/status", orderStatusPathItem()),
+			openapi3.WithPath("/orders/{id}/comments", orderCommentPathItem()),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
@@ -67,6 +70,13 @@ func orderByIDPathItem() *openapi3.PathItem {
 func orderStatusPathItem() *openapi3.PathItem {
 	return &openapi3.PathItem{
 		Patch: updateOrderStatusOperation(),
+	}
+}
+
+// orderCommentPathItem returns OpenAPI path operations for order comment append behavior.
+func orderCommentPathItem() *openapi3.PathItem {
+	return &openapi3.PathItem{
+		Post: addOrderCommentOperation(),
 	}
 }
 
@@ -174,6 +184,27 @@ func updateOrderStatusOperation() *openapi3.Operation {
 	}
 }
 
+// addOrderCommentOperation defines the OpenAPI operation for order-comment append behavior.
+func addOrderCommentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "OrdersController_addComment",
+		Summary:     "Append a comment to an order",
+		Tags:        []string{ordersTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+		},
+		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCommentCreate"),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("The order comment has been successfully appended.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Order not found.")),
+		),
+	}
+}
+
 // bearerSecurityRequirements builds bearer-auth operation security requirements.
 func bearerSecurityRequirements() *openapi3.SecurityRequirements {
 	return openapi3.NewSecurityRequirements().With(openapi3.NewSecurityRequirement().Authenticate(bearerSecurityScheme))
@@ -263,6 +294,7 @@ func orderSchema() *openapi3.Schema {
 		WithProperty("items", openapi3.NewArraySchema().WithItems(orderItemSchema())).
 		WithProperty("currentStatus", orderStatusSchema()).
 		WithProperty("statusHistory", openapi3.NewArraySchema().WithItems(orderStatusEntrySchema())).
+		WithProperty("comments", openapi3.NewArraySchema().WithItems(orderCommentSchema())).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("hasCustomShippingAddress", openapi3.NewBoolSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
@@ -293,6 +325,26 @@ func orderStatusEntrySchema() *openapi3.Schema {
 		WithProperty("note", openapi3.NewStringSchema()).
 		WithProperty("occurredAt", openapi3.NewDateTimeSchema()).
 		WithRequired([]string{"status", "author", "occurredAt"})
+}
+
+// orderCommentSchema returns schema for order comment-history payloads.
+func orderCommentSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("author", openapi3.NewStringSchema()).
+		WithProperty("comment", openapi3.NewStringSchema()).
+		WithProperty("internal", openapi3.NewBoolSchema()).
+		WithProperty("occurredAt", openapi3.NewDateTimeSchema()).
+		WithRequired([]string{"author", "comment", "internal", "occurredAt"})
+}
+
+// orderCommentCreateSchema returns request schema for appending order comments.
+func orderCommentCreateSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("author", openapi3.NewStringSchema()).
+		WithProperty("comment", openapi3.NewStringSchema()).
+		WithProperty("internal", openapi3.NewBoolSchema()).
+		WithProperty("source", openapi3.NewStringSchema()).
+		WithRequired([]string{"author", "comment"})
 }
 
 // orderShippingSchema returns schema for shipping-address payloads.

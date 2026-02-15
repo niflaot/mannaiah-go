@@ -23,6 +23,8 @@ type repositoryMock struct {
 	listFn func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error)
 	// appendStatusFn defines append-status behavior.
 	appendStatusFn func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error)
+	// appendCommentFn defines append-comment behavior.
+	appendCommentFn func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error)
 }
 
 // publisherMock defines integration event publication behavior for service tests.
@@ -61,6 +63,9 @@ func TestUpdateStatusCustomOccurredAt(t *testing.T) {
 				StatusHistory: []ordersdomain.StatusEntry{entry},
 			}, nil
 		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", Comments: []ordersdomain.Comment{comment}}, nil
+		},
 	}
 	customers := customerSourceMock{
 		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
@@ -87,6 +92,55 @@ func TestUpdateStatusCustomOccurredAt(t *testing.T) {
 	}
 }
 
+// TestAddComment verifies order-comment append behavior.
+func TestAddComment(t *testing.T) {
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1"}, nil
+		},
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", StatusHistory: []ordersdomain.StatusEntry{entry}, CurrentStatus: entry.Status}, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", Comments: []ordersdomain.Comment{comment}}, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	service, err := NewService(repository, customers)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	occurredAt := time.Date(2026, time.February, 14, 15, 30, 0, 0, time.UTC)
+	updated, err := service.AddComment(context.Background(), "o-1", AddCommentCommand{
+		Author:     "agent-1",
+		Comment:    "call before dispatch",
+		Internal:   true,
+		OccurredAt: &occurredAt,
+	})
+	if err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+	if len(updated.Comments) != 1 {
+		t.Fatalf("len(updated.Comments) = %d, want 1", len(updated.Comments))
+	}
+	if updated.Comments[0].Author != "agent-1" || updated.Comments[0].Comment != "call before dispatch" || !updated.Comments[0].Internal {
+		t.Fatalf("updated.Comments[0] = %+v, want author/comment/internal values", updated.Comments[0])
+	}
+	if !updated.Comments[0].OccurredAt.UTC().Equal(occurredAt) {
+		t.Fatalf("updated.Comments[0].OccurredAt = %v, want %v", updated.Comments[0].OccurredAt, occurredAt)
+	}
+}
+
 // Create executes mocked create behavior.
 func (m repositoryMock) Create(ctx context.Context, order *ordersdomain.Order) error {
 	return m.createFn(ctx, order)
@@ -110,6 +164,11 @@ func (m repositoryMock) List(ctx context.Context, query ordersport.ListQuery) ([
 // AppendStatus executes mocked append-status behavior.
 func (m repositoryMock) AppendStatus(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
 	return m.appendStatusFn(ctx, id, entry)
+}
+
+// AppendComment executes mocked append-comment behavior.
+func (m repositoryMock) AppendComment(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+	return m.appendCommentFn(ctx, id, comment)
 }
 
 // customerSourceMock defines customer-source behavior for service tests.

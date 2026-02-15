@@ -65,6 +65,22 @@ func toOrderStatusRecords(orderID string, statuses []ordersdomain.StatusEntry) [
 	return rows
 }
 
+// toOrderCommentRecords maps order comment-history values to storage child rows.
+func toOrderCommentRecords(orderID string, comments []ordersdomain.Comment) []orderCommentRecord {
+	rows := make([]orderCommentRecord, 0, len(comments))
+	for _, value := range comments {
+		rows = append(rows, orderCommentRecord{
+			OrderID:    strings.TrimSpace(orderID),
+			Author:     strings.TrimSpace(value.Author),
+			Comment:    strings.TrimSpace(value.Comment),
+			Internal:   value.Internal,
+			OccurredAt: value.OccurredAt.UTC(),
+		})
+	}
+
+	return rows
+}
+
 // toShippingChargeRecords maps shipping charge values to storage rows.
 func toShippingChargeRecords(orderID string, values []ordersdomain.ShippingCharge) []orderShippingChargeRecord {
 	rows := make([]orderShippingChargeRecord, 0, len(values))
@@ -97,6 +113,7 @@ func toOrderEntity(
 	record orderRecord,
 	items []orderItemRecord,
 	statuses []orderStatusRecord,
+	comments []orderCommentRecord,
 	shipping *orderShippingAddressRecord,
 	shippingCharges []orderShippingChargeRecord,
 	orderMetadata map[string]string,
@@ -111,6 +128,7 @@ func toOrderEntity(
 		CreatedAt:       record.CreatedAt,
 		UpdatedAt:       record.UpdatedAt,
 		StatusHistory:   toStatusEntries(statuses),
+		Comments:        toComments(comments),
 		Items:           toItemEntities(items),
 		ShippingAddress: ordersdomain.ShippingAddress{},
 		ShippingCharges: toShippingCharges(shippingCharges),
@@ -254,6 +272,21 @@ func toStatusEntries(rows []orderStatusRecord) []ordersdomain.StatusEntry {
 	}
 
 	return statuses
+}
+
+// toComments maps storage comment rows to order comment aggregate values.
+func toComments(rows []orderCommentRecord) []ordersdomain.Comment {
+	comments := make([]ordersdomain.Comment, 0, len(rows))
+	for _, row := range rows {
+		comments = append(comments, ordersdomain.Comment{
+			Author:     strings.TrimSpace(row.Author),
+			Comment:    strings.TrimSpace(row.Comment),
+			Internal:   row.Internal,
+			OccurredAt: row.OccurredAt,
+		})
+	}
+
+	return comments
 }
 
 // generateID creates random order identifier values.

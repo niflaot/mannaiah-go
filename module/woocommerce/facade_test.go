@@ -86,3 +86,8 @@ func (orderServiceMock) Update(ctx context.Context, id string, command ordersapp
 func (orderServiceMock) UpdateStatus(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 	return &ordersdomain.Order{}, nil
 }
+
+// AddComment appends order comment rows.
+func (orderServiceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{}, nil
+}

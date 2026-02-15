@@ -164,6 +164,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/orders/:id", h.protect("orders:read", h.findOne))
 	router.Patch("/orders/:id", h.protect("orders:update", h.update))
 	router.Patch("/orders/:id/status", h.protect("orders:update", h.updateStatus))
+	router.Post("/orders/:id/comments", h.protect("orders:update", h.addComment))
 }
 
 // create handles order creation endpoints.
@@ -370,7 +371,9 @@ func (h *Handler) mapError(err error) error {
 		errors.Is(err, ordersdomain.ErrItemIdentifierRequired) ||
 		errors.Is(err, ordersdomain.ErrItemQuantityInvalid) ||
 		errors.Is(err, ordersdomain.ErrStatusInvalid) ||
-		errors.Is(err, ordersdomain.ErrStatusAuthorRequired) {
+		errors.Is(err, ordersdomain.ErrStatusAuthorRequired) ||
+		errors.Is(err, ordersdomain.ErrCommentAuthorRequired) ||
+		errors.Is(err, ordersdomain.ErrCommentTextRequired) {
 		return corehttp.NewAppError(400, "invalid_order", err)
 	}
 

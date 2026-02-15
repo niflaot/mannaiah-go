@@ -22,8 +22,8 @@ const (
 	syncStatusAuthor = "woocommerce_sync"
 	// syncStatusDescription defines default status-entry description values used by WooCommerce sync updates.
 	syncStatusDescription = "WooCommerce Sync"
-	// syncNoteOwner defines default note owner values used for WooCommerce synchronized notes.
-	syncNoteOwner = "woocommerce_sync"
+	// syncCommentAuthor defines default order-comment author values for WooCommerce synchronized comments.
+	syncCommentAuthor = "system"
 )
 
 var (
@@ -96,7 +96,7 @@ func (u *Upserter) UpsertByIdentifier(ctx context.Context, command port.OrderSyn
 	return u.updateExisting(ctx, *existing, command, status)
 }
 
-// createOrder creates a new order and appends synchronized comment statuses.
+// createOrder creates new orders and appends synchronized comments.
 func (u *Upserter) createOrder(
 	ctx context.Context,
 	command port.OrderSyncCommand,
@@ -121,7 +121,7 @@ func (u *Upserter) createOrder(
 		return u.updateExisting(ctx, *existing, command, status)
 	}
 
-	_, _, appendErr := u.appendCommentStatuses(ctx, *created, status, command.Comments)
+	_, _, appendErr := u.appendComments(ctx, *created, command.Comments)
 	if appendErr != nil {
 		return "", appendErr
 	}
@@ -144,7 +144,7 @@ func (u *Upserter) updateExisting(
 			Status:      status,
 			Author:      syncStatusAuthor,
 			Description: syncStatusDescription,
-			OccurredAt:  command.CreatedAt,
+			OccurredAt:  resolveStatusOccurredAt(current, command.CreatedAt),
 			Source:      syncStatusAuthor,
 		})
 		if err != nil {
@@ -154,7 +154,7 @@ func (u *Upserter) updateExisting(
 		updated = true
 	}
 
-	commentUpdated, next, err := u.appendCommentStatuses(ctx, current, status, command.Comments)
+	commentUpdated, next, err := u.appendComments(ctx, current, command.Comments)
 	if err != nil {
 		return "", err
 	}

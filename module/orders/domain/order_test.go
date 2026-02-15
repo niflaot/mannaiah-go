@@ -18,6 +18,9 @@ func TestOrderNormalize(t *testing.T) {
 		StatusHistory: []StatusEntry{
 			{Status: " CREATED ", Author: " system ", Description: " created "},
 		},
+		Comments: []Comment{
+			{Author: " system ", Comment: " packed ", Internal: true},
+		},
 		ShippingAddress: ShippingAddress{
 			Address:  " Street 1 ",
 			Address2: " Apt 1 ",
@@ -51,6 +54,9 @@ func TestOrderNormalize(t *testing.T) {
 	}
 	if entity.ShippingCharges[0].MethodID != "flat_rate" {
 		t.Fatalf("ShippingCharges[0].MethodID = %q, want %q", entity.ShippingCharges[0].MethodID, "flat_rate")
+	}
+	if entity.Comments[0].Author != "system" || entity.Comments[0].Comment != "packed" {
+		t.Fatalf("Comments[0] = %+v, want trimmed values", entity.Comments[0])
 	}
 }
 
@@ -100,6 +106,8 @@ func TestOrderValidate(t *testing.T) {
 		{name: "item qty", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 0}}, CurrentStatus: StatusCreated}, err: ErrItemQuantityInvalid},
 		{name: "status", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: "bad"}, err: ErrStatusInvalid},
 		{name: "status author", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, StatusHistory: []StatusEntry{{Status: StatusCreated}}}, err: ErrStatusAuthorRequired},
+		{name: "comment author", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, Comments: []Comment{{Comment: "x"}}}, err: ErrCommentAuthorRequired},
+		{name: "comment text", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, Comments: []Comment{{Author: "a"}}}, err: ErrCommentTextRequired},
 		{name: "metadata invalid", item: Order{Identifier: "i", Realm: "x", ContactID: "c", Items: []Item{{SKU: "s", Quantity: 1}}, CurrentStatus: StatusCreated, Metadata: map[string]string{"k": string(make([]byte, 2050))}}, err: ErrInvalidMetadata},
 	}
 

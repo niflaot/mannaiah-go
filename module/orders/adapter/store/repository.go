@@ -45,6 +45,7 @@ func (r *Repository) EnsureSchema(ctx context.Context) error {
 		&orderRecord{},
 		&orderItemRecord{},
 		&orderStatusRecord{},
+		&orderCommentRecord{},
 		&orderShippingAddressRecord{},
 		&orderShippingChargeRecord{},
 		&orderMetadataRecord{},
@@ -73,6 +74,7 @@ func (r *Repository) Create(ctx context.Context, order *ordersdomain.Order) erro
 	}
 	itemRows := toOrderItemRecords(record.ID, entity.Items)
 	statusRows := toOrderStatusRecords(record.ID, entity.StatusHistory)
+	commentRows := toOrderCommentRecords(record.ID, entity.Comments)
 	shippingChargeRows := toShippingChargeRecords(record.ID, entity.ShippingCharges)
 	orderMetadataRows := toOrderMetadataRecords(record.ID, entity.Metadata)
 
@@ -93,6 +95,11 @@ func (r *Repository) Create(ctx context.Context, order *ordersdomain.Order) erro
 		if len(statusRows) > 0 {
 			if err := tx.Create(&statusRows).Error; err != nil {
 				return fmt.Errorf("create order status records: %w", err)
+			}
+		}
+		if len(commentRows) > 0 {
+			if err := tx.Create(&commentRows).Error; err != nil {
+				return fmt.Errorf("create order comment records: %w", err)
 			}
 		}
 		if len(shippingChargeRows) > 0 {
@@ -134,7 +141,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*ordersdomain.Orde
 		return nil, fmt.Errorf("get order record: %w", err)
 	}
 
-	itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, []string{trimmedID})
+	itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, []string{trimmedID})
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +151,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*ordersdomain.Orde
 		copyValue := value
 		shipping = &copyValue
 	}
-	entity := toOrderEntity(row, itemMap[trimmedID], statusMap[trimmedID], shipping, shippingChargeMap[trimmedID], orderMetadataMap[trimmedID])
+	entity := toOrderEntity(row, itemMap[trimmedID], statusMap[trimmedID], commentMap[trimmedID], shipping, shippingChargeMap[trimmedID], orderMetadataMap[trimmedID])
 
 	return &entity, nil
 }
@@ -167,15 +174,15 @@ func (r *Repository) List(ctx context.Context, query ordersport.ListQuery) ([]or
 	}
 
 	orderIDs := collectOrderIDs(rows)
-	itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, orderIDs)
+	itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, orderIDs)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return mapRowsToEntities(rows, itemMap, statusMap, shippingMap, shippingChargeMap, orderMetadataMap), total, nil
+	return mapRowsToEntities(rows, itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap), total, nil
 }
 
-// AppendStatus appends status rows and updates order current status values.
+// AppendStatus appends status rows for order identifiers.
 func (r *Repository) AppendStatus(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
 	trimmedID := strings.TrimSpace(id)
 
@@ -205,6 +212,38 @@ func (r *Repository) AppendStatus(ctx context.Context, id string, entry ordersdo
 		}
 		if err := tx.Create(&statusRow).Error; err != nil {
 			return fmt.Errorf("append order status record: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return r.GetByID(ctx, trimmedID)
+}
+
+// AppendComment appends comment rows for order identifiers.
+func (r *Repository) AppendComment(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+	trimmedID := strings.TrimSpace(id)
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&orderRecord{}, "id = ?", trimmedID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ordersport.ErrNotFound
+			}
+			return fmt.Errorf("lock order record: %w", err)
+		}
+
+		row := orderCommentRecord{
+			OrderID:    trimmedID,
+			Author:     strings.TrimSpace(comment.Author),
+			Comment:    strings.TrimSpace(comment.Comment),
+			Internal:   comment.Internal,
+			OccurredAt: comment.OccurredAt.UTC(),
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return fmt.Errorf("append order comment record: %w", err)
 		}
 
 		return nil

@@ -41,14 +41,12 @@ type OrderSyncShippingCharge struct {
 
 // OrderSyncComment defines order comment sync values.
 type OrderSyncComment struct {
-	// Owner defines comment owner values.
-	Owner string
-	// Note defines comment note values.
-	Note string
 	// Author defines comment author values.
 	Author string
-	// Description defines comment text values.
-	Description string
+	// Comment defines comment text values.
+	Comment string
+	// Internal reports whether comments are internal-only.
+	Internal bool
 	// OccurredAt defines comment timestamps.
 	OccurredAt time.Time
 }

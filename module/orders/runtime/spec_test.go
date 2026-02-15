@@ -14,6 +14,9 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Paths.Value("/orders/{id}/status") == nil {
 		t.Fatalf("expected /orders/{id}/status path spec")
 	}
+	if spec.Paths.Value("/orders/{id}/comments") == nil {
+		t.Fatalf("expected /orders/{id}/comments path spec")
+	}
 	if spec.Components == nil || spec.Components.Schemas["OrderCreate"] == nil {
 		t.Fatalf("expected OrderCreate schema")
 	}

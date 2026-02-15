@@ -23,6 +23,10 @@ var (
 	ErrStatusInvalid = errors.New("order status is invalid")
 	// ErrStatusAuthorRequired is returned when status authors are empty.
 	ErrStatusAuthorRequired = errors.New("order status author is required")
+	// ErrCommentAuthorRequired is returned when comment authors are empty.
+	ErrCommentAuthorRequired = errors.New("order comment author is required")
+	// ErrCommentTextRequired is returned when comment text values are empty.
+	ErrCommentTextRequired = errors.New("order comment text is required")
 	// ErrInvalidMetadata is returned when metadata keys or values are invalid.
 	ErrInvalidMetadata = errors.New("order metadata is invalid")
 )
@@ -87,6 +91,18 @@ type StatusEntry struct {
 	OccurredAt time.Time `json:"occurredAt"`
 }
 
+// Comment defines order comment-history values.
+type Comment struct {
+	// Author defines comment author values.
+	Author string `json:"author"`
+	// Comment defines comment text values.
+	Comment string `json:"comment"`
+	// Internal reports whether comments are internal-only.
+	Internal bool `json:"internal"`
+	// OccurredAt defines comment timestamps.
+	OccurredAt time.Time `json:"occurredAt"`
+}
+
 // ShippingAddress defines order shipping-address values.
 type ShippingAddress struct {
 	// Address defines shipping address line 1 values.
@@ -125,6 +141,8 @@ type Order struct {
 	CurrentStatus Status `json:"currentStatus"`
 	// StatusHistory defines order status-history values.
 	StatusHistory []StatusEntry `json:"statusHistory"`
+	// Comments defines order comment-history values.
+	Comments []Comment `json:"comments"`
 	// ShippingAddress defines resolved shipping-address values.
 	ShippingAddress ShippingAddress `json:"shippingAddress"`
 	// HasCustomShippingAddress reports whether shipping was explicitly provided for this order.
@@ -175,6 +193,10 @@ func (o *Order) Normalize() {
 		o.StatusHistory[index].NoteOwner = strings.TrimSpace(o.StatusHistory[index].NoteOwner)
 		o.StatusHistory[index].Note = strings.TrimSpace(o.StatusHistory[index].Note)
 	}
+	for index := range o.Comments {
+		o.Comments[index].Author = strings.TrimSpace(o.Comments[index].Author)
+		o.Comments[index].Comment = strings.TrimSpace(o.Comments[index].Comment)
+	}
 	o.Metadata = normalizeMetadata(o.Metadata)
 }
 
@@ -209,6 +231,14 @@ func (o Order) Validate() error {
 		}
 		if strings.TrimSpace(entry.Author) == "" {
 			return ErrStatusAuthorRequired
+		}
+	}
+	for _, comment := range o.Comments {
+		if strings.TrimSpace(comment.Author) == "" {
+			return ErrCommentAuthorRequired
+		}
+		if strings.TrimSpace(comment.Comment) == "" {
+			return ErrCommentTextRequired
 		}
 	}
 	if !isValidMetadata(o.Metadata) {

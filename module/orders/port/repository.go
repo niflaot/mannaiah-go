@@ -40,6 +40,8 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*ordersdomain.Order, error)
 	// List retrieves paginated order rows with total values.
 	List(ctx context.Context, query ListQuery) (rows []ordersdomain.Order, total int64, err error)
-	// AppendStatus appends status rows and updates current status values.
+	// AppendStatus appends status rows.
 	AppendStatus(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error)
+	// AppendComment appends comment rows.
+	AppendComment(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error)
 }

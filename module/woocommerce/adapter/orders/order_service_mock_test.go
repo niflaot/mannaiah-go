@@ -18,12 +18,16 @@ type ordersServiceMock struct {
 	listErr error
 	// updateStatusErr defines update-status operation errors.
 	updateStatusErr error
+	// addCommentErr defines add-comment operation errors.
+	addCommentErr error
 	// orders stores order rows keyed by id.
 	orders map[string]ordersdomain.Order
 	// createCommands stores create command values.
 	createCommands []ordersapplication.CreateCommand
 	// updateStatusCommands stores update-status command values.
 	updateStatusCommands []ordersapplication.UpdateStatusCommand
+	// addCommentCommands stores add-comment command values.
+	addCommentCommands []ordersapplication.AddCommentCommand
 }
 
 // Create stores created order rows.
@@ -197,6 +201,35 @@ func (m *ordersServiceMock) UpdateStatus(ctx context.Context, id string, command
 	})
 
 	m.updateStatusCommands = append(m.updateStatusCommands, command)
+	m.orders[entity.ID] = entity
+
+	copied := entity
+	return &copied, nil
+}
+
+// AddComment appends order comment rows.
+func (m *ordersServiceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+	if m.addCommentErr != nil {
+		return nil, m.addCommentErr
+	}
+
+	entity, ok := m.orders[strings.TrimSpace(id)]
+	if !ok {
+		return nil, ordersport.ErrNotFound
+	}
+
+	occurredAt := time.Now().UTC()
+	if command.OccurredAt != nil && !command.OccurredAt.IsZero() {
+		occurredAt = command.OccurredAt.UTC()
+	}
+	entity.Comments = append(entity.Comments, ordersdomain.Comment{
+		Author:     strings.TrimSpace(command.Author),
+		Comment:    strings.TrimSpace(command.Comment),
+		Internal:   command.Internal,
+		OccurredAt: occurredAt,
+	})
+
+	m.addCommentCommands = append(m.addCommentCommands, command)
 	m.orders[entity.ID] = entity
 
 	copied := entity

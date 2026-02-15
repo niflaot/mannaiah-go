@@ -84,6 +84,22 @@ type orderStatusRecord struct {
 	OccurredAt time.Time `gorm:"not null;index;index:idx_order_status_order_occurred,priority:2"`
 }
 
+// orderCommentRecord defines order comment-history persistence rows.
+type orderCommentRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;index;index:idx_order_comments_order_occurred,priority:1"`
+	// Author defines comment author values.
+	Author string `gorm:"size:255;not null"`
+	// Comment defines comment text values.
+	Comment string `gorm:"type:text;not null"`
+	// Internal reports whether comments are internal-only.
+	Internal bool `gorm:"not null;default:false"`
+	// OccurredAt defines comment timestamps.
+	OccurredAt time.Time `gorm:"not null;index;index:idx_order_comments_order_occurred,priority:2"`
+}
+
 // orderShippingAddressRecord defines optional shipping-address rows.
 type orderShippingAddressRecord struct {
 	// ID defines surrogate identifiers.
@@ -132,6 +148,9 @@ func (orderItemRecord) TableName() string { return "order_items" }
 
 // TableName defines storage table names.
 func (orderStatusRecord) TableName() string { return "order_status_history" }
+
+// TableName defines storage table names.
+func (orderCommentRecord) TableName() string { return "order_comments" }
 
 // TableName defines storage table names.
 func (orderShippingAddressRecord) TableName() string { return "order_shipping_addresses" }

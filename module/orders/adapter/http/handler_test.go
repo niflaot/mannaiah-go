@@ -25,6 +25,8 @@ type serviceMock struct {
 	updateFn func(ctx context.Context, id string, command ordersapplication.UpdateCommand) (*ordersdomain.Order, error)
 	// updateStatusFn defines update-status behavior.
 	updateStatusFn func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error)
+	// addCommentFn defines add-comment behavior.
+	addCommentFn func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error)
 }
 
 // Create executes configured create behavior.
@@ -50,6 +52,11 @@ func (m serviceMock) Update(ctx context.Context, id string, command ordersapplic
 // UpdateStatus executes configured update-status behavior.
 func (m serviceMock) UpdateStatus(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
 	return m.updateStatusFn(ctx, id, command)
+}
+
+// AddComment executes configured add-comment behavior.
+func (m serviceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+	return m.addCommentFn(ctx, id, command)
 }
 
 // authorizerMock defines auth behavior for handler tests.
@@ -120,6 +127,12 @@ func TestOrderEndpoints(t *testing.T) {
 			}
 			return &ordersdomain.Order{ID: id, CurrentStatus: command.Status}, nil
 		},
+		addCommentFn: func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+			if command.Author != "user" || command.Comment != "Order validated" || !command.Internal {
+				t.Fatalf("unexpected add-comment command: %+v", command)
+			}
+			return &ordersdomain.Order{ID: id}, nil
+		},
 	})
 	server := newHTTPServerForHandler(t, handler)
 
@@ -155,6 +168,13 @@ func TestOrderEndpoints(t *testing.T) {
 	if updateResp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("PATCH /orders/:id/status status = %d, want %d", updateResp.StatusCode, stdhttp.StatusOK)
 	}
+
+	addCommentReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/orders/o-1/comments", bytes.NewBufferString(`{"author":"user","comment":"Order validated","internal":true}`))
+	addCommentReq.Header.Set("Content-Type", "application/json")
+	addCommentResp := runRequest(t, server, addCommentReq)
+	if addCommentResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("POST /orders/:id/comments status = %d, want %d", addCommentResp.StatusCode, stdhttp.StatusOK)
+	}
 }
 
 // TestHandlerInvalidPayloadAndQuery verifies invalid request payload and query behavior.
@@ -173,6 +193,9 @@ func TestHandlerInvalidPayloadAndQuery(t *testing.T) {
 			return &ordersdomain.Order{ID: id}, nil
 		},
 		updateStatusFn: func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id}, nil
+		},
+		addCommentFn: func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{ID: id}, nil
 		},
 	})
@@ -245,6 +268,9 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 			return &ordersdomain.Order{}, nil
 		},
 		updateStatusFn: func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{}, nil
+		},
+		addCommentFn: func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{}, nil
 		},
 	}, authorizerMock{

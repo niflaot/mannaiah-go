@@ -106,6 +106,26 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 		t.Fatalf("len(updated.StatusHistory) = %d, want %d", len(updated.StatusHistory), 2)
 	}
 
+	commentAt := time.Now().UTC().Add(time.Minute)
+	updated, err = repository.AppendComment(ctx, entity.ID, ordersdomain.Comment{
+		Author:     "agent-1",
+		Comment:    "reviewed with customer",
+		Internal:   true,
+		OccurredAt: commentAt,
+	})
+	if err != nil {
+		t.Fatalf("AppendComment() error = %v", err)
+	}
+	if len(updated.Comments) != 1 {
+		t.Fatalf("len(updated.Comments) = %d, want 1", len(updated.Comments))
+	}
+	if updated.Comments[0].Author != "agent-1" || updated.Comments[0].Comment != "reviewed with customer" || !updated.Comments[0].Internal {
+		t.Fatalf("updated.Comments[0] = %+v, want author/comment/internal values", updated.Comments[0])
+	}
+	if !updated.Comments[0].OccurredAt.UTC().Equal(commentAt) {
+		t.Fatalf("updated.Comments[0].OccurredAt = %v, want %v", updated.Comments[0].OccurredAt, commentAt)
+	}
+
 	rows, total, err := repository.List(ctx, ordersport.ListQuery{Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -173,6 +193,13 @@ func TestRepositoryNotFoundPaths(t *testing.T) {
 		OccurredAt: time.Now().UTC(),
 	}); !errors.Is(err, ordersport.ErrNotFound) {
 		t.Fatalf("AppendStatus() error = %v, want ErrNotFound", err)
+	}
+	if _, err := repository.AppendComment(ctx, "missing", ordersdomain.Comment{
+		Author:     "agent-1",
+		Comment:    "missing",
+		OccurredAt: time.Now().UTC(),
+	}); !errors.Is(err, ordersport.ErrNotFound) {
+		t.Fatalf("AppendComment() error = %v, want ErrNotFound", err)
 	}
 }
 
@@ -337,6 +364,13 @@ func TestRepositoryErrorPathsOnClosedDB(t *testing.T) {
 		OccurredAt: time.Now().UTC(),
 	}); err == nil {
 		t.Fatalf("expected AppendStatus() error on closed db")
+	}
+	if _, err := repository.AppendComment(context.Background(), "x", ordersdomain.Comment{
+		Author:     "system",
+		Comment:    "closed db",
+		OccurredAt: time.Now().UTC(),
+	}); err == nil {
+		t.Fatalf("expected AppendComment() error on closed db")
 	}
 }
 

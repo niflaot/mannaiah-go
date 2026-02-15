@@ -134,7 +134,7 @@ func TestMergeOrderSyncCommand(t *testing.T) {
 		CreatedAt:  &existingCreatedAt,
 		Metadata:   map[string]string{"first": "value"},
 		Comments: []port.OrderSyncComment{
-			{Author: "system", Description: "a"},
+			{Author: "system", Comment: "a"},
 		},
 	}
 
@@ -147,7 +147,7 @@ func TestMergeOrderSyncCommand(t *testing.T) {
 		Items:      []port.OrderSyncItem{{SKU: "SKU-2", Quantity: 1}},
 		Metadata:   map[string]string{"second": "value"},
 		Comments: []port.OrderSyncComment{
-			{Author: "agent", Description: "b"},
+			{Author: "agent", Comment: "b"},
 		},
 	}
 

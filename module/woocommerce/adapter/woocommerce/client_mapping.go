@@ -143,8 +143,9 @@ func mapSDKOrderComments(customerNote string, dateModified string, dateCreated s
 
 	return []port.WooOrderComment{
 		{
-			Author:      "woocommerce_sync",
+			Author:      "system",
 			Description: description,
+			Internal:    false,
 			OccurredAt:  occurredAt,
 		},
 	}

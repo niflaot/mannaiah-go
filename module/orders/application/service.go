@@ -118,6 +118,20 @@ type UpdateStatusCommand struct {
 	Source string
 }
 
+// AddCommentCommand defines comment-append payload values.
+type AddCommentCommand struct {
+	// Author defines comment author values.
+	Author string
+	// Comment defines comment text values.
+	Comment string
+	// Internal reports whether comments are internal-only.
+	Internal bool
+	// OccurredAt defines optional comment timestamp values.
+	OccurredAt *time.Time
+	// Source defines mutation source values.
+	Source string
+}
+
 // ListQuery defines list payload values.
 type ListQuery struct {
 	// Page defines requested page values.
@@ -160,6 +174,8 @@ type Service interface {
 	List(ctx context.Context, query ListQuery) (*ListResult, error)
 	// UpdateStatus appends status values for order identifiers.
 	UpdateStatus(ctx context.Context, id string, command UpdateStatusCommand) (*ordersdomain.Order, error)
+	// AddComment appends comment values for order identifiers.
+	AddComment(ctx context.Context, id string, command AddCommentCommand) (*ordersdomain.Order, error)
 }
 
 // OrderService defines orders application dependencies.

@@ -123,7 +123,7 @@ func TestUpsertByIdentifierUpdate(t *testing.T) {
 		},
 		Items: []port.OrderSyncItem{{SKU: "SKU-1", Quantity: 1}},
 		Comments: []port.OrderSyncComment{
-			{Author: "agent-1", Description: "Order delivered", OccurredAt: commentAt},
+			{Author: "agent-1", Comment: "Order delivered", OccurredAt: commentAt},
 		},
 	})
 	if err != nil {
@@ -132,8 +132,8 @@ func TestUpsertByIdentifierUpdate(t *testing.T) {
 	if outcome != port.UpsertOutcomeUpdated {
 		t.Fatalf("outcome = %q, want %q", outcome, port.UpsertOutcomeUpdated)
 	}
-	if len(orderService.updateStatusCommands) != 2 {
-		t.Fatalf("len(updateStatusCommands) = %d, want 2", len(orderService.updateStatusCommands))
+	if len(orderService.updateStatusCommands) != 1 {
+		t.Fatalf("len(updateStatusCommands) = %d, want 1", len(orderService.updateStatusCommands))
 	}
 	if orderService.updateStatusCommands[0].Status != ordersdomain.StatusCompleted {
 		t.Fatalf("first status update = %q, want %q", orderService.updateStatusCommands[0].Status, ordersdomain.StatusCompleted)
@@ -141,14 +141,14 @@ func TestUpsertByIdentifierUpdate(t *testing.T) {
 	if orderService.updateStatusCommands[0].OccurredAt == nil || !orderService.updateStatusCommands[0].OccurredAt.UTC().Equal(createdAt) {
 		t.Fatalf("first status occurredAt = %v, want %v", orderService.updateStatusCommands[0].OccurredAt, createdAt)
 	}
-	if orderService.updateStatusCommands[1].Author != syncStatusAuthor {
-		t.Fatalf("comment status author = %q, want %q", orderService.updateStatusCommands[1].Author, syncStatusAuthor)
+	if len(orderService.addCommentCommands) != 1 {
+		t.Fatalf("len(addCommentCommands) = %d, want 1", len(orderService.addCommentCommands))
 	}
-	if orderService.updateStatusCommands[1].Description != syncStatusDescription {
-		t.Fatalf("comment status description = %q, want %q", orderService.updateStatusCommands[1].Description, syncStatusDescription)
+	if orderService.addCommentCommands[0].Author != "agent-1" {
+		t.Fatalf("comment author = %q, want %q", orderService.addCommentCommands[0].Author, "agent-1")
 	}
-	if orderService.updateStatusCommands[1].NoteOwner != "agent-1" || orderService.updateStatusCommands[1].Note != "Order delivered" {
-		t.Fatalf("comment note owner/note = %q/%q, want %q/%q", orderService.updateStatusCommands[1].NoteOwner, orderService.updateStatusCommands[1].Note, "agent-1", "Order delivered")
+	if orderService.addCommentCommands[0].Comment != "Order delivered" {
+		t.Fatalf("comment text = %q, want %q", orderService.addCommentCommands[0].Comment, "Order delivered")
 	}
 }
 
@@ -167,13 +167,13 @@ func TestUpsertByIdentifierUnchanged(t *testing.T) {
 		CurrentStatus: ordersdomain.StatusCompleted,
 		StatusHistory: []ordersdomain.StatusEntry{
 			{Status: ordersdomain.StatusCompleted, Author: syncStatusAuthor, Description: syncStatusDescription, OccurredAt: time.Date(2026, time.February, 10, 12, 0, 0, 0, time.UTC)},
+		},
+		Comments: []ordersdomain.Comment{
 			{
-				Status:      ordersdomain.StatusCompleted,
-				Author:      syncStatusAuthor,
-				Description: syncStatusDescription,
-				NoteOwner:   "agent-1",
-				Note:        "Order delivered",
-				OccurredAt:  commentAt,
+				Author:     "agent-1",
+				Comment:    "Order delivered",
+				Internal:   false,
+				OccurredAt: commentAt,
 			},
 		},
 	}
@@ -194,7 +194,7 @@ func TestUpsertByIdentifierUnchanged(t *testing.T) {
 		},
 		Items: []port.OrderSyncItem{{SKU: "SKU-1", Quantity: 1}},
 		Comments: []port.OrderSyncComment{
-			{Author: "agent-1", Description: "Order delivered", OccurredAt: commentAt},
+			{Author: "agent-1", Comment: "Order delivered", OccurredAt: commentAt},
 		},
 	})
 	if err != nil {
@@ -205,5 +205,8 @@ func TestUpsertByIdentifierUnchanged(t *testing.T) {
 	}
 	if len(orderService.updateStatusCommands) != 0 {
 		t.Fatalf("expected no status updates on unchanged sync")
+	}
+	if len(orderService.addCommentCommands) != 0 {
+		t.Fatalf("expected no comment updates on unchanged sync")
 	}
 }
