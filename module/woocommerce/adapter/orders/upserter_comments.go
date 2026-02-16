@@ -56,9 +56,10 @@ func (u *Upserter) appendComments(
 		if addErr != nil {
 			return false, order, fmt.Errorf("append woocommerce order comment: %w", addErr)
 		}
-
+		if hasCommentMutation(current, *next) {
+			hasChanges = true
+		}
 		current = *next
-		hasChanges = true
 	}
 
 	return hasChanges, current, nil

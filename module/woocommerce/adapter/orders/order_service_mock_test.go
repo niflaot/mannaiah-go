@@ -28,6 +28,8 @@ type ordersServiceMock struct {
 	updateStatusCommands []ordersapplication.UpdateStatusCommand
 	// addCommentCommands stores add-comment command values.
 	addCommentCommands []ordersapplication.AddCommentCommand
+	// ignoreWooSourceMutations reports whether Woo-origin status/comment mutations should be ignored.
+	ignoreWooSourceMutations bool
 }
 
 // Create stores created order rows.
@@ -185,6 +187,11 @@ func (m *ordersServiceMock) UpdateStatus(ctx context.Context, id string, command
 	if !ok {
 		return nil, ordersport.ErrNotFound
 	}
+	m.updateStatusCommands = append(m.updateStatusCommands, command)
+	if m.ignoreWooSourceMutations && strings.HasPrefix(strings.ToLower(strings.TrimSpace(command.Source)), "woocommerce") && strings.EqualFold(strings.TrimSpace(entity.Realm), "woocommerce") {
+		copied := entity
+		return &copied, nil
+	}
 
 	occurredAt := time.Now().UTC()
 	if command.OccurredAt != nil && !command.OccurredAt.IsZero() {
@@ -200,7 +207,6 @@ func (m *ordersServiceMock) UpdateStatus(ctx context.Context, id string, command
 		OccurredAt:  occurredAt,
 	})
 
-	m.updateStatusCommands = append(m.updateStatusCommands, command)
 	m.orders[entity.ID] = entity
 
 	copied := entity
@@ -217,6 +223,11 @@ func (m *ordersServiceMock) AddComment(ctx context.Context, id string, command o
 	if !ok {
 		return nil, ordersport.ErrNotFound
 	}
+	m.addCommentCommands = append(m.addCommentCommands, command)
+	if m.ignoreWooSourceMutations && strings.HasPrefix(strings.ToLower(strings.TrimSpace(command.Source)), "woocommerce") && strings.EqualFold(strings.TrimSpace(entity.Realm), "woocommerce") {
+		copied := entity
+		return &copied, nil
+	}
 
 	occurredAt := time.Now().UTC()
 	if command.OccurredAt != nil && !command.OccurredAt.IsZero() {
@@ -229,7 +240,6 @@ func (m *ordersServiceMock) AddComment(ctx context.Context, id string, command o
 		OccurredAt: occurredAt,
 	})
 
-	m.addCommentCommands = append(m.addCommentCommands, command)
 	m.orders[entity.ID] = entity
 
 	copied := entity

@@ -13,7 +13,7 @@ import (
 	"mannaiah/module/woocommerce"
 )
 
-// TestWooCommerceOrdersSyncE2E verifies WooCommerce order sync behavior including contact fallback and status updates.
+// TestWooCommerceOrdersSyncE2E verifies WooCommerce order sync behavior including contact fallback and Woo-origin update suppression.
 func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
@@ -103,33 +103,37 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 	harness.tracer.Step("update mock order source to completed with note comment")
 	setState("completed", "Delivered by carrier")
 
-	harness.tracer.Step("trigger manual woocommerce orders sync for update")
+	harness.tracer.Step("trigger manual woocommerce orders sync and expect Woo-origin updates to be ignored")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/orders", ordersManageToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	if payload["updated"] != float64(1) {
-		t.Fatalf("payload.updated = %v, want %v", payload["updated"], float64(1))
+	if payload["updated"] != float64(0) {
+		t.Fatalf("payload.updated = %v, want %v", payload["updated"], float64(0))
+	}
+	unchanged, ok := payload["unchanged"].(float64)
+	if !ok || unchanged < float64(1) {
+		t.Fatalf("payload.unchanged = %v, want >= %v", payload["unchanged"], float64(1))
 	}
 
-	harness.tracer.Step("verify order status and synchronized order comments")
+	harness.tracer.Step("verify order status and comments were not mutated by Woo-origin sync")
 	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/orders/"+orderID, ordersReadToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	if payload["currentStatus"] != "COMPLETED" {
-		t.Fatalf("order currentStatus = %v, want %q", payload["currentStatus"], "COMPLETED")
+	if payload["currentStatus"] != "CREATED" {
+		t.Fatalf("order currentStatus = %v, want %q", payload["currentStatus"], "CREATED")
 	}
 	history, ok := payload["statusHistory"].([]any)
-	if !ok || len(history) < 2 {
-		t.Fatalf("statusHistory = %v, want at least 2 entries", payload["statusHistory"])
+	if !ok || len(history) != 1 {
+		t.Fatalf("statusHistory = %v, want exactly 1 entry", payload["statusHistory"])
 	}
 	comments, ok := payload["comments"].([]any)
-	if !ok || len(comments) < 1 {
-		t.Fatalf("comments = %v, want at least one comment entry", payload["comments"])
+	if !ok {
+		t.Fatalf("comments = %v, want array payload", payload["comments"])
 	}
-	if !containsOrderComment(comments, "system", "Delivered by carrier", false) {
-		t.Fatalf("expected synchronized order comment entry")
+	if len(comments) != 0 {
+		t.Fatalf("comments = %v, want no synced comment entries", payload["comments"])
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
@@ -203,22 +207,4 @@ func newWooOrdersSyncServer(t *testing.T) (*httptest.Server, func(status string,
 	}))
 
 	return server, setState
-}
-
-// containsOrderComment reports whether order-comment payload values contain matching values.
-func containsOrderComment(values []any, author string, comment string, internal bool) bool {
-	for _, raw := range values {
-		row, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		authorValue, _ := row["author"].(string)
-		commentValue, _ := row["comment"].(string)
-		internalValue, _ := row["internal"].(bool)
-		if authorValue == author && commentValue == comment && internalValue == internal {
-			return true
-		}
-	}
-
-	return false
 }

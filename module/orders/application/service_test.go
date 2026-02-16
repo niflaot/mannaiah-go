@@ -524,6 +524,253 @@ func TestUpdateAndEventPublishing(t *testing.T) {
 	}
 }
 
+// TestUpdateSkipsWooInboundMutation verifies Woo-origin mutation suppression behavior for existing Woo orders.
+func TestUpdateSkipsWooInboundMutation(t *testing.T) {
+	updateCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error {
+			updateCalled = true
+			return nil
+		},
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items: []ordersdomain.Item{
+					{SKU: "SKU-1", Quantity: 1, ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved},
+				},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	publisher := &publisherMock{}
+	service, err := NewServiceWithPublisher(repository, customers, publisher)
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	items := []CreateItemCommand{{SKU: "SKU-2", Quantity: 2, Value: 22}}
+	updated, err := service.Update(context.Background(), "o-1", UpdateCommand{
+		Items:  &items,
+		Source: "woocommerce_plugin",
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if updateCalled {
+		t.Fatalf("expected update repository call to be skipped")
+	}
+	if len(publisher.events) != 0 {
+		t.Fatalf("len(publisher.events) = %d, want 0", len(publisher.events))
+	}
+	if len(updated.Items) != 1 || updated.Items[0].SKU != "SKU-1" {
+		t.Fatalf("updated.Items = %+v, want original SKU-1 row", updated.Items)
+	}
+}
+
+// TestUpdateNoopSkipsPersistenceAndPublish verifies idempotent no-op update behavior.
+func TestUpdateNoopSkipsPersistenceAndPublish(t *testing.T) {
+	updateCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error {
+			updateCalled = true
+			return nil
+		},
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:                       id,
+				Identifier:               "1001",
+				Realm:                    "woocommerce",
+				ContactID:                "c-1",
+				CurrentStatus:            ordersdomain.StatusCreated,
+				HasCustomShippingAddress: true,
+				ShippingAddress:          ordersdomain.ShippingAddress{Address: "Street 1", CityCode: "11001"},
+				ShippingCharges:          []ordersdomain.ShippingCharge{{MethodID: "flat_rate", MethodTitle: "Flat", Price: 9}},
+				StatusHistory:            []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items: []ordersdomain.Item{
+					{SKU: "SKU-2", Quantity: 2, Value: 22, ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved},
+				},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	publisher := &publisherMock{}
+	service, err := NewServiceWithPublisher(repository, customers, publisher)
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	items := []CreateItemCommand{{SKU: "SKU-2", Quantity: 2, Value: 22}}
+	charges := []ShippingChargeCommand{{MethodID: "flat_rate", MethodTitle: "Flat", Price: 9}}
+	updated, err := service.Update(context.Background(), "o-1", UpdateCommand{
+		Items:           &items,
+		ShippingCharges: &charges,
+		ShippingAddress: &ShippingAddressCommand{Address: "Street 1", CityCode: "11001"},
+		Source:          "mainstream",
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if updateCalled {
+		t.Fatalf("expected update repository call to be skipped for no-op update")
+	}
+	if len(publisher.events) != 0 {
+		t.Fatalf("len(publisher.events) = %d, want 0", len(publisher.events))
+	}
+	if len(updated.Items) != 1 || updated.Items[0].SKU != "SKU-2" {
+		t.Fatalf("updated.Items = %+v, want unchanged SKU-2 row", updated.Items)
+	}
+}
+
+// TestUpdateStatusSkipsWooInboundMutation verifies Woo-origin status-update suppression behavior.
+func TestUpdateStatusSkipsWooInboundMutation(t *testing.T) {
+	appendCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			appendCalled = true
+			return nil, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	publisher := &publisherMock{}
+	service, err := NewServiceWithPublisher(repository, customers, publisher)
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	updated, err := service.UpdateStatus(context.Background(), "o-1", UpdateStatusCommand{
+		Status: ordersdomain.StatusCompleted,
+		Author: "system",
+		Source: "woocommerce_plugin",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if appendCalled {
+		t.Fatalf("expected append status call to be skipped")
+	}
+	if len(publisher.events) != 0 {
+		t.Fatalf("len(publisher.events) = %d, want 0", len(publisher.events))
+	}
+	if updated.CurrentStatus != ordersdomain.StatusCreated {
+		t.Fatalf("updated.CurrentStatus = %q, want %q", updated.CurrentStatus, ordersdomain.StatusCreated)
+	}
+}
+
+// TestAddCommentSkipsWooInboundMutation verifies Woo-origin comment-append suppression behavior.
+func TestAddCommentSkipsWooInboundMutation(t *testing.T) {
+	appendCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			appendCalled = true
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	publisher := &publisherMock{}
+	service, err := NewServiceWithPublisher(repository, customers, publisher)
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	updated, err := service.AddComment(context.Background(), "o-1", AddCommentCommand{
+		Author:   "system",
+		Comment:  "test",
+		Internal: true,
+		Source:   "woocommerce_plugin",
+	})
+	if err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+	if appendCalled {
+		t.Fatalf("expected append comment call to be skipped")
+	}
+	if len(publisher.events) != 0 {
+		t.Fatalf("len(publisher.events) = %d, want 0", len(publisher.events))
+	}
+	if updated.ID != "o-1" {
+		t.Fatalf("updated.ID = %q, want %q", updated.ID, "o-1")
+	}
+}
+
 // TestCreatePublishError verifies create behavior when event publication fails.
 func TestCreatePublishError(t *testing.T) {
 	repository := repositoryMock{

@@ -150,8 +150,10 @@ func (u *Upserter) updateExisting(
 		if err != nil {
 			return "", fmt.Errorf("update order status for woocommerce sync: %w", err)
 		}
+		if hasStatusMutation(current, *next) {
+			updated = true
+		}
 		current = *next
-		updated = true
 	}
 
 	commentUpdated, next, err := u.appendComments(ctx, current, command.Comments)

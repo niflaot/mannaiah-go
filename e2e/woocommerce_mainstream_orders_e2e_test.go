@@ -34,6 +34,15 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 			writer.Header().Set("X-Wp-Totalpages", "0")
 			_ = json.NewEncoder(writer).Encode([]map[string]any{})
 			return
+		case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/wp-json/wc/v3/orders/"):
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"id":             1001,
+				"line_items":     []map[string]any{},
+				"fee_lines":      []map[string]any{},
+				"shipping_lines": []map[string]any{},
+			})
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/wp-json/wc/v3/products":
 			writer.Header().Set("Content-Type", "application/json")
 			if strings.TrimSpace(request.URL.Query().Get("sku")) == "SKU-1" {
@@ -60,12 +69,12 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 	harness.tracer.Step("initialize woocommerce module with messaging registrar")
 	wooModule, err := woocommerce.NewWithMessaging(
 		woocommerce.Config{
-			URL:            wooServer.URL,
-			ConsumerKey:    "key",
-			ConsumerSecret: "secret",
-			SyncContacts:   false,
-			SyncOrders:     false,
-			VerifySSL:      true,
+			URL:              wooServer.URL,
+			ConsumerKey:      "key",
+			ConsumerSecret:   "secret",
+			SyncContacts:     false,
+			SyncOrders:       false,
+			VerifySSL:        true,
 			RequestTimeoutMS: 300,
 		},
 		harness.contactsModule.Service(),

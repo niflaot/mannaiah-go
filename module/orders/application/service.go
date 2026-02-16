@@ -349,7 +349,6 @@ func (s *OrderService) UpdateStatus(ctx context.Context, id string, command Upda
 	if trimmedID == "" {
 		return nil, ErrInvalidID
 	}
-
 	entry := ordersdomain.StatusEntry{
 		Status:      command.Status,
 		Author:      strings.TrimSpace(command.Author),
@@ -366,6 +365,14 @@ func (s *OrderService) UpdateStatus(ctx context.Context, id string, command Upda
 	}
 	if err := validateStatusEntry(entry); err != nil {
 		return nil, err
+	}
+	current, err := s.repository.GetByID(ctx, trimmedID)
+	if err != nil {
+		return nil, fmt.Errorf("load order for status update: %w", err)
+	}
+	if shouldIgnoreWooInboundMutation(command.Source, current.Realm) {
+		s.enrichShippingWithBilling(ctx, current)
+		return current, nil
 	}
 
 	entity, err := s.repository.AppendStatus(ctx, trimmedID, entry)

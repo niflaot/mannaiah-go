@@ -16,7 +16,6 @@ func (s *OrderService) AddComment(ctx context.Context, id string, command AddCom
 	if trimmedID == "" {
 		return nil, ErrInvalidID
 	}
-
 	comment := ordersdomain.Comment{
 		Author:     strings.TrimSpace(command.Author),
 		Comment:    strings.TrimSpace(command.Comment),
@@ -28,6 +27,14 @@ func (s *OrderService) AddComment(ctx context.Context, id string, command AddCom
 	}
 	if err := validateComment(comment); err != nil {
 		return nil, err
+	}
+	current, err := s.repository.GetByID(ctx, trimmedID)
+	if err != nil {
+		return nil, fmt.Errorf("load order for comment append: %w", err)
+	}
+	if shouldIgnoreWooInboundMutation(command.Source, current.Realm) {
+		s.enrichShippingWithBilling(ctx, current)
+		return current, nil
 	}
 
 	updated, err := s.repository.AppendComment(ctx, trimmedID, comment)
