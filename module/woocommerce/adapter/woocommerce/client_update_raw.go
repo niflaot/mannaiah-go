@@ -208,9 +208,9 @@ func (c *Client) getOrderUpdateStateRaw(ctx context.Context, orderID int) (wooOr
 		return wooOrderUpdateState{}, err
 	}
 
-	query := url.Values{}
-	query.Set("_fields", "id,line_items.id,line_items.sku,line_items.name,line_items.product_id,fee_lines.id,fee_lines.name,shipping_lines.id,shipping_lines.method_id,shipping_lines.method_title")
-	endpoint := fmt.Sprintf("%s/wp-json/wc/v3/orders/%d?%s", c.baseURL, orderID, query.Encode())
+	// Use full-order fetch for update-state matching. Nested _fields filtering is not consistently
+	// supported across WooCommerce installations and may omit line-item identity fields.
+	endpoint := fmt.Sprintf("%s/wp-json/wc/v3/orders/%d", c.baseURL, orderID)
 	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if requestErr != nil {
 		return wooOrderUpdateState{}, fmt.Errorf("create raw order state request: %w", requestErr)

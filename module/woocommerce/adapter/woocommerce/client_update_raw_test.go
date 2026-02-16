@@ -228,6 +228,82 @@ func TestUpdateOrderFromMainstreamUsesRawPayload(t *testing.T) {
 	}
 }
 
+// TestUpdateOrderFromMainstreamAvoidsLineItemDuplication verifies full-state fetch behavior prevents duplicate line-item appends.
+func TestUpdateOrderFromMainstreamAvoidsLineItemDuplication(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/wp-json/wc/v3/products":
+			sku := strings.TrimSpace(request.URL.Query().Get("sku"))
+			writer.WriteHeader(http.StatusOK)
+			if sku == "SKU-1" {
+				_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 901}})
+				return
+			}
+			_ = json.NewEncoder(writer).Encode([]map[string]any{})
+		case "/wp-json/wc/v3/orders/1023650":
+			if request.Method == http.MethodGet {
+				if request.URL.Query().Get("_fields") != "" {
+					writer.WriteHeader(http.StatusOK)
+					_, _ = writer.Write([]byte(`{"line_items":[{"id":11}],"fee_lines":[],"shipping_lines":[]}`))
+					return
+				}
+				writer.WriteHeader(http.StatusOK)
+				_, _ = writer.Write([]byte(`{"line_items":[{"id":11,"sku":"SKU-1","product_id":901}],"fee_lines":[],"shipping_lines":[]}`))
+				return
+			}
+			if request.Method == http.MethodPut {
+				body, err := io.ReadAll(request.Body)
+				if err != nil {
+					t.Fatalf("ReadAll(request.Body) error = %v", err)
+				}
+
+				payload := map[string]any{}
+				if err := json.Unmarshal(body, &payload); err != nil {
+					t.Fatalf("json.Unmarshal() error = %v", err)
+				}
+				lineItems, _ := payload["line_items"].([]any)
+				if len(lineItems) != 1 {
+					t.Fatalf("line_items length = %d, want %d", len(lineItems), 1)
+				}
+				firstLineItem, _ := lineItems[0].(map[string]any)
+				if firstLineItem["id"].(float64) != 11 {
+					t.Fatalf("line_items[0].id = %v, want %d", firstLineItem["id"], 11)
+				}
+				if _, hasProductID := firstLineItem["product_id"]; hasProductID {
+					t.Fatalf("line_items[0].product_id should be omitted when matching existing line id")
+				}
+
+				writer.WriteHeader(http.StatusOK)
+				_, _ = writer.Write([]byte(`{"id":1023650}`))
+				return
+			}
+
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:        server.URL,
+		consumerKey:    "key",
+		consumerSecret: "secret",
+		timeout:        time.Second,
+		verifySSL:      true,
+	}
+
+	err := client.UpdateOrderFromMainstream(context.Background(), port.MainstreamOrderUpdateCommand{
+		Identifier: "1023650",
+		Items: []port.OrderSyncItem{
+			{SKU: "SKU-1", Quantity: 1, Value: 139000},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateOrderFromMainstream() error = %v", err)
+	}
+}
+
 // TestUpdateOrderFromMainstreamMarks4xxNonRetriable verifies non-retriable error classification for WooCommerce 4xx failures.
 func TestUpdateOrderFromMainstreamMarks4xxNonRetriable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
