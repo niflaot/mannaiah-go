@@ -26,7 +26,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Contacts API",
-			Version: "0.0.1",
+			Version: "1.0.0",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/contacts", contactsPathItem()),

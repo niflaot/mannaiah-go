@@ -21,6 +21,10 @@ var (
 	ErrIntegrationUnavailable = errors.New("woocommerce integration is unavailable")
 	// ErrUpsertUnavailable is returned when order-upsert dependencies are unavailable.
 	ErrUpsertUnavailable = errors.New("woocommerce order upsert dependency is unavailable")
+	// ErrInvalidOrderID is returned when targeted order-sync identifier values are invalid.
+	ErrInvalidOrderID = errors.New("woocommerce order id must be greater than zero")
+	// ErrOrderNotFound is returned when targeted order-sync identifiers are not present in Woo orders.
+	ErrOrderNotFound = errors.New("woocommerce order not found")
 )
 
 // SyncConfig defines sync behavior configuration values.
@@ -73,6 +77,8 @@ type Service interface {
 	ValidateIntegration(ctx context.Context) error
 	// SyncOrders performs order synchronization and emits integration events.
 	SyncOrders(ctx context.Context, trigger string) (*SyncSummary, error)
+	// SyncOrderByID performs targeted order synchronization for one Woo order identifier.
+	SyncOrderByID(ctx context.Context, trigger string, orderID int) (*SyncSummary, error)
 }
 
 // OrderSyncService defines WooCommerce order sync use-case dependencies.
@@ -149,50 +155,18 @@ func (s *OrderSyncService) ValidateIntegration(ctx context.Context) error {
 
 // SyncOrders performs order synchronization and emits integration events.
 func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*SyncSummary, error) {
-	summary := &SyncSummary{Trigger: normalizeTrigger(trigger)}
-	s.publishEvent(ctx, wooorderevent.NewSyncStartedEvent(summary.Trigger))
+	return s.syncOrdersWithResolver(ctx, trigger, s.resolveAllCommands)
+}
 
-	if err := s.ValidateIntegration(ctx); err != nil {
-		s.publishEvent(ctx, wooorderevent.NewSyncFailedEvent(toEventSummary(*summary), err))
-		return nil, err
+// SyncOrderByID performs targeted order synchronization for one Woo order identifier.
+func (s *OrderSyncService) SyncOrderByID(ctx context.Context, trigger string, orderID int) (*SyncSummary, error) {
+	if orderID <= 0 {
+		return nil, ErrInvalidOrderID
 	}
 
-	commandIndexByIdentifier := map[string]int{}
-	pendingCommands := make([]port.OrderSyncCommand, 0)
-	page := 1
-	for {
-		if err := ctx.Err(); err != nil {
-			s.publishEvent(ctx, wooorderevent.NewSyncFailedEvent(toEventSummary(*summary), err))
-			return nil, err
-		}
-
-		orders, hasNext, err := s.loadPage(ctx, page)
-		if err != nil {
-			wrappedErr := fmt.Errorf("list woocommerce orders page %d (%s): %w", page, formatSyncProgress(summary), err)
-			s.publishEvent(ctx, wooorderevent.NewSyncFailedEvent(toEventSummary(*summary), wrappedErr))
-			return nil, wrappedErr
-		}
-
-		if len(orders) == 0 {
-			break
-		}
-
-		pendingCommands = collectCommandsFromOrders(orders, commandIndexByIdentifier, pendingCommands, summary, s.logger)
-
-		if !hasNext {
-			break
-		}
-		page++
-	}
-
-	if err := s.processCommands(ctx, pendingCommands, summary); err != nil {
-		wrappedErr := fmt.Errorf("process woocommerce orders sync (%s): %w", formatSyncProgress(summary), err)
-		s.publishEvent(ctx, wooorderevent.NewSyncFailedEvent(toEventSummary(*summary), wrappedErr))
-		return nil, wrappedErr
-	}
-
-	s.publishEvent(ctx, wooorderevent.NewSyncCompletedEvent(toEventSummary(*summary)))
-	return summary, nil
+	return s.syncOrdersWithResolver(ctx, trigger, func(ctx context.Context, summary *SyncSummary) ([]port.OrderSyncCommand, error) {
+		return s.resolveCommandsByOrderID(ctx, summary, orderID)
+	})
 }
 
 // loadPage retrieves one WooCommerce order page with breaker protection.

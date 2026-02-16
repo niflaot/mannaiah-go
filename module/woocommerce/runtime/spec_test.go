@@ -25,6 +25,12 @@ func TestOpenAPISpec(t *testing.T) {
 	if path.Post.Responses == nil || path.Post.Responses.Status(503) == nil {
 		t.Fatalf("expected 503 response")
 	}
+	if len(path.Post.Parameters) == 0 {
+		t.Fatalf("expected contact sync query parameters")
+	}
+	if path.Post.Responses.Status(404) == nil {
+		t.Fatalf("expected 404 response for contact sync")
+	}
 
 	ordersPath := spec.Paths.Value("/woo/sync/orders")
 	if ordersPath.Post == nil {
@@ -35,5 +41,11 @@ func TestOpenAPISpec(t *testing.T) {
 	}
 	if ordersPath.Post.Responses == nil || ordersPath.Post.Responses.Status(503) == nil {
 		t.Fatalf("expected 503 response for orders")
+	}
+	if len(ordersPath.Post.Parameters) == 0 {
+		t.Fatalf("expected order sync query parameters")
+	}
+	if ordersPath.Post.Responses.Status(404) == nil {
+		t.Fatalf("expected 404 response for order sync")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	errorspkg "errors"
 	stdhttp "net/http"
+	"strings"
 	"testing"
 
 	corehttp "mannaiah/module/core/http"
@@ -17,6 +18,12 @@ type contactsServiceMock struct {
 	summary *woocontactservice.SyncSummary
 	// syncErr defines sync execution errors.
 	syncErr error
+	// syncByEmailSummary defines targeted sync summary responses.
+	syncByEmailSummary *woocontactservice.SyncSummary
+	// syncByEmailErr defines targeted sync execution errors.
+	syncByEmailErr error
+	// lastEmail captures last targeted email values.
+	lastEmail string
 }
 
 // ValidateIntegration validates integration state.
@@ -36,12 +43,31 @@ func (m *contactsServiceMock) SyncContacts(ctx context.Context, trigger string) 
 	return &woocontactservice.SyncSummary{Trigger: trigger}, nil
 }
 
+// SyncContactByEmail performs targeted sync behavior.
+func (m *contactsServiceMock) SyncContactByEmail(ctx context.Context, trigger string, email string) (*woocontactservice.SyncSummary, error) {
+	m.lastEmail = strings.Clone(email)
+	if m.syncByEmailErr != nil {
+		return nil, m.syncByEmailErr
+	}
+	if m.syncByEmailSummary != nil {
+		return m.syncByEmailSummary, nil
+	}
+
+	return &woocontactservice.SyncSummary{Trigger: trigger, Processed: 1}, nil
+}
+
 // ordersServiceMock defines WooCommerce orders service behavior for handler tests.
 type ordersServiceMock struct {
 	// summary defines sync summary responses.
 	summary *wooorderservice.SyncSummary
 	// syncErr defines sync execution errors.
 	syncErr error
+	// syncByIDSummary defines targeted sync summary responses.
+	syncByIDSummary *wooorderservice.SyncSummary
+	// syncByIDErr defines targeted sync execution errors.
+	syncByIDErr error
+	// lastOrderID captures last targeted order-id values.
+	lastOrderID int
 }
 
 // ValidateIntegration validates integration state.
@@ -59,6 +85,19 @@ func (m *ordersServiceMock) SyncOrders(ctx context.Context, trigger string) (*wo
 	}
 
 	return &wooorderservice.SyncSummary{Trigger: trigger}, nil
+}
+
+// SyncOrderByID performs targeted sync behavior.
+func (m *ordersServiceMock) SyncOrderByID(ctx context.Context, trigger string, orderID int) (*wooorderservice.SyncSummary, error) {
+	m.lastOrderID = orderID
+	if m.syncByIDErr != nil {
+		return nil, m.syncByIDErr
+	}
+	if m.syncByIDSummary != nil {
+		return m.syncByIDSummary, nil
+	}
+
+	return &wooorderservice.SyncSummary{Trigger: trigger, Processed: 1}, nil
 }
 
 // authorizerMock defines authorization behavior for handler tests.
@@ -101,11 +140,13 @@ func TestNewHandlerValidation(t *testing.T) {
 
 // TestRegisterRoutesAndSync verifies route registration and successful sync behavior.
 func TestRegisterRoutesAndSync(t *testing.T) {
-	handler, err := NewHandler(&contactsServiceMock{
+	contactsMock := &contactsServiceMock{
 		summary: &woocontactservice.SyncSummary{Trigger: "manual", Processed: 2},
-	}, &ordersServiceMock{
+	}
+	ordersMock := &ordersServiceMock{
 		summary: &wooorderservice.SyncSummary{Trigger: "manual", Processed: 3},
-	})
+	}
+	handler, err := NewHandler(contactsMock, ordersMock)
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -132,6 +173,30 @@ func TestRegisterRoutesAndSync(t *testing.T) {
 	}
 	if orderResponse.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("status = %d, want %d", orderResponse.StatusCode, stdhttp.StatusOK)
+	}
+
+	targetContactRequest, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/contacts?email=target@example.com", nil)
+	targetContactResponse, targetContactErr := server.App().Test(targetContactRequest)
+	if targetContactErr != nil {
+		t.Fatalf("App().Test() error = %v", targetContactErr)
+	}
+	if targetContactResponse.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want %d", targetContactResponse.StatusCode, stdhttp.StatusOK)
+	}
+
+	targetOrderRequest, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/orders?id=1001", nil)
+	targetOrderResponse, targetOrderErr := server.App().Test(targetOrderRequest)
+	if targetOrderErr != nil {
+		t.Fatalf("App().Test() error = %v", targetOrderErr)
+	}
+	if targetOrderResponse.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want %d", targetOrderResponse.StatusCode, stdhttp.StatusOK)
+	}
+	if contactsMock.lastEmail != "target@example.com" {
+		t.Fatalf("contacts lastEmail = %q, want %q", contactsMock.lastEmail, "target@example.com")
+	}
+	if ordersMock.lastOrderID != 1001 {
+		t.Fatalf("orders lastOrderID = %d, want %d", ordersMock.lastOrderID, 1001)
 	}
 }
 
@@ -168,11 +233,23 @@ func TestMapError(t *testing.T) {
 	if appErr := handler.mapError(woocontactservice.ErrSyncDisabled); appErr == nil {
 		t.Fatalf("expected mapError(sync disabled)")
 	}
+	if appErr := handler.mapError(woocontactservice.ErrInvalidEmail); appErr == nil {
+		t.Fatalf("expected mapError(invalid email)")
+	}
+	if appErr := handler.mapError(woocontactservice.ErrContactNotFound); appErr == nil {
+		t.Fatalf("expected mapError(contact not found)")
+	}
 	if appErr := handler.mapError(woocontactservice.ErrIntegrationUnavailable); appErr == nil {
 		t.Fatalf("expected mapError(integration unavailable)")
 	}
 	if appErr := handler.mapError(wooorderservice.ErrSyncDisabled); appErr == nil {
 		t.Fatalf("expected mapError(order sync disabled)")
+	}
+	if appErr := handler.mapError(wooorderservice.ErrInvalidOrderID); appErr == nil {
+		t.Fatalf("expected mapError(invalid order id)")
+	}
+	if appErr := handler.mapError(wooorderservice.ErrOrderNotFound); appErr == nil {
+		t.Fatalf("expected mapError(order not found)")
 	}
 	if appErr := handler.mapError(wooorderservice.ErrIntegrationUnavailable); appErr == nil {
 		t.Fatalf("expected mapError(order integration unavailable)")
@@ -190,4 +267,27 @@ func TestSetAuthorizer(t *testing.T) {
 	}
 
 	handler.SetAuthorizer(nil)
+}
+
+// TestSyncRoutesInvalidOrderIDQuery verifies invalid targeted order query behavior.
+func TestSyncRoutesInvalidOrderIDQuery(t *testing.T) {
+	handler, err := NewHandler(&contactsServiceMock{}, &ordersServiceMock{})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8123}, nil)
+	if err != nil {
+		t.Fatalf("corehttp.New() error = %v", err)
+	}
+	server.RegisterRoutes(handler.RegisterRoutes)
+
+	request, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/orders?id=abc", nil)
+	response, testErr := server.App().Test(request)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if response.StatusCode != stdhttp.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.StatusCode, stdhttp.StatusBadRequest)
+	}
 }

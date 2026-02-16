@@ -22,7 +22,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "WooCommerce API",
-			Version: "0.0.1",
+			Version: "1.0.0",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/woo/sync/contacts", &openapi3.PathItem{
@@ -46,10 +46,15 @@ func syncOrdersOperation() *openapi3.Operation {
 		Summary:     "Trigger WooCommerce order sync",
 		Tags:        []string{wooTag},
 		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			queryParameter("id", "Optional WooCommerce order numeric identifier for targeted sync.", openapi3.NewIntegerSchema()),
+		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Sync triggered successfully.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("WooCommerce order not found.")),
 			openapi3.WithStatus(503, responseWithDescription("WooCommerce integration unavailable or disabled.")),
 		),
 	}
@@ -62,10 +67,15 @@ func syncContactsOperation() *openapi3.Operation {
 		Summary:     "Trigger WooCommerce contact sync",
 		Tags:        []string{wooTag},
 		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			queryParameter("email", "Optional contact email for targeted sync.", openapi3.NewStringSchema()),
+		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Sync triggered successfully.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("WooCommerce contact not found.")),
 			openapi3.WithStatus(503, responseWithDescription("WooCommerce integration unavailable or disabled.")),
 		),
 	}
@@ -80,5 +90,14 @@ func bearerSecurityRequirements() *openapi3.SecurityRequirements {
 func responseWithDescription(description string) *openapi3.ResponseRef {
 	return &openapi3.ResponseRef{
 		Value: openapi3.NewResponse().WithDescription(description),
+	}
+}
+
+// queryParameter builds optional query-parameter OpenAPI definitions.
+func queryParameter(name, description string, schema *openapi3.Schema) *openapi3.ParameterRef {
+	return &openapi3.ParameterRef{
+		Value: openapi3.NewQueryParameter(name).
+			WithDescription(description).
+			WithSchema(schema),
 	}
 }

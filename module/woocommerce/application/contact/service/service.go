@@ -26,6 +26,10 @@ var (
 	ErrIntegrationUnavailable = errors.New("woocommerce integration is unavailable")
 	// ErrUpsertUnavailable is returned when contact-upsert dependencies are unavailable.
 	ErrUpsertUnavailable = errors.New("woocommerce contact upsert dependency is unavailable")
+	// ErrInvalidEmail is returned when targeted contact-sync email values are invalid.
+	ErrInvalidEmail = errors.New("woocommerce contact sync email is required")
+	// ErrContactNotFound is returned when targeted contact-sync email values are not present in Woo orders.
+	ErrContactNotFound = errors.New("woocommerce contact not found")
 )
 
 // SyncConfig defines sync behavior configuration values.
@@ -78,6 +82,8 @@ type Service interface {
 	ValidateIntegration(ctx context.Context) error
 	// SyncContacts performs contact synchronization and emits integration events.
 	SyncContacts(ctx context.Context, trigger string) (*SyncSummary, error)
+	// SyncContactByEmail performs targeted contact synchronization for one email and emits integration events.
+	SyncContactByEmail(ctx context.Context, trigger string, email string) (*SyncSummary, error)
 }
 
 // ContactSyncService defines WooCommerce contact sync use-case dependencies.
@@ -154,6 +160,21 @@ func (s *ContactSyncService) ValidateIntegration(ctx context.Context) error {
 
 // SyncContacts performs contact synchronization and emits integration events.
 func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (*SyncSummary, error) {
+	return s.syncContactsWithLoader(ctx, trigger, s.loadPage, false)
+}
+
+// SyncContactByEmail performs targeted contact synchronization for one email and emits integration events.
+func (s *ContactSyncService) SyncContactByEmail(ctx context.Context, trigger string, email string) (*SyncSummary, error) {
+	resolvedEmail := normalizeEmailKey(email)
+	if resolvedEmail == "" {
+		return nil, ErrInvalidEmail
+	}
+
+	return s.syncContactsWithLoader(ctx, trigger, s.newEmailPageLoader(resolvedEmail), true)
+}
+
+// syncContactsWithLoader performs contact synchronization using provided page-loader behavior.
+func (s *ContactSyncService) syncContactsWithLoader(ctx context.Context, trigger string, loader pageLoader, requireCommands bool) (*SyncSummary, error) {
 	summary := &SyncSummary{Trigger: normalizeTrigger(trigger)}
 	s.publishEvent(ctx, woocontactevent.NewSyncStartedEvent(summary.Trigger))
 
@@ -171,7 +192,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			return nil, err
 		}
 
-		orders, hasNext, err := s.loadPage(ctx, page)
+		orders, hasNext, err := loader(ctx, page)
 		if err != nil {
 			wrappedErr := fmt.Errorf("list woocommerce orders page %d (%s): %w", page, formatSyncProgress(summary), err)
 			s.publishEvent(ctx, woocontactevent.NewSyncFailedEvent(toEventSummary(*summary), wrappedErr))
@@ -188,6 +209,10 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			break
 		}
 		page++
+	}
+	if requireCommands && len(pendingCommands) == 0 {
+		s.publishEvent(ctx, woocontactevent.NewSyncFailedEvent(toEventSummary(*summary), ErrContactNotFound))
+		return nil, ErrContactNotFound
 	}
 
 	if err := s.processCommands(ctx, pendingCommands, summary); err != nil {

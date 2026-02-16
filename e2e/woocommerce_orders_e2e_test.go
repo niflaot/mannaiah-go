@@ -136,8 +136,17 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 		t.Fatalf("comments = %v, want no synced comment entries", payload["comments"])
 	}
 
+	harness.tracer.Step("trigger targeted woocommerce orders sync by id")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/orders?id=1001", ordersManageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["processed"] != float64(1) {
+		t.Fatalf("payload.processed = %v, want %v", payload["processed"], float64(1))
+	}
+
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(9)
+	harness.tracer.AssertStepCount(10)
 }
 
 // newWooOrdersSyncServer creates WooCommerce orders mock servers with mutable status and comment payload values.
@@ -156,15 +165,52 @@ func newWooOrdersSyncServer(t *testing.T) (*httptest.Server, func(status string,
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/wp-json/wc/v3/orders" {
-			writer.WriteHeader(http.StatusNotFound)
-			return
-		}
-
 		stateMutex.RLock()
 		status := currentStatus
 		note := currentNote
 		stateMutex.RUnlock()
+
+		if request.URL.Path == "/wp-json/wc/v3/orders/1001" {
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"id":            1001,
+				"status":        status,
+				"date_created":  "2026-02-10T12:00:00Z",
+				"date_modified": "2026-02-10T13:00:00Z",
+				"customer_note": note,
+				"billing": map[string]any{
+					"email":      "woo.order@example.com",
+					"first_name": "Woo",
+					"last_name":  "Order",
+					"phone":      "3001112233",
+					"address_1":  "Billing 1",
+					"address_2":  "Billing 2",
+					"city":       "11001",
+				},
+				"shipping": map[string]any{
+					"first_name": "Woo",
+					"last_name":  "Order",
+					"address_1":  "Shipping 1",
+					"address_2":  "Shipping 2",
+					"city":       "05001",
+				},
+				"line_items": []map[string]any{
+					{
+						"name":     "Woo Product",
+						"sku":      "SKU-WOO-1",
+						"quantity": 1,
+						"meta_data": []map[string]any{
+							{"key": "source", "value": "woocommerce"},
+						},
+					},
+				},
+			})
+			return
+		}
+		if request.URL.Path != "/wp-json/wc/v3/orders" {
+			writer.WriteHeader(http.StatusNotFound)
+			return
+		}
 
 		writer.Header().Set("Content-Type", "application/json")
 		writer.Header().Set("X-Wp-Total", "1")

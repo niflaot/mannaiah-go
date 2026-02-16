@@ -262,6 +262,87 @@ func TestResolveHasNextPage(t *testing.T) {
 	}
 }
 
+// TestSearchOrdersAndGetOrderByID verifies targeted Woo order retrieval behavior.
+func TestSearchOrdersAndGetOrderByID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/wp-json/wc/v3/orders":
+			writer.Header().Set("X-Wp-Total", "1")
+			writer.Header().Set("X-Wp-Totalpages", "1")
+			writer.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(writer).Encode([]map[string]any{
+				{
+					"id":           7001,
+					"status":       "processing",
+					"date_created": "2024-03-01T08:00:00Z",
+					"billing": map[string]any{
+						"email":      "target@example.com",
+						"first_name": "Target",
+						"last_name":  "Person",
+						"address_1":  "Street 1",
+						"city":       "Bogota",
+					},
+					"line_items": []map[string]any{
+						{"name": "Item 1", "sku": "SKU-1", "quantity": 1, "total": "12000"},
+					},
+				},
+			})
+		case "/wp-json/wc/v3/orders/7001":
+			writer.Header().Set("Content-Type", "application/json")
+			writer.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"id":            7001,
+				"status":        "completed",
+				"date_created":  "2024-03-01T08:00:00Z",
+				"date_modified": "2024-03-01T09:00:00Z",
+				"billing": map[string]any{
+					"email":      "target@example.com",
+					"first_name": "Target",
+					"last_name":  "Person",
+					"address_1":  "Street 1",
+					"city":       "Bogota",
+				},
+				"line_items": []map[string]any{
+					{"name": "Item 1", "sku": "SKU-1", "quantity": 1, "total": "12000"},
+				},
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		URL:            server.URL,
+		ConsumerKey:    "key",
+		ConsumerSecret: "secret",
+		Timeout:        time.Second,
+		VerifySSL:      true,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	orders, hasNext, searchErr := client.SearchOrders(context.Background(), "target@example.com", 1, 20)
+	if searchErr != nil {
+		t.Fatalf("SearchOrders() error = %v", searchErr)
+	}
+	if hasNext {
+		t.Fatalf("expected hasNext=false for one-page search result")
+	}
+	if len(orders) != 1 || orders[0].ID != 7001 {
+		t.Fatalf("SearchOrders() orders = %+v, want one id 7001", orders)
+	}
+
+	order, getErr := client.GetOrderByID(context.Background(), 7001)
+	if getErr != nil {
+		t.Fatalf("GetOrderByID() error = %v", getErr)
+	}
+	if order.ID != 7001 || order.Status != "completed" {
+		t.Fatalf("GetOrderByID() order = %+v, want id 7001 status completed", order)
+	}
+}
+
 // TestListOrdersMetadataArrayFallback verifies tolerant metadata decoding for non-scalar metadata values.
 func TestListOrdersMetadataArrayFallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

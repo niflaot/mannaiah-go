@@ -17,5 +17,6 @@
   - `service.NewService(cfg, source, target, publisher, logger, breakers...)`
   - `(*service.ContactSyncService).ValidateIntegration(ctx)`
   - `(*service.ContactSyncService).SyncContacts(ctx, trigger)`
+  - `(*service.ContactSyncService).SyncContactByEmail(ctx, trigger, email)`
 - Endpoints: none in this package.
 - Events: delegated to `application/contact/event`.

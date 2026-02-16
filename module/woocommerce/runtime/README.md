@@ -19,8 +19,8 @@
   - `(*runtime.Module).Start(ctx)`
   - `(*runtime.Module).Stop(ctx)`
 - Endpoints:
-  - `POST /woo/sync/contacts` (registered via HTTP adapter)
-  - `POST /woo/sync/orders` (registered via HTTP adapter)
+  - `POST /woo/sync/contacts` (`?email=<contact@email>` optional targeted sync; registered via HTTP adapter)
+  - `POST /woo/sync/orders` (`?id=<woo_order_id>` optional targeted sync; registered via HTTP adapter)
 - Events:
   - delegates lifecycle event emission to `application/contact/service`
   - delegates lifecycle event emission to `application/order/service`

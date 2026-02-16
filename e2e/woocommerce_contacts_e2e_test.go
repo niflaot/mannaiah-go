@@ -114,8 +114,17 @@ func TestWooCommerceContactsSyncE2E(t *testing.T) {
 		t.Fatalf("woo.one metadata oldest_order_created_at = %v, want %q", metadata["integration.woocommerce.oldest_order_created_at"], "2024-03-01T08:00:00Z")
 	}
 
+	harness.tracer.Step("trigger targeted woocommerce contacts sync by email")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/contacts?email=woo.one@example.com", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["processed"] != float64(1) {
+		t.Fatalf("payload.processed = %v, want %v", payload["processed"], float64(1))
+	}
+
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(8)
+	harness.tracer.AssertStepCount(9)
 }
 
 // TestWooCommerceInvalidIntegrationE2E verifies disabled endpoint behavior for invalid integrations.

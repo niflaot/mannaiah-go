@@ -141,6 +141,16 @@ func (m *raceOrderServiceMock) AddComment(ctx context.Context, id string, comman
 	}, nil
 }
 
+// UpdateComment updates order comment rows.
+func (m *raceOrderServiceMock) UpdateComment(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
+// DeleteComment deletes order comment rows.
+func (m *raceOrderServiceMock) DeleteComment(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
 // TestCreateOrderDuplicateFallback verifies duplicate-create fallback behavior.
 func TestCreateOrderDuplicateFallback(t *testing.T) {
 	mock := &raceOrderServiceMock{

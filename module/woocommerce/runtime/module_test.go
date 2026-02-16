@@ -80,6 +80,16 @@ func (orderServiceMock) AddComment(ctx context.Context, id string, command order
 	return &ordersdomain.Order{ID: id}, nil
 }
 
+// UpdateComment updates order comment rows.
+func (orderServiceMock) UpdateComment(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
+// DeleteComment deletes order comment rows.
+func (orderServiceMock) DeleteComment(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{ID: id}, nil
+}
+
 // schedulerMock defines scheduler behavior for module tests.
 type schedulerMock struct {
 	// addErr defines add-operation errors.

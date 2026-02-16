@@ -34,8 +34,8 @@
   - `(*woocommerce.Module).Stop(ctx)`
   - `(*woocommerce.Module).SetAuthorizer(authorizer)`
 - Endpoints:
-  - `POST /woo/sync/contacts`
-  - `POST /woo/sync/orders`
+  - `POST /woo/sync/contacts` (`?email=<contact@email>` optional targeted sync)
+  - `POST /woo/sync/orders` (`?id=<woo_order_id>` optional targeted sync)
 - Events:
   - `woocommerce.v1.contacts.sync.started`
   - `woocommerce.v1.contacts.sync.completed`

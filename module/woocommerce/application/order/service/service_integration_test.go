@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +26,19 @@ func (m sourceMock) Validate(ctx context.Context) error {
 // ListOrders executes mocked list behavior.
 func (m sourceMock) ListOrders(ctx context.Context, page int, pageSize int) ([]port.WooOrder, bool, error) {
 	return m.listFn(ctx, page, pageSize)
+}
+
+// sourceByIDMock defines source behavior with direct order-by-id lookup support.
+type sourceByIDMock struct {
+	// sourceMock defines baseline source behavior.
+	sourceMock
+	// getByIDFn defines direct order lookup behavior.
+	getByIDFn func(ctx context.Context, orderID int) (port.WooOrder, error)
+}
+
+// GetOrderByID executes direct order lookup behavior.
+func (m sourceByIDMock) GetOrderByID(ctx context.Context, orderID int) (port.WooOrder, error) {
+	return m.getByIDFn(ctx, orderID)
 }
 
 // targetMock defines target behavior for service tests.
@@ -105,7 +119,7 @@ func TestValidateIntegration(t *testing.T) {
 // TestSyncOrdersSuccess verifies full sync flow behavior.
 func TestSyncOrdersSuccess(t *testing.T) {
 	publisher := &publisherProbe{}
-	upsertCalls := 0
+	var upsertCalls atomic.Int32
 	service, err := NewService(
 		SyncConfig{Enabled: true, PageSize: 2, WorkerCount: 2},
 		sourceMock{
@@ -153,7 +167,7 @@ func TestSyncOrdersSuccess(t *testing.T) {
 		},
 		targetMock{
 			upsertFn: func(ctx context.Context, command port.OrderSyncCommand) (port.UpsertOutcome, error) {
-				upsertCalls++
+				upsertCalls.Add(1)
 				if command.Identifier == "1001" && command.Status != "completed" {
 					t.Fatalf("command.Status = %q, want %q", command.Status, "completed")
 				}
@@ -174,8 +188,8 @@ func TestSyncOrdersSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SyncOrders() error = %v", err)
 	}
-	if upsertCalls != 2 {
-		t.Fatalf("upsertCalls = %d, want %d", upsertCalls, 2)
+	if upsertCalls.Load() != 2 {
+		t.Fatalf("upsertCalls = %d, want %d", upsertCalls.Load(), 2)
 	}
 	if summary.Processed != 2 || summary.Created != 2 || summary.Failed != 0 {
 		t.Fatalf("summary = %+v, want processed=2 created=2 failed=0", summary)
@@ -213,6 +227,118 @@ func TestSyncOrdersFailure(t *testing.T) {
 	}
 	if len(publisher.topics) != 2 {
 		t.Fatalf("published topics = %d, want %d", len(publisher.topics), 2)
+	}
+}
+
+// TestSyncOrderByIDSuccess verifies targeted order-sync behavior by Woo order identifier.
+func TestSyncOrderByIDSuccess(t *testing.T) {
+	service, err := NewService(
+		SyncConfig{Enabled: true, WorkerCount: 1},
+		sourceByIDMock{
+			sourceMock: sourceMock{
+				validateFn: func(ctx context.Context) error { return nil },
+				listFn: func(ctx context.Context, page int, pageSize int) ([]port.WooOrder, bool, error) {
+					return nil, false, nil
+				},
+			},
+			getByIDFn: func(ctx context.Context, orderID int) (port.WooOrder, error) {
+				return port.WooOrder{
+					ID:                   orderID,
+					Status:               "processing",
+					BillingEmail:         "single@example.com",
+					BillingFirstName:     "Single",
+					BillingLastName:      "Order",
+					BillingAddress1:      "A",
+					BillingCity:          "11001",
+					ShippingAddressLine1: "A",
+					ShippingCityCode:     "11001",
+					Items: []port.WooOrderItem{
+						{SKU: "SKU-1", Name: "Item", Quantity: 1, Value: 1000},
+					},
+					CreatedAt: time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC),
+				}, nil
+			},
+		},
+		targetMock{
+			upsertFn: func(ctx context.Context, command port.OrderSyncCommand) (port.UpsertOutcome, error) {
+				if command.Identifier != "1001" {
+					t.Fatalf("command.Identifier = %q, want %q", command.Identifier, "1001")
+				}
+				return port.UpsertOutcomeCreated, nil
+			},
+		},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncOrderByID(context.Background(), "manual", 1001)
+	if syncErr != nil {
+		t.Fatalf("SyncOrderByID() error = %v", syncErr)
+	}
+	if summary.Processed != 1 || summary.Created != 1 {
+		t.Fatalf("summary = %+v, want processed=1 created=1", summary)
+	}
+}
+
+// TestSyncOrderByIDValidation verifies targeted order-sync validation behavior.
+func TestSyncOrderByIDValidation(t *testing.T) {
+	service, err := NewService(
+		SyncConfig{Enabled: true},
+		sourceMock{
+			validateFn: func(ctx context.Context) error { return nil },
+			listFn: func(ctx context.Context, page int, pageSize int) ([]port.WooOrder, bool, error) {
+				return nil, false, nil
+			},
+		},
+		targetMock{
+			upsertFn: func(ctx context.Context, command port.OrderSyncCommand) (port.UpsertOutcome, error) {
+				return port.UpsertOutcomeCreated, nil
+			},
+		},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if _, syncErr := service.SyncOrderByID(context.Background(), "manual", 0); !errors.Is(syncErr, ErrInvalidOrderID) {
+		t.Fatalf("SyncOrderByID(invalid) error = %v, want ErrInvalidOrderID", syncErr)
+	}
+}
+
+// TestSyncOrderByIDNotFound verifies targeted order-sync not-found behavior.
+func TestSyncOrderByIDNotFound(t *testing.T) {
+	service, err := NewService(
+		SyncConfig{Enabled: true},
+		sourceByIDMock{
+			sourceMock: sourceMock{
+				validateFn: func(ctx context.Context) error { return nil },
+				listFn: func(ctx context.Context, page int, pageSize int) ([]port.WooOrder, bool, error) {
+					return nil, false, nil
+				},
+			},
+			getByIDFn: func(ctx context.Context, orderID int) (port.WooOrder, error) {
+				return port.WooOrder{}, errors.New("404 not found")
+			},
+		},
+		targetMock{
+			upsertFn: func(ctx context.Context, command port.OrderSyncCommand) (port.UpsertOutcome, error) {
+				return port.UpsertOutcomeCreated, nil
+			},
+		},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if _, syncErr := service.SyncOrderByID(context.Background(), "manual", 1001); !errors.Is(syncErr, ErrOrderNotFound) {
+		t.Fatalf("SyncOrderByID(not found) error = %v, want ErrOrderNotFound", syncErr)
 	}
 }
 

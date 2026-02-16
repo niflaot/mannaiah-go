@@ -3,6 +3,8 @@ package http
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 
 	corehttp "mannaiah/module/core/http"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
@@ -74,7 +76,17 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 
 // syncContacts triggers manual contact sync behavior.
 func (h *Handler) syncContacts(ctx corehttp.Context) error {
-	summary, err := h.contactsService.SyncContacts(ctx.Context(), "manual")
+	targetEmail := strings.TrimSpace(ctx.Query("email", ""))
+
+	var (
+		summary *woocontactservice.SyncSummary
+		err     error
+	)
+	if targetEmail != "" {
+		summary, err = h.contactsService.SyncContactByEmail(ctx.Context(), "manual", targetEmail)
+	} else {
+		summary, err = h.contactsService.SyncContacts(ctx.Context(), "manual")
+	}
 	if err != nil {
 		return h.mapError(err)
 	}
@@ -84,7 +96,22 @@ func (h *Handler) syncContacts(ctx corehttp.Context) error {
 
 // syncOrders triggers manual order sync behavior.
 func (h *Handler) syncOrders(ctx corehttp.Context) error {
-	summary, err := h.ordersService.SyncOrders(ctx.Context(), "manual")
+	rawOrderID := strings.TrimSpace(ctx.Query("id", ""))
+
+	var (
+		summary *wooorderservice.SyncSummary
+		err     error
+	)
+	if rawOrderID != "" {
+		orderID, parseErr := strconv.Atoi(rawOrderID)
+		if parseErr != nil || orderID <= 0 {
+			return h.mapError(wooorderservice.ErrInvalidOrderID)
+		}
+
+		summary, err = h.ordersService.SyncOrderByID(ctx.Context(), "manual", orderID)
+	} else {
+		summary, err = h.ordersService.SyncOrders(ctx.Context(), "manual")
+	}
 	if err != nil {
 		return h.mapError(err)
 	}
@@ -121,8 +148,20 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, woocontactservice.ErrSyncDisabled) {
 		return corehttp.NewAppError(503, "woocommerce_contacts_sync_disabled", err)
 	}
+	if errors.Is(err, woocontactservice.ErrInvalidEmail) {
+		return corehttp.NewAppError(400, "invalid_contact_email", err)
+	}
+	if errors.Is(err, woocontactservice.ErrContactNotFound) {
+		return corehttp.NewAppError(404, "woocommerce_contact_not_found", err)
+	}
 	if errors.Is(err, wooorderservice.ErrSyncDisabled) {
 		return corehttp.NewAppError(503, "woocommerce_orders_sync_disabled", err)
+	}
+	if errors.Is(err, wooorderservice.ErrInvalidOrderID) {
+		return corehttp.NewAppError(400, "invalid_order_id", err)
+	}
+	if errors.Is(err, wooorderservice.ErrOrderNotFound) {
+		return corehttp.NewAppError(404, "woocommerce_order_not_found", err)
 	}
 	if errors.Is(err, woocontactservice.ErrIntegrationUnavailable) {
 		return corehttp.NewAppError(503, "woocommerce_integration_unavailable", err)

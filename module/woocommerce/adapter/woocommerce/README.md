@@ -13,5 +13,7 @@
   - `woocommerce.NewClient(cfg)`
   - `(*woocommerce.Client).Validate(ctx)`
   - `(*woocommerce.Client).ListOrders(ctx, page, pageSize)`
+  - `(*woocommerce.Client).SearchOrders(ctx, search, page, pageSize)`
+  - `(*woocommerce.Client).GetOrderByID(ctx, orderID)`
 - Endpoints: none in this package.
 - Events: none in this package.

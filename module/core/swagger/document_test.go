@@ -12,7 +12,7 @@ import (
 
 // TestNewDocumentBuild verifies base document creation behavior.
 func TestNewDocumentBuild(t *testing.T) {
-	document := NewDocument(Info{Title: "Mannaiah", Version: "0.0.1", Description: "API"}).Build()
+	document := NewDocument(Info{Title: "Mannaiah", Version: "1.0.0", Description: "API"}).Build()
 	if document.OpenAPI != "3.0.3" {
 		t.Fatalf("openapi = %v, want %q", document.OpenAPI, "3.0.3")
 	}
@@ -28,10 +28,10 @@ func TestMergeRejectsNilSpec(t *testing.T) {
 
 // TestMergeAggregatesPathsComponentsAndTags verifies spec aggregation behavior.
 func TestMergeAggregatesPathsComponentsAndTags(t *testing.T) {
-	doc := NewDocument(Info{Title: "Mannaiah", Version: "0.0.1"})
+	doc := NewDocument(Info{Title: "Mannaiah", Version: "1.0.0"})
 	spec := &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Contacts", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "Contacts", Version: "1.0.0"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/contacts", &openapi3.PathItem{
 				Get: &openapi3.Operation{
@@ -73,7 +73,7 @@ func TestMergeRejectsDuplicateOperation(t *testing.T) {
 	doc := NewDocument(Info{})
 	first := &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "A", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "A", Version: "1.0.0"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/contacts", &openapi3.PathItem{
 				Get: &openapi3.Operation{
@@ -85,7 +85,7 @@ func TestMergeRejectsDuplicateOperation(t *testing.T) {
 	}
 	second := &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "B", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "B", Version: "1.0.0"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/contacts", &openapi3.PathItem{
 				Get: &openapi3.Operation{
@@ -109,7 +109,7 @@ func TestMergeRejectsDuplicateComponent(t *testing.T) {
 	doc := NewDocument(Info{})
 	first := &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "A", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "A", Version: "1.0.0"},
 		Components: &openapi3.Components{
 			Schemas: openapi3.Schemas{
 				"Contact": {Value: openapi3.NewObjectSchema()},
@@ -118,7 +118,7 @@ func TestMergeRejectsDuplicateComponent(t *testing.T) {
 	}
 	second := &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "B", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "B", Version: "1.0.0"},
 		Components: &openapi3.Components{
 			Schemas: openapi3.Schemas{
 				"Contact": {Value: openapi3.NewObjectSchema()},
@@ -142,14 +142,14 @@ func TestMergeRejectsInvalidStructures(t *testing.T) {
 
 	if err := doc.Merge(&openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Bad Paths", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "Bad Paths", Version: "1.0.0"},
 		Paths:   invalidPaths,
 	}); err == nil {
 		t.Fatalf("expected invalid operations error")
 	}
 	if err := doc.Merge(&openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Bad Tags", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "Bad Tags", Version: "1.0.0"},
 		Tags: openapi3.Tags{
 			nil,
 		},
@@ -163,7 +163,7 @@ func TestMergeDeduplicatesTags(t *testing.T) {
 	doc := NewDocument(Info{})
 	spec := &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Tag Test", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "Tag Test", Version: "1.0.0"},
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: "contacts"},
 			&openapi3.Tag{Name: "contacts"},
@@ -184,7 +184,7 @@ func TestRegisterRoute(t *testing.T) {
 		t.Fatalf("corehttp.New() error = %v", err)
 	}
 
-	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "Mannaiah", Version: "0.0.1"}, Paths: openapi3.NewPaths()}
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "Mannaiah", Version: "1.0.0"}, Paths: openapi3.NewPaths()}
 	server.RegisterRoutes(func(router corehttp.Router) {
 		RegisterRoute(router, "/openapi.json", doc)
 	})
@@ -251,7 +251,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "schemas.Contact",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Schema", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Schema", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Schemas: openapi3.Schemas{"Contact": {Value: openapi3.NewObjectSchema()}},
 				},
@@ -262,7 +262,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "parameters.ContactID",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Parameter", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Parameter", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Parameters: openapi3.ParametersMap{"ContactID": {Value: openapi3.NewPathParameter("id")}},
 				},
@@ -273,7 +273,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "headers.Trace",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Header", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Header", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Headers: openapi3.Headers{"Trace": {Value: &openapi3.Header{}}},
 				},
@@ -284,7 +284,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "requestBodies.ContactCreate",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "RequestBody", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "RequestBody", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					RequestBodies: openapi3.RequestBodies{"ContactCreate": {Value: openapi3.NewRequestBody()}},
 				},
@@ -295,7 +295,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "responses.ContactOk",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Response", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Response", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Responses: openapi3.ResponseBodies{"ContactOk": responseRefWithDescription("ok")},
 				},
@@ -306,7 +306,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "securitySchemes.Bearer",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Security", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Security", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					SecuritySchemes: openapi3.SecuritySchemes{"Bearer": {Value: &openapi3.SecurityScheme{Type: "http"}}},
 				},
@@ -317,7 +317,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "examples.Contact",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Example", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Example", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Examples: openapi3.Examples{"Contact": {Value: &openapi3.Example{Value: "example"}}},
 				},
@@ -328,7 +328,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "links.Contact",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Link", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Link", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Links: openapi3.Links{"Contact": {Value: &openapi3.Link{}}},
 				},
@@ -339,7 +339,7 @@ func TestMergeRejectsDuplicateComponentTypes(t *testing.T) {
 			component: "callbacks.Contact",
 			spec: &openapi3.T{
 				OpenAPI: "3.0.3",
-				Info:    &openapi3.Info{Title: "Callback", Version: "0.0.1"},
+				Info:    &openapi3.Info{Title: "Callback", Version: "1.0.0"},
 				Components: &openapi3.Components{
 					Callbacks: openapi3.Callbacks{"Contact": {Value: openapi3.NewCallback(openapi3.WithCallback("{$request.body#/callbackUrl}", &openapi3.PathItem{}))}},
 				},
@@ -420,7 +420,7 @@ func TestCloneTag(t *testing.T) {
 func specWithAllComponentTypes(prefix string) *openapi3.T {
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "All Components", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "All Components", Version: "1.0.0"},
 		Components: &openapi3.Components{
 			Schemas: openapi3.Schemas{
 				prefix + "Schema": {Value: openapi3.NewObjectSchema()},

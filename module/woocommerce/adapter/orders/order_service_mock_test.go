@@ -245,3 +245,68 @@ func (m *ordersServiceMock) AddComment(ctx context.Context, id string, command o
 	copied := entity
 	return &copied, nil
 }
+
+// UpdateComment updates order comment rows.
+func (m *ordersServiceMock) UpdateComment(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+	entity, ok := m.orders[strings.TrimSpace(id)]
+	if !ok {
+		return nil, ordersport.ErrNotFound
+	}
+	if len(entity.Comments) == 0 {
+		return nil, ordersport.ErrCommentNotFound
+	}
+
+	index := -1
+	for valueIndex, value := range entity.Comments {
+		if strings.TrimSpace(value.ID) == strings.TrimSpace(commentID) {
+			index = valueIndex
+			break
+		}
+	}
+	if index < 0 {
+		return nil, ordersport.ErrCommentNotFound
+	}
+
+	if command.Author != nil {
+		entity.Comments[index].Author = strings.TrimSpace(*command.Author)
+	}
+	if command.Comment != nil {
+		entity.Comments[index].Comment = strings.TrimSpace(*command.Comment)
+	}
+	if command.Internal != nil {
+		entity.Comments[index].Internal = *command.Internal
+	}
+
+	m.orders[entity.ID] = entity
+	copied := entity
+	return &copied, nil
+}
+
+// DeleteComment deletes order comment rows.
+func (m *ordersServiceMock) DeleteComment(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
+	entity, ok := m.orders[strings.TrimSpace(id)]
+	if !ok {
+		return nil, ordersport.ErrNotFound
+	}
+	if len(entity.Comments) == 0 {
+		return nil, ordersport.ErrCommentNotFound
+	}
+
+	nextComments := make([]ordersdomain.Comment, 0, len(entity.Comments))
+	deleted := false
+	for _, value := range entity.Comments {
+		if strings.TrimSpace(value.ID) == strings.TrimSpace(commentID) {
+			deleted = true
+			continue
+		}
+		nextComments = append(nextComments, value)
+	}
+	if !deleted {
+		return nil, ordersport.ErrCommentNotFound
+	}
+
+	entity.Comments = nextComments
+	m.orders[entity.ID] = entity
+	copied := entity
+	return &copied, nil
+}

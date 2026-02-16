@@ -8,6 +8,7 @@
   - `service.NewMainstreamUpdateService(destination, logger, breakers...)`
   - `(*service.OrderSyncService).ValidateIntegration(ctx)`
   - `(*service.OrderSyncService).SyncOrders(ctx, trigger)`
+  - `(*service.OrderSyncService).SyncOrderByID(ctx, trigger, orderID)`
   - `(*service.MainstreamUpdateService).HandleOrderEvent(ctx, payload)`
 - Endpoints: none in this package.
 - Events:

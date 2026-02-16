@@ -9,6 +9,7 @@ import (
 
 	wc "github.com/jmolboy/woocommerce-go"
 	wcconfig "github.com/jmolboy/woocommerce-go/config"
+	wcentity "github.com/jmolboy/woocommerce-go/entity"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -138,49 +139,133 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 		return nil, false, fmt.Errorf("list woocommerce orders: %w", listErr)
 	}
 
-	result := make([]port.WooOrder, 0, len(items))
-	for _, item := range items {
-		metadata := map[string]string{}
-		for _, meta := range item.MetaData {
-			key := strings.TrimSpace(meta.Key)
-			if key == "" {
-				continue
-			}
-			metadata[key] = strings.TrimSpace(meta.Value)
-		}
-
-		result = append(result, port.WooOrder{
-			ID:                     item.ID,
-			Status:                 strings.TrimSpace(item.Status),
-			BillingEmail:           strings.TrimSpace(item.Billing.Email),
-			BillingFirstName:       strings.TrimSpace(item.Billing.FirstName),
-			BillingLastName:        strings.TrimSpace(item.Billing.LastName),
-			BillingCompany:         strings.TrimSpace(item.Billing.Company),
-			BillingPhone:           strings.TrimSpace(item.Billing.Phone),
-			BillingAddress1:        strings.TrimSpace(item.Billing.Address1),
-			BillingAddress2:        strings.TrimSpace(item.Billing.Address2),
-			BillingCity:            strings.TrimSpace(item.Billing.City),
-			BillingAddressLine1:    strings.TrimSpace(item.Billing.Address1),
-			BillingAddressLine2:    strings.TrimSpace(item.Billing.Address2),
-			BillingCityCode:        strings.TrimSpace(item.Billing.City),
-			BillingPhoneNormalized: strings.TrimSpace(item.Billing.Phone),
-			ShippingFirstName:      strings.TrimSpace(item.Shipping.FirstName),
-			ShippingLastName:       strings.TrimSpace(item.Shipping.LastName),
-			ShippingCompany:        strings.TrimSpace(item.Shipping.Company),
-			ShippingAddressLine1:   strings.TrimSpace(item.Shipping.Address1),
-			ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
-			ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
-			Items:                  append(mapSDKOrderItems(item.LineItems), mapSDKFeeItems(item.FeeLines)...),
-			ShippingCharges:        mapSDKShippingCharges(item.ShippingLines),
-			Comments:               mapSDKOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
-			CreatedAt:              parseWooOrderTime(item.DateCreated),
-			Metadata:               metadata,
-		})
-	}
+	result := mapSDKOrders(items)
 
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
 
 	return result, resolveHasNextPage(page, pageSize, len(items), totalPages, isLastPage), nil
+}
+
+// SearchOrders retrieves paginated order values filtered by search terms.
+func (c *Client) SearchOrders(ctx context.Context, search string, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+
+	params := wc.OrdersQueryParams{}
+	params.Page = page
+	params.PerPage = pageSize
+	params.Order = wc.SortAsc
+	params.OrderBy = "id"
+	params.Search = strings.TrimSpace(search)
+
+	items, _, totalPages, isLastPage, listErr := c.client.Services.Order.All(params)
+	if listErr != nil {
+		if shouldUseRawOrderFallback(listErr) {
+			rawItems, rawHasNext, rawErr := c.listOrdersRawWithQuery(ctx, page, pageSize, params.Search)
+			if rawErr == nil {
+				return rawItems, rawHasNext, nil
+			}
+
+			return nil, false, fmt.Errorf(
+				"search woocommerce orders: strict SDK decode failed (%s); raw fallback failed: %w",
+				compactError(listErr, 280),
+				rawErr,
+			)
+		}
+
+		return nil, false, fmt.Errorf("search woocommerce orders: %w", listErr)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+
+	return mapSDKOrders(items), resolveHasNextPage(page, pageSize, len(items), totalPages, isLastPage), nil
+}
+
+// GetOrderByID retrieves one order by WooCommerce identifier values.
+func (c *Client) GetOrderByID(ctx context.Context, orderID int) (order port.WooOrder, err error) {
+	if err := ctx.Err(); err != nil {
+		return port.WooOrder{}, err
+	}
+	if orderID <= 0 {
+		return port.WooOrder{}, errors.New("order id must be greater than zero")
+	}
+
+	item, lookupErr := c.client.Services.Order.One(orderID)
+	if lookupErr != nil {
+		if shouldUseRawOrderFallback(lookupErr) {
+			rawOrder, rawErr := c.getOrderRaw(ctx, orderID)
+			if rawErr == nil {
+				return rawOrder, nil
+			}
+
+			return port.WooOrder{}, fmt.Errorf(
+				"get woocommerce order by id: strict SDK decode failed (%s); raw fallback failed: %w",
+				compactError(lookupErr, 280),
+				rawErr,
+			)
+		}
+
+		return port.WooOrder{}, fmt.Errorf("get woocommerce order by id: %w", lookupErr)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return port.WooOrder{}, err
+	}
+
+	return mapSDKOrder(item), nil
+}
+
+// mapSDKOrders maps Woo SDK order values to transport order values.
+func mapSDKOrders(values []wcentity.Order) []port.WooOrder {
+	result := make([]port.WooOrder, 0, len(values))
+	for _, value := range values {
+		result = append(result, mapSDKOrder(value))
+	}
+
+	return result
+}
+
+// mapSDKOrder maps one Woo SDK order value to transport order values.
+func mapSDKOrder(item wcentity.Order) port.WooOrder {
+	metadata := map[string]string{}
+	for _, meta := range item.MetaData {
+		key := strings.TrimSpace(meta.Key)
+		if key == "" {
+			continue
+		}
+		metadata[key] = strings.TrimSpace(meta.Value)
+	}
+
+	return port.WooOrder{
+		ID:                     item.ID,
+		Status:                 strings.TrimSpace(item.Status),
+		BillingEmail:           strings.TrimSpace(item.Billing.Email),
+		BillingFirstName:       strings.TrimSpace(item.Billing.FirstName),
+		BillingLastName:        strings.TrimSpace(item.Billing.LastName),
+		BillingCompany:         strings.TrimSpace(item.Billing.Company),
+		BillingPhone:           strings.TrimSpace(item.Billing.Phone),
+		BillingAddress1:        strings.TrimSpace(item.Billing.Address1),
+		BillingAddress2:        strings.TrimSpace(item.Billing.Address2),
+		BillingCity:            strings.TrimSpace(item.Billing.City),
+		BillingAddressLine1:    strings.TrimSpace(item.Billing.Address1),
+		BillingAddressLine2:    strings.TrimSpace(item.Billing.Address2),
+		BillingCityCode:        strings.TrimSpace(item.Billing.City),
+		BillingPhoneNormalized: strings.TrimSpace(item.Billing.Phone),
+		ShippingFirstName:      strings.TrimSpace(item.Shipping.FirstName),
+		ShippingLastName:       strings.TrimSpace(item.Shipping.LastName),
+		ShippingCompany:        strings.TrimSpace(item.Shipping.Company),
+		ShippingAddressLine1:   strings.TrimSpace(item.Shipping.Address1),
+		ShippingAddressLine2:   strings.TrimSpace(item.Shipping.Address2),
+		ShippingCityCode:       strings.TrimSpace(item.Shipping.City),
+		Items:                  append(mapSDKOrderItems(item.LineItems), mapSDKFeeItems(item.FeeLines)...),
+		ShippingCharges:        mapSDKShippingCharges(item.ShippingLines),
+		Comments:               mapSDKOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
+		CreatedAt:              parseWooOrderTime(item.DateCreated),
+		Metadata:               metadata,
+	}
 }

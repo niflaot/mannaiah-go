@@ -345,6 +345,130 @@ func TestSyncContactsListErrorDoesNotApplyPartialWrites(t *testing.T) {
 	}
 }
 
+// searchableSourceMock defines source behavior with search support for targeted contact sync tests.
+type searchableSourceMock struct {
+	// sourceMock defines baseline source behavior.
+	sourceMock
+	// searchPages defines paginated search responses.
+	searchPages [][]port.WooOrder
+}
+
+// SearchOrders resolves paginated search results.
+func (m *searchableSourceMock) SearchOrders(ctx context.Context, search string, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if page <= 0 || page > len(m.searchPages) {
+		return nil, false, nil
+	}
+
+	items := m.searchPages[page-1]
+	return items, page < len(m.searchPages), nil
+}
+
+// TestSyncContactByEmailSuccess verifies targeted contact-sync behavior.
+func TestSyncContactByEmailSuccess(t *testing.T) {
+	source := &sourceMock{
+		pages: [][]port.WooOrder{
+			{
+				{
+					BillingEmail:     "one@example.com",
+					BillingFirstName: "One",
+					BillingLastName:  "Person",
+					BillingAddress1:  "A",
+					BillingCity:      "11001",
+					Items:            []port.WooOrderItem{{SKU: "SKU-1", Quantity: 1}},
+				},
+				{
+					BillingEmail:     "target@example.com",
+					BillingFirstName: "Target",
+					BillingLastName:  "Person",
+					BillingAddress1:  "B",
+					BillingCity:      "05001",
+					CreatedAt:        mustTimeFromRFC3339(t, "2024-04-01T08:00:00Z"),
+					ID:               2001,
+				},
+			},
+		},
+	}
+	target := &targetMock{
+		outcomes: map[string]port.UpsertOutcome{
+			"target@example.com": port.UpsertOutcomeCreated,
+		},
+		errors: map[string]error{},
+	}
+	service, err := NewService(SyncConfig{Enabled: true, WorkerCount: 2}, source, target, &publisherMock{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncContactByEmail(context.Background(), "manual", "target@example.com")
+	if syncErr != nil {
+		t.Fatalf("SyncContactByEmail() error = %v", syncErr)
+	}
+	if summary.Processed != 1 || summary.Created != 1 {
+		t.Fatalf("summary = %+v, want processed=1 created=1", summary)
+	}
+	if len(target.commands) != 1 || target.commands[0].Email != "target@example.com" {
+		t.Fatalf("target.commands = %+v, want one target@example.com command", target.commands)
+	}
+}
+
+// TestSyncContactByEmailSearchSource verifies targeted contact-sync behavior using source search capabilities.
+func TestSyncContactByEmailSearchSource(t *testing.T) {
+	source := &searchableSourceMock{
+		sourceMock: sourceMock{},
+		searchPages: [][]port.WooOrder{
+			{
+				{
+					BillingEmail:     "target@example.com",
+					BillingFirstName: "Target",
+					BillingLastName:  "Person",
+					BillingAddress1:  "B",
+					BillingCity:      "05001",
+					CreatedAt:        mustTimeFromRFC3339(t, "2024-04-01T08:00:00Z"),
+					ID:               2001,
+				},
+			},
+		},
+	}
+	target := &targetMock{
+		outcomes: map[string]port.UpsertOutcome{
+			"target@example.com": port.UpsertOutcomeUpdated,
+		},
+		errors: map[string]error{},
+	}
+	service, err := NewService(SyncConfig{Enabled: true, WorkerCount: 1}, source, target, &publisherMock{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncContactByEmail(context.Background(), "manual", "target@example.com")
+	if syncErr != nil {
+		t.Fatalf("SyncContactByEmail() error = %v", syncErr)
+	}
+	if summary.Processed != 1 || summary.Updated != 1 {
+		t.Fatalf("summary = %+v, want processed=1 updated=1", summary)
+	}
+}
+
+// TestSyncContactByEmailValidation verifies targeted contact-sync validation and not-found behavior.
+func TestSyncContactByEmailValidation(t *testing.T) {
+	source := &sourceMock{pages: [][]port.WooOrder{}}
+	target := &targetMock{outcomes: map[string]port.UpsertOutcome{}, errors: map[string]error{}}
+	service, err := NewService(SyncConfig{Enabled: true}, source, target, &publisherMock{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if _, syncErr := service.SyncContactByEmail(context.Background(), "manual", ""); !errorspkg.Is(syncErr, ErrInvalidEmail) {
+		t.Fatalf("SyncContactByEmail(empty) error = %v, want ErrInvalidEmail", syncErr)
+	}
+	if _, syncErr := service.SyncContactByEmail(context.Background(), "manual", "missing@example.com"); !errorspkg.Is(syncErr, ErrContactNotFound) {
+		t.Fatalf("SyncContactByEmail(missing) error = %v, want ErrContactNotFound", syncErr)
+	}
+}
+
 // TestSyncContactsContextCancel verifies cancellation behavior.
 func TestSyncContactsContextCancel(t *testing.T) {
 	source := &sourceMock{

@@ -14,7 +14,7 @@ import (
 
 // TestNewRuntimeValidation verifies runtime constructor dependency validation.
 func TestNewRuntimeValidation(t *testing.T) {
-	doc := swagger.NewDocument(swagger.Info{Title: "Mannaiah", Version: "0.0.1"})
+	doc := swagger.NewDocument(swagger.Info{Title: "Mannaiah", Version: "1.0.0"})
 	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8111}, nil)
 	if err != nil {
 		t.Fatalf("corehttp.New() error = %v", err)
@@ -34,7 +34,7 @@ func TestRuntimeRegisterRoutesAddSpecAndExposeOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("corehttp.New() error = %v", err)
 	}
-	doc := swagger.NewDocument(swagger.Info{Title: "Mannaiah", Version: "0.0.1"})
+	doc := swagger.NewDocument(swagger.Info{Title: "Mannaiah", Version: "1.0.0"})
 	runtime, err := NewRuntime(server, doc)
 	if err != nil {
 		t.Fatalf("NewRuntime() error = %v", err)
@@ -42,7 +42,7 @@ func TestRuntimeRegisterRoutesAddSpecAndExposeOpenAPI(t *testing.T) {
 
 	if err := runtime.AddOpenAPISpec(&openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Test", Version: "0.0.1"},
+		Info:    &openapi3.Info{Title: "Test", Version: "1.0.0"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/hello", &openapi3.PathItem{
 				Get: &openapi3.Operation{

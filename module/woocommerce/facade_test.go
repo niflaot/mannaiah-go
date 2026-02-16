@@ -91,3 +91,13 @@ func (orderServiceMock) UpdateStatus(ctx context.Context, id string, command ord
 func (orderServiceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
 	return &ordersdomain.Order{}, nil
 }
+
+// UpdateComment updates order comment rows.
+func (orderServiceMock) UpdateComment(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{}, nil
+}
+
+// DeleteComment deletes order comment rows.
+func (orderServiceMock) DeleteComment(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
+	return &ordersdomain.Order{}, nil
+}
