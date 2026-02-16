@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	wcentity "github.com/jmolboy/woocommerce-go/entity"
 	messagingplatform "mannaiah/module/core/messaging/platform"
 	"mannaiah/module/woocommerce/port"
 )
@@ -301,6 +302,33 @@ func TestUpdateOrderFromMainstreamAvoidsLineItemDuplication(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("UpdateOrderFromMainstream() error = %v", err)
+	}
+}
+
+// TestMapLineItemsForRawUpdateRemovesStaleRows verifies stale Woo line rows are zeroed when absent from mainstream payload.
+func TestMapLineItemsForRawUpdateRemovesStaleRows(t *testing.T) {
+	rows := mapLineItemsForRawUpdate(
+		[]wcentity.LineItem{
+			{ProductId: 901, SKU: "SKU-1", Quantity: 1, Total: 139000},
+		},
+		[]wooExistingLineItem{
+			{ID: 11, SKU: "SKU-1", ProductID: 901},
+			{ID: 12, SKU: "SKU-1", ProductID: 901},
+		},
+	)
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want %d", len(rows), 2)
+	}
+	firstID, _ := rows[0]["id"].(int)
+	if firstID != 11 {
+		t.Fatalf("rows[0].id = %v, want %d", rows[0]["id"], 11)
+	}
+	secondID, _ := rows[1]["id"].(int)
+	if secondID != 12 {
+		t.Fatalf("rows[1].id = %v, want %d", rows[1]["id"], 12)
+	}
+	if rows[1]["quantity"] != 0 {
+		t.Fatalf("rows[1].quantity = %v, want %d", rows[1]["quantity"], 0)
 	}
 }
 
