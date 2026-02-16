@@ -12,6 +12,8 @@
   - `(*application.OrderService).List(ctx, query)`
   - `(*application.OrderService).UpdateStatus(ctx, id, command)`
   - `(*application.OrderService).AddComment(ctx, id, command)`
+  - `(*application.OrderService).UpdateComment(ctx, id, commentID, command)`
+  - `(*application.OrderService).DeleteComment(ctx, id, commentID, command)`
 - Endpoints: none in this package.
 - Events:
   - `orders.v1.created`

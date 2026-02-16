@@ -9,6 +9,9 @@
   - `port.Repository.GetByID(ctx, id)`
   - `port.Repository.List(ctx, query)`
   - `port.Repository.AppendStatus(ctx, id, entry)`
+  - `port.Repository.AppendComment(ctx, id, comment)`
+  - `port.Repository.UpdateComment(ctx, id, commentID, comment)`
+  - `port.Repository.DeleteComment(ctx, id, commentID)`
   - `port.IntegrationEventPublisher.Publish(ctx, event)`
   - `port.CustomerSource.GetByID(ctx, id)`
   - `port.ProductResolver.Resolve(ctx, sku, alternateName)`

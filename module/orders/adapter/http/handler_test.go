@@ -29,6 +29,10 @@ type serviceMock struct {
 	updateStatusFn func(ctx context.Context, id string, command ordersapplication.UpdateStatusCommand) (*ordersdomain.Order, error)
 	// addCommentFn defines add-comment behavior.
 	addCommentFn func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error)
+	// updateCommentFn defines update-comment behavior.
+	updateCommentFn func(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error)
+	// deleteCommentFn defines delete-comment behavior.
+	deleteCommentFn func(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error)
 }
 
 // Create executes configured create behavior.
@@ -59,6 +63,16 @@ func (m serviceMock) UpdateStatus(ctx context.Context, id string, command orders
 // AddComment executes configured add-comment behavior.
 func (m serviceMock) AddComment(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
 	return m.addCommentFn(ctx, id, command)
+}
+
+// UpdateComment executes configured update-comment behavior.
+func (m serviceMock) UpdateComment(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+	return m.updateCommentFn(ctx, id, commentID, command)
+}
+
+// DeleteComment executes configured delete-comment behavior.
+func (m serviceMock) DeleteComment(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
+	return m.deleteCommentFn(ctx, id, commentID, command)
 }
 
 // authorizerMock defines auth behavior for handler tests.
@@ -133,7 +147,25 @@ func TestOrderEndpoints(t *testing.T) {
 			if command.Author != "user" || command.Comment != "Order validated" || !command.Internal {
 				t.Fatalf("unexpected add-comment command: %+v", command)
 			}
-			return &ordersdomain.Order{ID: id}, nil
+			return &ordersdomain.Order{ID: id, Comments: []ordersdomain.Comment{{ID: "10", Author: command.Author, Comment: command.Comment, Internal: command.Internal}}}, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+			if commentID != "10" {
+				t.Fatalf("commentID = %q, want %q", commentID, "10")
+			}
+			if command.Comment == nil || *command.Comment != "Order updated" || command.Source != "woocommerce_plugin" {
+				t.Fatalf("unexpected update-comment command: %+v", command)
+			}
+			return &ordersdomain.Order{ID: id, Comments: []ordersdomain.Comment{{ID: "10", Author: "user", Comment: "Order updated"}}}, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
+			if commentID != "10" {
+				t.Fatalf("commentID = %q, want %q", commentID, "10")
+			}
+			if command.Source != "woocommerce_plugin" {
+				t.Fatalf("command.Source = %q, want %q", command.Source, "woocommerce_plugin")
+			}
+			return &ordersdomain.Order{ID: id, Comments: []ordersdomain.Comment{}}, nil
 		},
 	})
 	server := newHTTPServerForHandler(t, handler)
@@ -178,6 +210,21 @@ func TestOrderEndpoints(t *testing.T) {
 	if addCommentResp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("POST /orders/:id/comments status = %d, want %d", addCommentResp.StatusCode, stdhttp.StatusOK)
 	}
+
+	updateCommentReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/orders/o-1/comments/10", bytes.NewBufferString(`{"comment":"Order updated"}`))
+	updateCommentReq.Header.Set("Content-Type", "application/json")
+	updateCommentReq.Header.Set("X-Sync-Source", "woocommerce_plugin")
+	updateCommentResp := runRequest(t, server, updateCommentReq)
+	if updateCommentResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("PATCH /orders/:id/comments/:commentId status = %d, want %d", updateCommentResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	deleteCommentReq, _ := stdhttp.NewRequest(stdhttp.MethodDelete, "/orders/o-1/comments/10", nil)
+	deleteCommentReq.Header.Set("X-Sync-Source", "woocommerce_plugin")
+	deleteCommentResp := runRequest(t, server, deleteCommentReq)
+	if deleteCommentResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("DELETE /orders/:id/comments/:commentId status = %d, want %d", deleteCommentResp.StatusCode, stdhttp.StatusOK)
+	}
 }
 
 // TestHandlerInvalidPayloadAndQuery verifies invalid request payload and query behavior.
@@ -199,6 +246,12 @@ func TestHandlerInvalidPayloadAndQuery(t *testing.T) {
 			return &ordersdomain.Order{ID: id}, nil
 		},
 		addCommentFn: func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id}, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id}, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{ID: id}, nil
 		},
 	})
@@ -223,6 +276,13 @@ func TestHandlerInvalidPayloadAndQuery(t *testing.T) {
 	if updateResp.StatusCode != stdhttp.StatusBadRequest {
 		t.Fatalf("PATCH invalid payload status = %d, want %d", updateResp.StatusCode, stdhttp.StatusBadRequest)
 	}
+
+	updateCommentReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/orders/o-1/comments/10", bytes.NewBufferString("{invalid"))
+	updateCommentReq.Header.Set("Content-Type", "application/json")
+	updateCommentResp := runRequest(t, server, updateCommentReq)
+	if updateCommentResp.StatusCode != stdhttp.StatusBadRequest {
+		t.Fatalf("PATCH comment invalid payload status = %d, want %d", updateCommentResp.StatusCode, stdhttp.StatusBadRequest)
+	}
 }
 
 // TestMapErrorVariants verifies direct error mapping branches.
@@ -230,7 +290,10 @@ func TestMapErrorVariants(t *testing.T) {
 	handler := &Handler{}
 	for _, value := range []error{
 		ordersport.ErrNotFound,
+		ordersport.ErrCommentNotFound,
 		ordersapplication.ErrInvalidID,
+		ordersapplication.ErrInvalidCommentID,
+		ordersapplication.ErrEmptyCommentUpdate,
 		ordersport.ErrDuplicateIdentifier,
 		ordersport.ErrCustomerNotFound,
 		ErrInvalidQuery,
@@ -274,6 +337,12 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 			return &ordersdomain.Order{}, nil
 		},
 		addCommentFn: func(ctx context.Context, id string, command ordersapplication.AddCommentCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{}, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, command ordersapplication.UpdateCommentCommand) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{}, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string, command ordersapplication.DeleteCommentCommand) (*ordersdomain.Order, error) {
 			return &ordersdomain.Order{}, nil
 		},
 	}, authorizerMock{

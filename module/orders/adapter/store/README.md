@@ -11,5 +11,8 @@
   - `(*store.Repository).GetByID(ctx, id)`
   - `(*store.Repository).List(ctx, query)`
   - `(*store.Repository).AppendStatus(ctx, id, entry)`
+  - `(*store.Repository).AppendComment(ctx, id, comment)`
+  - `(*store.Repository).UpdateComment(ctx, id, commentID, comment)`
+  - `(*store.Repository).DeleteComment(ctx, id, commentID)`
 - Endpoints: none in this package.
 - Events: none in this package.

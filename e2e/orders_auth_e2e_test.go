@@ -98,6 +98,51 @@ func TestOrdersAuthE2E(t *testing.T) {
 		t.Fatalf("payload.currentStatus = %v, want %q", payload["currentStatus"], "COMPLETED")
 	}
 
+	harness.tracer.Step("append order comment")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/orders/"+orderID+"/comments", ordersManageToken, []byte(`{"author":"ops","comment":"first","internal":true}`))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	comments, ok := payload["comments"].([]any)
+	if !ok || len(comments) == 0 {
+		t.Fatalf("expected comments payload")
+	}
+	firstComment, ok := comments[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first comment payload")
+	}
+	commentID, _ := firstComment["id"].(string)
+	if commentID == "" {
+		t.Fatalf("expected comment id")
+	}
+
+	harness.tracer.Step("patch order comment")
+	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/orders/"+orderID+"/comments/"+commentID, ordersManageToken, []byte(`{"comment":"updated","internal":false}`))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	comments, ok = payload["comments"].([]any)
+	if !ok || len(comments) != 1 {
+		t.Fatalf("expected one updated comment")
+	}
+	firstComment, ok = comments[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected updated comment payload")
+	}
+	if firstComment["comment"] != "updated" || firstComment["internal"] != false {
+		t.Fatalf("updated comment payload = %v, want comment/internal updated", firstComment)
+	}
+
+	harness.tracer.Step("delete order comment")
+	status, payload = harness.DoJSONRequest(t, http.MethodDelete, "/orders/"+orderID+"/comments/"+commentID, ordersManageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	comments, ok = payload["comments"].([]any)
+	if !ok || len(comments) != 0 {
+		t.Fatalf("expected empty comments after delete")
+	}
+
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(9)
+	harness.tracer.AssertStepCount(12)
 }

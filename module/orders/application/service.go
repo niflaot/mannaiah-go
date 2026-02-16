@@ -24,6 +24,10 @@ var (
 	ErrStatusAuthorRequired = errors.New("order status author is required")
 	// ErrEmptyOrderUpdate is returned when update commands do not include mutable fields.
 	ErrEmptyOrderUpdate = errors.New("order update command requires at least one mutable field")
+	// ErrInvalidCommentID is returned when order comment identifiers are empty.
+	ErrInvalidCommentID = errors.New("order comment id is required")
+	// ErrEmptyCommentUpdate is returned when comment update commands do not include mutable fields.
+	ErrEmptyCommentUpdate = errors.New("order comment update command requires at least one mutable field")
 )
 
 // CreateItemCommand defines order-item creation payload values.
@@ -132,6 +136,24 @@ type AddCommentCommand struct {
 	Source string
 }
 
+// UpdateCommentCommand defines comment-update payload values.
+type UpdateCommentCommand struct {
+	// Author defines optional comment author values.
+	Author *string
+	// Comment defines optional comment text values.
+	Comment *string
+	// Internal reports optional internal-visibility values.
+	Internal *bool
+	// Source defines mutation source values.
+	Source string
+}
+
+// DeleteCommentCommand defines comment-delete payload values.
+type DeleteCommentCommand struct {
+	// Source defines mutation source values.
+	Source string
+}
+
 // ListQuery defines list payload values.
 type ListQuery struct {
 	// Page defines requested page values.
@@ -176,6 +198,10 @@ type Service interface {
 	UpdateStatus(ctx context.Context, id string, command UpdateStatusCommand) (*ordersdomain.Order, error)
 	// AddComment appends comment values for order identifiers.
 	AddComment(ctx context.Context, id string, command AddCommentCommand) (*ordersdomain.Order, error)
+	// UpdateComment updates comment values for order identifiers.
+	UpdateComment(ctx context.Context, id string, commentID string, command UpdateCommentCommand) (*ordersdomain.Order, error)
+	// DeleteComment deletes comment values for order identifiers.
+	DeleteComment(ctx context.Context, id string, commentID string, command DeleteCommentCommand) (*ordersdomain.Order, error)
 }
 
 // OrderService defines orders application dependencies.

@@ -170,6 +170,8 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Patch("/orders/:id", h.protect("orders:update", h.update))
 	router.Patch("/orders/:id/status", h.protect("orders:update", h.updateStatus))
 	router.Post("/orders/:id/comments", h.protect("orders:update", h.addComment))
+	router.Patch("/orders/:id/comments/:commentId", h.protect("orders:update", h.updateComment))
+	router.Delete("/orders/:id/comments/:commentId", h.protect("orders:update", h.deleteComment))
 }
 
 // create handles order creation endpoints.
@@ -367,6 +369,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, ordersport.ErrNotFound) {
 		return corehttp.NewAppError(404, "order_not_found", err)
 	}
+	if errors.Is(err, ordersport.ErrCommentNotFound) {
+		return corehttp.NewAppError(404, "order_comment_not_found", err)
+	}
 	if errors.Is(err, ordersapplication.ErrInvalidID) {
 		return corehttp.NewAppError(400, "invalid_order_id", err)
 	}
@@ -377,6 +382,8 @@ func (h *Handler) mapError(err error) error {
 		return corehttp.NewAppError(404, "order_customer_not_found", err)
 	}
 	if errors.Is(err, ErrInvalidQuery) ||
+		errors.Is(err, ordersapplication.ErrInvalidCommentID) ||
+		errors.Is(err, ordersapplication.ErrEmptyCommentUpdate) ||
 		errors.Is(err, ordersapplication.ErrEmptyOrderUpdate) ||
 		errors.Is(err, ordersapplication.ErrStatusAuthorRequired) ||
 		errors.Is(err, ordersdomain.ErrIdentifierRequired) ||

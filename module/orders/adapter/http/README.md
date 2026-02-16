@@ -15,4 +15,6 @@
   - `PATCH /orders/:id`
   - `PATCH /orders/:id/status`
   - `POST /orders/:id/comments`
+  - `PATCH /orders/:id/comments/:commentId`
+  - `DELETE /orders/:id/comments/:commentId`
 - Events: none in this package.

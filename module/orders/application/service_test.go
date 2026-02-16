@@ -25,6 +25,10 @@ type repositoryMock struct {
 	appendStatusFn func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error)
 	// appendCommentFn defines append-comment behavior.
 	appendCommentFn func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error)
+	// updateCommentFn defines update-comment behavior.
+	updateCommentFn func(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error)
+	// deleteCommentFn defines delete-comment behavior.
+	deleteCommentFn func(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error)
 }
 
 // publisherMock defines integration event publication behavior for service tests.
@@ -141,6 +145,120 @@ func TestAddComment(t *testing.T) {
 	}
 }
 
+// TestUpdateComment verifies order-comment update behavior.
+func TestUpdateComment(t *testing.T) {
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:        id,
+				ContactID: "c-1",
+				Comments: []ordersdomain.Comment{
+					{ID: "7", Author: "agent-1", Comment: "initial", Internal: false, OccurredAt: time.Date(2026, time.February, 16, 10, 0, 0, 0, time.UTC)},
+				},
+			}, nil
+		},
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", StatusHistory: []ordersdomain.StatusEntry{entry}, CurrentStatus: entry.Status}, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			if commentID != "7" {
+				t.Fatalf("commentID = %q, want %q", commentID, "7")
+			}
+			if comment.Author != "agent-2" || comment.Comment != "updated" || !comment.Internal {
+				t.Fatalf("unexpected updated comment payload: %+v", comment)
+			}
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", Comments: []ordersdomain.Comment{comment}}, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	service, err := NewService(repository, customers)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	author := "agent-2"
+	comment := "updated"
+	internal := true
+	updated, err := service.UpdateComment(context.Background(), "o-1", "7", UpdateCommentCommand{
+		Author:   &author,
+		Comment:  &comment,
+		Internal: &internal,
+	})
+	if err != nil {
+		t.Fatalf("UpdateComment() error = %v", err)
+	}
+	if len(updated.Comments) != 1 || updated.Comments[0].Comment != "updated" {
+		t.Fatalf("updated.Comments = %+v, want updated comment", updated.Comments)
+	}
+}
+
+// TestDeleteComment verifies order-comment delete behavior.
+func TestDeleteComment(t *testing.T) {
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:        id,
+				ContactID: "c-1",
+				Comments: []ordersdomain.Comment{
+					{ID: "7", Author: "agent-1", Comment: "initial", Internal: false, OccurredAt: time.Date(2026, time.February, 16, 10, 0, 0, 0, time.UTC)},
+				},
+			}, nil
+		},
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", StatusHistory: []ordersdomain.StatusEntry{entry}, CurrentStatus: entry.Status}, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error) {
+			if commentID != "7" {
+				t.Fatalf("commentID = %q, want %q", commentID, "7")
+			}
+			return &ordersdomain.Order{ID: id, ContactID: "c-1", Comments: []ordersdomain.Comment{}}, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	service, err := NewService(repository, customers)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	updated, err := service.DeleteComment(context.Background(), "o-1", "7", DeleteCommentCommand{})
+	if err != nil {
+		t.Fatalf("DeleteComment() error = %v", err)
+	}
+	if len(updated.Comments) != 0 {
+		t.Fatalf("updated.Comments = %+v, want empty comments", updated.Comments)
+	}
+}
+
 // Create executes mocked create behavior.
 func (m repositoryMock) Create(ctx context.Context, order *ordersdomain.Order) error {
 	return m.createFn(ctx, order)
@@ -169,6 +287,16 @@ func (m repositoryMock) AppendStatus(ctx context.Context, id string, entry order
 // AppendComment executes mocked append-comment behavior.
 func (m repositoryMock) AppendComment(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
 	return m.appendCommentFn(ctx, id, comment)
+}
+
+// UpdateComment executes mocked update-comment behavior.
+func (m repositoryMock) UpdateComment(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+	return m.updateCommentFn(ctx, id, commentID, comment)
+}
+
+// DeleteComment executes mocked delete-comment behavior.
+func (m repositoryMock) DeleteComment(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error) {
+	return m.deleteCommentFn(ctx, id, commentID)
 }
 
 // customerSourceMock defines customer-source behavior for service tests.
@@ -445,6 +573,15 @@ func TestServiceErrorBranches(t *testing.T) {
 	}
 	if _, err := service.Update(context.Background(), "o-1", UpdateCommand{}); !errors.Is(err, ErrEmptyOrderUpdate) {
 		t.Fatalf("Update(empty command) error = %v, want ErrEmptyOrderUpdate", err)
+	}
+	if _, err := service.UpdateComment(context.Background(), "o-1", "", UpdateCommentCommand{}); !errors.Is(err, ErrInvalidCommentID) {
+		t.Fatalf("UpdateComment(empty comment id) error = %v, want ErrInvalidCommentID", err)
+	}
+	if _, err := service.UpdateComment(context.Background(), "o-1", "7", UpdateCommentCommand{}); !errors.Is(err, ErrEmptyCommentUpdate) {
+		t.Fatalf("UpdateComment(empty command) error = %v, want ErrEmptyCommentUpdate", err)
+	}
+	if _, err := service.DeleteComment(context.Background(), "o-1", "", DeleteCommentCommand{}); !errors.Is(err, ErrInvalidCommentID) {
+		t.Fatalf("DeleteComment(empty comment id) error = %v, want ErrInvalidCommentID", err)
 	}
 }
 
@@ -765,6 +902,126 @@ func TestAddCommentSkipsWooInboundMutation(t *testing.T) {
 	}
 	if len(publisher.events) != 0 {
 		t.Fatalf("len(publisher.events) = %d, want 0", len(publisher.events))
+	}
+	if updated.ID != "o-1" {
+		t.Fatalf("updated.ID = %q, want %q", updated.ID, "o-1")
+	}
+}
+
+// TestUpdateCommentSkipsWooInboundMutation verifies Woo-origin comment-update suppression behavior.
+func TestUpdateCommentSkipsWooInboundMutation(t *testing.T) {
+	updateCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+				Comments:      []ordersdomain.Comment{{ID: "9", Author: "agent", Comment: "old", Internal: true, OccurredAt: time.Now().UTC()}},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			updateCalled = true
+			return nil, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	service, err := NewService(repository, customers)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	comment := "new"
+	updated, err := service.UpdateComment(context.Background(), "o-1", "9", UpdateCommentCommand{
+		Comment: &comment,
+		Source:  "woocommerce_plugin",
+	})
+	if err != nil {
+		t.Fatalf("UpdateComment() error = %v", err)
+	}
+	if updateCalled {
+		t.Fatalf("expected update comment call to be skipped")
+	}
+	if updated.ID != "o-1" {
+		t.Fatalf("updated.ID = %q, want %q", updated.ID, "o-1")
+	}
+}
+
+// TestDeleteCommentSkipsWooInboundMutation verifies Woo-origin comment-delete suppression behavior.
+func TestDeleteCommentSkipsWooInboundMutation(t *testing.T) {
+	deleteCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+				Comments:      []ordersdomain.Comment{{ID: "9", Author: "agent", Comment: "old", Internal: true, OccurredAt: time.Now().UTC()}},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		updateCommentFn: func(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+		deleteCommentFn: func(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error) {
+			deleteCalled = true
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	service, err := NewService(repository, customers)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	updated, err := service.DeleteComment(context.Background(), "o-1", "9", DeleteCommentCommand{
+		Source: "woocommerce_plugin",
+	})
+	if err != nil {
+		t.Fatalf("DeleteComment() error = %v", err)
+	}
+	if deleteCalled {
+		t.Fatalf("expected delete comment call to be skipped")
 	}
 	if updated.ID != "o-1" {
 		t.Fatalf("updated.ID = %q, want %q", updated.ID, "o-1")

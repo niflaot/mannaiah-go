@@ -21,6 +21,7 @@ func OpenAPISpec() *openapi3.T {
 		"OrderItem":           &openapi3.SchemaRef{Value: orderItemSchema()},
 		"OrderComment":        &openapi3.SchemaRef{Value: orderCommentSchema()},
 		"OrderCommentCreate":  &openapi3.SchemaRef{Value: orderCommentCreateSchema()},
+		"OrderCommentUpdate":  &openapi3.SchemaRef{Value: orderCommentUpdateSchema()},
 		"OrderShipping":       &openapi3.SchemaRef{Value: orderShippingSchema()},
 		"OrderShippingCharge": &openapi3.SchemaRef{Value: orderShippingChargeSchema()},
 		"OrderStatusEntry":    &openapi3.SchemaRef{Value: orderStatusEntrySchema()},
@@ -44,6 +45,7 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/orders/{id}", orderByIDPathItem()),
 			openapi3.WithPath("/orders/{id}/status", orderStatusPathItem()),
 			openapi3.WithPath("/orders/{id}/comments", orderCommentPathItem()),
+			openapi3.WithPath("/orders/{id}/comments/{commentId}", orderCommentByIDPathItem()),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
@@ -79,6 +81,14 @@ func orderStatusPathItem() *openapi3.PathItem {
 func orderCommentPathItem() *openapi3.PathItem {
 	return &openapi3.PathItem{
 		Post: addOrderCommentOperation(),
+	}
+}
+
+// orderCommentByIDPathItem returns OpenAPI path operations for order-comment mutation behavior.
+func orderCommentByIDPathItem() *openapi3.PathItem {
+	return &openapi3.PathItem{
+		Patch:  updateOrderCommentOperation(),
+		Delete: deleteOrderCommentOperation(),
 	}
 }
 
@@ -209,6 +219,50 @@ func addOrderCommentOperation() *openapi3.Operation {
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Order not found.")),
+		),
+	}
+}
+
+// updateOrderCommentOperation defines the OpenAPI operation for order-comment update behavior.
+func updateOrderCommentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "OrdersController_updateComment",
+		Summary:     "Update an order comment",
+		Tags:        []string{ordersTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+			pathParameter("commentId", "Order comment ID", openapi3.NewStringSchema()),
+			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
+		},
+		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCommentUpdate"),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("The order comment has been successfully updated.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Order or order comment not found.")),
+		),
+	}
+}
+
+// deleteOrderCommentOperation defines the OpenAPI operation for order-comment delete behavior.
+func deleteOrderCommentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "OrdersController_deleteComment",
+		Summary:     "Delete an order comment",
+		Tags:        []string{ordersTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
+			pathParameter("commentId", "Order comment ID", openapi3.NewStringSchema()),
+			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("The order comment has been successfully deleted.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Order or order comment not found.")),
 		),
 	}
 }
@@ -348,11 +402,12 @@ func orderStatusEntrySchema() *openapi3.Schema {
 // orderCommentSchema returns schema for order comment-history payloads.
 func orderCommentSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
+		WithProperty("id", openapi3.NewStringSchema()).
 		WithProperty("author", openapi3.NewStringSchema()).
 		WithProperty("comment", openapi3.NewStringSchema()).
 		WithProperty("internal", openapi3.NewBoolSchema()).
 		WithProperty("occurredAt", openapi3.NewDateTimeSchema()).
-		WithRequired([]string{"author", "comment", "internal", "occurredAt"})
+		WithRequired([]string{"id", "author", "comment", "internal", "occurredAt"})
 }
 
 // orderCommentCreateSchema returns request schema for appending order comments.
@@ -363,6 +418,15 @@ func orderCommentCreateSchema() *openapi3.Schema {
 		WithProperty("internal", openapi3.NewBoolSchema()).
 		WithProperty("source", openapi3.NewStringSchema()).
 		WithRequired([]string{"author", "comment"})
+}
+
+// orderCommentUpdateSchema returns request schema for updating order comments.
+func orderCommentUpdateSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("author", openapi3.NewStringSchema()).
+		WithProperty("comment", openapi3.NewStringSchema()).
+		WithProperty("internal", openapi3.NewBoolSchema()).
+		WithProperty("source", openapi3.NewStringSchema())
 }
 
 // orderShippingSchema returns schema for shipping-address payloads.

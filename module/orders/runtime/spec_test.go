@@ -17,6 +17,9 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Paths.Value("/orders/{id}/comments") == nil {
 		t.Fatalf("expected /orders/{id}/comments path spec")
 	}
+	if spec.Paths.Value("/orders/{id}/comments/{commentId}") == nil {
+		t.Fatalf("expected /orders/{id}/comments/{commentId} path spec")
+	}
 	if spec.Components == nil || spec.Components.Schemas["OrderCreate"] == nil {
 		t.Fatalf("expected OrderCreate schema")
 	}
@@ -41,5 +44,10 @@ func TestOpenAPISpec(t *testing.T) {
 	orderByIDPath := spec.Paths.Value("/orders/{id}")
 	if orderByIDPath == nil || orderByIDPath.Patch == nil {
 		t.Fatalf("expected patch operation on /orders/{id}")
+	}
+
+	orderCommentByIDPath := spec.Paths.Value("/orders/{id}/comments/{commentId}")
+	if orderCommentByIDPath == nil || orderCommentByIDPath.Patch == nil || orderCommentByIDPath.Delete == nil {
+		t.Fatalf("expected patch and delete operations on /orders/{id}/comments/{commentId}")
 	}
 }

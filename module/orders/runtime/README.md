@@ -17,6 +17,8 @@
   - `PATCH /orders/:id`
   - `PATCH /orders/:id/status`
   - `POST /orders/:id/comments`
+  - `PATCH /orders/:id/comments/:commentId`
+  - `DELETE /orders/:id/comments/:commentId`
 - Events:
   - `orders.v1.created`
   - `orders.v1.updated`

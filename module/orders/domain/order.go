@@ -93,6 +93,8 @@ type StatusEntry struct {
 
 // Comment defines order comment-history values.
 type Comment struct {
+	// ID defines comment identifiers.
+	ID string `json:"id"`
 	// Author defines comment author values.
 	Author string `json:"author"`
 	// Comment defines comment text values.
@@ -194,6 +196,7 @@ func (o *Order) Normalize() {
 		o.StatusHistory[index].Note = strings.TrimSpace(o.StatusHistory[index].Note)
 	}
 	for index := range o.Comments {
+		o.Comments[index].ID = strings.TrimSpace(o.Comments[index].ID)
 		o.Comments[index].Author = strings.TrimSpace(o.Comments[index].Author)
 		o.Comments[index].Comment = strings.TrimSpace(o.Comments[index].Comment)
 	}

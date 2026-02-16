@@ -119,6 +119,9 @@ func TestRepositoryCreateGetAppendStatusAndList(t *testing.T) {
 	if len(updated.Comments) != 1 {
 		t.Fatalf("len(updated.Comments) = %d, want 1", len(updated.Comments))
 	}
+	if updated.Comments[0].ID == "" {
+		t.Fatalf("updated.Comments[0].ID = %q, want non-empty comment id", updated.Comments[0].ID)
+	}
 	if updated.Comments[0].Author != "agent-1" || updated.Comments[0].Comment != "reviewed with customer" || !updated.Comments[0].Internal {
 		t.Fatalf("updated.Comments[0] = %+v, want author/comment/internal values", updated.Comments[0])
 	}
@@ -200,6 +203,76 @@ func TestRepositoryNotFoundPaths(t *testing.T) {
 		OccurredAt: time.Now().UTC(),
 	}); !errors.Is(err, ordersport.ErrNotFound) {
 		t.Fatalf("AppendComment() error = %v, want ErrNotFound", err)
+	}
+	if _, err := repository.UpdateComment(ctx, "missing", "1", ordersdomain.Comment{
+		Author:     "agent-1",
+		Comment:    "updated",
+		OccurredAt: time.Now().UTC(),
+	}); !errors.Is(err, ordersport.ErrNotFound) {
+		t.Fatalf("UpdateComment() error = %v, want ErrNotFound", err)
+	}
+	if _, err := repository.DeleteComment(ctx, "missing", "1"); !errors.Is(err, ordersport.ErrNotFound) {
+		t.Fatalf("DeleteComment() error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestRepositoryUpdateDeleteComment verifies comment mutation behavior by persisted comment identifiers.
+func TestRepositoryUpdateDeleteComment(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	ctx := context.Background()
+
+	entity := newOrderForTest("identifier-comment-mutation", "woocommerce", "contact-comment")
+	if err := repository.Create(ctx, entity); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	updated, err := repository.AppendComment(ctx, entity.ID, ordersdomain.Comment{
+		Author:     "agent-1",
+		Comment:    "initial",
+		Internal:   true,
+		OccurredAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("AppendComment() error = %v", err)
+	}
+	commentID := updated.Comments[0].ID
+	if commentID == "" {
+		t.Fatalf("expected persisted comment id")
+	}
+
+	updated, err = repository.UpdateComment(ctx, entity.ID, commentID, ordersdomain.Comment{
+		ID:         commentID,
+		Author:     "agent-2",
+		Comment:    "updated",
+		Internal:   false,
+		OccurredAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("UpdateComment() error = %v", err)
+	}
+	if len(updated.Comments) != 1 {
+		t.Fatalf("len(updated.Comments) = %d, want 1", len(updated.Comments))
+	}
+	if updated.Comments[0].Author != "agent-2" || updated.Comments[0].Comment != "updated" || updated.Comments[0].Internal {
+		t.Fatalf("updated.Comments[0] = %+v, want updated comment values", updated.Comments[0])
+	}
+
+	updated, err = repository.DeleteComment(ctx, entity.ID, commentID)
+	if err != nil {
+		t.Fatalf("DeleteComment() error = %v", err)
+	}
+	if len(updated.Comments) != 0 {
+		t.Fatalf("len(updated.Comments) = %d, want 0", len(updated.Comments))
+	}
+	if _, err := repository.UpdateComment(ctx, entity.ID, commentID, ordersdomain.Comment{
+		ID:         commentID,
+		Author:     "agent-3",
+		Comment:    "missing",
+		OccurredAt: time.Now().UTC(),
+	}); !errors.Is(err, ordersport.ErrCommentNotFound) {
+		t.Fatalf("UpdateComment(after delete) error = %v, want ErrCommentNotFound", err)
+	}
+	if _, err := repository.DeleteComment(ctx, entity.ID, commentID); !errors.Is(err, ordersport.ErrCommentNotFound) {
+		t.Fatalf("DeleteComment(second call) error = %v, want ErrCommentNotFound", err)
 	}
 }
 
@@ -371,6 +444,17 @@ func TestRepositoryErrorPathsOnClosedDB(t *testing.T) {
 		OccurredAt: time.Now().UTC(),
 	}); err == nil {
 		t.Fatalf("expected AppendComment() error on closed db")
+	}
+	if _, err := repository.UpdateComment(context.Background(), "x", "1", ordersdomain.Comment{
+		ID:         "1",
+		Author:     "system",
+		Comment:    "closed db",
+		OccurredAt: time.Now().UTC(),
+	}); err == nil {
+		t.Fatalf("expected UpdateComment() error on closed db")
+	}
+	if _, err := repository.DeleteComment(context.Background(), "x", "1"); err == nil {
+		t.Fatalf("expected DeleteComment() error on closed db")
 	}
 }
 

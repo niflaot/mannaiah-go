@@ -10,6 +10,8 @@ import (
 var (
 	// ErrNotFound is returned when order rows are not found.
 	ErrNotFound = errors.New("order not found")
+	// ErrCommentNotFound is returned when order comment rows are not found.
+	ErrCommentNotFound = errors.New("order comment not found")
 	// ErrDuplicateIdentifier is returned when realm+identifier already exists.
 	ErrDuplicateIdentifier = errors.New("order identifier already exists for realm")
 )
@@ -44,4 +46,8 @@ type Repository interface {
 	AppendStatus(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error)
 	// AppendComment appends comment rows.
 	AppendComment(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error)
+	// UpdateComment updates comment rows by identifier.
+	UpdateComment(ctx context.Context, id string, commentID string, comment ordersdomain.Comment) (*ordersdomain.Order, error)
+	// DeleteComment deletes comment rows by identifier.
+	DeleteComment(ctx context.Context, id string, commentID string) (*ordersdomain.Order, error)
 }

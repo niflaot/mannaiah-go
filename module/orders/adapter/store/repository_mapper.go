@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"sort"
 	"strings"
 	"time"
@@ -69,13 +70,17 @@ func toOrderStatusRecords(orderID string, statuses []ordersdomain.StatusEntry) [
 func toOrderCommentRecords(orderID string, comments []ordersdomain.Comment) []orderCommentRecord {
 	rows := make([]orderCommentRecord, 0, len(comments))
 	for _, value := range comments {
-		rows = append(rows, orderCommentRecord{
+		row := orderCommentRecord{
 			OrderID:    strings.TrimSpace(orderID),
 			Author:     strings.TrimSpace(value.Author),
 			Comment:    strings.TrimSpace(value.Comment),
 			Internal:   value.Internal,
 			OccurredAt: value.OccurredAt.UTC(),
-		})
+		}
+		if resolvedID, err := strconv.ParseUint(strings.TrimSpace(value.ID), 10, 64); err == nil && resolvedID > 0 {
+			row.ID = uint(resolvedID)
+		}
+		rows = append(rows, row)
 	}
 
 	return rows
@@ -279,6 +284,7 @@ func toComments(rows []orderCommentRecord) []ordersdomain.Comment {
 	comments := make([]ordersdomain.Comment, 0, len(rows))
 	for _, row := range rows {
 		comments = append(comments, ordersdomain.Comment{
+			ID:         strconv.FormatUint(uint64(row.ID), 10),
 			Author:     strings.TrimSpace(row.Author),
 			Comment:    strings.TrimSpace(row.Comment),
 			Internal:   row.Internal,
