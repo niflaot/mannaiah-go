@@ -27,6 +27,8 @@ import (
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
+	"mannaiah/module/falabella"
+	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	"mannaiah/module/orders"
 	ordercontacts "mannaiah/module/orders/adapter/contacts"
 	orderevent "mannaiah/module/orders/adapter/event"
@@ -56,9 +58,10 @@ func run(ctx context.Context, envFile string) error {
 	var messagingCfg coremsgplatform.Config
 	var authCfg auth.Config
 	var cronCfg corecron.Config
+	var falabellaCfg falabella.Config
 	var wooCfg woocommerce.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &wooCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &falabellaCfg, &wooCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -169,6 +172,19 @@ func run(ctx context.Context, envFile string) error {
 	productsModule.SetAuthorizer(authModule)
 	if err := productsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load products module: %w", err)
+	}
+
+	falabellaCatalog, err := falabellaproducts.NewCatalog(productsModule.Service())
+	if err != nil {
+		return fmt.Errorf("initialize falabella products catalog: %w", err)
+	}
+	falabellaModule, err := falabella.New(falabellaCfg, logger, falabellaCatalog)
+	if err != nil {
+		return fmt.Errorf("initialize falabella module: %w", err)
+	}
+	falabellaModule.SetAuthorizer(authModule)
+	if err := falabellaModule.Load(runtime); err != nil {
+		return fmt.Errorf("load falabella module: %w", err)
 	}
 
 	orderCustomerSource, err := ordercontacts.NewSource(contactsModule.Service())
