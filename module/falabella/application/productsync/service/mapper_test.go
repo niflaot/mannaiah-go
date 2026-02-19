@@ -19,10 +19,10 @@ func TestMapProduct(t *testing.T) {
 					Name:        "Backpack",
 					Description: "Desc",
 					Attributes: map[string]any{
-						"brand":             "GENERIC",
-						"model":             "M-1",
-						"tax_percentage":    "19%",
-						"price_falabella":   "100000",
+						"brand":                "GENERIC",
+						"model":                "M-1",
+						"tax_percentage":       "19%",
+						"price_falabella":      "100000",
 						"sale_price_falabella": "90000",
 					},
 				},
@@ -41,6 +41,51 @@ func TestMapProduct(t *testing.T) {
 	}
 	if request.Attributes["global_identifier"] != "G08010305" {
 		t.Fatalf("global_identifier = %q, want %q", request.Attributes["global_identifier"], "G08010305")
+	}
+}
+
+// TestMapProductCanonicalizesKnownAttributeAliases verifies known Falabella attribute key canonicalization behavior.
+func TestMapProductCanonicalizesKnownAttributeAliases(t *testing.T) {
+	request, skipReason, err := mapProduct(
+		port.CatalogProduct{
+			ID:  "p-1",
+			SKU: "SKU-1",
+			Datasheets: []port.CatalogDatasheet{
+				{
+					Realm:       "falabella",
+					Name:        "Backpack",
+					Description: "Desc",
+					Attributes: map[string]any{
+						"businessunits": "1",
+						"colorbase":     "Blue",
+						"size":          "L",
+						"color":         "Navy",
+					},
+				},
+			},
+		},
+		Config{Realm: "falabella"},
+	)
+	if err != nil {
+		t.Fatalf("mapProduct() error = %v", err)
+	}
+	if skipReason != "" {
+		t.Fatalf("skipReason = %q, want empty", skipReason)
+	}
+	if request.Attributes["BusinessUnits"] != "1" {
+		t.Fatalf("BusinessUnits = %q, want %q", request.Attributes["BusinessUnits"], "1")
+	}
+	if request.Attributes["ColorBasico"] != "Blue" {
+		t.Fatalf("ColorBasico = %q, want %q", request.Attributes["ColorBasico"], "Blue")
+	}
+	if request.Attributes["Talla"] != "L" {
+		t.Fatalf("Talla = %q, want %q", request.Attributes["Talla"], "L")
+	}
+	if request.Attributes["Color"] != "Navy" {
+		t.Fatalf("Color = %q, want %q", request.Attributes["Color"], "Navy")
+	}
+	if _, ok := request.Attributes["businessunits"]; ok {
+		t.Fatalf("request.Attributes should not contain businessunits alias after canonicalization")
 	}
 }
 
@@ -69,6 +114,12 @@ func TestMapProductValidation(t *testing.T) {
 	); !errorspkg.Is(err, ErrNameRequired) {
 		t.Fatalf("mapProduct(empty-name) error = %v, want ErrNameRequired", err)
 	}
+	if _, _, err := mapProduct(
+		port.CatalogProduct{SKU: "SKU-1", Datasheets: []port.CatalogDatasheet{{Realm: "falabella", Name: "Backpack"}}},
+		Config{Realm: "falabella"},
+	); !errorspkg.Is(err, ErrDescriptionRequired) {
+		t.Fatalf("mapProduct(empty-description) error = %v, want ErrDescriptionRequired", err)
+	}
 }
 
 // TestHelpers verifies mapper helper behavior.
@@ -95,5 +146,158 @@ func TestHelpers(t *testing.T) {
 	if _, ok := values["nil"]; ok {
 		t.Fatalf("toStringMap() should omit nil values")
 	}
+
+	unique := uniqueTrimmedValues([]string{" a ", "a", "", "b"})
+	if len(unique) != 2 || unique[0] != "a" || unique[1] != "b" {
+		t.Fatalf("uniqueTrimmedValues() = %#v, want [a b]", unique)
+	}
 }
 
+// TestMapVariantProduct verifies variant request mapping behavior.
+func TestMapVariantProduct(t *testing.T) {
+	base := port.SyncProductRequest{
+		SKU:   "PARENT-SKU",
+		Name:  "Backpack",
+		Brand: "GENERIC",
+		Attributes: map[string]string{
+			"material": "Polyester",
+		},
+	}
+
+	request, err := mapVariantProduct(base, port.CatalogVariant{
+		SKU: "CHILD-SKU",
+		Variations: []port.CatalogVariation{
+			{Definition: "COLOR", Value: "Blue"},
+			{Definition: "SIZE", Value: "L"},
+			{Name: "Material", Definition: "TEXT", Value: "Canvas"},
+		},
+	}, map[string]struct{}{"child-sku": {}})
+	if err != nil {
+		t.Fatalf("mapVariantProduct() error = %v", err)
+	}
+
+	if request.SKU != "CHILD-SKU" {
+		t.Fatalf("request.SKU = %q, want %q", request.SKU, "CHILD-SKU")
+	}
+	if request.ParentSKU != "PARENT-SKU" {
+		t.Fatalf("request.ParentSKU = %q, want %q", request.ParentSKU, "PARENT-SKU")
+	}
+	if request.Attributes["Color"] != "Blue" {
+		t.Fatalf("request.Attributes[Color] = %q, want %q", request.Attributes["Color"], "Blue")
+	}
+	if request.Attributes["ColorBasico"] != "Blue" {
+		t.Fatalf("request.Attributes[ColorBasico] = %q, want %q", request.Attributes["ColorBasico"], "Blue")
+	}
+	if request.Attributes["Talla"] != "L" {
+		t.Fatalf("request.Attributes[Talla] = %q, want %q", request.Attributes["Talla"], "L")
+	}
+	if request.Attributes["Material"] != "Canvas" {
+		t.Fatalf("request.Attributes[Material] = %q, want %q", request.Attributes["Material"], "Canvas")
+	}
+}
+
+// TestMapVariantProductValidation verifies variant mapping validation behavior.
+func TestMapVariantProductValidation(t *testing.T) {
+	if _, err := mapVariantProduct(port.SyncProductRequest{SKU: "PARENT-SKU"}, port.CatalogVariant{SKU: " "}, map[string]struct{}{"child-sku": {}}); !errorspkg.Is(err, ErrVariantSKURequired) {
+		t.Fatalf("mapVariantProduct(empty-sku) error = %v, want ErrVariantSKURequired", err)
+	}
+}
+
+// TestMapVariantProductScopedAttributes verifies variant-SKU scoped attribute mapping behavior.
+func TestMapVariantProductScopedAttributes(t *testing.T) {
+	base := port.SyncProductRequest{
+		SKU: "PARENT-SKU",
+		Attributes: map[string]string{
+			"material":              "Polyester",
+			"material.type":         "Canvas",
+			"not_a_variant.color":   "Green",
+			"0013.color":            "Navy",
+			"0013.colorbase":        "Blue",
+			"0013.business_units":   "MEN",
+			"0013.custom_attribute": "custom-0013",
+			"0013.size":             "L",
+			"0014.color":            "Black",
+			"0014.custom_attribute": "custom-0014",
+		},
+	}
+
+	request0013, err := mapVariantProduct(base, port.CatalogVariant{
+		SKU: "0013",
+		Variations: []port.CatalogVariation{
+			{Definition: "COLOR", Value: "Red"},
+			{Definition: "SIZE", Value: "M"},
+		},
+	}, map[string]struct{}{"0013": {}, "0014": {}})
+	if err != nil {
+		t.Fatalf("mapVariantProduct() error = %v", err)
+	}
+
+	if request0013.Attributes["Color"] != "Navy" {
+		t.Fatalf("request0013.Attributes[Color] = %q, want %q", request0013.Attributes["Color"], "Navy")
+	}
+	if request0013.Attributes["ColorBasico"] != "Blue" {
+		t.Fatalf("request0013.Attributes[ColorBasico] = %q, want %q", request0013.Attributes["ColorBasico"], "Blue")
+	}
+	if request0013.Attributes["BusinessUnits"] != "MEN" {
+		t.Fatalf("request0013.Attributes[BusinessUnits] = %q, want %q", request0013.Attributes["BusinessUnits"], "MEN")
+	}
+	if request0013.Attributes["Talla"] != "L" {
+		t.Fatalf("request0013.Attributes[Talla] = %q, want %q", request0013.Attributes["Talla"], "L")
+	}
+	if request0013.Attributes["custom_attribute"] != "custom-0013" {
+		t.Fatalf("request0013.Attributes[custom_attribute] = %q, want %q", request0013.Attributes["custom_attribute"], "custom-0013")
+	}
+	if request0013.Attributes["material"] != "Polyester" {
+		t.Fatalf("request0013.Attributes[material] = %q, want %q", request0013.Attributes["material"], "Polyester")
+	}
+	if request0013.Attributes["material.type"] != "Canvas" {
+		t.Fatalf("request0013.Attributes[material.type] = %q, want %q", request0013.Attributes["material.type"], "Canvas")
+	}
+	if request0013.Attributes["not_a_variant.color"] != "Green" {
+		t.Fatalf("request0013.Attributes[not_a_variant.color] = %q, want %q", request0013.Attributes["not_a_variant.color"], "Green")
+	}
+	if _, ok := request0013.Attributes["0013.color"]; ok {
+		t.Fatalf("request0013.Attributes should not contain scoped key 0013.color")
+	}
+	if _, ok := request0013.Attributes["0014.color"]; ok {
+		t.Fatalf("request0013.Attributes should not contain scoped key 0014.color")
+	}
+
+	request0014, err := mapVariantProduct(base, port.CatalogVariant{
+		SKU: "0014",
+		Variations: []port.CatalogVariation{
+			{Definition: "COLOR", Value: "Black"},
+		},
+	}, map[string]struct{}{"0013": {}, "0014": {}})
+	if err != nil {
+		t.Fatalf("mapVariantProduct() error = %v", err)
+	}
+	if request0014.Attributes["Color"] != "Black" {
+		t.Fatalf("request0014.Attributes[Color] = %q, want %q", request0014.Attributes["Color"], "Black")
+	}
+	if request0014.Attributes["custom_attribute"] != "custom-0014" {
+		t.Fatalf("request0014.Attributes[custom_attribute] = %q, want %q", request0014.Attributes["custom_attribute"], "custom-0014")
+	}
+	if _, ok := request0014.Attributes["0013.color"]; ok {
+		t.Fatalf("request0014.Attributes should not contain scoped key 0013.color")
+	}
+}
+
+// TestResolveImageURLs verifies image URL filtering behavior.
+func TestResolveImageURLs(t *testing.T) {
+	images := []port.CatalogImage{
+		{URL: "https://cdn.example.com/parent.jpg"},
+		{URL: "https://cdn.example.com/variant.jpg", VariationIDs: []string{"v-color"}},
+		{URL: "https://cdn.example.com/excluded.jpg", ExcludedRealms: []string{"falabella"}},
+	}
+
+	parentURLs := resolveImageURLs(images, "falabella", nil)
+	if len(parentURLs) != 1 || parentURLs[0] != "https://cdn.example.com/parent.jpg" {
+		t.Fatalf("parentURLs = %#v, want [https://cdn.example.com/parent.jpg]", parentURLs)
+	}
+
+	variantURLs := resolveImageURLs(images, "falabella", []string{"v-color", "v-size"})
+	if len(variantURLs) != 2 {
+		t.Fatalf("variantURLs = %#v, want 2 urls", variantURLs)
+	}
+}

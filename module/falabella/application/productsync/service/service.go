@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mannaiah/module/falabella/port"
 	"strings"
 
-	"mannaiah/module/falabella/port"
+	"go.uber.org/zap"
 )
 
 var (
@@ -26,6 +27,8 @@ type Source interface {
 	Validate(ctx context.Context) error
 	// SyncProduct upserts product payloads into Falabella.
 	SyncProduct(ctx context.Context, request port.SyncProductRequest) ([]byte, error)
+	// SyncProductImages configures image URLs for a product SKU.
+	SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error)
 }
 
 // ProductCatalog defines product lookup behavior required by Falabella sync services.
@@ -46,6 +49,8 @@ type Config struct {
 	GlobalIdentifier string
 	// AttributeSetID defines Falabella attribute-set identifier values.
 	AttributeSetID string
+	// OperatorCode defines Falabella business-unit operator-code values.
+	OperatorCode string
 }
 
 // Result defines per-product sync result values.
@@ -58,6 +63,10 @@ type Result struct {
 	Status string `json:"status"`
 	// Reason defines sync result reason values.
 	Reason string `json:"reason,omitempty"`
+	// FeedID defines Falabella feed identifier returned on async submission.
+	FeedID string `json:"feedId,omitempty"`
+	// Warnings defines Falabella WarningDetail messages from the sync response.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Summary defines aggregate sync result values.
@@ -92,6 +101,10 @@ type ProductSyncService struct {
 	catalog ProductCatalog
 	// cfg defines mapping configuration values.
 	cfg Config
+	// recorder defines optional sync status recording dependencies.
+	recorder SyncStatusRecorder
+	// logger defines structured logging dependencies.
+	logger *zap.Logger
 }
 
 var (
@@ -112,8 +125,11 @@ func NewService(source Source, catalog ProductCatalog, cfg Config) (*ProductSync
 	if strings.TrimSpace(resolved.Realm) == "" {
 		resolved.Realm = "falabella"
 	}
+	if strings.TrimSpace(resolved.OperatorCode) == "" {
+		resolved.OperatorCode = "FACO"
+	}
 
-	return &ProductSyncService{source: source, catalog: catalog, cfg: resolved}, nil
+	return &ProductSyncService{source: source, catalog: catalog, cfg: resolved, logger: zap.NewNop()}, nil
 }
 
 // ValidateIntegration verifies Falabella integration availability.
@@ -132,26 +148,18 @@ func (s *ProductSyncService) SyncProduct(ctx context.Context, id string) (*Summa
 		return nil, ErrInvalidProductID
 	}
 
-	if err := s.ValidateIntegration(ctx); err != nil {
-		return nil, err
-	}
-
 	product, err := s.catalog.GetProduct(ctx, trimmedID)
 	if err != nil {
 		return nil, fmt.Errorf("load product for falabella sync: %w", err)
 	}
 
-	summary := &Summary{Requested: 1, Results: make([]Result, 0, 1)}
+	summary := &Summary{Results: make([]Result, 0, 1)}
 	s.syncOne(ctx, summary, *product)
 	return summary, nil
 }
 
 // SyncProducts syncs provided products or all products when ids are empty.
 func (s *ProductSyncService) SyncProducts(ctx context.Context, ids []string) (*Summary, error) {
-	if err := s.ValidateIntegration(ctx); err != nil {
-		return nil, err
-	}
-
 	var (
 		products []port.CatalogProduct
 		err      error
@@ -176,7 +184,7 @@ func (s *ProductSyncService) SyncProducts(ctx context.Context, ids []string) (*S
 		}
 	}
 
-	summary := &Summary{Requested: len(products), Results: make([]Result, 0, len(products))}
+	summary := &Summary{Results: make([]Result, 0, len(products))}
 	for _, product := range products {
 		s.syncOne(ctx, summary, product)
 	}
@@ -186,8 +194,9 @@ func (s *ProductSyncService) SyncProducts(ctx context.Context, ids []string) (*S
 
 // syncOne synchronizes a single product and appends the result to the aggregate summary.
 func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, product port.CatalogProduct) {
-	request, skipReason, err := mapProduct(product, s.cfg)
+	baseRequest, skipReason, err := mapProduct(product, s.cfg)
 	if err != nil {
+		summary.Requested++
 		summary.Failed++
 		summary.Results = append(summary.Results, Result{
 			ProductID: product.ID,
@@ -198,6 +207,7 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 		return
 	}
 	if skipReason != "" {
+		summary.Requested++
 		summary.Skipped++
 		summary.Results = append(summary.Results, Result{
 			ProductID: product.ID,
@@ -208,22 +218,187 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 		return
 	}
 
-	if _, syncErr := s.source.SyncProduct(ctx, request); syncErr != nil {
-		summary.Failed++
+	if len(product.Variants) == 0 {
+		s.syncBaseProduct(ctx, summary, product.ID, baseRequest, resolveImageURLs(product.Images, s.cfg.Realm, nil))
+		return
+	}
+
+	knownVariantSKUs := normalizeVariantSKUs(product.Variants)
+	seenVariantSKUs := map[string]struct{}{}
+	for _, variant := range product.Variants {
+		request, mapErr := mapVariantProduct(baseRequest, variant, knownVariantSKUs)
+		summary.Requested++
+		if mapErr != nil {
+			summary.Failed++
+			summary.Results = append(summary.Results, Result{
+				ProductID: product.ID,
+				SKU:       strings.TrimSpace(variant.SKU),
+				Status:    "failed",
+				Reason:    mapErr.Error(),
+			})
+			continue
+		}
+		if _, seen := seenVariantSKUs[request.SKU]; seen {
+			summary.Skipped++
+			summary.Results = append(summary.Results, Result{
+				ProductID: product.ID,
+				SKU:       request.SKU,
+				Status:    "skipped",
+				Reason:    "duplicate_variant_sku",
+			})
+			continue
+		}
+		seenVariantSKUs[request.SKU] = struct{}{}
+
+		syncResponse, syncErr := s.source.SyncProduct(ctx, request)
+		if syncErr != nil {
+			summary.Failed++
+			summary.Results = append(summary.Results, Result{
+				ProductID: product.ID,
+				SKU:       request.SKU,
+				Status:    "failed",
+				Reason:    syncErr.Error(),
+			})
+			continue
+		}
+
+		actionResp := parseSyncResponse(syncResponse)
+		feedID := ""
+		var warnings []string
+		if actionResp != nil {
+			feedID = actionResp.RequestID
+			warnings = actionResp.WarningMessages()
+		}
+
+		if actionResp != nil && actionResp.HasRequiredFieldViolations() {
+			summary.Failed++
+			summary.Results = append(summary.Results, Result{
+				ProductID: product.ID,
+				SKU:       request.SKU,
+				Status:    "failed",
+				Reason:    "required_field_warnings",
+				FeedID:    feedID,
+				Warnings:  warnings,
+			})
+			continue
+		}
+
+		variantImageURLs := resolveImageURLs(product.Images, s.cfg.Realm, variant.VariationIDs)
+		if imageErr := s.syncImages(ctx, request.SKU, variantImageURLs); imageErr != nil {
+			summary.Failed++
+			summary.Results = append(summary.Results, Result{
+				ProductID: product.ID,
+				SKU:       request.SKU,
+				Status:    "failed",
+				Reason:    imageErr.Error(),
+				FeedID:    feedID,
+				Warnings:  warnings,
+			})
+			continue
+		}
+
+		s.recordSyncEntry(ctx, product.ID, request.SKU, feedID, actionResp)
+
+		summary.Synced++
 		summary.Results = append(summary.Results, Result{
 			ProductID: product.ID,
-			SKU:       product.SKU,
+			SKU:       request.SKU,
+			Status:    "synced",
+			FeedID:    feedID,
+			Warnings:  warnings,
+		})
+	}
+}
+
+// normalizeVariantSKUs resolves normalized variant-SKU sets for scoped-attribute matching.
+func normalizeVariantSKUs(variants []port.CatalogVariant) map[string]struct{} {
+	if len(variants) == 0 {
+		return map[string]struct{}{}
+	}
+
+	normalized := make(map[string]struct{}, len(variants))
+	for _, variant := range variants {
+		token := normalizeScopedVariantToken(variant.SKU)
+		if token == "" {
+			continue
+		}
+		normalized[token] = struct{}{}
+	}
+
+	return normalized
+}
+
+// syncBaseProduct synchronizes one non-variant product SKU and optional image URLs.
+func (s *ProductSyncService) syncBaseProduct(ctx context.Context, summary *Summary, productID string, request port.SyncProductRequest, imageURLs []string) {
+	summary.Requested++
+	syncResponse, syncErr := s.source.SyncProduct(ctx, request)
+	if syncErr != nil {
+		summary.Failed++
+		summary.Results = append(summary.Results, Result{
+			ProductID: productID,
+			SKU:       request.SKU,
 			Status:    "failed",
 			Reason:    syncErr.Error(),
 		})
 		return
 	}
 
+	actionResp := parseSyncResponse(syncResponse)
+	feedID := ""
+	var warnings []string
+	if actionResp != nil {
+		feedID = actionResp.RequestID
+		warnings = actionResp.WarningMessages()
+	}
+
+	if actionResp != nil && actionResp.HasRequiredFieldViolations() {
+		summary.Failed++
+		summary.Results = append(summary.Results, Result{
+			ProductID: productID,
+			SKU:       request.SKU,
+			Status:    "failed",
+			Reason:    "required_field_warnings",
+			FeedID:    feedID,
+			Warnings:  warnings,
+		})
+		return
+	}
+
+	if imageErr := s.syncImages(ctx, request.SKU, imageURLs); imageErr != nil {
+		summary.Failed++
+		summary.Results = append(summary.Results, Result{
+			ProductID: productID,
+			SKU:       request.SKU,
+			Status:    "failed",
+			Reason:    imageErr.Error(),
+			FeedID:    feedID,
+			Warnings:  warnings,
+		})
+		return
+	}
+
+	s.recordSyncEntry(ctx, productID, request.SKU, feedID, actionResp)
+
 	summary.Synced++
 	summary.Results = append(summary.Results, Result{
-		ProductID: product.ID,
-		SKU:       product.SKU,
+		ProductID: productID,
+		SKU:       request.SKU,
 		Status:    "synced",
+		FeedID:    feedID,
+		Warnings:  warnings,
 	})
 }
 
+// syncImages syncs image URLs for a single SKU when URLs are provided.
+func (s *ProductSyncService) syncImages(ctx context.Context, sku string, urls []string) error {
+	normalized := uniqueTrimmedValues(urls)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	if _, err := s.source.SyncProductImages(ctx, port.SyncProductImagesRequest{SKU: strings.TrimSpace(sku), URLs: normalized}); err != nil {
+		return fmt.Errorf("sync falabella product images: %w", err)
+	}
+
+	return nil
+}

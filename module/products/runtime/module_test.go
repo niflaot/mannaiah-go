@@ -6,11 +6,12 @@ import (
 	stdhttp "net/http"
 	"testing"
 
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	coredb "mannaiah/module/core/database"
 	corehttp "mannaiah/module/core/http"
 	productstore "mannaiah/module/products/adapter/store/product"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // runtimeAssetLookupMock defines asset lookup behavior for runtime tests.
@@ -157,6 +158,19 @@ func TestSetAuthorizer(t *testing.T) {
 	}
 
 	module.SetAuthorizer(nil)
+}
+
+// TestVariationService verifies variation service exposure behavior.
+func TestVariationService(t *testing.T) {
+	db := newDBForTest(t)
+	module, err := New(db, runtimeAssetLookupMock{})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if module.VariationService() == nil {
+		t.Fatalf("VariationService() should not be nil")
+	}
 }
 
 // newDBForTest creates an in-memory DB for module tests.

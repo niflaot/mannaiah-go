@@ -23,10 +23,25 @@ func TestOpenAPISpec(t *testing.T) {
 	if path := spec.Paths.Value("/falabella/sync/products/{id}"); path == nil || path.Post == nil {
 		t.Fatalf("expected POST /falabella/sync/products/{id} path")
 	}
+	if path := spec.Paths.Value("/falabella/sync/status/feed/{feedId}"); path == nil || path.Get == nil {
+		t.Fatalf("expected GET /falabella/sync/status/feed/{feedId} path")
+	}
+	if path := spec.Paths.Value("/falabella/sync/status/product/{productId}"); path == nil || path.Get == nil {
+		t.Fatalf("expected GET /falabella/sync/status/product/{productId} path")
+	}
+	if path := spec.Paths.Value("/falabella/sync/status/feed/{feedId}/resolve"); path == nil || path.Post == nil {
+		t.Fatalf("expected POST /falabella/sync/status/feed/{feedId}/resolve path")
+	}
 	if spec.Components == nil || spec.Components.Schemas == nil {
 		t.Fatalf("expected components schemas")
 	}
 	if spec.Components.Schemas["FalabellaSyncSummary"] == nil {
 		t.Fatalf("expected FalabellaSyncSummary schema")
+	}
+	if spec.Components.Schemas["FalabellaSyncStatusEntry"] == nil {
+		t.Fatalf("expected FalabellaSyncStatusEntry schema")
+	}
+	if spec.Components.Schemas["FalabellaResolveResult"] == nil {
+		t.Fatalf("expected FalabellaResolveResult schema")
 	}
 }

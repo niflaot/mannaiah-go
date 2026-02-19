@@ -54,10 +54,6 @@ func (s *BrandService) ValidateIntegration(ctx context.Context) error {
 
 // GetBrands retrieves Falabella brand payload.
 func (s *BrandService) GetBrands(ctx context.Context) ([]byte, error) {
-	if err := s.ValidateIntegration(ctx); err != nil {
-		return nil, err
-	}
-
 	payload, err := s.source.GetBrands(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)

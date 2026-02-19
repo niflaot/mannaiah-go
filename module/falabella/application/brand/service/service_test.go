@@ -37,6 +37,16 @@ func (m *sourceMock) SyncProduct(ctx context.Context, request port.SyncProductRe
 	return nil, nil
 }
 
+// SyncProductImages returns no-op values for brand-service test doubles.
+func (m *sourceMock) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
+	return nil, nil
+}
+
+// GetFeedStatus returns no-op values for brand-service test doubles.
+func (m *sourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	return nil, nil
+}
+
 // TestNewServiceValidation verifies constructor validation behavior.
 func TestNewServiceValidation(t *testing.T) {
 	_, err := NewService(nil)

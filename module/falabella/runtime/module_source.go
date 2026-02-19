@@ -19,6 +19,10 @@ type source interface {
 	GetBrands(ctx context.Context) ([]byte, error)
 	// SyncProduct upserts Falabella product values.
 	SyncProduct(ctx context.Context, request port.SyncProductRequest) ([]byte, error)
+	// SyncProductImages configures Falabella product images.
+	SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error)
+	// GetFeedStatus retrieves Falabella feed status by feed identifier.
+	GetFeedStatus(ctx context.Context, feedID string) ([]byte, error)
 }
 
 // circuitBreaker defines circuit-breaker behavior used by runtime source wrappers.
@@ -40,11 +44,13 @@ type protectedSource struct {
 // newSource creates Falabella source adapters from module config values.
 func newSource(cfg Config, providedLogger *zap.Logger) (source, error) {
 	client, err := falabellaadapter.NewClient(falabellaadapter.Config{
-		URL:     cfg.URL,
-		UserID:  cfg.UserID,
-		APIKey:  cfg.APIKey,
-		Version: cfg.Version,
-		Timeout: resolveRequestTimeout(cfg.RequestTimeoutMS),
+		URL:       cfg.URL,
+		UserID:    cfg.UserID,
+		APIKey:    cfg.APIKey,
+		UserAgent: cfg.UserAgent,
+		Version:   cfg.Version,
+		Timeout:   resolveRequestTimeout(cfg.RequestTimeoutMS),
+		Logger:    providedLogger,
 	})
 	if err != nil {
 		return nil, err
@@ -86,6 +92,36 @@ func (s protectedSource) SyncProduct(ctx context.Context, request port.SyncProdu
 	err := s.executeWithBreaker(func() error {
 		var sourceErr error
 		payload, sourceErr = s.source.SyncProduct(ctx, request)
+		return sourceErr
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+// SyncProductImages configures Falabella product images with breaker protection.
+func (s protectedSource) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
+	var payload []byte
+	err := s.executeWithBreaker(func() error {
+		var sourceErr error
+		payload, sourceErr = s.source.SyncProductImages(ctx, request)
+		return sourceErr
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+// GetFeedStatus retrieves Falabella feed status with breaker protection.
+func (s protectedSource) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	var payload []byte
+	err := s.executeWithBreaker(func() error {
+		var sourceErr error
+		payload, sourceErr = s.source.GetFeedStatus(ctx, feedID)
 		return sourceErr
 	})
 	if err != nil {
@@ -150,6 +186,16 @@ func (f failingSource) GetBrands(ctx context.Context) ([]byte, error) {
 
 // SyncProduct returns startup validation failures.
 func (f failingSource) SyncProduct(ctx context.Context, request port.SyncProductRequest) ([]byte, error) {
+	return nil, f.err
+}
+
+// SyncProductImages returns startup validation failures.
+func (f failingSource) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
+	return nil, f.err
+}
+
+// GetFeedStatus returns startup validation failures.
+func (f failingSource) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
 	return nil, f.err
 }
 

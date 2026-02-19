@@ -6,6 +6,10 @@ import "context"
 type SyncProductRequest struct {
 	// SKU defines seller SKU values used as Falabella product identifiers.
 	SKU string
+	// ParentSKU defines parent seller SKU values for variant products.
+	ParentSKU string
+	// Variation defines Falabella variation relationship values.
+	Variation string
 	// Name defines product display names.
 	Name string
 	// Brand defines Falabella brand values.
@@ -26,8 +30,18 @@ type SyncProductRequest struct {
 	SaleStartDate string
 	// SaleEndDate defines optional sale end-date values.
 	SaleEndDate string
+	// OperatorCode defines Falabella business-unit operator code values.
+	OperatorCode string
 	// Attributes defines additional ProductData field values.
 	Attributes map[string]string
+}
+
+// SyncProductImagesRequest defines Falabella product-image sync request values.
+type SyncProductImagesRequest struct {
+	// SKU defines seller SKU values used as Falabella product identifiers.
+	SKU string
+	// URLs defines image URL values to associate with the provided SKU.
+	URLs []string
 }
 
 // Source defines Falabella integration source behavior.
@@ -38,4 +52,8 @@ type Source interface {
 	GetBrands(ctx context.Context) ([]byte, error)
 	// SyncProduct upserts a product into Falabella from mapped marketplace values.
 	SyncProduct(ctx context.Context, request SyncProductRequest) ([]byte, error)
+	// SyncProductImages configures product images in Falabella for one SKU.
+	SyncProductImages(ctx context.Context, request SyncProductImagesRequest) ([]byte, error)
+	// GetFeedStatus retrieves Falabella feed status by feed identifier.
+	GetFeedStatus(ctx context.Context, feedID string) ([]byte, error)
 }

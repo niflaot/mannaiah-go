@@ -20,6 +20,14 @@ type sourceMock struct {
 	syncPayload []byte
 	// syncErr defines SyncProduct() errors.
 	syncErr error
+	// imagePayload defines SyncProductImages() payload values.
+	imagePayload []byte
+	// imageErr defines SyncProductImages() errors.
+	imageErr error
+	// feedStatusPayload defines GetFeedStatus() payload values.
+	feedStatusPayload []byte
+	// feedStatusErr defines GetFeedStatus() errors.
+	feedStatusErr error
 }
 
 // Validate returns configured validation errors.
@@ -43,6 +51,24 @@ func (m sourceMock) SyncProduct(ctx context.Context, request port.SyncProductReq
 	}
 
 	return m.syncPayload, nil
+}
+
+// SyncProductImages returns configured payload/errors.
+func (m sourceMock) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
+	if m.imageErr != nil {
+		return nil, m.imageErr
+	}
+
+	return m.imagePayload, nil
+}
+
+// GetFeedStatus returns configured payload/errors.
+func (m sourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	if m.feedStatusErr != nil {
+		return nil, m.feedStatusErr
+	}
+
+	return m.feedStatusPayload, nil
 }
 
 // breakerMock defines circuit-breaker behavior for runtime source tests.
@@ -101,6 +127,32 @@ func TestProtectedSourceSyncProduct(t *testing.T) {
 	}
 }
 
+// TestProtectedSourceSyncProductImages verifies breaker-protected SyncProductImages behavior.
+func TestProtectedSourceSyncProductImages(t *testing.T) {
+	expected := []byte("<ok/>")
+	wrapped := protectedSource{source: sourceMock{imagePayload: expected}, breaker: breakerMock{}}
+	payload, err := wrapped.SyncProductImages(context.Background(), port.SyncProductImagesRequest{SKU: "SKU-1", URLs: []string{"https://cdn.example.com/1.jpg"}})
+	if err != nil {
+		t.Fatalf("SyncProductImages() error = %v", err)
+	}
+	if string(payload) != string(expected) {
+		t.Fatalf("payload = %q, want %q", string(payload), string(expected))
+	}
+}
+
+// TestProtectedSourceGetFeedStatus verifies breaker-protected GetFeedStatus behavior.
+func TestProtectedSourceGetFeedStatus(t *testing.T) {
+	expected := []byte("<FeedStatus/>")
+	wrapped := protectedSource{source: sourceMock{feedStatusPayload: expected}, breaker: breakerMock{}}
+	payload, err := wrapped.GetFeedStatus(context.Background(), "feed-123")
+	if err != nil {
+		t.Fatalf("GetFeedStatus() error = %v", err)
+	}
+	if string(payload) != string(expected) {
+		t.Fatalf("payload = %q, want %q", string(payload), string(expected))
+	}
+}
+
 // TestProtectedSourceOpenBreaker verifies open-breaker error mapping behavior.
 func TestProtectedSourceOpenBreaker(t *testing.T) {
 	wrapped := protectedSource{source: sourceMock{}, breaker: breakerMock{executeErr: errors.New("open"), open: true}}
@@ -121,5 +173,11 @@ func TestFailingSource(t *testing.T) {
 	}
 	if _, err := source.SyncProduct(context.Background(), port.SyncProductRequest{SKU: "SKU-1"}); !errors.Is(err, failure) {
 		t.Fatalf("SyncProduct() error = %v, want %v", err, failure)
+	}
+	if _, err := source.SyncProductImages(context.Background(), port.SyncProductImagesRequest{SKU: "SKU-1", URLs: []string{"https://cdn.example.com/1.jpg"}}); !errors.Is(err, failure) {
+		t.Fatalf("SyncProductImages() error = %v, want %v", err, failure)
+	}
+	if _, err := source.GetFeedStatus(context.Background(), "feed-123"); !errors.Is(err, failure) {
+		t.Fatalf("GetFeedStatus() error = %v, want %v", err, failure)
 	}
 }

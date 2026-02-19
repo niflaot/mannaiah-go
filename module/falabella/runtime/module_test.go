@@ -6,9 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	corehttp "mannaiah/module/core/http"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
-	corehttp "mannaiah/module/core/http"
 )
 
 // loaderProbe defines startup loader behavior for module tests.
@@ -73,9 +74,11 @@ func TestNewWithInvalidConfigKeepsRoute(t *testing.T) {
 	}
 }
 
-// TestNewWithValidConfig verifies valid integration behavior.
+// TestNewWithValidConfig verifies valid integration behavior without startup API calls.
 func TestNewWithValidConfig(t *testing.T) {
+	requestCount := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestCount++
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"SuccessResponse":{"Head":{"RequestId":"r1"}}}`))
 	}))
@@ -89,6 +92,10 @@ func TestNewWithValidConfig(t *testing.T) {
 	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
+	}
+
+	if requestCount != 0 {
+		t.Fatalf("startup made %d outbound requests, want 0 (GetBrands should not be called at startup)", requestCount)
 	}
 
 	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8195}, nil)
@@ -146,4 +153,36 @@ func TestSetAuthorizer(t *testing.T) {
 	}
 
 	module.SetAuthorizer(nil)
+}
+
+// TestConfigureSyncStatusNilDB verifies nil DB is silently ignored.
+func TestConfigureSyncStatusNilDB(t *testing.T) {
+	module, err := New(Config{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if configErr := module.ConfigureSyncStatus(nil); configErr != nil {
+		t.Fatalf("ConfigureSyncStatus(nil) error = %v", configErr)
+	}
+}
+
+// TestSyncStatusRoutesWithoutDB verifies sync status returns 503 without DB.
+func TestSyncStatusRoutesWithoutDB(t *testing.T) {
+	module, err := New(Config{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server, _ := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8305}, nil)
+	server.RegisterRoutes(module.RegisterRoutes)
+
+	request, _ := http.NewRequest(http.MethodGet, "/falabella/sync/status/feed/feed-abc", nil)
+	response, testErr := server.App().Test(request)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusServiceUnavailable)
+	}
 }

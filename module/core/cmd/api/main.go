@@ -9,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"mannaiah/module/assets"
 	assetevent "mannaiah/module/assets/adapter/event"
 	assetstorage "mannaiah/module/assets/adapter/storage"
@@ -36,6 +34,9 @@ import (
 	"mannaiah/module/products"
 	"mannaiah/module/woocommerce"
 	wooevent "mannaiah/module/woocommerce/adapter/event"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // main executes startup bootstrap and blocks until process shutdown.
@@ -174,7 +175,12 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("load products module: %w", err)
 	}
 
-	falabellaCatalog, err := falabellaproducts.NewCatalog(productsModule.Service())
+	falabellaCatalog, err := falabellaproducts.NewCatalog(
+		productsModule.Service(),
+		falabellaproducts.WithVariationService(productsModule.VariationService()),
+		falabellaproducts.WithAssetService(assetsModule.Service()),
+		falabellaproducts.WithAssetBaseURL(falabellaCfg.ProductImageBaseURL),
+	)
 	if err != nil {
 		return fmt.Errorf("initialize falabella products catalog: %w", err)
 	}
@@ -182,10 +188,26 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("initialize falabella module: %w", err)
 	}
+	if syncStatusErr := falabellaModule.ConfigureSyncStatus(db); syncStatusErr != nil {
+		return fmt.Errorf("configure falabella sync status: %w", syncStatusErr)
+	}
+	falabellaScheduler, err := corecron.NewScheduler(cronCfg, logger)
+	if err != nil {
+		return fmt.Errorf("create falabella scheduler: %w", err)
+	}
+	falabellaModule.ConfigureScheduler(falabellaScheduler)
 	falabellaModule.SetAuthorizer(authModule)
 	if err := falabellaModule.Load(runtime); err != nil {
 		return fmt.Errorf("load falabella module: %w", err)
 	}
+	if err := falabellaModule.Start(ctx); err != nil {
+		return fmt.Errorf("start falabella module: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = falabellaModule.Stop(stopCtx)
+	}()
 
 	orderCustomerSource, err := ordercontacts.NewSource(contactsModule.Service())
 	if err != nil {

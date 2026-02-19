@@ -3,14 +3,20 @@ package runtime
 import (
 	"context"
 	"errors"
+	"sync"
+
+	corecron "mannaiah/module/core/cron"
+	corehttp "mannaiah/module/core/http"
+	falabellahttp "mannaiah/module/falabella/adapter/http"
+	"mannaiah/module/falabella/adapter/store"
+	brandservice "mannaiah/module/falabella/application/brand/service"
+	productsyncservice "mannaiah/module/falabella/application/productsync/service"
+	syncstatusservice "mannaiah/module/falabella/application/syncstatus/service"
+	"mannaiah/module/falabella/port"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
-	corehttp "mannaiah/module/core/http"
-	falabellahttp "mannaiah/module/falabella/adapter/http"
-	brandservice "mannaiah/module/falabella/application/brand/service"
-	productsyncservice "mannaiah/module/falabella/application/productsync/service"
-	"mannaiah/module/falabella/port"
+	"gorm.io/gorm"
 )
 
 var (
@@ -34,10 +40,45 @@ type Module struct {
 	service brandservice.Service
 	// productSyncService defines Falabella product-sync service dependencies.
 	productSyncService productsyncservice.Service
+	// syncStatusService defines Falabella sync status service dependencies.
+	syncStatusService syncstatusservice.Service
 	// handler defines HTTP route adapter dependencies.
 	handler *falabellahttp.Handler
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
+	// scheduler defines optional cron scheduler dependencies.
+	scheduler corecron.Scheduler
+	// schedulerEntryID defines the cron entry identifier for feed status resolution.
+	schedulerEntryID corecron.EntryID
+	// mutex guards scheduler lifecycle state.
+	mutex sync.Mutex
+	// started reports whether scheduler lifecycle start logic has completed.
+	started bool
+}
+
+// Option defines functional option values for Falabella module construction.
+type Option func(*moduleOptions)
+
+// moduleOptions defines optional dependencies for module construction.
+type moduleOptions struct {
+	// db defines optional GORM database dependencies for sync status persistence.
+	db *gorm.DB
+	// catalogs defines optional product-catalog dependencies.
+	catalogs []port.ProductCatalog
+}
+
+// WithDB configures database dependencies for sync status persistence.
+func WithDB(db *gorm.DB) Option {
+	return func(opts *moduleOptions) {
+		opts.db = db
+	}
+}
+
+// WithCatalog configures product-catalog dependencies.
+func WithCatalog(catalog port.ProductCatalog) Option {
+	return func(opts *moduleOptions) {
+		opts.catalogs = append(opts.catalogs, catalog)
+	}
 }
 
 // New creates Falabella modules with source adapters and route handlers.
@@ -64,6 +105,7 @@ func New(cfg Config, providedLogger *zap.Logger, catalogs ...port.ProductCatalog
 		CategoryID:       cfg.ProductCategoryID,
 		GlobalIdentifier: cfg.ProductGlobalIdentifier,
 		AttributeSetID:   cfg.ProductAttributeSetID,
+		OperatorCode:     cfg.ProductOperatorCode,
 	})
 	if err != nil {
 		return nil, err
@@ -75,8 +117,60 @@ func New(cfg Config, providedLogger *zap.Logger, catalogs ...port.ProductCatalog
 	}
 
 	module := &Module{cfg: cfg, service: service, productSyncService: productSyncService, handler: handler, logger: logger}
+	productSyncService.SetLogger(logger)
 	module.validateAtStartup(resolveContext(context.Background()))
 	return module, nil
+}
+
+// ConfigureSyncStatus wires sync status persistence and endpoints backed by the provided database.
+func (m *Module) ConfigureSyncStatus(db *gorm.DB) error {
+	if m == nil || m.handler == nil {
+		return ErrModuleNotInitialized
+	}
+	if db == nil {
+		return nil
+	}
+
+	repo, err := store.NewRepository(db)
+	if err != nil {
+		m.logger.Warn("falabella sync status repository initialization failed", zap.Error(err))
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
+	defer cancel()
+	if schemaErr := repo.EnsureSchema(ctx); schemaErr != nil {
+		m.logger.Warn("falabella sync status schema migration failed", zap.Error(schemaErr))
+		return nil
+	}
+
+	// Build source for feed status - reuse the same source used by the module.
+	source, sourceErr := newSource(m.cfg, m.logger)
+	if sourceErr != nil {
+		source = failingSource{err: sourceErr}
+	}
+
+	svc, svcErr := syncstatusservice.NewService(repo, source)
+	if svcErr != nil {
+		m.logger.Warn("falabella sync status service initialization failed", zap.Error(svcErr))
+		return nil
+	}
+
+	m.syncStatusService = svc
+
+	// Wire sync status recording into product sync flow.
+	if productSyncSvc, ok := m.productSyncService.(*productsyncservice.ProductSyncService); ok {
+		productSyncSvc.SetRecorder(svc)
+	}
+
+	// Rebuild handler with sync status service
+	handler, handlerErr := falabellahttp.NewHandler(m.service, m.productSyncService, svc)
+	if handlerErr != nil {
+		return handlerErr
+	}
+	m.handler = handler
+
+	return nil
 }
 
 // RegisterRoutes registers Falabella routes on the provided router.
@@ -128,12 +222,6 @@ func (m *Module) validateAtStartup(ctx context.Context) {
 	if err := m.service.ValidateIntegration(validationCtx); err != nil {
 		m.logger.Warn(
 			"falabella integration unavailable; endpoints remain documented and return 503 until integration recovers",
-			zap.Error(err),
-		)
-	}
-	if err := m.productSyncService.ValidateIntegration(validationCtx); err != nil {
-		m.logger.Warn(
-			"falabella integration unavailable for product sync; endpoints remain documented and return 503 until integration recovers",
 			zap.Error(err),
 		)
 	}

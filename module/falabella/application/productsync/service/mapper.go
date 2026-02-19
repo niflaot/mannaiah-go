@@ -13,6 +13,10 @@ var (
 	ErrSKURequired = errors.New("product sku is required")
 	// ErrNameRequired is returned when falabella product names are missing.
 	ErrNameRequired = errors.New("falabella product name is required")
+	// ErrDescriptionRequired is returned when falabella product descriptions are missing.
+	ErrDescriptionRequired = errors.New("falabella product description is required")
+	// ErrVariantSKURequired is returned when variant SKU values are missing.
+	ErrVariantSKURequired = errors.New("product variant sku is required")
 )
 
 const (
@@ -33,24 +37,29 @@ func mapProduct(product port.CatalogProduct, cfg Config) (port.SyncProductReques
 	}
 
 	attributes := toStringMap(datasheet.Attributes)
-	name := firstNonEmpty(attributes["name"], datasheet.Name)
+	normalizeFalabellaAttributeKeys(attributes)
+	name := strings.TrimSpace(datasheet.Name)
 	if strings.TrimSpace(name) == "" {
 		return port.SyncProductRequest{}, "", ErrNameRequired
 	}
+	description := strings.TrimSpace(datasheet.Description)
+	if description == "" {
+		return port.SyncProductRequest{}, "", ErrDescriptionRequired
+	}
 
-	description := firstNonEmpty(attributes["description"], datasheet.Description)
 	request := port.SyncProductRequest{
 		SKU:             trimmedSKU,
-		Name:            strings.TrimSpace(name),
+		Name:            name,
 		Brand:           firstNonEmpty(attributes["brand"], defaultFalabellaBrand),
 		Model:           strings.TrimSpace(attributes["model"]),
-		Description:     strings.TrimSpace(description),
+		Description:     description,
 		PrimaryCategory: strings.TrimSpace(cfg.CategoryID),
 		TaxClass:        strings.TrimSpace(attributes["tax_percentage"]),
 		Price:           strings.TrimSpace(attributes["price_falabella"]),
 		SalePrice:       strings.TrimSpace(attributes["sale_price_falabella"]),
 		SaleStartDate:   strings.TrimSpace(attributes["sale_start_date_falabella"]),
 		SaleEndDate:     strings.TrimSpace(attributes["sale_end_date_falabella"]),
+		OperatorCode:    firstNonEmpty(strings.TrimSpace(cfg.OperatorCode), "FACO"),
 		Attributes:      attributes,
 	}
 
@@ -71,6 +80,25 @@ func mapProduct(product port.CatalogProduct, cfg Config) (port.SyncProductReques
 	}
 
 	return request, "", nil
+}
+
+// mapVariantProduct maps base product values and variant dimensions into Falabella sync payload values.
+func mapVariantProduct(base port.SyncProductRequest, variant port.CatalogVariant, knownVariantSKUs map[string]struct{}) (port.SyncProductRequest, error) {
+	parentSKU := strings.TrimSpace(base.SKU)
+	variantSKU := strings.TrimSpace(variant.SKU)
+	if variantSKU == "" {
+		return port.SyncProductRequest{}, ErrVariantSKURequired
+	}
+
+	mapped := base
+	mapped.SKU = variantSKU
+	mapped.ParentSKU = parentSKU
+	mapped.Variation = ""
+	mapped.Attributes = copyAttributes(base.Attributes)
+	applyVariantAttributes(mapped.Attributes, variant)
+	applyVariantScopedAttributes(mapped.Attributes, base.Attributes, variantSKU, knownVariantSKUs)
+
+	return mapped, nil
 }
 
 // findDatasheetByRealm resolves datasheets for configured realm values.
@@ -103,6 +131,177 @@ func toStringMap(attributes map[string]any) map[string]string {
 	return mapped
 }
 
+// copyAttributes copies string map values.
+func copyAttributes(attributes map[string]string) map[string]string {
+	if len(attributes) == 0 {
+		return map[string]string{}
+	}
+
+	copied := make(map[string]string, len(attributes))
+	for key, value := range attributes {
+		copied[key] = value
+	}
+
+	return copied
+}
+
+// applyVariantAttributes maps variant variation values into Falabella attributes.
+func applyVariantAttributes(attributes map[string]string, variant port.CatalogVariant) {
+	if attributes == nil {
+		return
+	}
+
+	if len(variant.Variations) == 0 {
+		return
+	}
+
+	for _, item := range variant.Variations {
+		key := variationAttributeKey(item)
+		value := strings.TrimSpace(item.Value)
+		if key == "" || value == "" {
+			continue
+		}
+
+		attributes[key] = value
+		if strings.EqualFold(strings.TrimSpace(item.Definition), "COLOR") {
+			if strings.TrimSpace(attributes["ColorBasico"]) == "" {
+				attributes["ColorBasico"] = value
+			}
+		}
+	}
+}
+
+// variationAttributeKey maps variation values into preferred Falabella attribute keys.
+func variationAttributeKey(variation port.CatalogVariation) string {
+	switch strings.ToUpper(strings.TrimSpace(variation.Definition)) {
+	case "COLOR":
+		return "Color"
+	case "SIZE":
+		return "Talla"
+	default:
+		name := strings.TrimSpace(variation.Name)
+		if name == "" {
+			return "Variation"
+		}
+		return name
+	}
+}
+
+// resolveImageURLs resolves filtered image URL values for realm and variation selection.
+func resolveImageURLs(images []port.CatalogImage, realm string, variantVariationIDs []string) []string {
+	if len(images) == 0 {
+		return nil
+	}
+
+	normalizedVariantVariationIDs := normalizeTrimmedSet(variantVariationIDs)
+	isVariantSelection := len(variantVariationIDs) > 0
+	result := make([]string, 0, len(images))
+	seen := make(map[string]struct{}, len(images))
+	for _, item := range images {
+		if isRealmExcluded(item.ExcludedRealms, realm) {
+			continue
+		}
+		if isVariantSelection {
+			if !isSubsetOfNormalized(item.VariationIDs, normalizedVariantVariationIDs) {
+				continue
+			}
+		} else if len(item.VariationIDs) > 0 {
+			continue
+		}
+
+		url := strings.TrimSpace(item.URL)
+		if url == "" {
+			continue
+		}
+		if _, ok := seen[url]; ok {
+			continue
+		}
+		seen[url] = struct{}{}
+		result = append(result, url)
+	}
+
+	return result
+}
+
+// normalizeTrimmedSet resolves normalized string set values.
+func normalizeTrimmedSet(values []string) map[string]struct{} {
+	if len(values) == 0 {
+		return map[string]struct{}{}
+	}
+
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		set[trimmed] = struct{}{}
+	}
+
+	return set
+}
+
+// uniqueTrimmedValues resolves deduplicated, non-empty string values preserving first occurrence order.
+func uniqueTrimmedValues(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+
+	return result
+}
+
+// isSubsetOfNormalized reports whether candidate values are subset of pre-normalized values.
+func isSubsetOfNormalized(candidate []string, normalizedSuperset map[string]struct{}) bool {
+	if len(candidate) == 0 {
+		return true
+	}
+	if len(normalizedSuperset) == 0 {
+		return false
+	}
+
+	for _, value := range candidate {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := normalizedSuperset[trimmed]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isRealmExcluded reports whether provided realm values are excluded from image sync.
+func isRealmExcluded(excludedRealms []string, realm string) bool {
+	trimmedRealm := strings.TrimSpace(realm)
+	if trimmedRealm == "" || len(excludedRealms) == 0 {
+		return false
+	}
+
+	for _, excludedRealm := range excludedRealms {
+		if strings.EqualFold(strings.TrimSpace(excludedRealm), trimmedRealm) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // firstNonEmpty resolves the first non-empty value from provided candidates.
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
@@ -113,4 +312,3 @@ func firstNonEmpty(values ...string) string {
 
 	return ""
 }
-

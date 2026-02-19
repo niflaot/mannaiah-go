@@ -1,11 +1,12 @@
 package falabella
 
 import (
+	falabellahttp "mannaiah/module/falabella/adapter/http"
+	"mannaiah/module/falabella/port"
+	falabellaruntime "mannaiah/module/falabella/runtime"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
-	falabellahttp "mannaiah/module/falabella/adapter/http"
-	falabellaruntime "mannaiah/module/falabella/runtime"
-	"mannaiah/module/falabella/port"
 )
 
 var (

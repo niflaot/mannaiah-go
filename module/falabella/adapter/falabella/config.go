@@ -1,6 +1,10 @@
 package falabella
 
-import "time"
+import (
+	"time"
+
+	"go.uber.org/zap"
+)
 
 const (
 	// defaultVersion defines Falabella API version values.
@@ -15,8 +19,12 @@ type Config struct {
 	UserID string
 	// APIKey defines Falabella API key values.
 	APIKey string
+	// UserAgent defines Falabella API User-Agent header values.
+	UserAgent string
 	// Timeout defines Falabella request timeout values.
 	Timeout time.Duration
 	// Version defines Falabella API version values.
 	Version string
+	// Logger defines optional adapter debug logger values.
+	Logger *zap.Logger
 }

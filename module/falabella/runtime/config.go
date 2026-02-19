@@ -8,6 +8,8 @@ type Config struct {
 	UserID string `mapstructure:"FALABELLA_USER_ID" default:""`
 	// APIKey defines Falabella API key values.
 	APIKey string `mapstructure:"FALABELLA_API_KEY" default:""`
+	// UserAgent defines Falabella API User-Agent header values.
+	UserAgent string `mapstructure:"FALABELLA_USER_AGENT" default:""`
 	// Version defines Falabella API version values.
 	Version string `mapstructure:"FALABELLA_API_VERSION" default:"1.0"`
 	// RequestTimeoutMS defines Falabella API timeout values in milliseconds.
@@ -32,4 +34,12 @@ type Config struct {
 	ProductGlobalIdentifier string `mapstructure:"FALABELLA_PRODUCT_GLOBAL_IDENTIFIER" default:"G08010305"`
 	// ProductAttributeSetID defines Falabella attribute-set identifier values.
 	ProductAttributeSetID string `mapstructure:"FALABELLA_PRODUCT_ATTRIBUTE_SET_ID" default:"5"`
+	// ProductOperatorCode defines Falabella business-unit operator code values.
+	ProductOperatorCode string `mapstructure:"FALABELLA_PRODUCT_OPERATOR_CODE" default:"FACO"`
+	// ProductImageBaseURL defines public base URL values used to expose asset keys as Falabella image URLs.
+	ProductImageBaseURL string `mapstructure:"FALABELLA_PRODUCT_IMAGE_BASE_URL" default:""`
+	// SyncStatusCron defines the cron expression used for periodic feed status resolution.
+	SyncStatusCron string `mapstructure:"FALABELLA_SYNC_STATUS_CRON" default:"*/5 * * * *"`
+	// SyncStatusBatchSize defines the maximum number of pending feeds resolved per cron tick.
+	SyncStatusBatchSize int `mapstructure:"FALABELLA_SYNC_STATUS_BATCH_SIZE" default:"50"`
 }

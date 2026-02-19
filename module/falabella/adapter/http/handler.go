@@ -11,6 +11,9 @@ import (
 	corehttp "mannaiah/module/core/http"
 	brandservice "mannaiah/module/falabella/application/brand/service"
 	productsyncservice "mannaiah/module/falabella/application/productsync/service"
+	syncstatusservice "mannaiah/module/falabella/application/syncstatus/service"
+	syncdomain "mannaiah/module/falabella/domain/sync"
+	"mannaiah/module/falabella/port"
 )
 
 var (
@@ -44,18 +47,30 @@ type ProductSyncService interface {
 	SyncProducts(ctx context.Context, ids []string) (*productsyncservice.Summary, error)
 }
 
+// SyncStatusService defines Falabella sync status use-case behavior required by HTTP handlers.
+type SyncStatusService interface {
+	// GetByFeedID retrieves a sync status entry by Falabella feed identifier.
+	GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error)
+	// GetByProductID retrieves sync status entries by source product identifier.
+	GetByProductID(ctx context.Context, productID string) ([]syncdomain.SyncEntry, error)
+	// ResolveFeedStatus queries Falabella feed status and updates the entry resolution.
+	ResolveFeedStatus(ctx context.Context, feedID string) (*syncstatusservice.ResolveResult, error)
+}
+
 // Handler defines HTTP route handlers for Falabella integration endpoints.
 type Handler struct {
 	// service defines Falabella brand service dependencies.
 	service Service
 	// productSyncService defines Falabella product-sync service dependencies.
 	productSyncService ProductSyncService
+	// syncStatusService defines optional Falabella sync status service dependencies.
+	syncStatusService SyncStatusService
 	// authorizer defines optional auth dependency for protected endpoints.
 	authorizer Authorizer
 }
 
 // NewHandler creates Falabella HTTP handlers.
-func NewHandler(service Service, productSyncService ProductSyncService, authorizers ...Authorizer) (*Handler, error) {
+func NewHandler(service Service, productSyncService ProductSyncService, syncStatusServices ...SyncStatusService) (*Handler, error) {
 	if service == nil {
 		return nil, ErrNilService
 	}
@@ -63,12 +78,12 @@ func NewHandler(service Service, productSyncService ProductSyncService, authoriz
 		return nil, ErrNilProductSyncService
 	}
 
-	var authorizer Authorizer
-	if len(authorizers) > 0 {
-		authorizer = authorizers[0]
+	var syncStatusService SyncStatusService
+	if len(syncStatusServices) > 0 && syncStatusServices[0] != nil {
+		syncStatusService = syncStatusServices[0]
 	}
 
-	return &Handler{service: service, productSyncService: productSyncService, authorizer: authorizer}, nil
+	return &Handler{service: service, productSyncService: productSyncService, syncStatusService: syncStatusService}, nil
 }
 
 // SetAuthorizer configures endpoint authentication and authorization dependencies.
@@ -85,6 +100,9 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/falabella/brands", h.protect("products:read", h.getBrands))
 	router.Post("/falabella/sync/products", h.protect("products:update", h.syncProducts))
 	router.Post("/falabella/sync/products/:id", h.protect("products:update", h.syncProductByID))
+	router.Get("/falabella/sync/status/feed/:feedId", h.protect("products:read", h.getSyncStatusByFeed))
+	router.Get("/falabella/sync/status/product/:productId", h.protect("products:read", h.getSyncStatusByProduct))
+	router.Post("/falabella/sync/status/feed/:feedId/resolve", h.protect("products:update", h.resolveFeedStatus))
 }
 
 // getBrands retrieves Falabella brands through integration service dependencies.
@@ -143,6 +161,53 @@ func (h *Handler) syncProductByID(ctx corehttp.Context) error {
 	return ctx.Status(200).JSON(summary)
 }
 
+// getSyncStatusByFeed retrieves sync status by Falabella feed identifier.
+func (h *Handler) getSyncStatusByFeed(ctx corehttp.Context) error {
+	if h.syncStatusService == nil {
+		return corehttp.NewAppError(503, "sync_status_unavailable", errors.New("sync status service is not configured"))
+	}
+
+	entry, err := h.syncStatusService.GetByFeedID(ctx.Context(), strings.TrimSpace(ctx.Params("feedId")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(mapSyncEntryResponse(entry))
+}
+
+// getSyncStatusByProduct retrieves sync status entries by source product identifier.
+func (h *Handler) getSyncStatusByProduct(ctx corehttp.Context) error {
+	if h.syncStatusService == nil {
+		return corehttp.NewAppError(503, "sync_status_unavailable", errors.New("sync status service is not configured"))
+	}
+
+	entries, err := h.syncStatusService.GetByProductID(ctx.Context(), strings.TrimSpace(ctx.Params("productId")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	response := make([]syncStatusEntryResponse, 0, len(entries))
+	for i := range entries {
+		response = append(response, mapSyncEntryResponse(&entries[i]))
+	}
+
+	return ctx.Status(200).JSON(response)
+}
+
+// resolveFeedStatus resolves Falabella feed status and updates sync entry.
+func (h *Handler) resolveFeedStatus(ctx corehttp.Context) error {
+	if h.syncStatusService == nil {
+		return corehttp.NewAppError(503, "sync_status_unavailable", errors.New("sync status service is not configured"))
+	}
+
+	result, err := h.syncStatusService.ResolveFeedStatus(ctx.Context(), strings.TrimSpace(ctx.Params("feedId")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(result)
+}
+
 // protect wraps endpoint handlers with optional authentication and permission checks.
 func (h *Handler) protect(permission string, next corehttp.Handler) corehttp.Handler {
 	if h == nil || h.authorizer == nil {
@@ -178,6 +243,18 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, productsyncservice.ErrInvalidProductID) {
 		return corehttp.NewAppError(400, "invalid_product_id", err)
 	}
+	if errors.Is(err, syncstatusservice.ErrInvalidFeedID) {
+		return corehttp.NewAppError(400, "invalid_feed_id", err)
+	}
+	if errors.Is(err, syncstatusservice.ErrInvalidProductID) {
+		return corehttp.NewAppError(400, "invalid_product_id", err)
+	}
+	if errors.Is(err, syncstatusservice.ErrFeedNotFinished) {
+		return corehttp.NewAppError(409, "feed_not_finished", err)
+	}
+	if errors.Is(err, port.ErrSyncEntryNotFound) {
+		return corehttp.NewAppError(404, "sync_entry_not_found", err)
+	}
 
 	return corehttp.NewAppError(500, "internal_server_error", err)
 }
@@ -186,4 +263,43 @@ func (h *Handler) mapError(err error) error {
 type syncProductsRequest struct {
 	// IDs defines optional product IDs to synchronize.
 	IDs []string `json:"ids"`
+}
+
+// syncStatusEntryResponse defines sync status entry response values.
+type syncStatusEntryResponse struct {
+	// FeedID defines Falabella feed identifier values.
+	FeedID string `json:"feedId"`
+	// ProductID defines source product identifier values.
+	ProductID string `json:"productId"`
+	// SKU defines seller SKU values.
+	SKU string `json:"sku"`
+	// Action defines sync operation type values.
+	Action string `json:"action"`
+	// Status defines feed resolution status values.
+	Status string `json:"status"`
+	// SyncedAt defines sync submission timestamp values.
+	SyncedAt string `json:"syncedAt"`
+	// ResolvedAt defines optional feed resolution timestamp values.
+	ResolvedAt string `json:"resolvedAt,omitempty"`
+}
+
+// mapSyncEntryResponse maps domain sync entries to HTTP response values.
+func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
+	if entry == nil {
+		return syncStatusEntryResponse{}
+	}
+
+	response := syncStatusEntryResponse{
+		FeedID:    entry.FeedID,
+		ProductID: entry.ProductID,
+		SKU:       entry.SKU,
+		Action:    entry.Action.String(),
+		Status:    entry.Status.String(),
+		SyncedAt:  entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
+	}
+	if entry.ResolvedAt != nil {
+		response.ResolvedAt = entry.ResolvedAt.UTC().Format("2006-01-02T15:04:05Z")
+	}
+
+	return response
 }
