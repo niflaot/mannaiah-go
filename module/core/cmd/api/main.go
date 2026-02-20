@@ -9,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"mannaiah/module/assets"
 	assetevent "mannaiah/module/assets/adapter/event"
 	assetstorage "mannaiah/module/assets/adapter/storage"
@@ -27,6 +25,8 @@ import (
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
+	"mannaiah/module/falabella"
+	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	"mannaiah/module/orders"
 	ordercontacts "mannaiah/module/orders/adapter/contacts"
 	orderevent "mannaiah/module/orders/adapter/event"
@@ -34,6 +34,9 @@ import (
 	"mannaiah/module/products"
 	"mannaiah/module/woocommerce"
 	wooevent "mannaiah/module/woocommerce/adapter/event"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // main executes startup bootstrap and blocks until process shutdown.
@@ -56,9 +59,10 @@ func run(ctx context.Context, envFile string) error {
 	var messagingCfg coremsgplatform.Config
 	var authCfg auth.Config
 	var cronCfg corecron.Config
+	var falabellaCfg falabella.Config
 	var wooCfg woocommerce.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &wooCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &falabellaCfg, &wooCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -170,6 +174,40 @@ func run(ctx context.Context, envFile string) error {
 	if err := productsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load products module: %w", err)
 	}
+
+	falabellaCatalog, err := falabellaproducts.NewCatalog(
+		productsModule.Service(),
+		falabellaproducts.WithVariationService(productsModule.VariationService()),
+		falabellaproducts.WithAssetService(assetsModule.Service()),
+		falabellaproducts.WithAssetBaseURL(falabellaCfg.ProductImageBaseURL),
+	)
+	if err != nil {
+		return fmt.Errorf("initialize falabella products catalog: %w", err)
+	}
+	falabellaModule, err := falabella.New(falabellaCfg, logger, falabellaCatalog)
+	if err != nil {
+		return fmt.Errorf("initialize falabella module: %w", err)
+	}
+	if syncStatusErr := falabellaModule.ConfigureSyncStatus(db); syncStatusErr != nil {
+		return fmt.Errorf("configure falabella sync status: %w", syncStatusErr)
+	}
+	falabellaScheduler, err := corecron.NewScheduler(cronCfg, logger)
+	if err != nil {
+		return fmt.Errorf("create falabella scheduler: %w", err)
+	}
+	falabellaModule.ConfigureScheduler(falabellaScheduler)
+	falabellaModule.SetAuthorizer(authModule)
+	if err := falabellaModule.Load(runtime); err != nil {
+		return fmt.Errorf("load falabella module: %w", err)
+	}
+	if err := falabellaModule.Start(ctx); err != nil {
+		return fmt.Errorf("start falabella module: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = falabellaModule.Stop(stopCtx)
+	}()
 
 	orderCustomerSource, err := ordercontacts.NewSource(contactsModule.Service())
 	if err != nil {

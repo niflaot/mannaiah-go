@@ -23,6 +23,7 @@ jobs:
           - module/orders
           - module/assets
           - module/products
+          - module/falabella
           - module/woocommerce
 
     defaults:

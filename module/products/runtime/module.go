@@ -3,8 +3,6 @@ package runtime
 import (
 	"context"
 
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	corehttp "mannaiah/module/core/http"
 	producthttp "mannaiah/module/products/adapter/http/product"
 	variationhttp "mannaiah/module/products/adapter/http/variation"
@@ -12,6 +10,9 @@ import (
 	variationstore "mannaiah/module/products/adapter/store/variation"
 	productapplication "mannaiah/module/products/application/product"
 	variationapplication "mannaiah/module/products/application/variation"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // Module defines composition-root wiring for product endpoints.
@@ -101,6 +102,15 @@ func (m *Module) Service() productapplication.Service {
 	}
 
 	return m.productService
+}
+
+// VariationService returns variation application service dependencies for module integrations.
+func (m *Module) VariationService() variationapplication.Service {
+	if m == nil {
+		return nil
+	}
+
+	return m.variationService
 }
 
 // SetAuthorizer configures endpoint authentication and permission dependencies.

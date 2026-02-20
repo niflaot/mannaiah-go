@@ -24,6 +24,7 @@ require (
 	mannaiah/module/assets v0.0.0
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
+	mannaiah/module/falabella v0.0.0
 	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
 	mannaiah/module/woocommerce v0.0.0
@@ -105,6 +106,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/swaggo/files/v2 v2.0.2 // indirect
 	github.com/swaggo/swag v1.16.4 // indirect
+	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.56.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
@@ -127,6 +129,8 @@ replace mannaiah/module/contacts => ../contacts
 replace mannaiah/module/assets => ../assets
 
 replace mannaiah/module/auth => ../auth
+
+replace mannaiah/module/falabella => ../falabella
 
 replace mannaiah/module/products => ../products
 
