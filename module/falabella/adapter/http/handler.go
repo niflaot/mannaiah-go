@@ -348,13 +348,13 @@ func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
 
 	response := syncStatusEntryResponse{
 		ExecutionID: entry.ExecutionID,
-		FeedID:    entry.FeedID,
-		ProductID: entry.ProductID,
-		SKU:       entry.SKU,
-		Step:      entry.Step.String(),
-		Action:    entry.Action.String(),
-		Status:    entry.Status.String(),
-		SyncedAt:  entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		FeedID:      entry.FeedID,
+		ProductID:   entry.ProductID,
+		SKU:         entry.SKU,
+		Step:        entry.Step.String(),
+		Action:      entry.Action.String(),
+		Status:      entry.Status.String(),
+		SyncedAt:    entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	if entry.ResolvedAt != nil {
 		response.ResolvedAt = entry.ResolvedAt.UTC().Format("2006-01-02T15:04:05Z")

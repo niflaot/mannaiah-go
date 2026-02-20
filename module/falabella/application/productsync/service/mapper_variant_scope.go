@@ -168,4 +168,3 @@ func normalizeFalabellaAttributeKeys(attributes map[string]string) {
 		delete(attributes, key)
 	}
 }
-

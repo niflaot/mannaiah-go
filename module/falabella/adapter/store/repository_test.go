@@ -72,9 +72,9 @@ func TestEnsureSchemaMigrationFromLegacy(t *testing.T) {
 	// Verify we can create an entry with feed_id as PK (no id column).
 	entry := &syncdomain.SyncEntry{
 		ProductID: "prod-1", SKU: "SKU-001", FeedID: "feed-legacy",
-		Action:    syncdomain.SyncActionCreate,
-		Status:    syncdomain.SyncStatusPending,
-		SyncedAt:  time.Now().UTC(),
+		Action:   syncdomain.SyncActionCreate,
+		Status:   syncdomain.SyncStatusPending,
+		SyncedAt: time.Now().UTC(),
 	}
 	if err := repo.Create(context.Background(), entry); err != nil {
 		t.Fatalf("Create() after legacy migration error = %v", err)

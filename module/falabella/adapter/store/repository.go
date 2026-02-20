@@ -10,8 +10,8 @@ import (
 	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
 
-	"gorm.io/gorm/clause"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -282,14 +282,14 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 
 	return syncStatusRecord{
 		ExecutionID: executionID,
-		FeedID:     strings.TrimSpace(entry.FeedID),
-		ProductID:  strings.TrimSpace(entry.ProductID),
-		SKU:        strings.TrimSpace(entry.SKU),
-		Step:       step.String(),
-		Action:     string(entry.Action),
-		Status:     string(entry.Status),
-		SyncedAt:   syncedAt,
-		ResolvedAt: entry.ResolvedAt,
+		FeedID:      strings.TrimSpace(entry.FeedID),
+		ProductID:   strings.TrimSpace(entry.ProductID),
+		SKU:         strings.TrimSpace(entry.SKU),
+		Step:        step.String(),
+		Action:      string(entry.Action),
+		Status:      string(entry.Status),
+		SyncedAt:    syncedAt,
+		ResolvedAt:  entry.ResolvedAt,
 	}
 }
 
@@ -297,14 +297,14 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 func toDomain(record syncStatusRecord) syncdomain.SyncEntry {
 	return syncdomain.SyncEntry{
 		ExecutionID: record.ExecutionID,
-		FeedID:     record.FeedID,
-		ProductID:  record.ProductID,
-		SKU:        record.SKU,
-		Step:       syncdomain.SyncStep(record.Step),
-		Action:     syncdomain.SyncAction(record.Action),
-		Status:     syncdomain.SyncStatus(record.Status),
-		SyncedAt:   record.SyncedAt,
-		ResolvedAt: record.ResolvedAt,
+		FeedID:      record.FeedID,
+		ProductID:   record.ProductID,
+		SKU:         record.SKU,
+		Step:        syncdomain.SyncStep(record.Step),
+		Action:      syncdomain.SyncAction(record.Action),
+		Status:      syncdomain.SyncStatus(record.Status),
+		SyncedAt:    record.SyncedAt,
+		ResolvedAt:  record.ResolvedAt,
 	}
 }
 

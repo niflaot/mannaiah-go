@@ -50,13 +50,13 @@ func (s *ProductSyncService) recordSyncEntry(ctx context.Context, executionID, p
 
 	entry := &syncdomain.SyncEntry{
 		ExecutionID: strings.TrimSpace(executionID),
-		ProductID: strings.TrimSpace(productID),
-		SKU:       strings.TrimSpace(sku),
-		FeedID:    strings.TrimSpace(feedID),
-		Step:      step,
-		Action:    action,
-		Status:    syncdomain.SyncStatusPending,
-		SyncedAt:  time.Now().UTC(),
+		ProductID:   strings.TrimSpace(productID),
+		SKU:         strings.TrimSpace(sku),
+		FeedID:      strings.TrimSpace(feedID),
+		Step:        step,
+		Action:      action,
+		Status:      syncdomain.SyncStatusPending,
+		SyncedAt:    time.Now().UTC(),
 	}
 
 	if err := s.recorder.RecordEntry(ctx, entry); err != nil {
