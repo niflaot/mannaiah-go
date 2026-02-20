@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	errorspkg "errors"
+	"sync"
 	"testing"
+	"time"
 
 	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
@@ -21,6 +23,8 @@ type sourceMock struct {
 	syncImagesErr error
 	// syncedImages defines captured sync-image payload values.
 	syncedImages []port.SyncProductImagesRequest
+	// syncImagesResponse defines SyncProductImages() payload values.
+	syncImagesResponse []byte
 }
 
 const testSyncResponseXML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -47,6 +51,15 @@ const testSyncResponseWithWarningsXML = `<?xml version="1.0" encoding="UTF-8"?>
   </Body>
 </SuccessResponse>`
 
+const testImageSyncResponseXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SuccessResponse>
+	<Head>
+		<RequestId>feed-img-999</RequestId>
+		<RequestAction>Image</RequestAction>
+	</Head>
+	<Body/>
+</SuccessResponse>`
+
 // Validate returns configured integration-validation errors.
 func (m *sourceMock) Validate(ctx context.Context) error {
 	return m.validateErr
@@ -67,6 +80,9 @@ func (m *sourceMock) SyncProductImages(ctx context.Context, request port.SyncPro
 	m.syncedImages = append(m.syncedImages, request)
 	if m.syncImagesErr != nil {
 		return nil, m.syncImagesErr
+	}
+	if len(m.syncImagesResponse) > 0 {
+		return m.syncImagesResponse, nil
 	}
 
 	return []byte(`<SuccessResponse/>`), nil
@@ -173,6 +189,58 @@ func TestSyncProduct(t *testing.T) {
 	if summary.Results[0].FeedID != "feed-abc-123" {
 		t.Fatalf("FeedID = %q, want %q", summary.Results[0].FeedID, "feed-abc-123")
 	}
+	if summary.ExecutionID == "" {
+		t.Fatalf("ExecutionID should not be empty")
+	}
+}
+
+// TestSyncProductWithImageFeedAggregation verifies one result can expose both product and image feed IDs.
+func TestSyncProductWithImageFeedAggregation(t *testing.T) {
+	source := &sourceMock{syncImagesResponse: []byte(testImageSyncResponseXML)}
+	service, err := NewService(source, catalogMock{
+		product: &port.CatalogProduct{
+			ID:  "p-1",
+			SKU: "SKU-1",
+			Datasheets: []port.CatalogDatasheet{
+				{Realm: "falabella", Name: "Backpack", Description: "Backpack description"},
+			},
+			Images: []port.CatalogImage{
+				{URL: "https://cdn.example.com/1.jpg"},
+			},
+		},
+	}, Config{Realm: "falabella"})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncProduct(context.Background(), "p-1")
+	if syncErr != nil {
+		t.Fatalf("SyncProduct() error = %v", syncErr)
+	}
+	if summary.Synced != 1 {
+		t.Fatalf("summary.Synced = %d, want %d", summary.Synced, 1)
+	}
+	if summary.ExecutionID == "" {
+		t.Fatalf("ExecutionID should not be empty")
+	}
+	if len(summary.Results) != 1 {
+		t.Fatalf("len(summary.Results) = %d, want %d", len(summary.Results), 1)
+	}
+	if len(summary.Results[0].Feeds) != 2 {
+		t.Fatalf("len(result.Feeds) = %d, want %d", len(summary.Results[0].Feeds), 2)
+	}
+	if summary.Results[0].Feeds[0].Step != "product" {
+		t.Fatalf("first feed step = %q, want %q", summary.Results[0].Feeds[0].Step, "product")
+	}
+	if summary.Results[0].Feeds[0].FeedID != "feed-abc-123" {
+		t.Fatalf("first feed id = %q, want %q", summary.Results[0].Feeds[0].FeedID, "feed-abc-123")
+	}
+	if summary.Results[0].Feeds[1].Step != "image" {
+		t.Fatalf("second feed step = %q, want %q", summary.Results[0].Feeds[1].Step, "image")
+	}
+	if summary.Results[0].Feeds[1].FeedID != "feed-img-999" {
+		t.Fatalf("second feed id = %q, want %q", summary.Results[0].Feeds[1].FeedID, "feed-img-999")
+	}
 }
 
 // TestSyncProductWithVariants verifies parent/child variant sync behavior.
@@ -268,6 +336,88 @@ func TestSyncProducts(t *testing.T) {
 	}
 	if summary.Requested != 2 || summary.Synced != 1 || summary.Skipped != 1 || summary.Failed != 0 {
 		t.Fatalf("summary = %#v, want requested=2 synced=1 skipped=1 failed=0", summary)
+	}
+}
+
+// concurrentSourceMock defines source behavior for sync concurrency tests.
+type concurrentSourceMock struct {
+	// mutex guards active counters.
+	mutex sync.Mutex
+	// active defines currently running sync calls.
+	active int
+	// maxActive defines observed max concurrent sync calls.
+	maxActive int
+}
+
+// Validate returns nil.
+func (m *concurrentSourceMock) Validate(ctx context.Context) error { return nil }
+
+// SyncProduct tracks concurrent execution and returns success responses.
+func (m *concurrentSourceMock) SyncProduct(ctx context.Context, request port.SyncProductRequest) ([]byte, error) {
+	m.mutex.Lock()
+	m.active++
+	if m.active > m.maxActive {
+		m.maxActive = m.active
+	}
+	m.mutex.Unlock()
+
+	time.Sleep(20 * time.Millisecond)
+
+	m.mutex.Lock()
+	m.active--
+	m.mutex.Unlock()
+
+	return []byte(testSyncResponseXML), nil
+}
+
+// SyncProductImages returns no-op responses.
+func (m *concurrentSourceMock) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
+	return []byte(`<SuccessResponse/>`), nil
+}
+
+// TestSyncProductsUsesConcurrentWorkers verifies batch sync uses bounded parallelism.
+func TestSyncProductsUsesConcurrentWorkers(t *testing.T) {
+	source := &concurrentSourceMock{}
+	products := []port.CatalogProduct{
+		{ID: "p-1", SKU: "SKU-1", Datasheets: []port.CatalogDatasheet{{Realm: "falabella", Name: "N1", Description: "D1"}}},
+		{ID: "p-2", SKU: "SKU-2", Datasheets: []port.CatalogDatasheet{{Realm: "falabella", Name: "N2", Description: "D2"}}},
+		{ID: "p-3", SKU: "SKU-3", Datasheets: []port.CatalogDatasheet{{Realm: "falabella", Name: "N3", Description: "D3"}}},
+		{ID: "p-4", SKU: "SKU-4", Datasheets: []port.CatalogDatasheet{{Realm: "falabella", Name: "N4", Description: "D4"}}},
+	}
+
+	service, err := NewService(source, catalogMock{products: products}, Config{Realm: "falabella", SyncWorkers: 4})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncProducts(context.Background(), nil)
+	if syncErr != nil {
+		t.Fatalf("SyncProducts() error = %v", syncErr)
+	}
+	if summary.Synced != 4 {
+		t.Fatalf("summary.Synced = %d, want %d", summary.Synced, 4)
+	}
+	if source.maxActive < 2 {
+		t.Fatalf("maxActive = %d, want >= 2", source.maxActive)
+	}
+}
+
+// TestResolveSyncWorkerCount verifies worker-count normalization behavior.
+func TestResolveSyncWorkerCount(t *testing.T) {
+	if got := resolveSyncWorkerCount(0, 0); got != 1 {
+		t.Fatalf("resolveSyncWorkerCount(0,0) = %d, want %d", got, 1)
+	}
+	if got := resolveSyncWorkerCount(0, 1); got != 1 {
+		t.Fatalf("resolveSyncWorkerCount(0,1) = %d, want %d", got, 1)
+	}
+	if got := resolveSyncWorkerCount(0, 10); got != defaultSyncWorkers {
+		t.Fatalf("resolveSyncWorkerCount(0,10) = %d, want %d", got, defaultSyncWorkers)
+	}
+	if got := resolveSyncWorkerCount(maxSyncWorkers+5, 100); got != maxSyncWorkers {
+		t.Fatalf("resolveSyncWorkerCount(max+5,100) = %d, want %d", got, maxSyncWorkers)
+	}
+	if got := resolveSyncWorkerCount(10, 3); got != 3 {
+		t.Fatalf("resolveSyncWorkerCount(10,3) = %d, want %d", got, 3)
 	}
 }
 

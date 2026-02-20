@@ -314,6 +314,8 @@ func TestSyncProductsRouteWithoutBody(t *testing.T) {
 
 // syncStatusServiceMock defines sync status service behavior for handler tests.
 type syncStatusServiceMock struct {
+	// execution defines GetExecutionByID() return values.
+	execution *syncdomain.SyncExecution
 	// entry defines GetByFeedID() return values.
 	entry *syncdomain.SyncEntry
 	// entries defines GetByProductID() return values.
@@ -324,12 +326,28 @@ type syncStatusServiceMock struct {
 	err error
 }
 
+// GetExecutionByID returns configured execution/error values.
+func (m *syncStatusServiceMock) GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.execution, nil
+}
+
 // GetByFeedID returns configured entry/error values.
 func (m *syncStatusServiceMock) GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	return m.entry, nil
+}
+
+// GetByExecutionID returns configured entries/error values.
+func (m *syncStatusServiceMock) GetByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.entries, nil
 }
 
 // GetByProductID returns configured entries/error values.
@@ -364,6 +382,28 @@ func TestGetSyncStatusByFeedRoute(t *testing.T) {
 	server.RegisterRoutes(handler.RegisterRoutes)
 
 	request, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/falabella/sync/status/feed/feed-abc", nil)
+	response, testErr := server.App().Test(request)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if response.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, stdhttp.StatusOK)
+	}
+}
+
+// TestGetSyncStatusExecutionRoute verifies execution lookup route behavior.
+func TestGetSyncStatusExecutionRoute(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	statusSvc := &syncStatusServiceMock{execution: &syncdomain.SyncExecution{ExecutionID: "exec-1", StartedAt: now}}
+	handler, err := NewHandler(&serviceMock{payload: []byte(`{"ok":true}`)}, &productSyncServiceMock{}, statusSvc)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	server, _ := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8306}, nil)
+	server.RegisterRoutes(handler.RegisterRoutes)
+
+	request, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/falabella/sync/status/execution/exec-1", nil)
 	response, testErr := server.App().Test(request)
 	if testErr != nil {
 		t.Fatalf("App().Test() error = %v", testErr)

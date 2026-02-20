@@ -13,7 +13,8 @@ func TestResolveContext(t *testing.T) {
 	if resolveContext(context.Background()) == nil {
 		t.Fatalf("resolveContext(background) should not be nil")
 	}
-	if resolveContext(nil) == nil {
+	var nilCtx context.Context
+	if resolveContext(nilCtx) == nil {
 		t.Fatalf("resolveContext(nil) should not be nil")
 	}
 }

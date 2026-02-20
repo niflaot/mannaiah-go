@@ -23,6 +23,15 @@ func TestNormalizeScopedAttributeKey(t *testing.T) {
 		{name: "Talla mixed case", input: "Talla", want: "Talla"},
 		{name: "businessunits", input: "businessunits", want: "BusinessUnits"},
 		{name: "businessunit", input: "businessunit", want: "BusinessUnits"},
+		{name: "operator code", input: "operator_code", want: "OperatorCode"},
+		{name: "stock falabella", input: "QuantityFalabella", want: "Stock"},
+		{name: "status", input: "status", want: "Status"},
+		{name: "price falabella", input: "PriceFalabella", want: "PriceFalabella"},
+		{name: "special price alias", input: "SpecialPrice", want: "SalePriceFalabella"},
+		{name: "special from date alias", input: "SpecialFromDate", want: "SaleStartDateFalabella"},
+		{name: "special to date alias", input: "SpecialToDate", want: "SaleEndDateFalabella"},
+		{name: "tax percentage alias", input: "TaxPercentage", want: "TaxPercentage"},
+		{name: "tax class alias", input: "TaxClass", want: "TaxClass"},
 		{name: "unknown passthrough", input: "custom_field", want: "custom_field"},
 		{name: "empty", input: "", want: ""},
 		{name: "whitespace only", input: "   ", want: ""},
@@ -68,10 +77,13 @@ func TestNormalizeAttributeToken(t *testing.T) {
 // TestNormalizeFalabellaAttributeKeys verifies top-level attribute alias canonicalization behavior.
 func TestNormalizeFalabellaAttributeKeys(t *testing.T) {
 	attrs := map[string]string{
-		"colorbase":     "Blue",
-		"size":          "L",
-		"businessunits": "MEN",
-		"material":      "Polyester",
+		"colorbase":         "Blue",
+		"size":              "L",
+		"businessunits":     "MEN",
+		"PriceFalabella":    "165000",
+		"TaxPercentage":     "19",
+		"QuantityFalabella": "7",
+		"material":          "Polyester",
 	}
 
 	normalizeFalabellaAttributeKeys(attrs)
@@ -85,6 +97,15 @@ func TestNormalizeFalabellaAttributeKeys(t *testing.T) {
 	if attrs["BusinessUnits"] != "MEN" {
 		t.Fatalf("BusinessUnits = %q, want %q", attrs["BusinessUnits"], "MEN")
 	}
+	if attrs["PriceFalabella"] != "165000" {
+		t.Fatalf("PriceFalabella = %q, want %q", attrs["PriceFalabella"], "165000")
+	}
+	if attrs["TaxPercentage"] != "19" {
+		t.Fatalf("TaxPercentage = %q, want %q", attrs["TaxPercentage"], "19")
+	}
+	if attrs["Stock"] != "7" {
+		t.Fatalf("Stock = %q, want %q", attrs["Stock"], "7")
+	}
 	if attrs["material"] != "Polyester" {
 		t.Fatalf("material = %q, want %q", attrs["material"], "Polyester")
 	}
@@ -96,6 +117,9 @@ func TestNormalizeFalabellaAttributeKeys(t *testing.T) {
 	}
 	if _, ok := attrs["businessunits"]; ok {
 		t.Fatalf("attrs should not contain alias businessunits after normalization")
+	}
+	if _, ok := attrs["QuantityFalabella"]; ok {
+		t.Fatalf("attrs should not contain alias QuantityFalabella after normalization")
 	}
 }
 

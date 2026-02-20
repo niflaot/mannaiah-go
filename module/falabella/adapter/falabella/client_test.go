@@ -277,7 +277,9 @@ func TestSyncProductUpdateSuccess(t *testing.T) {
 		time.Now,
 	)
 
-	payload, err := client.SyncProduct(context.Background(), syncProductRequestFixture())
+	request := syncProductRequestFixture()
+	request.ParentSKU = ""
+	payload, err := client.SyncProduct(context.Background(), request)
 	if err != nil {
 		t.Fatalf("SyncProduct() error = %v", err)
 	}
@@ -319,7 +321,9 @@ func TestSyncProductCreateWhenMissing(t *testing.T) {
 		time.Now,
 	)
 
-	payload, err := client.SyncProduct(context.Background(), syncProductRequestFixture())
+	request := syncProductRequestFixture()
+	request.ParentSKU = ""
+	payload, err := client.SyncProduct(context.Background(), request)
 	if err != nil {
 		t.Fatalf("SyncProduct() error = %v", err)
 	}
@@ -328,6 +332,99 @@ func TestSyncProductCreateWhenMissing(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("calls = %d, want 2", calls)
+	}
+}
+
+// TestSyncProductUpdateWhenParentSKUExists verifies ProductUpdate behavior when child SKU is missing but parent SKU exists.
+func TestSyncProductUpdateWhenParentSKUExists(t *testing.T) {
+	calls := 0
+	doer := &doerMock{fn: func(req *http.Request, body []byte) (*http.Response, error) {
+		calls++
+		action := req.URL.Query().Get("Action")
+		skuList := req.URL.Query().Get("SkuSellerList")
+
+		switch action {
+		case getProductsAction:
+			switch {
+			case strings.Contains(skuList, "SKU-CHILD"):
+				return newHTTPResponse(http.StatusOK, http.Header{"Content-Type": []string{"application/json"}}, `{"SuccessResponse":{"Body":{"Products":{"Product":[]}}}}`), nil
+			case strings.Contains(skuList, "SKU-PARENT"):
+				return newHTTPResponse(http.StatusOK, http.Header{"Content-Type": []string{"application/json"}}, `{"SuccessResponse":{"Body":{"Products":{"Product":[{"SellerSku":"SKU-PARENT"}]}}}}`), nil
+			default:
+				t.Fatalf("unexpected SkuSellerList = %q", skuList)
+				return nil, nil
+			}
+		case productUpdateAction:
+			if !strings.Contains(string(body), "<SellerSku>SKU-CHILD</SellerSku>") {
+				t.Fatalf("expected update payload with child sku, got: %s", string(body))
+			}
+			return newHTTPResponse(http.StatusOK, http.Header{"Content-Type": []string{"application/json"}}, `{"SuccessResponse":{}}`), nil
+		default:
+			t.Fatalf("unexpected action: %s", action)
+			return nil, nil
+		}
+	}}
+	client := newClientWithDependencies(
+		Config{URL: "https://sellercenter-api.falabella.com", UserID: "user-1", APIKey: "key-1", Version: "1.0", Timeout: 5 * time.Second},
+		doer,
+		time.Now,
+	)
+
+	request := syncProductRequestFixture()
+	request.SKU = "SKU-CHILD"
+	request.ParentSKU = "SKU-PARENT"
+
+	payload, err := client.SyncProduct(context.Background(), request)
+	if err != nil {
+		t.Fatalf("SyncProduct() error = %v", err)
+	}
+	if string(payload) != `{"SuccessResponse":{}}` {
+		t.Fatalf("payload = %s", payload)
+	}
+	if calls != 3 {
+		t.Fatalf("calls = %d, want 3", calls)
+	}
+}
+
+// TestSyncProductCreateWhenParentAndChildMissing verifies ProductCreate behavior when neither child nor parent SKU exists.
+func TestSyncProductCreateWhenParentAndChildMissing(t *testing.T) {
+	calls := 0
+	doer := &doerMock{fn: func(req *http.Request, body []byte) (*http.Response, error) {
+		calls++
+		action := req.URL.Query().Get("Action")
+
+		switch action {
+		case getProductsAction:
+			return newHTTPResponse(http.StatusOK, http.Header{"Content-Type": []string{"application/json"}}, `{"SuccessResponse":{"Body":{"Products":{"Product":[]}}}}`), nil
+		case productCreateAction:
+			if !strings.Contains(string(body), "<SellerSku>SKU-CHILD</SellerSku>") {
+				t.Fatalf("expected create payload with child sku, got: %s", string(body))
+			}
+			return newHTTPResponse(http.StatusOK, http.Header{"Content-Type": []string{"application/json"}}, `{"SuccessResponse":{}}`), nil
+		default:
+			t.Fatalf("unexpected action: %s", action)
+			return nil, nil
+		}
+	}}
+	client := newClientWithDependencies(
+		Config{URL: "https://sellercenter-api.falabella.com", UserID: "user-1", APIKey: "key-1", Version: "1.0", Timeout: 5 * time.Second},
+		doer,
+		time.Now,
+	)
+
+	request := syncProductRequestFixture()
+	request.SKU = "SKU-CHILD"
+	request.ParentSKU = "SKU-PARENT"
+
+	payload, err := client.SyncProduct(context.Background(), request)
+	if err != nil {
+		t.Fatalf("SyncProduct() error = %v", err)
+	}
+	if string(payload) != `{"SuccessResponse":{}}` {
+		t.Fatalf("payload = %s", payload)
+	}
+	if calls != 3 {
+		t.Fatalf("calls = %d, want 3", calls)
 	}
 }
 

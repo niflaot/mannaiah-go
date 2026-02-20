@@ -10,6 +10,7 @@ import (
 	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
 
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm"
 )
 
@@ -20,12 +21,16 @@ var (
 
 // syncStatusRecord defines sync status persistence schema.
 type syncStatusRecord struct {
+	// ExecutionID defines parent sync execution identifier values.
+	ExecutionID string `gorm:"index;size:191;not null"`
 	// FeedID defines Falabella feed identifier values (primary key).
 	FeedID string `gorm:"primaryKey;size:191;not null"`
 	// ProductID defines source product identifier values.
 	ProductID string `gorm:"index;size:128;not null"`
 	// SKU defines seller SKU values.
 	SKU string `gorm:"size:128;not null"`
+	// Step defines logical step values for this feed (product/image).
+	Step string `gorm:"size:16;not null"`
 	// Action defines sync operation type values.
 	Action string `gorm:"size:16;not null"`
 	// Status defines feed resolution status values.
@@ -34,6 +39,19 @@ type syncStatusRecord struct {
 	SyncedAt time.Time `gorm:"not null"`
 	// ResolvedAt defines optional feed resolution timestamp values.
 	ResolvedAt *time.Time
+}
+
+// syncExecutionRecord defines parent sync execution persistence schema.
+type syncExecutionRecord struct {
+	// ExecutionID defines one unique sync execution identifier.
+	ExecutionID string `gorm:"primaryKey;size:191;not null"`
+	// StartedAt defines sync execution start timestamp values.
+	StartedAt time.Time `gorm:"not null"`
+}
+
+// TableName defines parent execution table name.
+func (syncExecutionRecord) TableName() string {
+	return "falabella_sync_execution"
 }
 
 // TableName defines storage table name.
@@ -75,19 +93,84 @@ func (r *Repository) EnsureSchema(ctx context.Context) error {
 	if err := r.db.WithContext(ctx).AutoMigrate(&syncStatusRecord{}); err != nil {
 		return fmt.Errorf("migrate falabella sync status schema: %w", err)
 	}
+	if err := r.db.WithContext(ctx).AutoMigrate(&syncExecutionRecord{}); err != nil {
+		return fmt.Errorf("migrate falabella sync execution schema: %w", err)
+	}
+
+	return nil
+}
+
+// CreateExecution persists one sync execution parent record.
+func (r *Repository) CreateExecution(ctx context.Context, execution *syncdomain.SyncExecution) error {
+	if execution == nil {
+		return errors.New("sync execution must not be nil")
+	}
+
+	record := syncExecutionRecord{
+		ExecutionID: strings.TrimSpace(execution.ExecutionID),
+		StartedAt:   execution.StartedAt,
+	}
+	if record.ExecutionID == "" {
+		return errors.New("sync execution id must not be empty")
+	}
+	if record.StartedAt.IsZero() {
+		record.StartedAt = time.Now().UTC()
+	}
+
+	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&record).Error; err != nil {
+		return fmt.Errorf("create sync execution: %w", err)
+	}
 
 	return nil
 }
 
 // Create persists a new sync status entry.
 func (r *Repository) Create(ctx context.Context, entry *syncdomain.SyncEntry) error {
-	record := toRecord(*entry)
+	if entry == nil {
+		return errors.New("sync entry must not be nil")
+	}
 
-	if err := r.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return wrapWriteError("create", err)
+	record := toRecord(*entry)
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		execution := syncExecutionRecord{ExecutionID: record.ExecutionID, StartedAt: record.SyncedAt}
+		if execution.ExecutionID == "" {
+			return errors.New("sync execution id must not be empty")
+		}
+		if execution.StartedAt.IsZero() {
+			execution.StartedAt = time.Now().UTC()
+		}
+
+		if createExecutionErr := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&execution).Error; createExecutionErr != nil {
+			return fmt.Errorf("create sync execution: %w", createExecutionErr)
+		}
+
+		if createEntryErr := tx.Create(&record).Error; createEntryErr != nil {
+			return wrapWriteError("create", createEntryErr)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// GetExecutionByID retrieves one sync execution by identifier.
+func (r *Repository) GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error) {
+	trimmedExecutionID := strings.TrimSpace(executionID)
+
+	var record syncExecutionRecord
+	if err := r.db.WithContext(ctx).First(&record, "execution_id = ?", trimmedExecutionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, port.ErrSyncExecutionNotFound
+		}
+		return nil, fmt.Errorf("get sync execution record: %w", err)
+	}
+
+	execution := syncdomain.SyncExecution{ExecutionID: record.ExecutionID, StartedAt: record.StartedAt}
+	return &execution, nil
 }
 
 // GetByFeedID retrieves a sync status entry by Falabella feed identifier.
@@ -104,6 +187,23 @@ func (r *Repository) GetByFeedID(ctx context.Context, feedID string) (*syncdomai
 
 	entity := toDomain(record)
 	return &entity, nil
+}
+
+// ListByExecutionID retrieves child feed rows by execution identifier ordered by submission time.
+func (r *Repository) ListByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error) {
+	trimmedExecutionID := strings.TrimSpace(executionID)
+
+	var records []syncStatusRecord
+	if err := r.db.WithContext(ctx).Where("execution_id = ?", trimmedExecutionID).Order("synced_at ASC").Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("list sync status records by execution: %w", err)
+	}
+
+	entries := make([]syncdomain.SyncEntry, 0, len(records))
+	for _, record := range records {
+		entries = append(entries, toDomain(record))
+	}
+
+	return entries, nil
 }
 
 // GetByProductID retrieves sync status entries by source product identifier.
@@ -167,13 +267,28 @@ func (r *Repository) UpdateStatus(ctx context.Context, feedID string, status syn
 
 // toRecord maps domain sync entries to persistence records.
 func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
+	executionID := strings.TrimSpace(entry.ExecutionID)
+	if executionID == "" {
+		executionID = strings.TrimSpace(entry.FeedID)
+	}
+	step := entry.Step
+	if !step.IsValid() {
+		step = syncdomain.SyncStepProduct
+	}
+	syncedAt := entry.SyncedAt
+	if syncedAt.IsZero() {
+		syncedAt = time.Now().UTC()
+	}
+
 	return syncStatusRecord{
+		ExecutionID: executionID,
 		FeedID:     strings.TrimSpace(entry.FeedID),
 		ProductID:  strings.TrimSpace(entry.ProductID),
 		SKU:        strings.TrimSpace(entry.SKU),
+		Step:       step.String(),
 		Action:     string(entry.Action),
 		Status:     string(entry.Status),
-		SyncedAt:   entry.SyncedAt,
+		SyncedAt:   syncedAt,
 		ResolvedAt: entry.ResolvedAt,
 	}
 }
@@ -181,9 +296,11 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 // toDomain maps persistence records to domain sync entries.
 func toDomain(record syncStatusRecord) syncdomain.SyncEntry {
 	return syncdomain.SyncEntry{
+		ExecutionID: record.ExecutionID,
 		FeedID:     record.FeedID,
 		ProductID:  record.ProductID,
 		SKU:        record.SKU,
+		Step:       syncdomain.SyncStep(record.Step),
 		Action:     syncdomain.SyncAction(record.Action),
 		Status:     syncdomain.SyncStatus(record.Status),
 		SyncedAt:   record.SyncedAt,

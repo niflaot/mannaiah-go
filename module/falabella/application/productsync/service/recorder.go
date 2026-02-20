@@ -37,20 +37,23 @@ func (s *ProductSyncService) SetLogger(logger *zap.Logger) {
 }
 
 // recordSyncEntry persists sync status entries when a recorder is configured.
-func (s *ProductSyncService) recordSyncEntry(ctx context.Context, productID, sku, feedID string, actionResp *syncdomain.ActionResponse) {
+func (s *ProductSyncService) recordSyncEntry(ctx context.Context, executionID, productID, sku, feedID string, step syncdomain.SyncStep, action syncdomain.SyncAction) {
 	if s.recorder == nil || strings.TrimSpace(feedID) == "" {
 		return
 	}
-
-	action := syncdomain.SyncActionCreate
-	if actionResp != nil {
-		action = actionResp.SyncAction()
+	if !step.IsValid() {
+		step = syncdomain.SyncStepProduct
+	}
+	if !action.IsValid() {
+		action = syncdomain.SyncActionCreate
 	}
 
 	entry := &syncdomain.SyncEntry{
+		ExecutionID: strings.TrimSpace(executionID),
 		ProductID: strings.TrimSpace(productID),
 		SKU:       strings.TrimSpace(sku),
 		FeedID:    strings.TrimSpace(feedID),
+		Step:      step,
 		Action:    action,
 		Status:    syncdomain.SyncStatusPending,
 		SyncedAt:  time.Now().UTC(),

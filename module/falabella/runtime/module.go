@@ -106,6 +106,7 @@ func New(cfg Config, providedLogger *zap.Logger, catalogs ...port.ProductCatalog
 		GlobalIdentifier: cfg.ProductGlobalIdentifier,
 		AttributeSetID:   cfg.ProductAttributeSetID,
 		OperatorCode:     cfg.ProductOperatorCode,
+		SyncWorkers:      cfg.ProductSyncWorkers,
 	})
 	if err != nil {
 		return nil, err

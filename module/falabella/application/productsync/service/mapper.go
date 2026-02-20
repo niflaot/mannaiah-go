@@ -38,6 +38,12 @@ func mapProduct(product port.CatalogProduct, cfg Config) (port.SyncProductReques
 
 	attributes := toStringMap(datasheet.Attributes)
 	normalizeFalabellaAttributeKeys(attributes)
+	brand := firstNonEmpty(attributes["Brand"], attributes["brand"])
+	model := firstNonEmpty(attributes["Model"], attributes["model"])
+	delete(attributes, "Brand")
+	delete(attributes, "brand")
+	delete(attributes, "Model")
+	delete(attributes, "model")
 	name := strings.TrimSpace(datasheet.Name)
 	if strings.TrimSpace(name) == "" {
 		return port.SyncProductRequest{}, "", ErrNameRequired
@@ -50,30 +56,22 @@ func mapProduct(product port.CatalogProduct, cfg Config) (port.SyncProductReques
 	request := port.SyncProductRequest{
 		SKU:             trimmedSKU,
 		Name:            name,
-		Brand:           firstNonEmpty(attributes["brand"], defaultFalabellaBrand),
-		Model:           strings.TrimSpace(attributes["model"]),
+		Brand:           firstNonEmpty(brand, defaultFalabellaBrand),
+		Model:           strings.TrimSpace(model),
 		Description:     description,
 		PrimaryCategory: strings.TrimSpace(cfg.CategoryID),
-		TaxClass:        strings.TrimSpace(attributes["tax_percentage"]),
-		Price:           strings.TrimSpace(attributes["price_falabella"]),
-		SalePrice:       strings.TrimSpace(attributes["sale_price_falabella"]),
-		SaleStartDate:   strings.TrimSpace(attributes["sale_start_date_falabella"]),
-		SaleEndDate:     strings.TrimSpace(attributes["sale_end_date_falabella"]),
+		TaxClass:        strings.TrimSpace(attributes["TaxClass"]),
+		Price:           strings.TrimSpace(attributes["PriceFalabella"]),
+		SalePrice:       strings.TrimSpace(attributes["SalePriceFalabella"]),
+		SaleStartDate:   strings.TrimSpace(attributes["SaleStartDateFalabella"]),
+		SaleEndDate:     strings.TrimSpace(attributes["SaleEndDateFalabella"]),
 		OperatorCode:    firstNonEmpty(strings.TrimSpace(cfg.OperatorCode), "FACO"),
 		Attributes:      attributes,
 	}
+	applyRequestBusinessUnitFields(&request, attributes)
 
 	if request.Attributes == nil {
 		request.Attributes = map[string]string{}
-	}
-	if trimmed := strings.TrimSpace(cfg.GlobalIdentifier); trimmed != "" {
-		request.Attributes["global_identifier"] = trimmed
-	}
-	if trimmed := strings.TrimSpace(cfg.AttributeSetID); trimmed != "" {
-		request.Attributes["attribute_set_id"] = trimmed
-	}
-	if trimmed := strings.TrimSpace(cfg.CategoryID); trimmed != "" {
-		request.Attributes["category_id"] = trimmed
 	}
 	if request.Brand == "" {
 		request.Brand = defaultFalabellaBrand
@@ -97,8 +95,41 @@ func mapVariantProduct(base port.SyncProductRequest, variant port.CatalogVariant
 	mapped.Attributes = copyAttributes(base.Attributes)
 	applyVariantAttributes(mapped.Attributes, variant)
 	applyVariantScopedAttributes(mapped.Attributes, base.Attributes, variantSKU, knownVariantSKUs)
+	applyRequestBusinessUnitFields(&mapped, mapped.Attributes)
 
 	return mapped, nil
+}
+
+// applyRequestBusinessUnitFields resolves product sync request business-unit values from mapped attributes.
+func applyRequestBusinessUnitFields(request *port.SyncProductRequest, attributes map[string]string) {
+	if request == nil {
+		return
+	}
+
+	request.TaxClass = firstNonEmpty(
+		request.TaxClass,
+		strings.TrimSpace(attributes["TaxClass"]),
+	)
+	request.Price = firstNonEmpty(
+		request.Price,
+		strings.TrimSpace(attributes["PriceFalabella"]),
+		strings.TrimSpace(attributes["Price"]),
+	)
+	request.SalePrice = firstNonEmpty(
+		request.SalePrice,
+		strings.TrimSpace(attributes["SalePriceFalabella"]),
+		strings.TrimSpace(attributes["SpecialPrice"]),
+	)
+	request.SaleStartDate = firstNonEmpty(
+		request.SaleStartDate,
+		strings.TrimSpace(attributes["SaleStartDateFalabella"]),
+		strings.TrimSpace(attributes["SpecialFromDate"]),
+	)
+	request.SaleEndDate = firstNonEmpty(
+		request.SaleEndDate,
+		strings.TrimSpace(attributes["SaleEndDateFalabella"]),
+		strings.TrimSpace(attributes["SpecialToDate"]),
+	)
 }
 
 // findDatasheetByRealm resolves datasheets for configured realm values.

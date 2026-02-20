@@ -21,6 +21,8 @@ var (
 	ErrInvalidFeedID = errors.New("falabella feed id is required")
 	// ErrInvalidProductID is returned when product identifier values are empty.
 	ErrInvalidProductID = errors.New("falabella product id is required")
+	// ErrInvalidExecutionID is returned when execution identifier values are empty.
+	ErrInvalidExecutionID = errors.New("falabella execution id is required")
 	// ErrFeedNotFinished is returned when feed status resolution is attempted on unfinished feeds.
 	ErrFeedNotFinished = errors.New("falabella feed is not finished")
 )
@@ -29,10 +31,16 @@ var (
 type Repository interface {
 	// EnsureSchema migrates sync status persistence schema.
 	EnsureSchema(ctx context.Context) error
+	// CreateExecution persists one sync execution parent record.
+	CreateExecution(ctx context.Context, execution *syncdomain.SyncExecution) error
 	// Create persists a new sync status entry.
 	Create(ctx context.Context, entry *syncdomain.SyncEntry) error
+	// GetExecutionByID retrieves one sync execution by identifier.
+	GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error)
 	// GetByFeedID retrieves a sync status entry by Falabella feed identifier.
 	GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error)
+	// ListByExecutionID retrieves child feed rows by execution identifier.
+	ListByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error)
 	// GetByProductID retrieves sync status entries by source product identifier.
 	GetByProductID(ctx context.Context, productID string) ([]syncdomain.SyncEntry, error)
 	// ListPending retrieves unresolved sync status entries ordered by submission time.
@@ -51,8 +59,12 @@ type Source interface {
 type Service interface {
 	// RecordEntry persists a new sync status entry.
 	RecordEntry(ctx context.Context, entry *syncdomain.SyncEntry) error
+	// GetExecutionByID retrieves one sync execution by identifier.
+	GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error)
 	// GetByFeedID retrieves a sync status entry by Falabella feed identifier.
 	GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error)
+	// GetByExecutionID retrieves child feed rows by execution identifier.
+	GetByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error)
 	// GetByProductID retrieves sync status entries by source product identifier.
 	GetByProductID(ctx context.Context, productID string) ([]syncdomain.SyncEntry, error)
 	// ResolveFeedStatus queries Falabella feed status and updates the entry resolution.
@@ -123,6 +135,16 @@ func (s *SyncStatusService) RecordEntry(ctx context.Context, entry *syncdomain.S
 	return s.repo.Create(ctx, entry)
 }
 
+// GetExecutionByID retrieves one sync execution by identifier.
+func (s *SyncStatusService) GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error) {
+	trimmed := strings.TrimSpace(executionID)
+	if trimmed == "" {
+		return nil, ErrInvalidExecutionID
+	}
+
+	return s.repo.GetExecutionByID(ctx, trimmed)
+}
+
 // GetByFeedID retrieves a sync status entry by Falabella feed identifier.
 func (s *SyncStatusService) GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error) {
 	trimmed := strings.TrimSpace(feedID)
@@ -131,6 +153,16 @@ func (s *SyncStatusService) GetByFeedID(ctx context.Context, feedID string) (*sy
 	}
 
 	return s.repo.GetByFeedID(ctx, trimmed)
+}
+
+// GetByExecutionID retrieves child feed rows by execution identifier.
+func (s *SyncStatusService) GetByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error) {
+	trimmed := strings.TrimSpace(executionID)
+	if trimmed == "" {
+		return nil, ErrInvalidExecutionID
+	}
+
+	return s.repo.ListByExecutionID(ctx, trimmed)
 }
 
 // GetByProductID retrieves sync status entries by source product identifier.

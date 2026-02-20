@@ -232,6 +232,46 @@ func TestCreateDuplicateFeedID(t *testing.T) {
 	}
 }
 
+// TestCreateDuplicateFeedIDRollsBackExecution verifies transactional rollback for execution rows when entry insert fails.
+func TestCreateDuplicateFeedIDRollsBackExecution(t *testing.T) {
+	db := newTestDB(t)
+	repo, _ := NewRepository(db)
+	_ = repo.EnsureSchema(context.Background())
+
+	now := time.Now().UTC().Truncate(time.Second)
+	first := &syncdomain.SyncEntry{
+		ExecutionID: "exec-1",
+		ProductID:   "prod-1",
+		SKU:         "SKU-001",
+		FeedID:      "feed-dup-rb",
+		Action:      syncdomain.SyncActionCreate,
+		Status:      syncdomain.SyncStatusPending,
+		SyncedAt:    now,
+	}
+	if err := repo.Create(context.Background(), first); err != nil {
+		t.Fatalf("Create(first) error = %v", err)
+	}
+
+	duplicate := &syncdomain.SyncEntry{
+		ExecutionID: "exec-2",
+		ProductID:   "prod-2",
+		SKU:         "SKU-002",
+		FeedID:      "feed-dup-rb",
+		Action:      syncdomain.SyncActionCreate,
+		Status:      syncdomain.SyncStatusPending,
+		SyncedAt:    now,
+	}
+	err := repo.Create(context.Background(), duplicate)
+	if err == nil {
+		t.Fatalf("Create(duplicate) should fail")
+	}
+
+	_, getErr := repo.GetExecutionByID(context.Background(), "exec-2")
+	if !errors.Is(getErr, port.ErrSyncExecutionNotFound) {
+		t.Fatalf("GetExecutionByID(exec-2) error = %v, want %v", getErr, port.ErrSyncExecutionNotFound)
+	}
+}
+
 // TestListPending verifies pending entry retrieval behavior.
 func TestListPending(t *testing.T) {
 	db := newTestDB(t)

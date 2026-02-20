@@ -36,6 +36,8 @@ type Config struct {
 	ProductAttributeSetID string `mapstructure:"FALABELLA_PRODUCT_ATTRIBUTE_SET_ID" default:"5"`
 	// ProductOperatorCode defines Falabella business-unit operator code values.
 	ProductOperatorCode string `mapstructure:"FALABELLA_PRODUCT_OPERATOR_CODE" default:"FACO"`
+	// ProductSyncWorkers defines max concurrent workers for batch product sync operations.
+	ProductSyncWorkers int `mapstructure:"FALABELLA_PRODUCT_SYNC_WORKERS" default:"4"`
 	// ProductImageBaseURL defines public base URL values used to expose asset keys as Falabella image URLs.
 	ProductImageBaseURL string `mapstructure:"FALABELLA_PRODUCT_IMAGE_BASE_URL" default:""`
 	// SyncStatusCron defines the cron expression used for periodic feed status resolution.

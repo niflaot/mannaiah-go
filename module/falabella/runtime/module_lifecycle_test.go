@@ -76,8 +76,18 @@ func (m *syncStatusSvcMock) RecordEntry(ctx context.Context, entry *syncdomain.S
 	return nil
 }
 
+// GetExecutionByID returns nil.
+func (m *syncStatusSvcMock) GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error) {
+	return nil, nil
+}
+
 // GetByFeedID returns nil.
 func (m *syncStatusSvcMock) GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error) {
+	return nil, nil
+}
+
+// GetByExecutionID returns nil.
+func (m *syncStatusSvcMock) GetByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error) {
 	return nil, nil
 }
 
@@ -274,7 +284,8 @@ func TestStopWithNilContext(t *testing.T) {
 	}
 
 	_ = module.Start(context.Background())
-	if err := module.Stop(nil); err != nil {
+	var nilCtx context.Context
+	if err := module.Stop(nilCtx); err != nil {
 		t.Fatalf("Stop(nil ctx) error = %v", err)
 	}
 	if !scheduler.stopped {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,5 +175,92 @@ func TestResolvePendingFeedsDefaultLimit(t *testing.T) {
 	}
 	if result.Checked != 0 {
 		t.Fatalf("Checked = %d, want %d", result.Checked, 0)
+	}
+}
+
+// TestNormalizePendingResolveLimit verifies default and cap behavior for pending resolution limits.
+func TestNormalizePendingResolveLimit(t *testing.T) {
+	if got := normalizePendingResolveLimit(0); got != defaultPendingResolveLimit {
+		t.Fatalf("normalizePendingResolveLimit(0) = %d, want %d", got, defaultPendingResolveLimit)
+	}
+	if got := normalizePendingResolveLimit(-10); got != defaultPendingResolveLimit {
+		t.Fatalf("normalizePendingResolveLimit(-10) = %d, want %d", got, defaultPendingResolveLimit)
+	}
+	if got := normalizePendingResolveLimit(10); got != 10 {
+		t.Fatalf("normalizePendingResolveLimit(10) = %d, want %d", got, 10)
+	}
+	if got := normalizePendingResolveLimit(maxPendingResolveLimit + 1); got != maxPendingResolveLimit {
+		t.Fatalf("normalizePendingResolveLimit(max+1) = %d, want %d", got, maxPendingResolveLimit)
+	}
+}
+
+// concurrentPendingSourceMock defines delayed source behavior to verify concurrent pending resolution.
+type concurrentPendingSourceMock struct {
+	// mutex guards active counters.
+	mutex sync.Mutex
+	// active defines current in-flight GetFeedStatus calls.
+	active int
+	// maxActive defines max observed in-flight calls.
+	maxActive int
+}
+
+// GetFeedStatus tracks active calls and returns finished responses.
+func (m *concurrentPendingSourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	m.mutex.Lock()
+	m.active++
+	if m.active > m.maxActive {
+		m.maxActive = m.active
+	}
+	m.mutex.Unlock()
+
+	time.Sleep(20 * time.Millisecond)
+
+	m.mutex.Lock()
+	m.active--
+	m.mutex.Unlock()
+
+	return []byte(feedStatusFinishedSuccessXML), nil
+}
+
+// TestResolvePendingFeedsUsesConcurrentWorkers verifies pending feed resolution executes concurrently.
+func TestResolvePendingFeedsUsesConcurrentWorkers(t *testing.T) {
+	repo := &repoMock{entries: map[string]*syncdomain.SyncEntry{
+		"feed-1": {FeedID: "feed-1", Status: syncdomain.SyncStatusPending, SyncedAt: time.Now()},
+		"feed-2": {FeedID: "feed-2", Status: syncdomain.SyncStatusPending, SyncedAt: time.Now()},
+		"feed-3": {FeedID: "feed-3", Status: syncdomain.SyncStatusPending, SyncedAt: time.Now()},
+		"feed-4": {FeedID: "feed-4", Status: syncdomain.SyncStatusPending, SyncedAt: time.Now()},
+	}}
+	source := &concurrentPendingSourceMock{}
+
+	svc, err := NewService(repo, source)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	result, resolveErr := svc.ResolvePendingFeeds(context.Background(), 50)
+	if resolveErr != nil {
+		t.Fatalf("ResolvePendingFeeds() error = %v", resolveErr)
+	}
+	if result.Resolved != 4 {
+		t.Fatalf("Resolved = %d, want %d", result.Resolved, 4)
+	}
+	if source.maxActive < 2 {
+		t.Fatalf("maxActive = %d, want >= 2", source.maxActive)
+	}
+}
+
+// TestNormalizePendingWorkerCount verifies worker count normalization behavior.
+func TestNormalizePendingWorkerCount(t *testing.T) {
+	if got := normalizePendingWorkerCount(0); got != 1 {
+		t.Fatalf("normalizePendingWorkerCount(0) = %d, want %d", got, 1)
+	}
+	if got := normalizePendingWorkerCount(1); got != 1 {
+		t.Fatalf("normalizePendingWorkerCount(1) = %d, want %d", got, 1)
+	}
+	if got := normalizePendingWorkerCount(2); got != 2 {
+		t.Fatalf("normalizePendingWorkerCount(2) = %d, want %d", got, 2)
+	}
+	if got := normalizePendingWorkerCount(100); got != defaultPendingWorkers {
+		t.Fatalf("normalizePendingWorkerCount(100) = %d, want %d", got, defaultPendingWorkers)
 	}
 }

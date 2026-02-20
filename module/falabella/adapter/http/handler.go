@@ -49,8 +49,12 @@ type ProductSyncService interface {
 
 // SyncStatusService defines Falabella sync status use-case behavior required by HTTP handlers.
 type SyncStatusService interface {
+	// GetExecutionByID retrieves one sync execution by identifier.
+	GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error)
 	// GetByFeedID retrieves a sync status entry by Falabella feed identifier.
 	GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error)
+	// GetByExecutionID retrieves child feed rows by execution identifier.
+	GetByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error)
 	// GetByProductID retrieves sync status entries by source product identifier.
 	GetByProductID(ctx context.Context, productID string) ([]syncdomain.SyncEntry, error)
 	// ResolveFeedStatus queries Falabella feed status and updates the entry resolution.
@@ -101,6 +105,8 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/falabella/sync/products", h.protect("products:update", h.syncProducts))
 	router.Post("/falabella/sync/products/:id", h.protect("products:update", h.syncProductByID))
 	router.Get("/falabella/sync/status/feed/:feedId", h.protect("products:read", h.getSyncStatusByFeed))
+	router.Get("/falabella/sync/status/execution/:executionId", h.protect("products:read", h.getSyncStatusExecution))
+	router.Get("/falabella/sync/status/execution/:executionId/feeds", h.protect("products:read", h.getSyncStatusByExecution))
 	router.Get("/falabella/sync/status/product/:productId", h.protect("products:read", h.getSyncStatusByProduct))
 	router.Post("/falabella/sync/status/feed/:feedId/resolve", h.protect("products:update", h.resolveFeedStatus))
 }
@@ -175,6 +181,39 @@ func (h *Handler) getSyncStatusByFeed(ctx corehttp.Context) error {
 	return ctx.Status(200).JSON(mapSyncEntryResponse(entry))
 }
 
+// getSyncStatusExecution retrieves one execution parent by identifier.
+func (h *Handler) getSyncStatusExecution(ctx corehttp.Context) error {
+	if h.syncStatusService == nil {
+		return corehttp.NewAppError(503, "sync_status_unavailable", errors.New("sync status service is not configured"))
+	}
+
+	execution, err := h.syncStatusService.GetExecutionByID(ctx.Context(), strings.TrimSpace(ctx.Params("executionId")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(mapSyncExecutionResponse(execution))
+}
+
+// getSyncStatusByExecution retrieves child feed rows by execution identifier.
+func (h *Handler) getSyncStatusByExecution(ctx corehttp.Context) error {
+	if h.syncStatusService == nil {
+		return corehttp.NewAppError(503, "sync_status_unavailable", errors.New("sync status service is not configured"))
+	}
+
+	entries, err := h.syncStatusService.GetByExecutionID(ctx.Context(), strings.TrimSpace(ctx.Params("executionId")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	response := make([]syncStatusEntryResponse, 0, len(entries))
+	for i := range entries {
+		response = append(response, mapSyncEntryResponse(&entries[i]))
+	}
+
+	return ctx.Status(200).JSON(response)
+}
+
 // getSyncStatusByProduct retrieves sync status entries by source product identifier.
 func (h *Handler) getSyncStatusByProduct(ctx corehttp.Context) error {
 	if h.syncStatusService == nil {
@@ -246,6 +285,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, syncstatusservice.ErrInvalidFeedID) {
 		return corehttp.NewAppError(400, "invalid_feed_id", err)
 	}
+	if errors.Is(err, syncstatusservice.ErrInvalidExecutionID) {
+		return corehttp.NewAppError(400, "invalid_execution_id", err)
+	}
 	if errors.Is(err, syncstatusservice.ErrInvalidProductID) {
 		return corehttp.NewAppError(400, "invalid_product_id", err)
 	}
@@ -254,6 +296,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, port.ErrSyncEntryNotFound) {
 		return corehttp.NewAppError(404, "sync_entry_not_found", err)
+	}
+	if errors.Is(err, port.ErrSyncExecutionNotFound) {
+		return corehttp.NewAppError(404, "sync_execution_not_found", err)
 	}
 
 	return corehttp.NewAppError(500, "internal_server_error", err)
@@ -267,12 +312,16 @@ type syncProductsRequest struct {
 
 // syncStatusEntryResponse defines sync status entry response values.
 type syncStatusEntryResponse struct {
+	// ExecutionID defines parent execution identifier values.
+	ExecutionID string `json:"executionId,omitempty"`
 	// FeedID defines Falabella feed identifier values.
 	FeedID string `json:"feedId"`
 	// ProductID defines source product identifier values.
 	ProductID string `json:"productId"`
 	// SKU defines seller SKU values.
 	SKU string `json:"sku"`
+	// Step defines logical feed step values (product/image).
+	Step string `json:"step,omitempty"`
 	// Action defines sync operation type values.
 	Action string `json:"action"`
 	// Status defines feed resolution status values.
@@ -283,6 +332,14 @@ type syncStatusEntryResponse struct {
 	ResolvedAt string `json:"resolvedAt,omitempty"`
 }
 
+// syncStatusExecutionResponse defines parent sync execution response values.
+type syncStatusExecutionResponse struct {
+	// ExecutionID defines parent execution identifier values.
+	ExecutionID string `json:"executionId"`
+	// StartedAt defines execution start timestamp values.
+	StartedAt string `json:"startedAt"`
+}
+
 // mapSyncEntryResponse maps domain sync entries to HTTP response values.
 func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
 	if entry == nil {
@@ -290,9 +347,11 @@ func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
 	}
 
 	response := syncStatusEntryResponse{
+		ExecutionID: entry.ExecutionID,
 		FeedID:    entry.FeedID,
 		ProductID: entry.ProductID,
 		SKU:       entry.SKU,
+		Step:      entry.Step.String(),
 		Action:    entry.Action.String(),
 		Status:    entry.Status.String(),
 		SyncedAt:  entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
@@ -302,4 +361,16 @@ func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
 	}
 
 	return response
+}
+
+// mapSyncExecutionResponse maps domain sync execution values to HTTP response values.
+func mapSyncExecutionResponse(execution *syncdomain.SyncExecution) syncStatusExecutionResponse {
+	if execution == nil {
+		return syncStatusExecutionResponse{}
+	}
+
+	return syncStatusExecutionResponse{
+		ExecutionID: execution.ExecutionID,
+		StartedAt:   execution.StartedAt.UTC().Format("2006-01-02T15:04:05Z"),
+	}
 }

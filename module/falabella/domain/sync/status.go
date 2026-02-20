@@ -12,6 +12,16 @@ const (
 	SyncActionUpdate SyncAction = "update"
 )
 
+// SyncStep defines logical step values that emit Falabella feeds within one execution.
+type SyncStep string
+
+const (
+	// SyncStepProduct defines product create/update feed steps.
+	SyncStepProduct SyncStep = "product"
+	// SyncStepImage defines image feed steps.
+	SyncStepImage SyncStep = "image"
+)
+
 // SyncStatus defines Falabella feed resolution status values.
 type SyncStatus string
 
@@ -26,12 +36,16 @@ const (
 
 // SyncEntry defines Falabella sync status domain entities.
 type SyncEntry struct {
+	// ExecutionID defines one parent sync execution identifier grouping child feed rows.
+	ExecutionID string
 	// ProductID defines source product identifier values.
 	ProductID string
 	// SKU defines seller SKU values sent to Falabella.
 	SKU string
 	// FeedID defines Falabella feed identifier values returned on async submission.
 	FeedID string
+	// Step defines the logical step that emitted this feed.
+	Step SyncStep
 	// Action defines whether the sync was a creation or update.
 	Action SyncAction
 	// Status defines current feed resolution status values.
@@ -42,6 +56,14 @@ type SyncEntry struct {
 	ResolvedAt *time.Time
 }
 
+// SyncExecution defines one parent sync execution persisted for grouped feed submissions.
+type SyncExecution struct {
+	// ExecutionID defines one unique parent identifier for a sync execution.
+	ExecutionID string
+	// StartedAt defines the sync execution start timestamp.
+	StartedAt time.Time
+}
+
 // IsValid reports whether sync action values are recognized.
 func (a SyncAction) IsValid() bool {
 	return a == SyncActionCreate || a == SyncActionUpdate
@@ -50,6 +72,16 @@ func (a SyncAction) IsValid() bool {
 // String returns the string representation of sync action values.
 func (a SyncAction) String() string {
 	return string(a)
+}
+
+// IsValid reports whether sync step values are recognized.
+func (s SyncStep) IsValid() bool {
+	return s == SyncStepProduct || s == SyncStepImage
+}
+
+// String returns the string representation of sync step values.
+func (s SyncStep) String() string {
+	return string(s)
 }
 
 // IsValid reports whether sync status values are recognized.

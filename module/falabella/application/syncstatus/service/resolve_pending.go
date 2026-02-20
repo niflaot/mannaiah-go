@@ -6,10 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
+)
+
+const (
+	defaultPendingResolveLimit = 50
+	maxPendingResolveLimit     = 200
+	fallbackFeedStatusTimeout  = 5 * time.Second
+	defaultPendingWorkers      = 4
+	maxPendingWorkers          = 16
 )
 
 // ResolvePendingResult defines aggregate results from a batch pending-feed resolution pass.
@@ -26,10 +35,7 @@ type ResolvePendingResult struct {
 
 // ResolvePendingFeeds resolves all pending feed entries by querying the Falabella FeedStatus API.
 func (s *SyncStatusService) ResolvePendingFeeds(ctx context.Context, limit int) (*ResolvePendingResult, error) {
-	resolvedLimit := limit
-	if resolvedLimit <= 0 {
-		resolvedLimit = 50
-	}
+	resolvedLimit := normalizePendingResolveLimit(limit)
 
 	pending, err := s.repo.ListPending(ctx, resolvedLimit)
 	if err != nil {
@@ -37,24 +43,82 @@ func (s *SyncStatusService) ResolvePendingFeeds(ctx context.Context, limit int) 
 	}
 
 	result := &ResolvePendingResult{Checked: len(pending)}
-	for _, entry := range pending {
-		feedID := strings.TrimSpace(entry.FeedID)
-		if feedID == "" {
-			result.Errored++
-			continue
-		}
-
-		resolveErr := s.resolveOneFeed(ctx, feedID)
-		if resolveErr != nil {
-			if errors.Is(resolveErr, ErrFeedNotFinished) {
-				result.StillPending++
-			} else {
+	workerCount := normalizePendingWorkerCount(len(pending))
+	if workerCount == 1 {
+		for _, entry := range pending {
+			feedID := strings.TrimSpace(entry.FeedID)
+			if feedID == "" {
 				result.Errored++
+				continue
 			}
-			continue
+
+			resolveErr := s.resolveOneFeed(ctx, feedID)
+			if resolveErr != nil {
+				if errors.Is(resolveErr, ErrFeedNotFinished) {
+					result.StillPending++
+				} else {
+					result.Errored++
+				}
+				continue
+			}
+
+			result.Resolved++
 		}
 
-		result.Resolved++
+		return result, nil
+	}
+
+	type pendingOutcome int
+	const (
+		pendingResolved pendingOutcome = iota
+		pendingStillPending
+		pendingErrored
+	)
+
+	jobs := make(chan string, len(pending))
+	outcomes := make(chan pendingOutcome, len(pending))
+
+	var waitGroup sync.WaitGroup
+	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			for feedID := range jobs {
+				if strings.TrimSpace(feedID) == "" {
+					outcomes <- pendingErrored
+					continue
+				}
+				resolveErr := s.resolveOneFeed(ctx, feedID)
+				if resolveErr == nil {
+					outcomes <- pendingResolved
+					continue
+				}
+				if errors.Is(resolveErr, ErrFeedNotFinished) {
+					outcomes <- pendingStillPending
+					continue
+				}
+				outcomes <- pendingErrored
+			}
+		}()
+	}
+
+	for _, entry := range pending {
+		jobs <- strings.TrimSpace(entry.FeedID)
+	}
+	close(jobs)
+
+	waitGroup.Wait()
+	close(outcomes)
+
+	for outcome := range outcomes {
+		switch outcome {
+		case pendingResolved:
+			result.Resolved++
+		case pendingStillPending:
+			result.StillPending++
+		default:
+			result.Errored++
+		}
 	}
 
 	return result, nil
@@ -62,7 +126,14 @@ func (s *SyncStatusService) ResolvePendingFeeds(ctx context.Context, limit int) 
 
 // resolveOneFeed queries Falabella FeedStatus for a single feed and updates the local status.
 func (s *SyncStatusService) resolveOneFeed(ctx context.Context, feedID string) error {
-	rawPayload, err := s.source.GetFeedStatus(ctx, feedID)
+	requestCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		requestCtx, cancel = context.WithTimeout(ctx, fallbackFeedStatusTimeout)
+		defer cancel()
+	}
+
+	rawPayload, err := s.source.GetFeedStatus(requestCtx, feedID)
 	if err != nil {
 		return fmt.Errorf("get falabella feed status: %w", err)
 	}
@@ -90,4 +161,36 @@ func (s *SyncStatusService) resolveOneFeed(ctx context.Context, feedID string) e
 	}
 
 	return nil
+}
+
+// normalizePendingResolveLimit resolves safe limits for pending-feed resolution batches.
+func normalizePendingResolveLimit(limit int) int {
+	if limit <= 0 {
+		return defaultPendingResolveLimit
+	}
+	if limit > maxPendingResolveLimit {
+		return maxPendingResolveLimit
+	}
+
+	return limit
+}
+
+// normalizePendingWorkerCount resolves bounded worker counts for pending-feed resolution.
+func normalizePendingWorkerCount(totalPending int) int {
+	if totalPending <= 1 {
+		return 1
+	}
+
+	workers := defaultPendingWorkers
+	if workers > maxPendingWorkers {
+		workers = maxPendingWorkers
+	}
+	if workers > totalPending {
+		workers = totalPending
+	}
+	if workers <= 0 {
+		return 1
+	}
+
+	return workers
 }

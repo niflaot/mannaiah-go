@@ -12,6 +12,8 @@ import (
 
 // repoMock defines sync status repository behavior for service tests.
 type repoMock struct {
+	// executions defines stored execution parent values by execution ID.
+	executions map[string]*syncdomain.SyncExecution
 	// entries defines stored entries by feed ID.
 	entries map[string]*syncdomain.SyncEntry
 	// productEntries defines stored entries by product ID.
@@ -27,6 +29,18 @@ type repoMock struct {
 // EnsureSchema returns nil.
 func (m *repoMock) EnsureSchema(ctx context.Context) error { return nil }
 
+// CreateExecution persists parent execution records.
+func (m *repoMock) CreateExecution(ctx context.Context, execution *syncdomain.SyncExecution) error {
+	if execution == nil {
+		return errors.New("execution must not be nil")
+	}
+	if m.executions == nil {
+		m.executions = map[string]*syncdomain.SyncExecution{}
+	}
+	m.executions[execution.ExecutionID] = execution
+	return nil
+}
+
 // Create persists entries or returns configured errors.
 func (m *repoMock) Create(ctx context.Context, entry *syncdomain.SyncEntry) error {
 	if m.createErr != nil {
@@ -39,6 +53,18 @@ func (m *repoMock) Create(ctx context.Context, entry *syncdomain.SyncEntry) erro
 	return nil
 }
 
+// GetExecutionByID retrieves parent execution values.
+func (m *repoMock) GetExecutionByID(ctx context.Context, executionID string) (*syncdomain.SyncExecution, error) {
+	if m.executions == nil {
+		return nil, port.ErrSyncExecutionNotFound
+	}
+	execution, ok := m.executions[executionID]
+	if !ok {
+		return nil, port.ErrSyncExecutionNotFound
+	}
+	return execution, nil
+}
+
 // GetByFeedID retrieves entries by feed ID.
 func (m *repoMock) GetByFeedID(ctx context.Context, feedID string) (*syncdomain.SyncEntry, error) {
 	if m.entries == nil {
@@ -49,6 +75,17 @@ func (m *repoMock) GetByFeedID(ctx context.Context, feedID string) (*syncdomain.
 		return nil, port.ErrSyncEntryNotFound
 	}
 	return entry, nil
+}
+
+// ListByExecutionID retrieves child feed rows for one execution id.
+func (m *repoMock) ListByExecutionID(ctx context.Context, executionID string) ([]syncdomain.SyncEntry, error) {
+	entries := make([]syncdomain.SyncEntry, 0)
+	for _, entry := range m.entries {
+		if entry != nil && entry.ExecutionID == executionID {
+			entries = append(entries, *entry)
+		}
+	}
+	return entries, nil
 }
 
 // GetByProductID retrieves entries by product ID.
@@ -227,6 +264,38 @@ func TestGetByFeedID(t *testing.T) {
 	}
 	if entry.ProductID != "prod-1" {
 		t.Fatalf("ProductID = %q, want %q", entry.ProductID, "prod-1")
+	}
+}
+
+// TestGetExecutionByID verifies execution lookup behavior.
+func TestGetExecutionByID(t *testing.T) {
+	repo := &repoMock{executions: map[string]*syncdomain.SyncExecution{"exec-1": {ExecutionID: "exec-1", StartedAt: time.Now().UTC()}}}
+	svc, _ := NewService(repo, &sourceMock{})
+
+	execution, err := svc.GetExecutionByID(context.Background(), "exec-1")
+	if err != nil {
+		t.Fatalf("GetExecutionByID() error = %v", err)
+	}
+	if execution.ExecutionID != "exec-1" {
+		t.Fatalf("ExecutionID = %q, want %q", execution.ExecutionID, "exec-1")
+	}
+}
+
+// TestGetByExecutionID verifies child feed lookup by execution behavior.
+func TestGetByExecutionID(t *testing.T) {
+	repo := &repoMock{entries: map[string]*syncdomain.SyncEntry{
+		"feed-1": {ExecutionID: "exec-1", FeedID: "feed-1", ProductID: "prod-1"},
+		"feed-2": {ExecutionID: "exec-1", FeedID: "feed-2", ProductID: "prod-1"},
+		"feed-3": {ExecutionID: "exec-2", FeedID: "feed-3", ProductID: "prod-1"},
+	}}
+	svc, _ := NewService(repo, &sourceMock{})
+
+	entries, err := svc.GetByExecutionID(context.Background(), "exec-1")
+	if err != nil {
+		t.Fatalf("GetByExecutionID() error = %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("len(entries) = %d, want %d", len(entries), 2)
 	}
 }
 

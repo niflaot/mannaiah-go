@@ -104,6 +104,24 @@ func normalizeScopedAttributeKey(value string) string {
 		return "Talla"
 	case "businessunits", "businessunit":
 		return "BusinessUnits"
+	case "operatorcode":
+		return "OperatorCode"
+	case "stock", "stockfalabella", "quantity", "quantityfalabella", "inventory":
+		return "Stock"
+	case "status":
+		return "Status"
+	case "price", "pricefalabella", "pricefacl", "pricefape", "pricefaco":
+		return "PriceFalabella"
+	case "saleprice", "salepricefalabella", "specialprice":
+		return "SalePriceFalabella"
+	case "salestartdate", "salestartdatefalabella", "specialfromdate":
+		return "SaleStartDateFalabella"
+	case "saleenddate", "saleenddatefalabella", "specialtodate":
+		return "SaleEndDateFalabella"
+	case "taxpercentage":
+		return "TaxPercentage"
+	case "taxclass":
+		return "TaxClass"
 	default:
 		return trimmed
 	}
@@ -150,3 +168,4 @@ func normalizeFalabellaAttributeKeys(attributes map[string]string) {
 		delete(attributes, key)
 	}
 }
+

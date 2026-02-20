@@ -207,7 +207,7 @@ func (c *Client) GetBrands(ctx context.Context) ([]byte, error) {
 
 // SyncProduct upserts a product into Falabella using GetProducts existence checks.
 func (c *Client) SyncProduct(ctx context.Context, request port.SyncProductRequest) ([]byte, error) {
-	productExists, existsErr := c.productExists(ctx, request.SKU)
+	productExists, existsErr := c.shouldUpdateProduct(ctx, request)
 	if existsErr != nil {
 		return nil, existsErr
 	}
@@ -241,6 +241,36 @@ func (c *Client) SyncProduct(ctx context.Context, request port.SyncProductReques
 	}
 
 	return body, nil
+}
+
+// shouldUpdateProduct resolves whether sync requests should use ProductUpdate actions.
+// For variant payloads, Falabella catalogs can already contain parent SKUs while child SKUs
+// are still absent; in those cases ProductUpdate is preferred to avoid duplicate-create failures.
+func (c *Client) shouldUpdateProduct(ctx context.Context, request port.SyncProductRequest) (bool, error) {
+	trimmedSKU := strings.TrimSpace(request.SKU)
+	if trimmedSKU == "" {
+		return false, errors.New("falabella product sku is required")
+	}
+
+	exists, err := c.productExists(ctx, trimmedSKU)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+
+	trimmedParentSKU := strings.TrimSpace(request.ParentSKU)
+	if trimmedParentSKU == "" || strings.EqualFold(trimmedParentSKU, trimmedSKU) {
+		return false, nil
+	}
+
+	parentExists, parentErr := c.productExists(ctx, trimmedParentSKU)
+	if parentErr != nil {
+		return false, fmt.Errorf("check falabella parent sku existence: %w", parentErr)
+	}
+
+	return parentExists, nil
 }
 
 // SyncProductImages configures product image URLs in Falabella.

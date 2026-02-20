@@ -19,11 +19,14 @@ func TestMapProduct(t *testing.T) {
 					Name:        "Backpack",
 					Description: "Desc",
 					Attributes: map[string]any{
-						"brand":                "GENERIC",
-						"model":                "M-1",
-						"tax_percentage":       "19%",
-						"price_falabella":      "100000",
-						"sale_price_falabella": "90000",
+						"Brand":                  "GENÉRICO",
+						"Model":                  "M-1",
+						"TaxClass":               "IVA 19%",
+						"PriceFalabella":         "100000",
+						"QuantityFalabella":      "12",
+						"SalePriceFalabella":     "90000",
+						"SaleStartDateFalabella": "2026-02-19 00:00:00",
+						"SaleEndDateFalabella":   "2026-02-20 23:59:59",
 					},
 				},
 			},
@@ -39,8 +42,29 @@ func TestMapProduct(t *testing.T) {
 	if request.PrimaryCategory != "1638" {
 		t.Fatalf("PrimaryCategory = %q, want %q", request.PrimaryCategory, "1638")
 	}
-	if request.Attributes["global_identifier"] != "G08010305" {
-		t.Fatalf("global_identifier = %q, want %q", request.Attributes["global_identifier"], "G08010305")
+	if request.Price != "100000" {
+		t.Fatalf("Price = %q, want %q", request.Price, "100000")
+	}
+	if request.SalePrice != "90000" {
+		t.Fatalf("SalePrice = %q, want %q", request.SalePrice, "90000")
+	}
+	if request.TaxClass != "IVA 19%" {
+		t.Fatalf("TaxClass = %q, want %q", request.TaxClass, "IVA 19%")
+	}
+	if request.Brand != "GENÉRICO" {
+		t.Fatalf("Brand = %q, want %q", request.Brand, "GENÉRICO")
+	}
+	if request.Attributes["Stock"] != "12" {
+		t.Fatalf("Stock = %q, want %q", request.Attributes["Stock"], "12")
+	}
+	if _, ok := request.Attributes["Brand"]; ok {
+		t.Fatalf("Brand should not be present inside ProductData attributes")
+	}
+	if _, ok := request.Attributes["brand"]; ok {
+		t.Fatalf("brand alias should not be present inside ProductData attributes")
+	}
+	if _, ok := request.Attributes["global_identifier"]; ok {
+		t.Fatalf("global_identifier should not be injected into falabella attributes")
 	}
 }
 
@@ -208,16 +232,24 @@ func TestMapVariantProductScopedAttributes(t *testing.T) {
 	base := port.SyncProductRequest{
 		SKU: "PARENT-SKU",
 		Attributes: map[string]string{
-			"material":              "Polyester",
-			"material.type":         "Canvas",
-			"not_a_variant.color":   "Green",
-			"0013.color":            "Navy",
-			"0013.colorbase":        "Blue",
-			"0013.business_units":   "MEN",
-			"0013.custom_attribute": "custom-0013",
-			"0013.size":             "L",
-			"0014.color":            "Black",
-			"0014.custom_attribute": "custom-0014",
+			"material":                    "Polyester",
+			"material.type":               "Canvas",
+			"not_a_variant.color":         "Green",
+			"0013.color":                  "Navy",
+			"0013.colorbase":              "Blue",
+			"0013.business_units":         "MEN",
+			"0013.custom_attribute":       "custom-0013",
+			"0013.size":                   "L",
+			"0013.tax_percentage":         "19",
+			"0013.PriceFalabella":         "165000",
+			"0013.QuantityFalabella":      "9",
+			"0013.SalePriceFalabella":     "159000",
+			"0013.SaleStartDateFalabella": "2026-02-19 00:00:00",
+			"0013.SaleEndDateFalabella":   "2026-02-20 23:59:59",
+			"0014.color":                  "Black",
+			"0014.custom_attribute":       "custom-0014",
+			"0014.PriceFalabella":         "170000",
+			"0014.QuantityFalabella":      "5",
 		},
 	}
 
@@ -246,6 +278,24 @@ func TestMapVariantProductScopedAttributes(t *testing.T) {
 	}
 	if request0013.Attributes["custom_attribute"] != "custom-0013" {
 		t.Fatalf("request0013.Attributes[custom_attribute] = %q, want %q", request0013.Attributes["custom_attribute"], "custom-0013")
+	}
+	if request0013.Attributes["TaxPercentage"] != "19" {
+		t.Fatalf("request0013.Attributes[TaxPercentage] = %q, want %q", request0013.Attributes["TaxPercentage"], "19")
+	}
+	if request0013.Price != "165000" {
+		t.Fatalf("request0013.Price = %q, want %q", request0013.Price, "165000")
+	}
+	if request0013.SalePrice != "159000" {
+		t.Fatalf("request0013.SalePrice = %q, want %q", request0013.SalePrice, "159000")
+	}
+	if request0013.SaleStartDate != "2026-02-19 00:00:00" {
+		t.Fatalf("request0013.SaleStartDate = %q, want %q", request0013.SaleStartDate, "2026-02-19 00:00:00")
+	}
+	if request0013.SaleEndDate != "2026-02-20 23:59:59" {
+		t.Fatalf("request0013.SaleEndDate = %q, want %q", request0013.SaleEndDate, "2026-02-20 23:59:59")
+	}
+	if request0013.Attributes["Stock"] != "9" {
+		t.Fatalf("request0013.Attributes[Stock] = %q, want %q", request0013.Attributes["Stock"], "9")
 	}
 	if request0013.Attributes["material"] != "Polyester" {
 		t.Fatalf("request0013.Attributes[material] = %q, want %q", request0013.Attributes["material"], "Polyester")
@@ -277,6 +327,12 @@ func TestMapVariantProductScopedAttributes(t *testing.T) {
 	}
 	if request0014.Attributes["custom_attribute"] != "custom-0014" {
 		t.Fatalf("request0014.Attributes[custom_attribute] = %q, want %q", request0014.Attributes["custom_attribute"], "custom-0014")
+	}
+	if request0014.Price != "170000" {
+		t.Fatalf("request0014.Price = %q, want %q", request0014.Price, "170000")
+	}
+	if request0014.Attributes["Stock"] != "5" {
+		t.Fatalf("request0014.Attributes[Stock] = %q, want %q", request0014.Attributes["Stock"], "5")
 	}
 	if _, ok := request0014.Attributes["0013.color"]; ok {
 		t.Fatalf("request0014.Attributes should not contain scoped key 0013.color")

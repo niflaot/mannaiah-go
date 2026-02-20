@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
 	"strings"
+	"sync"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -19,6 +22,11 @@ var (
 	ErrInvalidProductID = errors.New("falabella sync product id is required")
 	// ErrIntegrationUnavailable is returned when Falabella integration is unavailable.
 	ErrIntegrationUnavailable = errors.New("falabella integration is unavailable")
+)
+
+const (
+	defaultSyncWorkers = 4
+	maxSyncWorkers     = 16
 )
 
 // Source defines Falabella product-sync source behavior required by this service.
@@ -51,6 +59,8 @@ type Config struct {
 	AttributeSetID string
 	// OperatorCode defines Falabella business-unit operator-code values.
 	OperatorCode string
+	// SyncWorkers defines max concurrent workers for batch product sync.
+	SyncWorkers int
 }
 
 // Result defines per-product sync result values.
@@ -65,12 +75,26 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 	// FeedID defines Falabella feed identifier returned on async submission.
 	FeedID string `json:"feedId,omitempty"`
+	// Feeds defines all feed submissions generated during one SKU sync (for example, product and image).
+	Feeds []ResultFeed `json:"feeds,omitempty"`
 	// Warnings defines Falabella WarningDetail messages from the sync response.
 	Warnings []string `json:"warnings,omitempty"`
 }
 
+// ResultFeed defines one feed submission linked to a product sync result.
+type ResultFeed struct {
+	// Step defines the logical sync step that emitted this feed (for example, product or image).
+	Step string `json:"step"`
+	// Action defines Falabella request action values (for example, ProductCreate, ProductUpdate, Image).
+	Action string `json:"action,omitempty"`
+	// FeedID defines Falabella feed identifier values.
+	FeedID string `json:"feedId"`
+}
+
 // Summary defines aggregate sync result values.
 type Summary struct {
+	// ExecutionID defines one unique identifier for this sync execution.
+	ExecutionID string `json:"executionId"`
 	// Requested defines requested product count values.
 	Requested int `json:"requested"`
 	// Synced defines successful sync count values.
@@ -128,6 +152,9 @@ func NewService(source Source, catalog ProductCatalog, cfg Config) (*ProductSync
 	if strings.TrimSpace(resolved.OperatorCode) == "" {
 		resolved.OperatorCode = "FACO"
 	}
+	if resolved.SyncWorkers <= 0 {
+		resolved.SyncWorkers = defaultSyncWorkers
+	}
 
 	return &ProductSyncService{source: source, catalog: catalog, cfg: resolved, logger: zap.NewNop()}, nil
 }
@@ -154,6 +181,7 @@ func (s *ProductSyncService) SyncProduct(ctx context.Context, id string) (*Summa
 	}
 
 	summary := &Summary{Results: make([]Result, 0, 1)}
+	summary.ExecutionID = newExecutionID()
 	s.syncOne(ctx, summary, *product)
 	return summary, nil
 }
@@ -185,11 +213,85 @@ func (s *ProductSyncService) SyncProducts(ctx context.Context, ids []string) (*S
 	}
 
 	summary := &Summary{Results: make([]Result, 0, len(products))}
-	for _, product := range products {
-		s.syncOne(ctx, summary, product)
+	summary.ExecutionID = newExecutionID()
+	workers := resolveSyncWorkerCount(s.cfg.SyncWorkers, len(products))
+	if workers == 1 {
+		for _, product := range products {
+			s.syncOne(ctx, summary, product)
+		}
+		return summary, nil
+	}
+
+	type syncJob struct {
+		index   int
+		product port.CatalogProduct
+	}
+	type syncOutcome struct {
+		index   int
+		summary Summary
+	}
+
+	jobs := make(chan syncJob, len(products))
+	outcomes := make(chan syncOutcome, len(products))
+
+	var waitGroup sync.WaitGroup
+	for workerIndex := 0; workerIndex < workers; workerIndex++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			for job := range jobs {
+				localSummary := Summary{ExecutionID: summary.ExecutionID, Results: make([]Result, 0, 1)}
+				s.syncOne(ctx, &localSummary, job.product)
+				outcomes <- syncOutcome{index: job.index, summary: localSummary}
+			}
+		}()
+	}
+
+	for index, product := range products {
+		jobs <- syncJob{index: index, product: product}
+	}
+	close(jobs)
+
+	waitGroup.Wait()
+	close(outcomes)
+
+	orderedOutcomes := make([]Summary, len(products))
+	for outcome := range outcomes {
+		orderedOutcomes[outcome.index] = outcome.summary
+	}
+
+	for _, outcome := range orderedOutcomes {
+		summary.Requested += outcome.Requested
+		summary.Synced += outcome.Synced
+		summary.Skipped += outcome.Skipped
+		summary.Failed += outcome.Failed
+		summary.Results = append(summary.Results, outcome.Results...)
 	}
 
 	return summary, nil
+}
+
+// resolveSyncWorkerCount resolves bounded worker counts for batch sync execution.
+func resolveSyncWorkerCount(configuredWorkers int, totalProducts int) int {
+	if totalProducts <= 1 {
+		return 1
+	}
+
+	resolved := configuredWorkers
+	if resolved <= 0 {
+		resolved = defaultSyncWorkers
+	}
+	if resolved > maxSyncWorkers {
+		resolved = maxSyncWorkers
+	}
+	if resolved > totalProducts {
+		resolved = totalProducts
+	}
+	if resolved <= 0 {
+		return 1
+	}
+
+	return resolved
 }
 
 // syncOne synchronizes a single product and appends the result to the aggregate summary.
@@ -263,6 +365,7 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 		}
 
 		actionResp := parseSyncResponse(syncResponse)
+		productAction := syncActionFromResponse(actionResp)
 		feedID := ""
 		var warnings []string
 		if actionResp != nil {
@@ -271,42 +374,58 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 		}
 
 		if actionResp != nil && actionResp.HasRequiredFieldViolations() {
-			summary.Failed++
-			summary.Results = append(summary.Results, Result{
+			result := Result{
 				ProductID: product.ID,
 				SKU:       request.SKU,
 				Status:    "failed",
 				Reason:    "required_field_warnings",
 				FeedID:    feedID,
 				Warnings:  warnings,
-			})
+			}
+			appendFeedResult(&result, "product", actionResp)
+			summary.Failed++
+			summary.Results = append(summary.Results, result)
 			continue
 		}
 
 		variantImageURLs := resolveImageURLs(product.Images, s.cfg.Realm, variant.VariationIDs)
-		if imageErr := s.syncImages(ctx, request.SKU, variantImageURLs); imageErr != nil {
-			summary.Failed++
-			summary.Results = append(summary.Results, Result{
+		imageActionResp, imageErr := s.syncImages(ctx, request.SKU, variantImageURLs)
+		if imageErr != nil {
+			result := Result{
 				ProductID: product.ID,
 				SKU:       request.SKU,
 				Status:    "failed",
 				Reason:    imageErr.Error(),
 				FeedID:    feedID,
 				Warnings:  warnings,
-			})
+			}
+			appendFeedResult(&result, "product", actionResp)
+			summary.Failed++
+			summary.Results = append(summary.Results, result)
 			continue
 		}
 
-		s.recordSyncEntry(ctx, product.ID, request.SKU, feedID, actionResp)
+		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, feedID, syncdomain.SyncStepProduct, productAction)
+		imageFeedID := ""
+		imageAction := syncdomain.SyncActionCreate
+		if imageActionResp != nil {
+			imageFeedID = strings.TrimSpace(imageActionResp.RequestID)
+			imageAction = syncActionFromResponse(imageActionResp)
+		}
+		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, imageFeedID, syncdomain.SyncStepImage, imageAction)
 
-		summary.Synced++
-		summary.Results = append(summary.Results, Result{
+		result := Result{
 			ProductID: product.ID,
 			SKU:       request.SKU,
 			Status:    "synced",
 			FeedID:    feedID,
 			Warnings:  warnings,
-		})
+		}
+		appendFeedResult(&result, "product", actionResp)
+		appendFeedResult(&result, "image", imageActionResp)
+
+		summary.Synced++
+		summary.Results = append(summary.Results, result)
 	}
 }
 
@@ -344,6 +463,7 @@ func (s *ProductSyncService) syncBaseProduct(ctx context.Context, summary *Summa
 	}
 
 	actionResp := parseSyncResponse(syncResponse)
+	productAction := syncActionFromResponse(actionResp)
 	feedID := ""
 	var warnings []string
 	if actionResp != nil {
@@ -352,53 +472,101 @@ func (s *ProductSyncService) syncBaseProduct(ctx context.Context, summary *Summa
 	}
 
 	if actionResp != nil && actionResp.HasRequiredFieldViolations() {
-		summary.Failed++
-		summary.Results = append(summary.Results, Result{
+		result := Result{
 			ProductID: productID,
 			SKU:       request.SKU,
 			Status:    "failed",
 			Reason:    "required_field_warnings",
 			FeedID:    feedID,
 			Warnings:  warnings,
-		})
+		}
+		appendFeedResult(&result, "product", actionResp)
+		summary.Failed++
+		summary.Results = append(summary.Results, result)
 		return
 	}
 
-	if imageErr := s.syncImages(ctx, request.SKU, imageURLs); imageErr != nil {
-		summary.Failed++
-		summary.Results = append(summary.Results, Result{
+	imageActionResp, imageErr := s.syncImages(ctx, request.SKU, imageURLs)
+	if imageErr != nil {
+		result := Result{
 			ProductID: productID,
 			SKU:       request.SKU,
 			Status:    "failed",
 			Reason:    imageErr.Error(),
 			FeedID:    feedID,
 			Warnings:  warnings,
-		})
+		}
+		appendFeedResult(&result, "product", actionResp)
+		summary.Failed++
+		summary.Results = append(summary.Results, result)
 		return
 	}
 
-	s.recordSyncEntry(ctx, productID, request.SKU, feedID, actionResp)
+	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, feedID, syncdomain.SyncStepProduct, productAction)
+	imageFeedID := ""
+	imageAction := syncdomain.SyncActionCreate
+	if imageActionResp != nil {
+		imageFeedID = strings.TrimSpace(imageActionResp.RequestID)
+		imageAction = syncActionFromResponse(imageActionResp)
+	}
+	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, imageFeedID, syncdomain.SyncStepImage, imageAction)
 
-	summary.Synced++
-	summary.Results = append(summary.Results, Result{
+	result := Result{
 		ProductID: productID,
 		SKU:       request.SKU,
 		Status:    "synced",
 		FeedID:    feedID,
 		Warnings:  warnings,
-	})
+	}
+	appendFeedResult(&result, "product", actionResp)
+	appendFeedResult(&result, "image", imageActionResp)
+
+	summary.Synced++
+	summary.Results = append(summary.Results, result)
 }
 
 // syncImages syncs image URLs for a single SKU when URLs are provided.
-func (s *ProductSyncService) syncImages(ctx context.Context, sku string, urls []string) error {
+func (s *ProductSyncService) syncImages(ctx context.Context, sku string, urls []string) (*syncdomain.ActionResponse, error) {
 	normalized := uniqueTrimmedValues(urls)
 	if len(normalized) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	if _, err := s.source.SyncProductImages(ctx, port.SyncProductImagesRequest{SKU: strings.TrimSpace(sku), URLs: normalized}); err != nil {
-		return fmt.Errorf("sync falabella product images: %w", err)
+	response, err := s.source.SyncProductImages(ctx, port.SyncProductImagesRequest{SKU: strings.TrimSpace(sku), URLs: normalized})
+	if err != nil {
+		return nil, fmt.Errorf("sync falabella product images: %w", err)
 	}
 
-	return nil
+	return parseSyncResponse(response), nil
+}
+
+// appendFeedResult appends feed metadata into one sync result.
+func appendFeedResult(result *Result, step string, actionResp *syncdomain.ActionResponse) {
+	if result == nil || actionResp == nil {
+		return
+	}
+
+	feedID := strings.TrimSpace(actionResp.RequestID)
+	if feedID == "" {
+		return
+	}
+	result.Feeds = append(result.Feeds, ResultFeed{
+		Step:   strings.TrimSpace(step),
+		Action: strings.TrimSpace(actionResp.RequestAction),
+		FeedID: feedID,
+	})
+}
+
+// syncActionFromResponse resolves persisted sync action values from Falabella action responses.
+func syncActionFromResponse(actionResp *syncdomain.ActionResponse) syncdomain.SyncAction {
+	if actionResp == nil {
+		return syncdomain.SyncActionCreate
+	}
+
+	return actionResp.SyncAction()
+}
+
+// newExecutionID returns one best-effort unique identifier per sync execution.
+func newExecutionID() string {
+	return fmt.Sprintf("falabella-sync-%d", time.Now().UTC().UnixNano())
 }

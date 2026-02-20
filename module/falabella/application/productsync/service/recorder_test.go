@@ -77,8 +77,7 @@ func TestRecordSyncEntryWithRecorder(t *testing.T) {
 	probe := &recorderProbe{}
 	svc := &ProductSyncService{recorder: probe, logger: zap.NewNop()}
 
-	actionResp := &syncdomain.ActionResponse{RequestAction: "ProductCreate"}
-	svc.recordSyncEntry(context.Background(), "prod-1", "SKU-001", "feed-abc", actionResp)
+	svc.recordSyncEntry(context.Background(), "exec-1", "prod-1", "SKU-001", "feed-abc", syncdomain.SyncStepProduct, syncdomain.SyncActionCreate)
 
 	if len(probe.entries) != 1 {
 		t.Fatalf("len(entries) = %d, want %d", len(probe.entries), 1)
@@ -86,8 +85,14 @@ func TestRecordSyncEntryWithRecorder(t *testing.T) {
 	if probe.entries[0].ProductID != "prod-1" {
 		t.Fatalf("ProductID = %q, want %q", probe.entries[0].ProductID, "prod-1")
 	}
+	if probe.entries[0].ExecutionID != "exec-1" {
+		t.Fatalf("ExecutionID = %q, want %q", probe.entries[0].ExecutionID, "exec-1")
+	}
 	if probe.entries[0].SKU != "SKU-001" {
 		t.Fatalf("SKU = %q, want %q", probe.entries[0].SKU, "SKU-001")
+	}
+	if probe.entries[0].Step != syncdomain.SyncStepProduct {
+		t.Fatalf("Step = %q, want %q", probe.entries[0].Step, syncdomain.SyncStepProduct)
 	}
 	if probe.entries[0].FeedID != "feed-abc" {
 		t.Fatalf("FeedID = %q, want %q", probe.entries[0].FeedID, "feed-abc")
@@ -105,8 +110,7 @@ func TestRecordSyncEntryUpdateAction(t *testing.T) {
 	probe := &recorderProbe{}
 	svc := &ProductSyncService{recorder: probe, logger: zap.NewNop()}
 
-	actionResp := &syncdomain.ActionResponse{RequestAction: "ProductUpdate"}
-	svc.recordSyncEntry(context.Background(), "prod-1", "SKU-001", "feed-upd", actionResp)
+	svc.recordSyncEntry(context.Background(), "exec-1", "prod-1", "SKU-001", "feed-upd", syncdomain.SyncStepImage, syncdomain.SyncActionUpdate)
 
 	if len(probe.entries) != 1 {
 		t.Fatalf("len(entries) = %d, want %d", len(probe.entries), 1)
@@ -114,12 +118,15 @@ func TestRecordSyncEntryUpdateAction(t *testing.T) {
 	if probe.entries[0].Action != syncdomain.SyncActionUpdate {
 		t.Fatalf("Action = %q, want %q", probe.entries[0].Action, syncdomain.SyncActionUpdate)
 	}
+	if probe.entries[0].Step != syncdomain.SyncStepImage {
+		t.Fatalf("Step = %q, want %q", probe.entries[0].Step, syncdomain.SyncStepImage)
+	}
 }
 
 // TestRecordSyncEntryNilRecorder verifies no-op when recorder is nil.
 func TestRecordSyncEntryNilRecorder(t *testing.T) {
 	svc := &ProductSyncService{logger: zap.NewNop()}
-	svc.recordSyncEntry(context.Background(), "prod-1", "SKU-001", "feed-abc", nil)
+	svc.recordSyncEntry(context.Background(), "exec-1", "prod-1", "SKU-001", "feed-abc", syncdomain.SyncStepProduct, syncdomain.SyncActionCreate)
 }
 
 // TestRecordSyncEntryEmptyFeedID verifies no-op when feed ID is empty.
@@ -127,7 +134,7 @@ func TestRecordSyncEntryEmptyFeedID(t *testing.T) {
 	probe := &recorderProbe{}
 	svc := &ProductSyncService{recorder: probe, logger: zap.NewNop()}
 
-	svc.recordSyncEntry(context.Background(), "prod-1", "SKU-001", "", nil)
+	svc.recordSyncEntry(context.Background(), "exec-1", "prod-1", "SKU-001", "", syncdomain.SyncStepProduct, syncdomain.SyncActionCreate)
 	if len(probe.entries) != 0 {
 		t.Fatalf("len(entries) = %d, want %d", len(probe.entries), 0)
 	}
@@ -138,7 +145,7 @@ func TestRecordSyncEntryRecorderError(t *testing.T) {
 	probe := &recorderProbe{err: errors.New("db down")}
 	svc := &ProductSyncService{recorder: probe, logger: zap.NewNop()}
 
-	svc.recordSyncEntry(context.Background(), "prod-1", "SKU-001", "feed-abc", nil)
+	svc.recordSyncEntry(context.Background(), "exec-1", "prod-1", "SKU-001", "feed-abc", syncdomain.SyncStepProduct, syncdomain.SyncActionCreate)
 }
 
 // TestSetRecorderNilService verifies SetRecorder on nil service is safe.
