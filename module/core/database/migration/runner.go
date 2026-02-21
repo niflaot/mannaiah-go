@@ -14,8 +14,6 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratedatabase "github.com/golang-migrate/migrate/v4/database"
 	mysqlmigrate "github.com/golang-migrate/migrate/v4/database/mysql"
-	postgresmigrate "github.com/golang-migrate/migrate/v4/database/postgres"
-	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -32,7 +30,7 @@ const (
 	defaultMigrationTimeout = 30 * time.Second
 )
 
-//go:embed migrations/mysql/*.sql migrations/postgres/*.sql migrations/sqlite/*.sql
+//go:embed migrations/mysql/*.sql
 var migrationFiles embed.FS
 
 // Config defines startup migration execution settings.
@@ -288,18 +286,6 @@ func resolveDatabaseDriver(sqlDB *sql.DB, cfg Config) (migratedatabase.Driver, s
 			return nil, "", "", fmt.Errorf("create mysql migration driver: %w", err)
 		}
 		return databaseDriver, "mysql", "migrations/mysql", nil
-	case "postgres", "postgresql":
-		databaseDriver, err := postgresmigrate.WithInstance(sqlDB, &postgresmigrate.Config{MigrationsTable: table})
-		if err != nil {
-			return nil, "", "", fmt.Errorf("create postgres migration driver: %w", err)
-		}
-		return databaseDriver, "postgres", "migrations/postgres", nil
-	case "sqlite":
-		databaseDriver, err := sqlitemigrate.WithInstance(sqlDB, &sqlitemigrate.Config{MigrationsTable: table})
-		if err != nil {
-			return nil, "", "", fmt.Errorf("create sqlite migration driver: %w", err)
-		}
-		return databaseDriver, "sqlite3", "migrations/sqlite", nil
 	default:
 		return nil, "", "", fmt.Errorf("%w: %q", ErrUnsupportedDriver, cfg.Driver)
 	}

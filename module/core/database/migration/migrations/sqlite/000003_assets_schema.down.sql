@@ -1,5 +1,0 @@
-DROP TABLE IF EXISTS folder_tags;
-DROP TABLE IF EXISTS asset_metadata;
-DROP TABLE IF EXISTS asset_tags;
-DROP TABLE IF EXISTS assets;
-DROP TABLE IF EXISTS asset_folders;

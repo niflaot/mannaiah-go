@@ -12,9 +12,7 @@ Provides startup-safe, embedded SQL migration execution using `golang-migrate`.
 ## Behavior
 - Reads migration files from embedded driver-specific directories:
   - `migrations/mysql/*.sql`
-  - `migrations/postgres/*.sql`
-  - `migrations/sqlite/*.sql`
-- Supports `mysql`, `postgres`, and `sqlite` migration drivers.
+- Supports `mysql` migration driver.
 - Uses `ErrNoChange` as a non-failure state.
 - Applies best-effort timeout and graceful stop signaling.
 - Supports operations: `up`, `down`, `version`, `force`.
@@ -28,7 +26,7 @@ Provides startup-safe, embedded SQL migration execution using `golang-migrate`.
 - By default, command execution enforces migrations (`DB_MIGRATIONS_ENABLED` is ignored unless `--respect-env-enabled=true`).
 
 ## Baseline strategy
-- Each driver directory includes `000001_baseline` as a no-op anchor migration for controlled versioning.
+- MySQL migrations include `000001_baseline` as a no-op anchor migration for controlled versioning.
 - Future schema changes must add numbered `*.up.sql` and `*.down.sql` pairs.
 
 ## Assets folder uniqueness migration

@@ -3,13 +3,12 @@ package migration
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	coredatabase "mannaiah/module/core/database"
 
 	"go.uber.org/zap"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 // TestFromDatabaseConfig verifies migration config mapping behavior from core database config.
@@ -41,66 +40,27 @@ func TestApplyDisabled(t *testing.T) {
 
 // TestApplyNilDB verifies enabled migration execution requires db dependencies.
 func TestApplyNilDB(t *testing.T) {
-	err := Apply(context.Background(), nil, Config{Enabled: true, Driver: "sqlite"}, zap.NewNop())
+	err := Apply(context.Background(), nil, Config{Enabled: true, Driver: "mysql"}, zap.NewNop())
 	if !errors.Is(err, ErrNilDB) {
 		t.Fatalf("Apply(nil db) error = %v, want %v", err, ErrNilDB)
 	}
 }
 
-// TestApplySQLite verifies embedded migrations apply successfully to sqlite databases.
-func TestApplySQLite(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open() error = %v", err)
+// TestResolveDatabaseDriverRejectsUnsupported verifies unsupported migration driver handling behavior.
+func TestResolveDatabaseDriverRejectsUnsupported(t *testing.T) {
+	_, _, _, err := resolveDatabaseDriver(nil, Config{Driver: "sqlite"})
+	if !errors.Is(err, ErrUnsupportedDriver) {
+		t.Fatalf("resolveDatabaseDriver(sqlite) error = %v, want %v", err, ErrUnsupportedDriver)
 	}
-
-	cfg := Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}
-	if applyErr := Apply(context.Background(), db, cfg, zap.NewNop()); applyErr != nil {
-		t.Fatalf("Apply() error = %v", applyErr)
-	}
-	if applyErr := Apply(context.Background(), db, cfg, zap.NewNop()); applyErr != nil {
-		t.Fatalf("Apply(second run) error = %v", applyErr)
-	}
-}
-
-// TestRunVersion verifies version operation behavior.
-func TestRunVersion(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open() error = %v", err)
-	}
-
-	result, runErr := Run(context.Background(), db, Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, RunOptions{Operation: OperationVersion}, zap.NewNop())
-	if runErr != nil {
-		t.Fatalf("Run(version) error = %v", runErr)
-	}
-	if result == nil {
-		t.Fatalf("Run(version) result should not be nil")
+	if !strings.Contains(err.Error(), "sqlite") {
+		t.Fatalf("resolveDatabaseDriver(sqlite) error = %v, want quoted driver", err)
 	}
 }
 
 // TestRunForceRequiresVersion verifies force operation validation behavior.
 func TestRunForceRequiresVersion(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open() error = %v", err)
-	}
-
-	_, runErr := Run(context.Background(), db, Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, RunOptions{Operation: OperationForce, ForceVersion: -1}, zap.NewNop())
+	_, runErr := runOperation(nil, RunOptions{Operation: OperationForce, ForceVersion: -1})
 	if runErr == nil {
-		t.Fatalf("Run(force without version) expected error")
-	}
-}
-
-// TestApplyUnsupportedDriver verifies unsupported driver handling behavior.
-func TestApplyUnsupportedDriver(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open() error = %v", err)
-	}
-
-	applyErr := Apply(context.Background(), db, Config{Enabled: true, Driver: "oracle"}, zap.NewNop())
-	if !errors.Is(applyErr, ErrUnsupportedDriver) {
-		t.Fatalf("Apply(unsupported) error = %v, want %v", applyErr, ErrUnsupportedDriver)
+		t.Fatalf("runOperation(force without version) expected error")
 	}
 }

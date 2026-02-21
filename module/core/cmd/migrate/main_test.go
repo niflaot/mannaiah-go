@@ -32,7 +32,7 @@ func TestRunVersionCommand(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	err := run(context.Background(), []string{"--env-file", envFile, "--operation", "version"}, stdout, stderr)
+	err := run(context.Background(), []string{"--env-file", envFile, "--operation", "version", "--respect-env-enabled=true"}, stdout, stderr)
 	if err != nil {
 		t.Fatalf("run(version) error = %v", err)
 	}
@@ -47,7 +47,7 @@ func TestRunUpCommand(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	err := run(context.Background(), []string{"--env-file", envFile, "--operation", "up"}, stdout, stderr)
+	err := run(context.Background(), []string{"--env-file", envFile, "--operation", "up", "--respect-env-enabled=true"}, stdout, stderr)
 	if err != nil {
 		t.Fatalf("run(up) error = %v", err)
 	}
@@ -68,7 +68,7 @@ func writeMigrationEnvFile(t *testing.T) string {
 		"LOGGING_LEVEL=error",
 		"DB_DRIVER=sqlite",
 		"DB_DSN=" + dsn,
-		"DB_MIGRATIONS_ENABLED=true",
+		"DB_MIGRATIONS_ENABLED=false",
 		"DB_MIGRATIONS_TABLE=schema_migrations",
 		"DB_MIGRATIONS_TIMEOUT_MS=30000",
 	}, "\n") + "\n"
