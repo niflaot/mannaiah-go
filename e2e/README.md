@@ -13,7 +13,7 @@
 - Includes WooCommerce sync flows (manual endpoint + integration availability behavior).
 - Includes WooCommerce order-sync flows (contact fallback + status/comment mapping).
 - Includes WooCommerce outage fail-fast validation through circuit-breaker behavior.
-- Includes assets upload/CRUD, nested folder operations, and product-gallery asset-reference validation.
+- Includes assets upload/CRUD, hierarchical folder-tree retrieval, nested folder operations, and product-gallery asset-reference validation.
 
 ## Key Methods / Endpoints / Events
 - Methods:
@@ -50,6 +50,7 @@
   - `DELETE /assets/:id`
   - `POST /assets/folders`
   - `GET /assets/folders`
+  - `GET /assets/folders/tree`
   - `GET /assets/folders/:id`
   - `PATCH /assets/folders/:id`
   - `DELETE /assets/folders/:id`

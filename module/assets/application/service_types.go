@@ -127,6 +127,8 @@ type Service interface {
 	GetFolder(ctx context.Context, id string) (*domain.Folder, error)
 	// ListFolders paginates folders.
 	ListFolders(ctx context.Context, query ListQuery) (*port.FolderPageResult, error)
+	// GetFolderTree returns all folders as a hierarchical tree.
+	GetFolderTree(ctx context.Context) ([]domain.Folder, error)
 	// UpdateFolder updates mutable folder fields.
 	UpdateFolder(ctx context.Context, id string, command UpdateFolderCommand) (*domain.Folder, error)
 	// DeleteFolder soft-deletes folders and detaches linked assets.

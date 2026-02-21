@@ -52,6 +52,12 @@ type folderListResponse struct {
 	Meta listResponseMeta `json:"meta"`
 }
 
+// folderTreeResponse defines response payload for hierarchical folder-tree retrieval.
+type folderTreeResponse struct {
+	// Data defines hierarchical root folder rows.
+	Data []domain.Folder `json:"data"`
+}
+
 // listResponseMeta defines pagination metadata payload values.
 type listResponseMeta struct {
 	// Page defines current page numbers.
@@ -95,6 +101,7 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/assets/folders", h.protect("assets:create", h.createFolder))
 	router.Get("/assets/folders", h.protect("assets:read", h.findFolders))
+	router.Get("/assets/folders/tree", h.protect("assets:read", h.findFolderTree))
 	router.Get("/assets/folders/:id", h.protect("assets:read", h.findFolderByID))
 	router.Patch("/assets/folders/:id", h.protect("assets:update", h.updateFolder))
 	router.Delete("/assets/folders/:id", h.protect("assets:delete", h.deleteFolder))

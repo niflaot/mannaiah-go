@@ -13,9 +13,13 @@ const (
 func OpenAPISpec() *openapi3.T {
 	components := openapi3.NewComponents()
 	components.Schemas = openapi3.Schemas{
-		"Asset":                  &openapi3.SchemaRef{Value: assetSchema()},
-		"AssetTag":               &openapi3.SchemaRef{Value: tagSchema()},
-		"AssetFolder":            &openapi3.SchemaRef{Value: folderSchema()},
+		"Asset":               &openapi3.SchemaRef{Value: assetSchema()},
+		"AssetTag":            &openapi3.SchemaRef{Value: tagSchema()},
+		"AssetFolder":         &openapi3.SchemaRef{Value: folderSchema()},
+		"AssetFolderTreeNode": &openapi3.SchemaRef{Value: folderTreeNodeSchema()},
+		"AssetFolderTreeResponse": &openapi3.SchemaRef{
+			Value: folderTreeResponseSchema(),
+		},
 		"UpdateAssetDto":         &openapi3.SchemaRef{Value: updateAssetSchema()},
 		"CreateAssetFolderDto":   &openapi3.SchemaRef{Value: createFolderSchema()},
 		"UpdateAssetFolderDto":   &openapi3.SchemaRef{Value: updateFolderSchema()},
@@ -39,6 +43,7 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/assets", assetsPathItem()),
 			openapi3.WithPath("/assets/{id}", assetByIDPathItem()),
 			openapi3.WithPath("/assets/folders", foldersPathItem()),
+			openapi3.WithPath("/assets/folders/tree", &openapi3.PathItem{Get: listFolderTreeOperation()}),
 			openapi3.WithPath("/assets/folders/{id}", folderByIDPathItem()),
 		),
 		Components: &components,
@@ -230,6 +235,21 @@ func listFoldersOperation() *openapi3.Operation {
 	}
 }
 
+// listFolderTreeOperation defines the OpenAPI operation for hierarchical folder-tree retrieval.
+func listFolderTreeOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsFoldersController_tree",
+		Summary:     "Get complete hierarchical asset folder tree",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Return complete hierarchical folder tree.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		),
+	}
+}
+
 // getFolderOperation defines the OpenAPI operation for folder retrieval by ID.
 func getFolderOperation() *openapi3.Operation {
 	return &openapi3.Operation{
@@ -355,6 +375,32 @@ func folderSchema() *openapi3.Schema {
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema()).
 		WithProperty("deletedAt", openapi3.NewDateTimeSchema()).
 		WithProperty("isDeleted", openapi3.NewBoolSchema())
+}
+
+// folderTreeNodeSchema returns the response schema for hierarchical folder-node payloads.
+func folderTreeNodeSchema() *openapi3.Schema {
+	childrenSchema := openapi3.NewArraySchema()
+	childrenSchema.Items = &openapi3.SchemaRef{Ref: "#/components/schemas/AssetFolderTreeNode"}
+
+	return openapi3.NewObjectSchema().
+		WithProperty("_id", openapi3.NewStringSchema()).
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("slug", openapi3.NewStringSchema()).
+		WithProperty("parentFolderId", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(tagSchema())).
+		WithProperty("children", childrenSchema).
+		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
+		WithProperty("updatedAt", openapi3.NewDateTimeSchema()).
+		WithProperty("deletedAt", openapi3.NewDateTimeSchema()).
+		WithProperty("isDeleted", openapi3.NewBoolSchema())
+}
+
+// folderTreeResponseSchema returns the response schema for hierarchical folder-tree responses.
+func folderTreeResponseSchema() *openapi3.Schema {
+	dataSchema := openapi3.NewArraySchema()
+	dataSchema.Items = &openapi3.SchemaRef{Ref: "#/components/schemas/AssetFolderTreeNode"}
+
+	return openapi3.NewObjectSchema().WithProperty("data", dataSchema)
 }
 
 // updateAssetSchema returns the request schema for asset update payloads.

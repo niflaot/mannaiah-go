@@ -176,6 +176,14 @@ func TestRepositoryFolderCRUD(t *testing.T) {
 		t.Fatalf("childPage.Data[0].ID = %q, want %q", childPage.Data[0].ID, child.ID)
 	}
 
+	allFolders, err := repository.ListAllFolders(ctx)
+	if err != nil {
+		t.Fatalf("ListAllFolders() error = %v", err)
+	}
+	if len(allFolders) != 3 {
+		t.Fatalf("len(allFolders) = %d, want %d", len(allFolders), 3)
+	}
+
 	selfParent := folder.ID
 	if _, err := repository.UpdateFolder(ctx, folder.ID, port.FolderUpdate{ParentFolderID: &selfParent}); !errorspkg.Is(err, domain.ErrFolderParentSelfReference) {
 		t.Fatalf("UpdateFolder(self parent) error = %v, want domain.ErrFolderParentSelfReference", err)

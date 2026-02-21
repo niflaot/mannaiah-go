@@ -31,6 +31,8 @@ type repositoryMock struct {
 	getFolderByIDFn func(ctx context.Context, id string) (*domain.Folder, error)
 	// listFoldersFn defines folder-list behavior.
 	listFoldersFn func(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error)
+	// listAllFoldersFn defines full-folder listing behavior for tree construction.
+	listAllFoldersFn func(ctx context.Context) ([]domain.Folder, error)
 	// updateFolderFn defines folder-update behavior.
 	updateFolderFn func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error)
 	// softDeleteFolderFn defines folder-delete behavior.
@@ -80,6 +82,11 @@ func (m repositoryMock) GetFolderByID(ctx context.Context, id string) (*domain.F
 // ListFolders executes configured folder-list behavior.
 func (m repositoryMock) ListFolders(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error) {
 	return m.listFoldersFn(ctx, query)
+}
+
+// ListAllFolders executes configured full-folder listing behavior.
+func (m repositoryMock) ListAllFolders(ctx context.Context) ([]domain.Folder, error) {
+	return m.listAllFoldersFn(ctx)
 }
 
 // UpdateFolder executes configured folder-update behavior.
@@ -392,6 +399,12 @@ func TestFolderOperations(t *testing.T) {
 				}
 				return &port.FolderPageResult{Data: []domain.Folder{*folder}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
 			},
+			listAllFoldersFn: func(ctx context.Context) ([]domain.Folder, error) {
+				return []domain.Folder{
+					{ID: "f-1", Name: "Hero", Slug: "hero"},
+					{ID: "f-2", Name: "Child", Slug: "child", ParentFolderID: "f-1"},
+				}, nil
+			},
 			updateFolderFn: func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
 				if update.Name != nil {
 					folder.Name = *update.Name
@@ -443,6 +456,17 @@ func TestFolderOperations(t *testing.T) {
 		t.Fatalf("listed.Total = %d, want %d", listed.Total, 1)
 	}
 
+	tree, treeErr := service.GetFolderTree(context.Background())
+	if treeErr != nil {
+		t.Fatalf("GetFolderTree() error = %v", treeErr)
+	}
+	if len(tree) != 1 {
+		t.Fatalf("len(tree) = %d, want %d", len(tree), 1)
+	}
+	if len(tree[0].Children) != 1 || tree[0].Children[0].ID != child.ID {
+		t.Fatalf("tree[0].Children = %#v, want child id %q", tree[0].Children, child.ID)
+	}
+
 	if _, updateErr := service.UpdateFolder(context.Background(), "f-1", UpdateFolderCommand{Name: ptr(" ")}); !errorspkg.Is(updateErr, ErrInvalidFolderName) {
 		t.Fatalf("UpdateFolder(empty name) error = %v, want ErrInvalidFolderName", updateErr)
 	}
@@ -461,6 +485,41 @@ func TestFolderOperations(t *testing.T) {
 	}
 	if deleteErr := service.DeleteFolder(context.Background(), "f-1"); deleteErr != nil {
 		t.Fatalf("DeleteFolder() error = %v", deleteErr)
+	}
+}
+
+// TestGetFolderTreeHandlesCycles verifies tree construction degrades gracefully on cyclic records.
+func TestGetFolderTreeHandlesCycles(t *testing.T) {
+	service, err := NewService(
+		newRepositoryMockWith(repositoryMock{
+			listAllFoldersFn: func(ctx context.Context) ([]domain.Folder, error) {
+				return []domain.Folder{
+					{ID: "f-1", Name: "One", Slug: "one", ParentFolderID: "f-2"},
+					{ID: "f-2", Name: "Two", Slug: "two", ParentFolderID: "f-1"},
+				}, nil
+			},
+		}),
+		newStorageMock(),
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	tree, treeErr := service.GetFolderTree(context.Background())
+	if treeErr != nil {
+		t.Fatalf("GetFolderTree() error = %v", treeErr)
+	}
+	if len(tree) != 1 {
+		t.Fatalf("len(tree) = %d, want %d", len(tree), 1)
+	}
+	if tree[0].ID != "f-1" {
+		t.Fatalf("tree[0].ID = %q, want %q", tree[0].ID, "f-1")
+	}
+	if len(tree[0].Children) != 1 || tree[0].Children[0].ID != "f-2" {
+		t.Fatalf("tree children = %#v, want one child f-2", tree[0].Children)
+	}
+	if len(tree[0].Children[0].Children) != 0 {
+		t.Fatalf("expected cycle to be truncated, got %#v", tree[0].Children[0].Children)
 	}
 }
 
@@ -576,6 +635,9 @@ func newRepositoryMockWith(overrides repositoryMock) repositoryMock {
 		listFoldersFn: func(ctx context.Context, query port.ListQuery) (*port.FolderPageResult, error) {
 			return &port.FolderPageResult{}, nil
 		},
+		listAllFoldersFn: func(ctx context.Context) ([]domain.Folder, error) {
+			return []domain.Folder{}, nil
+		},
 		updateFolderFn: func(ctx context.Context, id string, update port.FolderUpdate) (*domain.Folder, error) {
 			return &domain.Folder{ID: id, Name: "folder", Slug: "folder"}, nil
 		},
@@ -608,6 +670,9 @@ func newRepositoryMockWith(overrides repositoryMock) repositoryMock {
 	}
 	if overrides.listFoldersFn != nil {
 		mock.listFoldersFn = overrides.listFoldersFn
+	}
+	if overrides.listAllFoldersFn != nil {
+		mock.listAllFoldersFn = overrides.listAllFoldersFn
 	}
 	if overrides.updateFolderFn != nil {
 		mock.updateFolderFn = overrides.updateFolderFn

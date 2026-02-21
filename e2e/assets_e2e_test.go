@@ -62,6 +62,28 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 		t.Fatalf("folder row = %v, want child folder id %q", folderData[0], childFolderID)
 	}
 
+	harness.tracer.Step("retrieve complete folder tree")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/assets/folders/tree", assetsReadToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	treeData, ok := payload["data"].([]any)
+	if !ok || len(treeData) != 1 {
+		t.Fatalf("payload.data = %v, want one root folder", payload["data"])
+	}
+	treeRoot, ok := treeData[0].(map[string]any)
+	if !ok || treeRoot["_id"] != parentFolderID {
+		t.Fatalf("tree root = %v, want parent folder id %q", treeData[0], parentFolderID)
+	}
+	children, ok := treeRoot["children"].([]any)
+	if !ok || len(children) != 1 {
+		t.Fatalf("tree root children = %v, want one child", treeRoot["children"])
+	}
+	treeChild, ok := children[0].(map[string]any)
+	if !ok || treeChild["_id"] != childFolderID {
+		t.Fatalf("tree child = %v, want child folder id %q", children[0], childFolderID)
+	}
+
 	harness.tracer.Step("upload asset with create scope")
 	status, payload = doAssetUploadRequest(t, harness, assetsCreateToken, "image.png", []byte("payload"), map[string]string{
 		"name":     "Hero",
@@ -161,7 +183,7 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 	harness.AwaitAssetDeletedEvent(t)
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(13)
+	harness.tracer.AssertStepCount(14)
 }
 
 // doAssetUploadRequest uploads asset payloads as multipart/form-data.

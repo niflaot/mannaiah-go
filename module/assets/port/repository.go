@@ -94,6 +94,8 @@ type Repository interface {
 	GetFolderByID(ctx context.Context, id string) (*domain.Folder, error)
 	// ListFolders paginates folder metadata rows.
 	ListFolders(ctx context.Context, query ListQuery) (*FolderPageResult, error)
+	// ListAllFolders loads all folder metadata rows for hierarchical tree construction.
+	ListAllFolders(ctx context.Context) ([]domain.Folder, error)
 	// UpdateFolder updates folder metadata fields.
 	UpdateFolder(ctx context.Context, id string, update FolderUpdate) (*domain.Folder, error)
 	// SoftDeleteFolder soft-deletes folder rows and detaches linked assets.

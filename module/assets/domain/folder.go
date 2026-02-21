@@ -37,6 +37,8 @@ type Folder struct {
 	ParentFolderID string `json:"parentFolderId,omitempty"`
 	// Tags defines optional classification tags.
 	Tags []Tag `json:"tags,omitempty"`
+	// Children defines nested child-folder values when returning hierarchical trees.
+	Children []Folder `json:"children,omitempty"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines update timestamps.

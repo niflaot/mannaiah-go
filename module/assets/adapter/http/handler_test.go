@@ -36,6 +36,8 @@ type serviceMock struct {
 	getFolderFn func(ctx context.Context, id string) (*domain.Folder, error)
 	// listFoldersFn defines folder-list behavior.
 	listFoldersFn func(ctx context.Context, query assetsapplication.ListQuery) (*port.FolderPageResult, error)
+	// getFolderTreeFn defines folder-tree behavior.
+	getFolderTreeFn func(ctx context.Context) ([]domain.Folder, error)
 	// updateFolderFn defines folder-update behavior.
 	updateFolderFn func(ctx context.Context, id string, command assetsapplication.UpdateFolderCommand) (*domain.Folder, error)
 	// deleteFolderFn defines folder-delete behavior.
@@ -90,6 +92,11 @@ func (m serviceMock) GetFolder(ctx context.Context, id string) (*domain.Folder, 
 // ListFolders executes configured folder-list behavior.
 func (m serviceMock) ListFolders(ctx context.Context, query assetsapplication.ListQuery) (*port.FolderPageResult, error) {
 	return m.listFoldersFn(ctx, query)
+}
+
+// GetFolderTree executes configured folder-tree behavior.
+func (m serviceMock) GetFolderTree(ctx context.Context) ([]domain.Folder, error) {
+	return m.getFolderTreeFn(ctx)
 }
 
 // UpdateFolder executes configured folder-update behavior.
@@ -187,6 +194,12 @@ func TestAssetEndpoints(t *testing.T) {
 	listFoldersResp := runRequest(t, server, listFoldersReq)
 	if listFoldersResp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /assets/folders status = %d, want %d", listFoldersResp.StatusCode, http.StatusOK)
+	}
+
+	treeFoldersReq, _ := http.NewRequest(http.MethodGet, "/assets/folders/tree", nil)
+	treeFoldersResp := runRequest(t, server, treeFoldersReq)
+	if treeFoldersResp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /assets/folders/tree status = %d, want %d", treeFoldersResp.StatusCode, http.StatusOK)
 	}
 
 	getFolderReq, _ := http.NewRequest(http.MethodGet, "/assets/folders/f-1", nil)
@@ -328,6 +341,9 @@ func TestFolderListAndCreateErrorPaths(t *testing.T) {
 		getFolderFn:    newServiceMock().getFolderFn,
 		updateFolderFn: newServiceMock().updateFolderFn,
 		deleteFolderFn: newServiceMock().deleteFolderFn,
+		getFolderTreeFn: func(ctx context.Context) ([]domain.Folder, error) {
+			return []domain.Folder{}, nil
+		},
 		createFolderFn: func(ctx context.Context, command assetsapplication.CreateFolderCommand) (*domain.Folder, error) {
 			return nil, domain.ErrFolderNameRequired
 		},
@@ -420,6 +436,11 @@ func newServiceMock() serviceMock {
 		},
 		listFoldersFn: func(ctx context.Context, query assetsapplication.ListQuery) (*port.FolderPageResult, error) {
 			return &port.FolderPageResult{Data: []domain.Folder{{ID: "f-1", Name: "Hero", Slug: "hero"}}, Total: 1, Page: query.Page, Limit: query.Limit}, nil
+		},
+		getFolderTreeFn: func(ctx context.Context) ([]domain.Folder, error) {
+			return []domain.Folder{
+				{ID: "f-1", Name: "Hero", Slug: "hero", Children: []domain.Folder{{ID: "f-2", Name: "Child", Slug: "child", ParentFolderID: "f-1"}}},
+			}, nil
 		},
 		updateFolderFn: func(ctx context.Context, id string, command assetsapplication.UpdateFolderCommand) (*domain.Folder, error) {
 			parentID := ""

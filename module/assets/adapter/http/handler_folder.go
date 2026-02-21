@@ -72,6 +72,16 @@ func (h *Handler) findFolders(ctx corehttp.Context) error {
 	})
 }
 
+// findFolderTree handles hierarchical folder-tree retrieval endpoints.
+func (h *Handler) findFolderTree(ctx corehttp.Context) error {
+	result, err := h.service.GetFolderTree(ctx.Context())
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(folderTreeResponse{Data: result})
+}
+
 // findFolderByID handles folder-by-id retrieval endpoints.
 func (h *Handler) findFolderByID(ctx corehttp.Context) error {
 	entity, err := h.service.GetFolder(ctx.Context(), ctx.Params("id"))
