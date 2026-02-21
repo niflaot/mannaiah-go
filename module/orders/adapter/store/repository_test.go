@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/gorm"
 	coredb "mannaiah/module/core/database"
+	coredbmigration "mannaiah/module/core/database/migration"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
+
+	"gorm.io/gorm"
 )
 
 // TestNewRepositoryRejectsNilDB verifies constructor validation for nil DB dependencies.
@@ -416,8 +418,8 @@ func TestRepositoryErrorPathsOnClosedDB(t *testing.T) {
 		t.Fatalf("sqlDB.Close() error = %v", err)
 	}
 
-	if err := repository.EnsureSchema(context.Background()); err == nil {
-		t.Fatalf("expected EnsureSchema() error on closed db")
+	if err := repository.EnsureSchema(context.Background()); err != nil {
+		t.Fatalf("EnsureSchema() error = %v", err)
 	}
 	if err := repository.Create(context.Background(), newOrderForTest("x", "y", "c")); err == nil {
 		t.Fatalf("expected Create() error on closed db")
@@ -496,6 +498,9 @@ func newRepositoryForTest(t *testing.T) *Repository {
 	repository, err := NewRepository(db)
 	if err != nil {
 		t.Fatalf("NewRepository() error = %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("coredbmigration.Apply() error = %v", err)
 	}
 	if err := repository.EnsureSchema(context.Background()); err != nil {
 		t.Fatalf("EnsureSchema() error = %v", err)

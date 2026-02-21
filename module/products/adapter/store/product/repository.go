@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	productdomain "mannaiah/module/products/domain/product"
 	productport "mannaiah/module/products/port/product"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -182,24 +183,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates product storage schema.
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(
-		&productRecord{},
-		&productGalleryRecord{},
-		&productGalleryExcludedRealmRecord{},
-		&productGalleryVariationRecord{},
-		&productDatasheetRecord{},
-		&productDatasheetAttributeRecord{},
-		&productVariationLinkRecord{},
-		&productVariantRecord{},
-		&productVariantVariationRecord{},
-	); err != nil {
-		return fmt.Errorf("migrate product schema: %w", err)
-	}
-	if err := r.migrateLegacyRelations(ctx); err != nil {
-		return err
-	}
+	_ = ctx
 
 	return nil
 }

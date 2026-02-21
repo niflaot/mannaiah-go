@@ -1,0 +1,17 @@
+DROP TABLE IF EXISTS order_metadata;
+DROP TABLE IF EXISTS order_shipping_charges;
+DROP TABLE IF EXISTS order_shipping_addresses;
+DROP TABLE IF EXISTS order_comments;
+DROP TABLE IF EXISTS order_status_history;
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS product_variant_variations;
+DROP TABLE IF EXISTS product_variants;
+DROP TABLE IF EXISTS product_variation_links;
+DROP TABLE IF EXISTS product_datasheet_attributes;
+DROP TABLE IF EXISTS product_datasheets;
+DROP TABLE IF EXISTS product_gallery_variations;
+DROP TABLE IF EXISTS product_gallery_excluded_realms;
+DROP TABLE IF EXISTS product_gallery_items;
+DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS variations;

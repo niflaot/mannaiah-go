@@ -138,13 +138,6 @@ func (m *Module) ConfigureSyncStatus(db *gorm.DB) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
-	defer cancel()
-	if schemaErr := repo.EnsureSchema(ctx); schemaErr != nil {
-		m.logger.Warn("falabella sync status schema migration failed", zap.Error(schemaErr))
-		return nil
-	}
-
 	// Build source for feed status - reuse the same source used by the module.
 	source, sourceErr := newSource(m.cfg, m.logger)
 	if sourceErr != nil {

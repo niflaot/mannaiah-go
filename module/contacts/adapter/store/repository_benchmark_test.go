@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"testing"
 
-	"gorm.io/gorm"
 	"mannaiah/module/contacts/domain"
 	"mannaiah/module/contacts/port"
 	coredb "mannaiah/module/core/database"
+	coredbmigration "mannaiah/module/core/database/migration"
+
+	"gorm.io/gorm"
 )
 
 // BenchmarkRepositoryCreate measures repository write throughput for contact creation.
@@ -73,6 +75,9 @@ func newRepositoryForBenchmark(b *testing.B) *Repository {
 	b.Helper()
 
 	db := newDBForBenchmark(b)
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		b.Fatalf("coredbmigration.Apply() error = %v", err)
+	}
 	repository, err := NewRepository(db)
 	if err != nil {
 		b.Fatalf("NewRepository() error = %v", err)

@@ -63,6 +63,35 @@ func TestApplySQLite(t *testing.T) {
 	}
 }
 
+// TestRunVersion verifies version operation behavior.
+func TestRunVersion(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open() error = %v", err)
+	}
+
+	result, runErr := Run(context.Background(), db, Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, RunOptions{Operation: OperationVersion}, zap.NewNop())
+	if runErr != nil {
+		t.Fatalf("Run(version) error = %v", runErr)
+	}
+	if result == nil {
+		t.Fatalf("Run(version) result should not be nil")
+	}
+}
+
+// TestRunForceRequiresVersion verifies force operation validation behavior.
+func TestRunForceRequiresVersion(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open() error = %v", err)
+	}
+
+	_, runErr := Run(context.Background(), db, Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, RunOptions{Operation: OperationForce, ForceVersion: -1}, zap.NewNop())
+	if runErr == nil {
+		t.Fatalf("Run(force without version) expected error")
+	}
+}
+
 // TestApplyUnsupportedDriver verifies unsupported driver handling behavior.
 func TestApplyUnsupportedDriver(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

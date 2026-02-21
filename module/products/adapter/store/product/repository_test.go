@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	coredb "mannaiah/module/core/database"
+	coredbmigration "mannaiah/module/core/database/migration"
 	productdomain "mannaiah/module/products/domain/product"
 	productport "mannaiah/module/products/port/product"
 )
@@ -156,76 +157,11 @@ func TestIsDuplicateSKUErr(t *testing.T) {
 	}
 }
 
-// TestEnsureSchemaMigratesLegacyJSONRelations verifies legacy JSON migration into normalized tables.
-func TestEnsureSchemaMigratesLegacyJSONRelations(t *testing.T) {
-	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
-	if err != nil {
-		t.Fatalf("coredb.Open() error = %v", err)
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("db.DB() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
-
-	ctx := context.Background()
-	if err := db.WithContext(ctx).Exec(`
-		CREATE TABLE products (
-			id TEXT PRIMARY KEY,
-			sku TEXT NOT NULL UNIQUE,
-			gallery TEXT,
-			datasheets TEXT,
-			variations TEXT,
-			variants TEXT,
-			created_at DATETIME,
-			updated_at DATETIME,
-			deleted_at DATETIME
-		);
-	`).Error; err != nil {
-		t.Fatalf("create legacy products table error = %v", err)
-	}
-	if err := db.WithContext(ctx).Exec(`
-		INSERT INTO products (id, sku, gallery, datasheets, variations, variants, created_at, updated_at)
-		VALUES (
-			'p-legacy',
-			'SKU-LEGACY',
-			'[{"assetId":"asset-1","isMain":true,"excludedRealms":["b2b"],"variationIds":["v1"]}]',
-			'[{"realm":"default","name":"Legacy","description":"desc","attributes":{"weight":10}}]',
-			'["v1","v2"]',
-			'[{"variationIds":["v1"],"sku":"SKU-LEGACY-V1"}]',
-			CURRENT_TIMESTAMP,
-			CURRENT_TIMESTAMP
-		);
-	`).Error; err != nil {
-		t.Fatalf("insert legacy product row error = %v", err)
-	}
-
-	repository, err := NewRepository(db)
-	if err != nil {
-		t.Fatalf("NewRepository() error = %v", err)
-	}
-	if err := repository.EnsureSchema(ctx); err != nil {
+// TestEnsureSchemaNoop verifies repository EnsureSchema does not mutate schema at runtime.
+func TestEnsureSchemaNoop(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	if err := repository.EnsureSchema(context.Background()); err != nil {
 		t.Fatalf("EnsureSchema() error = %v", err)
-	}
-
-	entity, err := repository.GetByID(ctx, "p-legacy")
-	if err != nil {
-		t.Fatalf("GetByID() error = %v", err)
-	}
-	if len(entity.Gallery) != 1 || entity.Gallery[0].AssetID != "asset-1" {
-		t.Fatalf("entity.Gallery = %#v, want one asset-1 item", entity.Gallery)
-	}
-	if len(entity.Datasheets) != 1 || entity.Datasheets[0].Realm != "default" {
-		t.Fatalf("entity.Datasheets = %#v, want one default datasheet", entity.Datasheets)
-	}
-	if len(entity.Variations) != 2 {
-		t.Fatalf("entity.Variations = %#v, want two items", entity.Variations)
-	}
-	if len(entity.Variants) != 1 || entity.Variants[0].SKU != "SKU-LEGACY-V1" {
-		t.Fatalf("entity.Variants = %#v, want one SKU-LEGACY-V1 variant", entity.Variants)
 	}
 }
 
@@ -249,6 +185,9 @@ func newRepositoryForTest(t *testing.T) *Repository {
 	repository, err := NewRepository(db)
 	if err != nil {
 		t.Fatalf("NewRepository() error = %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("coredbmigration.Apply() error = %v", err)
 	}
 	if err := repository.EnsureSchema(context.Background()); err != nil {
 		t.Fatalf("EnsureSchema() error = %v", err)

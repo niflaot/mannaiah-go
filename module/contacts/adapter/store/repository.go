@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"mannaiah/module/contacts/domain"
 	"mannaiah/module/contacts/port"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -78,11 +79,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates contact persistence schema.
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(&contactRecord{}, &contactMetadataRecord{}); err != nil {
-		return fmt.Errorf("migrate contact schema: %w", err)
-	}
+	_ = ctx
 
 	return nil
 }

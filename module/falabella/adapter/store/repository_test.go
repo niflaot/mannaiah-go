@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	coredbmigration "mannaiah/module/core/database/migration"
 	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
 
@@ -20,6 +21,9 @@ func newTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("migration.Apply() error = %v", err)
 	}
 
 	return db
@@ -46,46 +50,12 @@ func TestEnsureSchema(t *testing.T) {
 	}
 }
 
-// TestEnsureSchemaMigrationFromLegacy verifies legacy schema (with id column) is dropped and recreated.
+// TestEnsureSchemaMigrationFromLegacy verifies repository no-op behavior for schema management.
 func TestEnsureSchemaMigrationFromLegacy(t *testing.T) {
 	db := newTestDB(t)
-
-	// Create legacy table with id column.
-	if err := db.Exec(`CREATE TABLE falabella_sync_status (
-		id VARCHAR(64) PRIMARY KEY,
-		feed_id VARCHAR(191) NOT NULL,
-		product_id VARCHAR(128) NOT NULL,
-		sku VARCHAR(128) NOT NULL,
-		action VARCHAR(16) NOT NULL,
-		status VARCHAR(16) NOT NULL,
-		synced_at DATETIME NOT NULL,
-		resolved_at DATETIME
-	)`).Error; err != nil {
-		t.Fatalf("create legacy table: %v", err)
-	}
-
 	repo, _ := NewRepository(db)
 	if err := repo.EnsureSchema(context.Background()); err != nil {
 		t.Fatalf("EnsureSchema() error = %v", err)
-	}
-
-	// Verify we can create an entry with feed_id as PK (no id column).
-	entry := &syncdomain.SyncEntry{
-		ProductID: "prod-1", SKU: "SKU-001", FeedID: "feed-legacy",
-		Action:   syncdomain.SyncActionCreate,
-		Status:   syncdomain.SyncStatusPending,
-		SyncedAt: time.Now().UTC(),
-	}
-	if err := repo.Create(context.Background(), entry); err != nil {
-		t.Fatalf("Create() after legacy migration error = %v", err)
-	}
-
-	retrieved, err := repo.GetByFeedID(context.Background(), "feed-legacy")
-	if err != nil {
-		t.Fatalf("GetByFeedID() error = %v", err)
-	}
-	if retrieved.FeedID != "feed-legacy" {
-		t.Fatalf("FeedID = %q, want %q", retrieved.FeedID, "feed-legacy")
 	}
 }
 

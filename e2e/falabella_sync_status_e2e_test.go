@@ -11,6 +11,7 @@ import (
 
 	corecron "mannaiah/module/core/cron"
 	coredatabase "mannaiah/module/core/database"
+	coredatabasemigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
 	"mannaiah/module/falabella"
 )
@@ -106,6 +107,9 @@ func TestFalabellaSyncStatusEndpointsE2E(t *testing.T) {
 	if err != nil {
 		t.Fatalf("coredatabase.Open() error = %v", err)
 	}
+	if err := coredatabasemigration.Apply(context.Background(), db, coredatabasemigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, tracer.logger); err != nil {
+		t.Fatalf("coredatabasemigration.Apply() error = %v", err)
+	}
 
 	tracer.Step("initialize falabella module")
 	module, err := falabella.New(falabella.Config{
@@ -193,6 +197,9 @@ func TestFalabellaSyncStatusLifecycleE2E(t *testing.T) {
 	}, tracer.logger)
 	if err != nil {
 		t.Fatalf("coredatabase.Open() error = %v", err)
+	}
+	if err := coredatabasemigration.Apply(context.Background(), db, coredatabasemigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, tracer.logger); err != nil {
+		t.Fatalf("coredatabasemigration.Apply() error = %v", err)
 	}
 
 	tracer.Step("initialize falabella module")

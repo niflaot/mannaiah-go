@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"mannaiah/module/assets/port"
@@ -139,20 +138,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates asset persistence schema.
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(
-		&folderRecord{},
-		&assetRecord{},
-		&assetTagRecord{},
-		&assetMetadataRecord{},
-		&folderTagRecord{},
-	); err != nil {
-		return fmt.Errorf("migrate asset schema: %w", err)
-	}
-	if err := r.migrateLegacyRelations(ctx); err != nil {
-		return err
-	}
+	_ = ctx
 
 	return nil
 }

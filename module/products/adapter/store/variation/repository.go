@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	variationdomain "mannaiah/module/products/domain/variation"
 	variationport "mannaiah/module/products/port/variation"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -60,11 +61,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates variation persistence schema.
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(&variationRecord{}); err != nil {
-		return fmt.Errorf("migrate variation schema: %w", err)
-	}
+	_ = ctx
 
 	return nil
 }

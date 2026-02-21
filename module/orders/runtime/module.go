@@ -1,16 +1,14 @@
 package runtime
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	corehttp "mannaiah/module/core/http"
 	ordershttp "mannaiah/module/orders/adapter/http"
 	ordersstore "mannaiah/module/orders/adapter/store"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersport "mannaiah/module/orders/port"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // Module defines composition-root wiring for order endpoints.
@@ -29,7 +27,7 @@ type Loader interface {
 	AddOpenAPISpec(spec *openapi3.T) error
 }
 
-// New creates an orders module with schema migration and adapter wiring.
+// New creates an orders module with adapter wiring.
 func New(
 	db *gorm.DB,
 	customerSource ordersport.CustomerSource,
@@ -39,9 +37,6 @@ func New(
 	repository, err := ordersstore.NewRepository(db)
 	if err != nil {
 		return nil, err
-	}
-	if err := repository.EnsureSchema(context.Background()); err != nil {
-		return nil, fmt.Errorf("ensure orders schema: %w", err)
 	}
 
 	service, err := ordersapplication.NewServiceWithPublisher(repository, customerSource, publisher, resolvers...)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	coredb "mannaiah/module/core/database"
+	coredbmigration "mannaiah/module/core/database/migration"
 	variationdomain "mannaiah/module/products/domain/variation"
 	variationport "mannaiah/module/products/port/variation"
 )
@@ -134,6 +135,9 @@ func newRepositoryForTest(t *testing.T) *Repository {
 	repository, err := NewRepository(db)
 	if err != nil {
 		t.Fatalf("NewRepository() error = %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("coredbmigration.Apply() error = %v", err)
 	}
 	if err := repository.EnsureSchema(context.Background()); err != nil {
 		t.Fatalf("EnsureSchema() error = %v", err)

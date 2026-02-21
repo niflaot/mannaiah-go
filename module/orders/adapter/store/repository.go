@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -39,19 +40,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates normalized order persistence schema.
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(
-		&orderRecord{},
-		&orderItemRecord{},
-		&orderStatusRecord{},
-		&orderCommentRecord{},
-		&orderShippingAddressRecord{},
-		&orderShippingChargeRecord{},
-		&orderMetadataRecord{},
-	); err != nil {
-		return fmt.Errorf("migrate order schema: %w", err)
-	}
+	_ = ctx
 
 	return nil
 }
