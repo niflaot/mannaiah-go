@@ -3,11 +3,11 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
-	"gorm.io/gorm"
 	"mannaiah/module/assets/port"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -52,9 +52,9 @@ type folderRecord struct {
 	// Name defines folder names.
 	Name string `gorm:"size:255;not null"`
 	// Slug defines normalized folder slugs.
-	Slug string `gorm:"size:191;uniqueIndex:idx_asset_folders_slug;not null"`
+	Slug string `gorm:"size:191;not null;uniqueIndex:idx_asset_folders_parent_slug,priority:2"`
 	// ParentFolderID defines optional parent-folder identifiers for nested folders.
-	ParentFolderID *string `gorm:"size:64;index"`
+	ParentFolderID *string `gorm:"size:64;index;uniqueIndex:idx_asset_folders_parent_slug,priority:1"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
@@ -138,20 +138,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates asset persistence schema.
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).AutoMigrate(
-		&folderRecord{},
-		&assetRecord{},
-		&assetTagRecord{},
-		&assetMetadataRecord{},
-		&folderTagRecord{},
-	); err != nil {
-		return fmt.Errorf("migrate asset schema: %w", err)
-	}
-	if err := r.migrateLegacyRelations(ctx); err != nil {
-		return err
-	}
+	_ = ctx
 
 	return nil
 }

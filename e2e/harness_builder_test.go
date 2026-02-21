@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	contactevent "mannaiah/module/contacts/adapter/event"
 	contactapplication "mannaiah/module/contacts/application"
 	coredatabase "mannaiah/module/core/database"
+	coredatabasemigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
 	coremsgplatform "mannaiah/module/core/messaging/platform"
 	corewatermill "mannaiah/module/core/messaging/watermill"
@@ -53,13 +55,17 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	}
 
 	tracer.Step("open sqlite database")
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
 	db, err := coredatabase.Open(coredatabase.Config{
 		Driver:       "sqlite",
-		DSN:          "file::memory:?cache=shared",
+		DSN:          dsn,
 		MaxOpenConns: 1,
 	}, tracer.logger)
 	if err != nil {
 		t.Fatalf("coredatabase.Open() error = %v", err)
+	}
+	if err := coredatabasemigration.Apply(context.Background(), db, coredatabasemigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, tracer.logger); err != nil {
+		t.Fatalf("coredatabasemigration.Apply() error = %v", err)
 	}
 
 	tracer.Step("initialize in-memory messaging platform")

@@ -1,16 +1,14 @@
 package runtime
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	"mannaiah/module/contacts/adapter/http"
 	"mannaiah/module/contacts/adapter/store"
 	"mannaiah/module/contacts/application"
 	"mannaiah/module/contacts/port"
 	corehttp "mannaiah/module/core/http"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // Module defines composition-root wiring for contact endpoints.
@@ -29,14 +27,11 @@ type Loader interface {
 	AddOpenAPISpec(spec *openapi3.T) error
 }
 
-// New creates a contacts module with schema migration and adapter wiring.
+// New creates a contacts module with adapter wiring.
 func New(db *gorm.DB, publishers ...port.IntegrationEventPublisher) (*Module, error) {
 	repository, err := store.NewRepository(db)
 	if err != nil {
 		return nil, err
-	}
-	if err := repository.EnsureSchema(context.Background()); err != nil {
-		return nil, fmt.Errorf("ensure contacts schema: %w", err)
 	}
 
 	service, err := application.NewServiceWithPublisher(repository, resolvePublisher(publishers))

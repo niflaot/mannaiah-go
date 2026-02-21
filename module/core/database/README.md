@@ -8,15 +8,18 @@
 - Generic base model with timestamps and soft-delete metadata.
 - Generic CRUD service with query-based `Find`.
 - Extension-friendly service composition for domain-specific methods.
+- Embedded startup migration runner (`database/migration`) based on versioned SQL files.
 
 ## Usage Rules
 - Load `database.Config` through the shared core config loader.
-- Migrate models before CRUD operations.
+- Prefer versioned SQL migrations under `database/migration/migrations` for schema changes.
 - Extend `Service[T]` via composition for module-specific behavior.
 
 ## Key Methods / Endpoints / Events
 - Methods:
   - `database.Open(cfg, providedLogger)`
+  - `migration.FromDatabaseConfig(cfg)`
+  - `migration.Apply(ctx, db, cfg, logger)`
   - `database.NewService[T](db)`
   - `(*database.Service[T]).Create(ctx, entity)`
   - `(*database.Service[T]).Read(ctx, id)`

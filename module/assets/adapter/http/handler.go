@@ -175,6 +175,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, port.ErrFolderNotFound) {
 		return corehttp.NewAppError(404, "asset_folder_not_found", err)
 	}
+	if errors.Is(err, port.ErrFolderAlreadyExists) {
+		return corehttp.NewAppError(409, "asset_folder_already_exists", err)
+	}
 	if errors.Is(err, port.ErrNotFound) {
 		return corehttp.NewAppError(404, "asset_not_found", err)
 	}

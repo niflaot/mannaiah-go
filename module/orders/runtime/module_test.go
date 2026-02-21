@@ -6,13 +6,15 @@ import (
 	stdhttp "net/http"
 	"testing"
 
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	coredb "mannaiah/module/core/database"
+	coredbmigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
 	ordersstore "mannaiah/module/orders/adapter/store"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersport "mannaiah/module/orders/port"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // customerSourceProbe defines customer-source behavior for module tests.
@@ -164,6 +166,9 @@ func newDBForTest(t *testing.T) *gorm.DB {
 	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared", MaxOpenConns: 1}, nil)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("migration.Apply() error = %v", err)
 	}
 
 	sqlDB, err := db.DB()

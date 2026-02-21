@@ -13,13 +13,15 @@ import (
 	"testing"
 	"time"
 
-	jwtlib "github.com/golang-jwt/jwt/v5"
-	"gorm.io/gorm"
 	"mannaiah/module/auth"
 	"mannaiah/module/contacts"
 	contactport "mannaiah/module/contacts/port"
 	coredatabase "mannaiah/module/core/database"
+	coredatabasemigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
+
+	jwtlib "github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 // failingIntegrationEventPublisher defines deterministic event publication failures for resilience tests.
@@ -304,6 +306,9 @@ func newE2EDatabase(t *testing.T, tracer *stepTracer) *gorm.DB {
 	}, tracer.logger)
 	if err != nil {
 		t.Fatalf("coredatabase.Open() error = %v", err)
+	}
+	if err := coredatabasemigration.Apply(context.Background(), db, coredatabasemigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, tracer.logger); err != nil {
+		t.Fatalf("coredatabasemigration.Apply() error = %v", err)
 	}
 
 	return db

@@ -1,11 +1,12 @@
 package assets
 
 import (
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	"mannaiah/module/assets/port"
 	assetsruntime "mannaiah/module/assets/runtime"
 	corehttp "mannaiah/module/core/http"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // Module defines composition-root wiring for asset endpoints.
@@ -19,7 +20,7 @@ type Loader interface {
 	AddOpenAPISpec(spec *openapi3.T) error
 }
 
-// New creates an assets module with schema migration and adapter wiring.
+// New creates an assets module with adapter wiring.
 func New(db *gorm.DB, storage port.Storage, publishers ...port.IntegrationEventPublisher) (*Module, error) {
 	return assetsruntime.New(db, storage, publishers...)
 }

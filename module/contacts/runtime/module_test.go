@@ -6,12 +6,14 @@ import (
 	stdhttp "net/http"
 	"testing"
 
-	"github.com/getkin/kin-openapi/openapi3"
-	"gorm.io/gorm"
 	"mannaiah/module/contacts/adapter/store"
 	"mannaiah/module/contacts/port"
 	coredb "mannaiah/module/core/database"
+	coredbmigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gorm.io/gorm"
 )
 
 // TestNewAndRegisterRoutes verifies module wiring and route registration.
@@ -173,6 +175,9 @@ func newDBForTest(t *testing.T) *gorm.DB {
 	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("migration.Apply() error = %v", err)
 	}
 
 	sqlDB, err := db.DB()

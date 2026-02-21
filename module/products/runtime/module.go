@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"context"
-
 	corehttp "mannaiah/module/core/http"
 	producthttp "mannaiah/module/products/adapter/http/product"
 	variationhttp "mannaiah/module/products/adapter/http/variation"
@@ -35,13 +33,10 @@ type Loader interface {
 	AddOpenAPISpec(spec *openapi3.T) error
 }
 
-// New creates a products module with schema migration and adapter wiring.
+// New creates a products module with adapter wiring.
 func New(db *gorm.DB, assetLookup productapplication.AssetLookup) (*Module, error) {
 	productRepository, err := productstore.NewRepository(db)
 	if err != nil {
-		return nil, err
-	}
-	if err := productRepository.EnsureSchema(context.Background()); err != nil {
 		return nil, err
 	}
 
@@ -57,9 +52,6 @@ func New(db *gorm.DB, assetLookup productapplication.AssetLookup) (*Module, erro
 
 	variationRepository, err := variationstore.NewRepository(db)
 	if err != nil {
-		return nil, err
-	}
-	if err := variationRepository.EnsureSchema(context.Background()); err != nil {
 		return nil, err
 	}
 

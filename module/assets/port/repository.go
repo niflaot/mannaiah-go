@@ -12,6 +12,8 @@ var (
 	ErrNotFound = errors.New("asset not found")
 	// ErrFolderNotFound is returned when folder records are missing.
 	ErrFolderNotFound = errors.New("asset folder not found")
+	// ErrFolderAlreadyExists is returned when folder name already exists under the same parent path.
+	ErrFolderAlreadyExists = errors.New("asset folder already exists")
 )
 
 // ListQuery defines list-assets query values.

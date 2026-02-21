@@ -63,3 +63,18 @@
   - place use-case orchestration in `application/<feature>/service`
   - place integration event contracts/builders in `application/<feature>/event`
   - do not define integration event topics/payload builders inside service packages when an `event` package exists
+
+## Database Migrations (Mandatory)
+- All SQL schema changes must be delivered through versioned migration files; do not rely on ad-hoc runtime `AutoMigrate` in production startup paths.
+- When schema is touched, include both directions:
+  - `*.up.sql` for forward changes
+  - `*.down.sql` for rollback changes
+- Migration files must live in the core migration source-of-truth directory and use monotonic numeric version prefixes.
+- Pull requests that modify schema-affecting code must also include corresponding migration files and tests covering startup/apply behavior where practical.
+- Prefer backward-compatible rollout strategy:
+  - additive changes first (new table/column/index),
+  - application rollout,
+  - cleanup/drop in later migration.
+- Destructive schema changes (drop/rename/type narrowing) require explicit rollback strategy and data-safety notes in the PR.
+- New indexes/constraints must be intentional and validated against query paths and uniqueness/idempotency requirements.
+- If denormalization is introduced for performance, document rationale and consistency safeguards/tests in the same PR.

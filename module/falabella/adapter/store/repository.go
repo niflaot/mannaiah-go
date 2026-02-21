@@ -79,23 +79,9 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// EnsureSchema migrates sync status persistence schema.
-// Handles migration from old schema (id PK + feed_id unique) to new schema (feed_id PK).
+// EnsureSchema is a no-op because schema evolution is managed by SQL migrations.
 func (r *Repository) EnsureSchema(ctx context.Context) error {
-	migrator := r.db.WithContext(ctx).Migrator()
-
-	if migrator.HasTable(&syncStatusRecord{}) && migrator.HasColumn(&syncStatusRecord{}, "id") {
-		if err := migrator.DropTable(&syncStatusRecord{}); err != nil {
-			return fmt.Errorf("drop legacy falabella sync status table: %w", err)
-		}
-	}
-
-	if err := r.db.WithContext(ctx).AutoMigrate(&syncStatusRecord{}); err != nil {
-		return fmt.Errorf("migrate falabella sync status schema: %w", err)
-	}
-	if err := r.db.WithContext(ctx).AutoMigrate(&syncExecutionRecord{}); err != nil {
-		return fmt.Errorf("migrate falabella sync execution schema: %w", err)
-	}
+	_ = ctx
 
 	return nil
 }
