@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	gosqlmysql "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
-	"gorm.io/driver/mysql"
+	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -62,8 +63,23 @@ func resolveDialector(driver string, dsn string) (gorm.Dialector, error) {
 	case "postgres", "postgresql":
 		return postgres.Open(strings.TrimSpace(dsn)), nil
 	case "mysql":
-		return mysql.Open(strings.TrimSpace(dsn)), nil
+		normalizedDSN, err := normalizeMySQLDSN(strings.TrimSpace(dsn))
+		if err != nil {
+			return nil, err
+		}
+		return gormmysql.Open(normalizedDSN), nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnsupportedDriver, driver)
 	}
+}
+
+// normalizeMySQLDSN ensures MySQL connections support migration multi-statement SQL files.
+func normalizeMySQLDSN(dsn string) (string, error) {
+	cfg, err := gosqlmysql.ParseDSN(strings.TrimSpace(dsn))
+	if err != nil {
+		return "", fmt.Errorf("parse mysql dsn: %w", err)
+	}
+	cfg.MultiStatements = true
+
+	return cfg.FormatDSN(), nil
 }

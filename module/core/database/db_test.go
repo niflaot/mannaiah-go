@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	gosqlmysql "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gorm.io/gorm"
@@ -117,6 +118,36 @@ func TestResolveDialectorSupportsAliases(t *testing.T) {
 	}
 	if _, err := resolveDialector("mysql", "user:pass@tcp(localhost:3306)/db"); err != nil {
 		t.Fatalf("resolveDialector(mysql) error = %v", err)
+	}
+}
+
+// TestNormalizeMySQLDSNEnablesMultiStatements verifies MySQL DSN normalization forces multiStatements=true.
+func TestNormalizeMySQLDSNEnablesMultiStatements(t *testing.T) {
+	normalized, err := normalizeMySQLDSN("user:pass@tcp(localhost:3306)/db?parseTime=true")
+	if err != nil {
+		t.Fatalf("normalizeMySQLDSN() error = %v", err)
+	}
+
+	cfg, err := gosqlmysql.ParseDSN(normalized)
+	if err != nil {
+		t.Fatalf("ParseDSN(normalized) error = %v", err)
+	}
+	if !cfg.MultiStatements {
+		t.Fatalf("MultiStatements = %t, want true", cfg.MultiStatements)
+	}
+	if !cfg.ParseTime {
+		t.Fatalf("ParseTime = %t, want true", cfg.ParseTime)
+	}
+}
+
+// TestNormalizeMySQLDSNRejectsInvalid verifies invalid mysql DSN values are rejected.
+func TestNormalizeMySQLDSNRejectsInvalid(t *testing.T) {
+	_, err := normalizeMySQLDSN("not-a-valid-dsn")
+	if err == nil {
+		t.Fatalf("expected normalizeMySQLDSN() to fail for invalid DSN")
+	}
+	if !strings.Contains(err.Error(), "parse mysql dsn") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
