@@ -18,4 +18,10 @@ type Config struct {
 	GormLogLevel string `mapstructure:"DB_GORM_LOG_LEVEL" default:"warn"`
 	// SlowQueryThresholdMS defines slow query threshold in milliseconds.
 	SlowQueryThresholdMS int `mapstructure:"DB_GORM_SLOW_QUERY_THRESHOLD_MS" default:"200"`
+	// MigrationsEnabled defines whether startup applies SQL migrations automatically.
+	MigrationsEnabled bool `mapstructure:"DB_MIGRATIONS_ENABLED" default:"true"`
+	// MigrationsTable defines migration state table name used by migration tooling.
+	MigrationsTable string `mapstructure:"DB_MIGRATIONS_TABLE" default:"schema_migrations"`
+	// MigrationsTimeoutMS defines best-effort migration execution timeout in milliseconds.
+	MigrationsTimeoutMS int `mapstructure:"DB_MIGRATIONS_TIMEOUT_MS" default:"30000"`
 }

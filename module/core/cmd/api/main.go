@@ -18,6 +18,7 @@ import (
 	coreconfig "mannaiah/module/core/config"
 	corecron "mannaiah/module/core/cron"
 	coredatabase "mannaiah/module/core/database"
+	coredatabasemigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
 	corelogger "mannaiah/module/core/logger"
 	coremsgplatform "mannaiah/module/core/messaging/platform"
@@ -77,6 +78,9 @@ func run(ctx context.Context, envFile string) error {
 	db, err := coredatabase.Open(dbCfg, logger)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
+	}
+	if migrationErr := coredatabasemigration.Apply(ctx, db, coredatabasemigration.FromDatabaseConfig(dbCfg), logger); migrationErr != nil {
+		return fmt.Errorf("apply database migrations: %w", migrationErr)
 	}
 	sqlDB, err := db.DB()
 	if err != nil {

@@ -227,6 +227,7 @@ func TestHandlerErrorMapping(t *testing.T) {
 		domain.ErrFolderParentCycle,
 		domain.ErrInvalidMetadata,
 		port.ErrFolderNotFound,
+		port.ErrFolderAlreadyExists,
 		port.ErrNotFound,
 		errorspkg.New("boom"),
 	}
@@ -235,6 +236,20 @@ func TestHandlerErrorMapping(t *testing.T) {
 		if mapped := handler.mapError(value); mapped == nil {
 			t.Fatalf("expected mapped error for %v", value)
 		}
+	}
+}
+
+// TestHandlerMapErrorFolderAlreadyExists verifies duplicate folder conflicts are translated to HTTP 409.
+func TestHandlerMapErrorFolderAlreadyExists(t *testing.T) {
+	handler := &Handler{}
+	mapped := handler.mapError(port.ErrFolderAlreadyExists)
+
+	appErr, ok := mapped.(*corehttp.AppError)
+	if !ok {
+		t.Fatalf("mapError() type = %T, want *corehttp.AppError", mapped)
+	}
+	if appErr.Status != http.StatusConflict {
+		t.Fatalf("mapError() status = %d, want %d", appErr.Status, http.StatusConflict)
 	}
 }
 

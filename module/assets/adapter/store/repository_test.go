@@ -263,8 +263,30 @@ func TestRepositoryDuplicateConstraints(t *testing.T) {
 	}
 	second := &domain.Folder{ID: "f-2", Name: "Hero"}
 	second.Normalize()
-	if err := repository.CreateFolder(ctx, second); err == nil {
-		t.Fatalf("expected duplicate folder slug error")
+	if err := repository.CreateFolder(ctx, second); !errorspkg.Is(err, port.ErrFolderAlreadyExists) {
+		t.Fatalf("CreateFolder(duplicate root slug) error = %v, want port.ErrFolderAlreadyExists", err)
+	}
+
+	parentOne := &domain.Folder{ID: "f-parent-1", Name: "Hi"}
+	parentOne.Normalize()
+	if err := repository.CreateFolder(ctx, parentOne); err != nil {
+		t.Fatalf("CreateFolder(parent one) error = %v", err)
+	}
+	parentTwo := &domain.Folder{ID: "f-parent-2", Name: "Bye"}
+	parentTwo.Normalize()
+	if err := repository.CreateFolder(ctx, parentTwo); err != nil {
+		t.Fatalf("CreateFolder(parent two) error = %v", err)
+	}
+
+	childOne := &domain.Folder{ID: "f-child-1", Name: "Hello", ParentFolderID: parentOne.ID}
+	childOne.Normalize()
+	if err := repository.CreateFolder(ctx, childOne); err != nil {
+		t.Fatalf("CreateFolder(child under parent one) error = %v", err)
+	}
+	childTwo := &domain.Folder{ID: "f-child-2", Name: "Hello", ParentFolderID: parentTwo.ID}
+	childTwo.Normalize()
+	if err := repository.CreateFolder(ctx, childTwo); err != nil {
+		t.Fatalf("CreateFolder(child under parent two) error = %v", err)
 	}
 }
 

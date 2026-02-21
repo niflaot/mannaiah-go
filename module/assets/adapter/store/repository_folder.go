@@ -29,7 +29,18 @@ func (r *Repository) CreateFolder(ctx context.Context, folder *domain.Folder) er
 	}
 
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		exists, existsErr := folderSlugExistsInParent(tx, record.ParentFolderID, record.Slug, "")
+		if existsErr != nil {
+			return existsErr
+		}
+		if exists {
+			return port.ErrFolderAlreadyExists
+		}
+
 		if err := tx.Create(&record).Error; err != nil {
+			if isUniqueConstraintError(err) {
+				return port.ErrFolderAlreadyExists
+			}
 			return fmt.Errorf("create folder record: %w", err)
 		}
 		if err := replaceFolderTags(tx, record.ID, folder.Tags); err != nil {
@@ -157,7 +168,18 @@ func (r *Repository) UpdateFolder(ctx context.Context, id string, update port.Fo
 			}
 		}
 
+		exists, existsErr := folderSlugExistsInParent(tx, record.ParentFolderID, record.Slug, trimmedID)
+		if existsErr != nil {
+			return existsErr
+		}
+		if exists {
+			return port.ErrFolderAlreadyExists
+		}
+
 		if saveErr := tx.Save(&record).Error; saveErr != nil {
+			if isUniqueConstraintError(saveErr) {
+				return port.ErrFolderAlreadyExists
+			}
 			return fmt.Errorf("update folder record: %w", saveErr)
 		}
 
@@ -257,6 +279,31 @@ func getFolderRecordByID(tx *gorm.DB, id string) (*folderRecord, error) {
 	}
 
 	return &record, nil
+}
+
+// folderSlugExistsInParent reports whether an active folder with slug already exists under the same parent.
+func folderSlugExistsInParent(tx *gorm.DB, parentFolderID *string, slug string, excludeID string) (bool, error) {
+	query := tx.Model(&folderRecord{}).
+		Where("slug = ?", strings.TrimSpace(slug)).
+		Where("deleted_at IS NULL")
+
+	if parentFolderID == nil || strings.TrimSpace(*parentFolderID) == "" {
+		query = query.Where("parent_folder_id IS NULL")
+	} else {
+		query = query.Where("parent_folder_id = ?", strings.TrimSpace(*parentFolderID))
+	}
+
+	trimmedExcludeID := strings.TrimSpace(excludeID)
+	if trimmedExcludeID != "" {
+		query = query.Where("id <> ?", trimmedExcludeID)
+	}
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return false, fmt.Errorf("count folder slug in parent: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // assertNoParentCycle ensures assigning parentID to folderID does not create hierarchy cycles.
