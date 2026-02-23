@@ -14,6 +14,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratedatabase "github.com/golang-migrate/migrate/v4/database"
 	mysqlmigrate "github.com/golang-migrate/migrate/v4/database/mysql"
+	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -30,7 +31,7 @@ const (
 	defaultMigrationTimeout = 30 * time.Second
 )
 
-//go:embed migrations/mysql/*.sql
+//go:embed migrations/mysql/*.sql migrations/sqlite/*.sql
 var migrationFiles embed.FS
 
 // Config defines startup migration execution settings.
@@ -286,6 +287,12 @@ func resolveDatabaseDriver(sqlDB *sql.DB, cfg Config) (migratedatabase.Driver, s
 			return nil, "", "", fmt.Errorf("create mysql migration driver: %w", err)
 		}
 		return databaseDriver, "mysql", "migrations/mysql", nil
+	case "sqlite", "sqlite3":
+		databaseDriver, err := sqlitemigrate.WithInstance(sqlDB, &sqlitemigrate.Config{MigrationsTable: table})
+		if err != nil {
+			return nil, "", "", fmt.Errorf("create sqlite migration driver: %w", err)
+		}
+		return databaseDriver, "sqlite3", "migrations/sqlite", nil
 	default:
 		return nil, "", "", fmt.Errorf("%w: %q", ErrUnsupportedDriver, cfg.Driver)
 	}

@@ -12,7 +12,8 @@ Provides startup-safe, embedded SQL migration execution using `golang-migrate`.
 ## Behavior
 - Reads migration files from embedded driver-specific directories:
   - `migrations/mysql/*.sql`
-- Supports `mysql` migration driver.
+  - `migrations/sqlite/*.sql`
+- Supports `mysql`, `sqlite`, and `sqlite3` migration drivers.
 - Uses `ErrNoChange` as a non-failure state.
 - Applies best-effort timeout and graceful stop signaling.
 - Supports operations: `up`, `down`, `version`, `force`.

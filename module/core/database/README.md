@@ -13,6 +13,7 @@
 ## Usage Rules
 - Load `database.Config` through the shared core config loader.
 - Prefer versioned SQL migrations under `database/migration/migrations` for schema changes.
+- SQL migration files are maintained for `mysql` and `sqlite`.
 - Extend `Service[T]` via composition for module-specific behavior.
 
 ## Key Methods / Endpoints / Events

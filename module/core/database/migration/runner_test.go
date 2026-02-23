@@ -48,12 +48,12 @@ func TestApplyNilDB(t *testing.T) {
 
 // TestResolveDatabaseDriverRejectsUnsupported verifies unsupported migration driver handling behavior.
 func TestResolveDatabaseDriverRejectsUnsupported(t *testing.T) {
-	_, _, _, err := resolveDatabaseDriver(nil, Config{Driver: "sqlite"})
+	_, _, _, err := resolveDatabaseDriver(nil, Config{Driver: "postgres"})
 	if !errors.Is(err, ErrUnsupportedDriver) {
-		t.Fatalf("resolveDatabaseDriver(sqlite) error = %v, want %v", err, ErrUnsupportedDriver)
+		t.Fatalf("resolveDatabaseDriver(postgres) error = %v, want %v", err, ErrUnsupportedDriver)
 	}
-	if !strings.Contains(err.Error(), "sqlite") {
-		t.Fatalf("resolveDatabaseDriver(sqlite) error = %v, want quoted driver", err)
+	if !strings.Contains(err.Error(), "postgres") {
+		t.Fatalf("resolveDatabaseDriver(postgres) error = %v, want quoted driver", err)
 	}
 }
 
