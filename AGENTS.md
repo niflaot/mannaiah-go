@@ -4,6 +4,16 @@
 - Root module (`go.mod`) is a container module only and must not contain executable entrypoints.
 - All submodules must live under `module/` (for example, `module/core`, `module/<name>`).
 
+## CI/CD
+- Drone CI is the only supported CI/CD orchestrator for this repository.
+- CI/CD source of truth must be `.drone.yml`; do not add or maintain GitHub Actions workflows under `.github/`.
+- Validation pipeline must run module tests, root e2e tests, and WooCommerce performance benchmarks.
+- Container publish pipeline must push images to Nexus registry `docker.momlesstomato.dev` under repository `fl-docker/mannaiah-go`.
+- Drone deployment credentials must be injected via secrets (`nexus_username`, `nexus_password`) and never hardcoded.
+- Publish behavior must include:
+  - `main` branch pushes tagged as `latest` plus commit SHA.
+  - Git tag events tagged with the Git tag plus commit SHA.
+
 ## Testing
 - All production code must be unit tested to the maximum practical level.
 - Follow TDD by writing or updating tests before implementation changes whenever possible.
