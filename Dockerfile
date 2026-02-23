@@ -6,12 +6,8 @@ COPY module ./module
 
 WORKDIR /app/module/core
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags="-s -w" -o /out/mannaiah-api ./cmd/api
+RUN go mod download
+RUN go build -trimpath -ldflags="-s -w" -o /out/mannaiah-api ./cmd/api
 
 FROM debian:bookworm-slim AS runtime
 
