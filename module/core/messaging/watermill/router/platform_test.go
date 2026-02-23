@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"mannaiah/module/core/messaging/bus"
 	"mannaiah/module/core/messaging/platform"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 // TestInMemoryPlatformAddHandlerValidation verifies handler registration input validation.
@@ -128,6 +130,58 @@ func TestCorrelationPropagationGenerated(t *testing.T) {
 	}
 	if firstCorrelation != secondCorrelation {
 		t.Fatalf("generated correlation mismatch: first=%q second=%q", firstCorrelation, secondCorrelation)
+	}
+}
+
+// TestTraceparentPropagation verifies trace context propagation through message metadata.
+func TestTraceparentPropagation(t *testing.T) {
+	provider, err := coretelemetry.Init(context.Background(), coretelemetry.Config{
+		Enabled:       true,
+		TracesEnabled: true,
+	}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("coretelemetry.Init() error = %v", err)
+	}
+	defer func() {
+		_ = provider.Shutdown(context.Background())
+		coretelemetry.SetActive(nil)
+	}()
+
+	instance := newRunningPlatform(t, platform.Config{}, zap.NewNop())
+	defer stopPlatform(t, instance)
+
+	traceIDReceived := make(chan string, 1)
+
+	if err := instance.Registrar().AddHandler("trace.v1", func(ctx context.Context, msg bus.Message) error {
+		spanContext := trace.SpanContextFromContext(ctx)
+		traceIDReceived <- spanContext.TraceID().String()
+		return nil
+	}); err != nil {
+		t.Fatalf("AddHandler(trace.v1) error = %v", err)
+	}
+
+	parentCtx, parentSpan := coretelemetry.StartSpan(context.Background(), "test", "root")
+	parentTraceparent := coretelemetry.TraceparentFromContext(parentCtx)
+	parentSpanContext := trace.SpanContextFromContext(coretelemetry.ContextWithTraceparent(context.Background(), parentTraceparent))
+	coretelemetry.EndSpan(parentSpan, nil)
+
+	if err := instance.Publisher().Publish(context.Background(), bus.Message{
+		ID:      "evt-trace-1",
+		Topic:   "trace.v1",
+		Payload: []byte(`{}`),
+		Metadata: map[string]string{
+			bus.MetadataTraceparent: parentTraceparent,
+		},
+	}); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+
+	receivedTraceID := readString(t, traceIDReceived, "trace id")
+	if receivedTraceID == "" {
+		t.Fatalf("expected non-empty trace id")
+	}
+	if receivedTraceID != parentSpanContext.TraceID().String() {
+		t.Fatalf("received trace id = %q, want %q", receivedTraceID, parentSpanContext.TraceID().String())
 	}
 }
 

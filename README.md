@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v1.1.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v1.2.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -20,6 +20,7 @@ Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture
 ## Key Runtime Endpoints
 
 - `GET /status`: health/status endpoint.
+- `GET /metrics`: Prometheus metrics endpoint (protect this at ingress/network layer).
 - `GET /openapi.json`: aggregated OpenAPI document from core + modules.
 - `GET /docs`: API documentation UI.
 
@@ -86,3 +87,29 @@ docker run --rm -p 8080:8080 --env-file .env mannaiah-go:local
 - Drone secrets required for publish:
   - `nexus_username`
   - `nexus_password`
+
+## Observability
+
+- Metrics:
+  - Prometheus exposition is available at `GET /metrics`.
+  - Keep `HTTP_PREFORK=false` when you need single-process metric accuracy.
+  - Restrict `/metrics` to internal scrapers using proxy/network controls.
+- Tracing:
+  - Distributed tracing uses OpenTelemetry with OTLP gRPC export support.
+  - Configure collector endpoint with `TELEMETRY_OTLP_ENDPOINT`.
+  - Trace context propagation uses W3C `traceparent` across HTTP and messaging.
+
+### Telemetry Environment Variables
+
+- `TELEMETRY_ENABLED`
+- `TELEMETRY_SERVICE_NAME`
+- `TELEMETRY_SERVICE_VERSION`
+- `TELEMETRY_TRACES_ENABLED`
+- `TELEMETRY_TRACES_EXPORTER`
+- `TELEMETRY_OTLP_ENDPOINT`
+- `TELEMETRY_OTLP_INSECURE`
+- `TELEMETRY_TRACES_SAMPLER`
+- `TELEMETRY_TRACES_SAMPLER_RATIO`
+- `TELEMETRY_METRICS_ENABLED`
+- `TELEMETRY_METRICS_PATH`
+- `TELEMETRY_DB_STATS_INTERVAL_MS`

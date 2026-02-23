@@ -8,6 +8,7 @@ import (
 	wmmsg "github.com/ThreeDotsLabs/watermill/message"
 	"mannaiah/module/core/messaging/bus"
 	correlationctx "mannaiah/module/core/messaging/watermill/internal/correlation"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 // publisherProbe is a message publisher probe used for adapter unit tests.
@@ -125,6 +126,43 @@ func TestPublishGeneratesCorrelation(t *testing.T) {
 	correlationID := probe.messages[0].Metadata.Get(bus.MetadataCorrelationID)
 	if correlationID == "" {
 		t.Fatalf("expected generated correlation_id")
+	}
+}
+
+// TestPublishInjectsTraceparent verifies publish calls propagate traceparent metadata.
+func TestPublishInjectsTraceparent(t *testing.T) {
+	provider, err := coretelemetry.Init(context.Background(), coretelemetry.Config{
+		Enabled:       true,
+		TracesEnabled: true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("coretelemetry.Init() error = %v", err)
+	}
+	defer func() {
+		_ = provider.Shutdown(context.Background())
+		coretelemetry.SetActive(nil)
+	}()
+
+	probe := &publisherProbe{}
+	adapter, err := NewAdapter(probe)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	spanCtx, span := coretelemetry.StartSpan(context.Background(), "test", "root")
+	defer coretelemetry.EndSpan(span, nil)
+
+	if err := adapter.Publish(spanCtx, bus.Message{
+		ID:      "evt-trace-1",
+		Topic:   "orders.v1.created",
+		Payload: []byte(`{}`),
+	}); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+
+	traceparent := probe.messages[0].Metadata.Get(bus.MetadataTraceparent)
+	if traceparent == "" {
+		t.Fatalf("expected traceparent metadata to be injected")
 	}
 }
 

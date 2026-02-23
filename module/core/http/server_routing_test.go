@@ -229,6 +229,18 @@ func TestZapFiberMiddlewareSkipsWooLookupNoise(t *testing.T) {
 		app.Get("/products", func(ctx *fiber.Ctx) error {
 			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
 		})
+		app.Get("/metrics", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).SendString("metrics")
+		})
+		app.Get("/status", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+		})
+		app.Get("/openapi.json", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"openapi": "3.0.3"})
+		})
+		app.Get("/docs", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).SendString("docs")
+		})
 	})
 
 	skippedContactsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?email=test%40example.com&limit=1&page=1", nil)
@@ -276,6 +288,42 @@ func TestZapFiberMiddlewareSkipsWooLookupNoise(t *testing.T) {
 		t.Fatalf("contact by id status = %d, want %d", skippedContactByIDResp.StatusCode, stdhttp.StatusOK)
 	}
 
+	skippedMetricsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/metrics", nil)
+	skippedMetricsResp, skippedMetricsErr := server.App().Test(skippedMetricsReq)
+	if skippedMetricsErr != nil {
+		t.Fatalf("App().Test() metrics error = %v", skippedMetricsErr)
+	}
+	if skippedMetricsResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("metrics status = %d, want %d", skippedMetricsResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedStatusReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/status", nil)
+	skippedStatusResp, skippedStatusErr := server.App().Test(skippedStatusReq)
+	if skippedStatusErr != nil {
+		t.Fatalf("App().Test() status error = %v", skippedStatusErr)
+	}
+	if skippedStatusResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status route status = %d, want %d", skippedStatusResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedOpenAPIReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/openapi.json", nil)
+	skippedOpenAPIResp, skippedOpenAPIErr := server.App().Test(skippedOpenAPIReq)
+	if skippedOpenAPIErr != nil {
+		t.Fatalf("App().Test() openapi error = %v", skippedOpenAPIErr)
+	}
+	if skippedOpenAPIResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("openapi status = %d, want %d", skippedOpenAPIResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedDocsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/docs", nil)
+	skippedDocsResp, skippedDocsErr := server.App().Test(skippedDocsReq)
+	if skippedDocsErr != nil {
+		t.Fatalf("App().Test() docs error = %v", skippedDocsErr)
+	}
+	if skippedDocsResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("docs status = %d, want %d", skippedDocsResp.StatusCode, stdhttp.StatusOK)
+	}
+
 	visibleReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?email=test%40example.com&limit=2&page=1", nil)
 	visibleResp, visibleErr := server.App().Test(visibleReq)
 	if visibleErr != nil {
@@ -300,6 +348,18 @@ func TestZapFiberMiddlewareSkipsWooLookupNoise(t *testing.T) {
 	}
 	if strings.Contains(payload, "/contacts/c480b5cbb751bd434e63b5f9f344f527") {
 		t.Fatalf("expected skipped contact-by-id request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/metrics") {
+		t.Fatalf("expected skipped metrics request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/status") {
+		t.Fatalf("expected skipped status request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/openapi.json") {
+		t.Fatalf("expected skipped openapi request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/docs") {
+		t.Fatalf("expected skipped docs request to be absent from logs, got %q", payload)
 	}
 	if !strings.Contains(payload, "/contacts?email=test%40example.com&limit=2&page=1") {
 		t.Fatalf("expected visible contacts request to remain logged, got %q", payload)

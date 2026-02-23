@@ -16,6 +16,9 @@ func shouldSkipAccessLog(ctx *fiber.Ctx) bool {
 	}
 
 	path := strings.TrimSpace(ctx.Path())
+	if path == "/metrics" || path == "/status" || path == "/openapi.json" || strings.HasPrefix(path, "/docs") {
+		return true
+	}
 	if path == "/products" {
 		return true
 	}

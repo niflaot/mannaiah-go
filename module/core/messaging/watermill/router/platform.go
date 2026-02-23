@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	wmmsg "github.com/ThreeDotsLabs/watermill/message"
 	wmmiddleware "github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"mannaiah/module/core/messaging/bus"
 	"mannaiah/module/core/messaging/platform"
@@ -17,6 +20,7 @@ import (
 	watermillmiddleware "mannaiah/module/core/messaging/watermill/middleware"
 	watermillpublisher "mannaiah/module/core/messaging/watermill/publisher"
 	watermillpubsub "mannaiah/module/core/messaging/watermill/pubsub"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 var (
@@ -154,13 +158,31 @@ func (r *registrar) AddHandler(topic string, handler bus.Handler) error {
 			}
 
 			ctx := correlationctx.WithContext(message.Context(), message.Metadata.Get(bus.MetadataCorrelationID))
+			ctx = coretelemetry.ContextWithTraceparent(ctx, message.Metadata.Get(bus.MetadataTraceparent))
+			startedAt := time.Now()
+			spanCtx, span := coretelemetry.StartSpan(
+				ctx,
+				"mannaiah/messaging",
+				"messaging.consume",
+				trace.WithSpanKind(trace.SpanKindConsumer),
+				trace.WithAttributes(
+					attribute.String("messaging.system", "watermill"),
+					attribute.String("messaging.operation", "consume"),
+					attribute.String("messaging.destination.name", trimmedTopic),
+					attribute.String("messaging.message.id", message.UUID),
+				),
+			)
 
-			return handler(ctx, bus.Message{
+			err := handler(spanCtx, bus.Message{
 				ID:       message.UUID,
 				Topic:    trimmedTopic,
 				Payload:  append([]byte(nil), message.Payload...),
 				Metadata: metadata,
 			})
+			coretelemetry.RecordMessaging(trimmedTopic, "consume", startedAt, err)
+			coretelemetry.EndSpan(span, err)
+
+			return err
 		},
 	)
 

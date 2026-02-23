@@ -21,6 +21,7 @@
 - Add resilience tests for critical flows, including authentication-provider outages, dependency connection failures (database/cache/messaging), and expected error-mapping behavior.
 - Add concurrency/race-condition tests on uniqueness/idempotency critical paths whenever applicable.
 - Add performance tests (benchmarks/load-oriented tests) for hot paths whenever practical, and keep them modular and reproducible.
+- Critical workflows must include telemetry propagation tests (HTTP + messaging + dependency failure paths).
 - External integration modules must include enabled/disabled path tests and outage tests (invalid credentials/host/timeouts) validating graceful behavior.
 - Integration endpoints that are documented but unavailable due to invalid integration config must return controlled service-unavailable errors and must be covered by unit and e2e tests.
 
@@ -73,6 +74,16 @@
   - place use-case orchestration in `application/<feature>/service`
   - place integration event contracts/builders in `application/<feature>/event`
   - do not define integration event topics/payload builders inside service packages when an `event` package exists
+
+## Observability & Telemetry (Mandatory)
+- Every runtime service must expose Prometheus metrics at `/metrics` from the core composition root.
+- Distributed tracing must use OpenTelemetry only; exporter configuration must be environment-driven.
+- Trace context must propagate across HTTP and integration events (`traceparent` metadata) end-to-end.
+- Telemetry must be fail-open: exporter/backends failing must not break service startup or request handling.
+- Metrics/spans must use low-cardinality labels/attributes only; never include PII, IDs, query strings, raw payload fragments, or secrets.
+- New adapters that perform outbound I/O must include tracing spans and dependency metrics.
+- Every telemetry change must include unit tests, integration propagation tests, and at least one performance benchmark for hot paths.
+- `/metrics` exposure must be documented with network/access restrictions.
 
 ## Database Migrations (Mandatory)
 - All SQL schema changes must be delivered through versioned migration files; do not rely on ad-hoc runtime `AutoMigrate` in production startup paths.

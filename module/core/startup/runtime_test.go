@@ -117,6 +117,9 @@ func TestCoreSpec(t *testing.T) {
 	if spec.Paths.Value("/status") == nil {
 		t.Fatalf("expected /status spec")
 	}
+	if spec.Paths.Value("/metrics") == nil {
+		t.Fatalf("expected /metrics spec")
+	}
 	if spec.Paths.Value("/openapi.json") == nil {
 		t.Fatalf("expected /openapi.json spec")
 	}

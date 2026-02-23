@@ -3,9 +3,13 @@ package store
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 // TestSetGetDeleteLifecycle verifies set, get, and delete operations for a key.
@@ -196,5 +200,38 @@ func TestClose(t *testing.T) {
 	store := newStore(t)
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+// TestOperationsEmitDependencyMetrics verifies Redis operations emit telemetry dependency metrics.
+func TestOperationsEmitDependencyMetrics(t *testing.T) {
+	provider, err := coretelemetry.Init(context.Background(), coretelemetry.Config{
+		Enabled:        true,
+		MetricsEnabled: true,
+		TracesEnabled:  false,
+	}, nil)
+	if err != nil {
+		t.Fatalf("coretelemetry.Init() error = %v", err)
+	}
+	defer func() {
+		_ = provider.Shutdown(context.Background())
+		coretelemetry.SetActive(nil)
+	}()
+
+	store := newStore(t)
+	if err := store.Set(context.Background(), "telemetry:1", "ok", 0); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	if _, err := store.Get(context.Background(), "telemetry:1"); err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	recorder := httptest.NewRecorder()
+	provider.MetricsHandler().ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `dependency="redis"`) {
+		t.Fatalf("expected redis dependency labels in metrics output")
 	}
 }

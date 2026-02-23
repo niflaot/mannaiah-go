@@ -10,6 +10,7 @@ import (
 	wc "github.com/jmolboy/woocommerce-go"
 	wcconfig "github.com/jmolboy/woocommerce-go/config"
 	wcentity "github.com/jmolboy/woocommerce-go/entity"
+	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -93,7 +94,12 @@ func NewClient(cfg Config) (*Client, error) {
 
 // Validate verifies source connectivity and credentials.
 func (c *Client) Validate(ctx context.Context) error {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "woocommerce.validate")
+	defer span.End()
+
 	if err := ctx.Err(); err != nil {
+		coretelemetry.RecordDependency("woocommerce", "validate", startedAt, err)
 		return err
 	}
 
@@ -103,15 +109,25 @@ func (c *Client) Validate(ctx context.Context) error {
 
 	_, _, _, _, err := c.client.Services.Order.All(params)
 	if err != nil {
+		coretelemetry.RecordDependency("woocommerce", "validate", startedAt, err)
 		return fmt.Errorf("validate woocommerce integration: %w", err)
 	}
 
-	return ctx.Err()
+	finalErr := spanCtx.Err()
+	coretelemetry.RecordDependency("woocommerce", "validate", startedAt, finalErr)
+	return finalErr
 }
 
 // ListOrders retrieves paginated order values and reports whether additional pages exist.
 func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
-	if err := ctx.Err(); err != nil {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "woocommerce.list_orders")
+	defer func() {
+		coretelemetry.RecordDependency("woocommerce", "list_orders", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+	}()
+
+	if err := spanCtx.Err(); err != nil {
 		return nil, false, err
 	}
 
@@ -150,7 +166,14 @@ func (c *Client) ListOrders(ctx context.Context, page int, pageSize int) (orders
 
 // SearchOrders retrieves paginated order values filtered by search terms.
 func (c *Client) SearchOrders(ctx context.Context, search string, page int, pageSize int) (orders []port.WooOrder, hasNext bool, err error) {
-	if err := ctx.Err(); err != nil {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "woocommerce.search_orders")
+	defer func() {
+		coretelemetry.RecordDependency("woocommerce", "search_orders", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+	}()
+
+	if err := spanCtx.Err(); err != nil {
 		return nil, false, err
 	}
 
@@ -188,7 +211,14 @@ func (c *Client) SearchOrders(ctx context.Context, search string, page int, page
 
 // GetOrderByID retrieves one order by WooCommerce identifier values.
 func (c *Client) GetOrderByID(ctx context.Context, orderID int) (order port.WooOrder, err error) {
-	if err := ctx.Err(); err != nil {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "woocommerce.get_order_by_id")
+	defer func() {
+		coretelemetry.RecordDependency("woocommerce", "get_order_by_id", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+	}()
+
+	if err := spanCtx.Err(); err != nil {
 		return port.WooOrder{}, err
 	}
 	if orderID <= 0 {
@@ -213,7 +243,7 @@ func (c *Client) GetOrderByID(ctx context.Context, orderID int) (order port.WooO
 		return port.WooOrder{}, fmt.Errorf("get woocommerce order by id: %w", lookupErr)
 	}
 
-	if err := ctx.Err(); err != nil {
+	if err := spanCtx.Err(); err != nil {
 		return port.WooOrder{}, err
 	}
 

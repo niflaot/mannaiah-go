@@ -92,11 +92,14 @@ func CoreSpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Core Startup API",
-			Version: "1.0.0",
+			Version: "1.2.0",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/status", &openapi3.PathItem{
 				Get: statusOperation(),
+			}),
+			openapi3.WithPath("/metrics", &openapi3.PathItem{
+				Get: metricsOperation(),
 			}),
 			openapi3.WithPath("/openapi.json", &openapi3.PathItem{
 				Get: openapiOperation(),
@@ -132,6 +135,20 @@ func statusOperation() *openapi3.Operation {
 							},
 						},
 					}),
+			}),
+		),
+	}
+}
+
+// metricsOperation defines the OpenAPI operation for Prometheus metrics exposure.
+func metricsOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		Summary:     "Get Prometheus metrics",
+		OperationID: "StatusController_getMetrics",
+		Tags:        []string{"Status"},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: openapi3.NewResponse().WithDescription("Return Prometheus metrics payload."),
 			}),
 		),
 	}

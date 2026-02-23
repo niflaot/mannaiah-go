@@ -7,6 +7,7 @@ import (
 
 	wmmsg "github.com/ThreeDotsLabs/watermill/message"
 	"mannaiah/module/core/messaging/bus"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 const dlqErrorMaxLength = 512
@@ -15,6 +16,7 @@ const dlqErrorMaxLength = 512
 func NewDLQ(topic string, suffix string, publisher wmmsg.Publisher) wmmsg.HandlerMiddleware {
 	return func(next wmmsg.HandlerFunc) wmmsg.HandlerFunc {
 		return func(message *wmmsg.Message) ([]*wmmsg.Message, error) {
+			startedAt := time.Now()
 			produced, err := next(message)
 			if err == nil {
 				return produced, nil
@@ -23,8 +25,11 @@ func NewDLQ(topic string, suffix string, publisher wmmsg.Publisher) wmmsg.Handle
 			dlqMessage := copyMessageWithDLQMetadata(topic, message, err)
 			dlqTopic := topic + suffix
 			if publishErr := publisher.Publish(dlqTopic, dlqMessage); publishErr != nil {
+				coretelemetry.RecordMessaging(dlqTopic, "publish", startedAt, publishErr)
 				return nil, fmt.Errorf("publish dlq topic %q: %w", dlqTopic, publishErr)
 			}
+			coretelemetry.RecordMessaging(dlqTopic, "publish", startedAt, nil)
+			coretelemetry.IncMessagingDLQ(topic)
 
 			return nil, nil
 		}
