@@ -14,6 +14,7 @@ import (
 	awss3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.uber.org/zap"
 	corebreaker "mannaiah/module/core/circuitbreaker"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 var (
@@ -128,19 +129,26 @@ func Disabled(reason error) *Client {
 
 // Upload uploads object bytes to storage.
 func (c *Client) Upload(ctx context.Context, request UploadRequest) error {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "s3.upload")
+	defer span.End()
+
 	if err := c.validateAvailability(); err != nil {
+		coretelemetry.RecordDependency("s3", "upload", startedAt, err)
 		return err
 	}
 
 	key := strings.TrimSpace(request.Key)
 	if key == "" {
+		coretelemetry.RecordDependency("s3", "upload", startedAt, ErrInvalidKey)
 		return ErrInvalidKey
 	}
 	if len(request.Body) == 0 {
+		coretelemetry.RecordDependency("s3", "upload", startedAt, ErrEmptyBody)
 		return ErrEmptyBody
 	}
 
-	err := c.execute(ctx, func(operationCtx context.Context) error {
+	err := c.execute(spanCtx, func(operationCtx context.Context) error {
 		_, operationErr := c.api.PutObject(operationCtx, &awss3.PutObjectInput{
 			Bucket:      &c.bucketName,
 			Key:         &key,
@@ -154,24 +162,32 @@ func (c *Client) Upload(ctx context.Context, request UploadRequest) error {
 		return nil
 	})
 	if err != nil {
+		coretelemetry.RecordDependency("s3", "upload", startedAt, err)
 		return err
 	}
 
+	coretelemetry.RecordDependency("s3", "upload", startedAt, nil)
 	return nil
 }
 
 // Delete removes object keys from storage.
 func (c *Client) Delete(ctx context.Context, key string) error {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "s3.delete")
+	defer span.End()
+
 	if err := c.validateAvailability(); err != nil {
+		coretelemetry.RecordDependency("s3", "delete", startedAt, err)
 		return err
 	}
 
 	trimmedKey := strings.TrimSpace(key)
 	if trimmedKey == "" {
+		coretelemetry.RecordDependency("s3", "delete", startedAt, ErrInvalidKey)
 		return ErrInvalidKey
 	}
 
-	err := c.execute(ctx, func(operationCtx context.Context) error {
+	err := c.execute(spanCtx, func(operationCtx context.Context) error {
 		_, operationErr := c.api.DeleteObject(operationCtx, &awss3.DeleteObjectInput{
 			Bucket: &c.bucketName,
 			Key:    &trimmedKey,
@@ -183,25 +199,33 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 		return nil
 	})
 	if err != nil {
+		coretelemetry.RecordDependency("s3", "delete", startedAt, err)
 		return err
 	}
 
+	coretelemetry.RecordDependency("s3", "delete", startedAt, nil)
 	return nil
 }
 
 // Exists verifies whether object keys exist.
 func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "s3.exists")
+	defer span.End()
+
 	if err := c.validateAvailability(); err != nil {
+		coretelemetry.RecordDependency("s3", "exists", startedAt, err)
 		return false, err
 	}
 
 	trimmedKey := strings.TrimSpace(key)
 	if trimmedKey == "" {
+		coretelemetry.RecordDependency("s3", "exists", startedAt, ErrInvalidKey)
 		return false, ErrInvalidKey
 	}
 
 	var exists bool
-	err := c.execute(ctx, func(operationCtx context.Context) error {
+	err := c.execute(spanCtx, func(operationCtx context.Context) error {
 		_, operationErr := c.api.HeadObject(operationCtx, &awss3.HeadObjectInput{
 			Bucket: &c.bucketName,
 			Key:    &trimmedKey,
@@ -218,9 +242,11 @@ func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
 		return nil
 	})
 	if err != nil {
+		coretelemetry.RecordDependency("s3", "exists", startedAt, err)
 		return false, err
 	}
 
+	coretelemetry.RecordDependency("s3", "exists", startedAt, nil)
 	return exists, nil
 }
 

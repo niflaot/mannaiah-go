@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gofiber/adaptor/v2"
+	"github.com/gofiber/fiber/v2"
 	"mannaiah/module/assets"
 	assetevent "mannaiah/module/assets/adapter/event"
 	assetstorage "mannaiah/module/assets/adapter/storage"
@@ -26,6 +28,7 @@ import (
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
+	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/falabella"
 	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	"mannaiah/module/orders"
@@ -62,8 +65,9 @@ func run(ctx context.Context, envFile string) error {
 	var cronCfg corecron.Config
 	var falabellaCfg falabella.Config
 	var wooCfg woocommerce.Config
+	var telemetryCfg coretelemetry.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &falabellaCfg, &wooCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &falabellaCfg, &wooCfg, &telemetryCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -73,6 +77,18 @@ func run(ctx context.Context, envFile string) error {
 	}
 	defer func() {
 		_ = logger.Sync()
+	}()
+
+	telemetryProvider, telemetryErr := coretelemetry.Init(ctx, telemetryCfg, logger)
+	if telemetryErr != nil {
+		return fmt.Errorf("initialize telemetry: %w", telemetryErr)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if shutdownErr := telemetryProvider.Shutdown(shutdownCtx); shutdownErr != nil {
+			logger.Warn("telemetry shutdown failed", zap.Error(shutdownErr))
+		}
 	}()
 
 	db, err := coredatabase.Open(dbCfg, logger)
@@ -86,6 +102,7 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("access sql db handle: %w", err)
 	}
+	telemetryProvider.StartSQLStatsCollector(sqlDB)
 	defer func() {
 		_ = sqlDB.Close()
 	}()
@@ -111,10 +128,14 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create http server: %w", err)
 	}
+	httpServer.Register(func(app *fiber.App) {
+		app.Use(telemetryProvider.HTTPMiddleware())
+		app.Get(telemetryProvider.MetricsPath(), adaptor.HTTPHandler(telemetryProvider.MetricsHandler()))
+	})
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "1.0.0",
+		Version:     "1.2.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)

@@ -9,7 +9,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -118,6 +120,13 @@ func (c *Client) listOrdersRaw(ctx context.Context, page int, pageSize int) (ord
 
 // listOrdersRawWithQuery performs tolerant order decoding for metadata values with optional search behavior.
 func (c *Client) listOrdersRawWithQuery(ctx context.Context, page int, pageSize int, search string) (orders []port.WooOrder, hasNext bool, err error) {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "woocommerce.list_orders_raw")
+	defer func() {
+		coretelemetry.RecordDependency("woocommerce", "list_orders_raw", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+	}()
+
 	query := url.Values{}
 	query.Set("page", strconv.Itoa(page))
 	query.Set("per_page", strconv.Itoa(pageSize))
@@ -128,7 +137,7 @@ func (c *Client) listOrdersRawWithQuery(ctx context.Context, page int, pageSize 
 	}
 
 	endpoint := c.baseURL + "/wp-json/wc/v3/orders?" + query.Encode()
-	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	request, requestErr := http.NewRequestWithContext(spanCtx, http.MethodGet, endpoint, nil)
 	if requestErr != nil {
 		return nil, false, fmt.Errorf("create raw orders request: %w", requestErr)
 	}
@@ -161,8 +170,15 @@ func (c *Client) listOrdersRawWithQuery(ctx context.Context, page int, pageSize 
 
 // getOrderRaw resolves one WooCommerce order using tolerant raw-decoding behavior.
 func (c *Client) getOrderRaw(ctx context.Context, orderID int) (order port.WooOrder, err error) {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "woocommerce.get_order_raw")
+	defer func() {
+		coretelemetry.RecordDependency("woocommerce", "get_order_raw", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+	}()
+
 	endpoint := fmt.Sprintf("%s/wp-json/wc/v3/orders/%d", c.baseURL, orderID)
-	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	request, requestErr := http.NewRequestWithContext(spanCtx, http.MethodGet, endpoint, nil)
 	if requestErr != nil {
 		return port.WooOrder{}, fmt.Errorf("create raw order request: %w", requestErr)
 	}

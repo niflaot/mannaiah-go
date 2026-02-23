@@ -15,6 +15,7 @@
 - `cron`: provider-agnostic in-process scheduling backed by `robfig/cron`.
 - `swagger`: OpenAPI aggregation and documentation route exposure.
 - `startup`: module-loading runtime helpers for composition roots.
+- `telemetry`: OpenTelemetry tracing + Prometheus metrics provider and instrumentation helpers.
 
 ## Goals
 - Deterministic startup configuration rules.
@@ -92,6 +93,14 @@
   - `(*startup.Runtime).ExposeOpenAPI(path)`
   - `(*startup.Runtime).ExposeOpenAPIUI(path, specPath, title)`
   - `startup.CoreSpec() *openapi3.T`
+  - `telemetry.Init(ctx, cfg, logger)`
+  - `(*telemetry.Provider).Shutdown(ctx)`
+  - `(*telemetry.Provider).MetricsHandler()`
+  - `(*telemetry.Provider).HTTPMiddleware()`
+  - `(*telemetry.Provider).StartSQLStatsCollector(db)`
+  - `telemetry.StartSpan(ctx, tracerName, spanName, opts...)`
+  - `telemetry.TraceparentFromContext(ctx)`
+  - `telemetry.ContextWithTraceparent(ctx, traceparent)`
   - `(*http.Server).RegisterRoutes(register)`
   - `(*http.Server).MountRoutes(prefix, register)`
   - `(*http.Server).Register(register)`
@@ -99,5 +108,10 @@
   - `(*http.Server).Start()`
   - `(*http.Server).Shutdown(ctx)`
 - Endpoints:
-  - startup compositions commonly expose `/status`, `/openapi.json`, and `/docs`
+  - startup compositions commonly expose `/status`, `/metrics`, `/openapi.json`, and `/docs`
 - Events: startup validation errors are emitted through Zap logger records.
+
+## Telemetry Notes
+- `/metrics` is exposed from the same HTTP listener and must be protected at ingress/network level.
+- Keep metrics and tracing labels low-cardinality (`route`, `method`, `status_code`, dependency/operation enums).
+- Do not put PII or business identifiers in span attributes or metric labels.

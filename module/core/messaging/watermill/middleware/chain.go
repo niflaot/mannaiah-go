@@ -8,6 +8,7 @@ import (
 	wmmiddleware "github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"mannaiah/module/core/messaging/bus"
 	"mannaiah/module/core/messaging/platform"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 // AddRouterMiddlewares adds router-level middleware in the required execution order.
@@ -39,7 +40,12 @@ func Correlation(next wmmsg.HandlerFunc) wmmsg.HandlerFunc {
 
 // ShouldRetry classifies retry decisions for middleware retries.
 func ShouldRetry(params wmmiddleware.RetryParams) bool {
-	return !platform.IsNonRetriable(params.Err)
+	retriable := !platform.IsNonRetriable(params.Err)
+	if retriable {
+		coretelemetry.RecordMessaging("unknown", "retry", time.Now(), nil)
+	}
+
+	return retriable
 }
 
 // NewRetry creates retry middleware from normalized platform configuration.

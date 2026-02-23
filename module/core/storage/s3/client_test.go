@@ -3,12 +3,16 @@ package s3
 import (
 	"context"
 	errorspkg "errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	awss3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	corebreaker "mannaiah/module/core/circuitbreaker"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 // apiMock defines S3 API behavior for tests.
@@ -231,5 +235,50 @@ func TestValidateConfig(t *testing.T) {
 	}
 	if resolved.RequestTimeoutMS <= 0 {
 		t.Fatalf("expected positive request timeout")
+	}
+}
+
+// TestS3OperationsEmitDependencyMetrics verifies S3 operations emit telemetry dependency metrics.
+func TestS3OperationsEmitDependencyMetrics(t *testing.T) {
+	provider, err := coretelemetry.Init(context.Background(), coretelemetry.Config{
+		Enabled:        true,
+		MetricsEnabled: true,
+		TracesEnabled:  false,
+	}, nil)
+	if err != nil {
+		t.Fatalf("coretelemetry.Init() error = %v", err)
+	}
+	defer func() {
+		_ = provider.Shutdown(context.Background())
+		coretelemetry.SetActive(nil)
+	}()
+
+	client := &Client{
+		api: apiMock{
+			putFn: func(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.Options)) (*awss3.PutObjectOutput, error) {
+				return &awss3.PutObjectOutput{}, nil
+			},
+			deleteFn: func(ctx context.Context, params *awss3.DeleteObjectInput, optFns ...func(*awss3.Options)) (*awss3.DeleteObjectOutput, error) {
+				return &awss3.DeleteObjectOutput{}, nil
+			},
+			headFn: func(ctx context.Context, params *awss3.HeadObjectInput, optFns ...func(*awss3.Options)) (*awss3.HeadObjectOutput, error) {
+				return &awss3.HeadObjectOutput{}, nil
+			},
+		},
+		bucketName:     "bucket",
+		requestTimeout: 100 * time.Millisecond,
+	}
+
+	if err := client.Upload(context.Background(), UploadRequest{Key: "assets/telemetry.png", Body: []byte("data")}); err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	recorder := httptest.NewRecorder()
+	provider.MetricsHandler().ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `dependency="s3"`) {
+		t.Fatalf("expected s3 dependency labels in metrics output")
 	}
 }

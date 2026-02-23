@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/falabella/port"
 
 	"go.uber.org/zap"
@@ -332,6 +333,13 @@ func (c *Client) executeAction(
 	queryParams map[string]string,
 	profileIndices []int,
 ) ([]byte, *signingContext, error) {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(
+		ctx,
+		"mannaiah/dependency",
+		"falabella.execute_action",
+	)
+
 	orderedIndices := append([]int(nil), profileIndices...)
 	if len(orderedIndices) == 0 {
 		orderedIndices = []int{c.activeSigningProfileIndex()}
@@ -346,7 +354,7 @@ func (c *Client) executeAction(
 		signing := &signingContext{}
 		lastSigning = signing
 
-		req, reqErr := c.newRequest(ctx, method, contentType, payload)
+		req, reqErr := c.newRequest(spanCtx, method, contentType, payload)
 		if reqErr != nil {
 			lastErr = fmt.Errorf("build falabella %s request: %w", actionLabel, reqErr)
 			continue
@@ -367,15 +375,20 @@ func (c *Client) executeAction(
 		validationErr, retryable := validateActionResponse(actionLabel, response.StatusCode, response.Body, response.HTTPResponse)
 		if validationErr == nil {
 			c.activeSigningProfileIdx.Store(int32(profileIdx))
+			coretelemetry.RecordDependency("falabella", strings.ToLower(strings.TrimSpace(apiAction)), startedAt, nil)
+			coretelemetry.EndSpan(span, nil)
 			return response.Body, signing, nil
 		}
 
 		wrapped := fmt.Errorf("%w (%s)", validationErr, signing)
 		if isSignatureMismatch(response.Body) {
+			coretelemetry.RecordMessaging("falabella", "retry", time.Now(), nil)
 			lastErr = wrapped
 			continue
 		}
 		if !retryable {
+			coretelemetry.RecordDependency("falabella", strings.ToLower(strings.TrimSpace(apiAction)), startedAt, wrapped)
+			coretelemetry.EndSpan(span, wrapped)
 			return nil, signing, wrapped
 		}
 
@@ -385,7 +398,8 @@ func (c *Client) executeAction(
 	if lastErr == nil {
 		lastErr = fmt.Errorf("falabella %s failed without diagnostics", actionLabel)
 	}
-
+	coretelemetry.RecordDependency("falabella", strings.ToLower(strings.TrimSpace(apiAction)), startedAt, lastErr)
+	coretelemetry.EndSpan(span, lastErr)
 	return nil, lastSigning, lastErr
 }
 
@@ -601,23 +615,39 @@ func anyContainsSellerSKU(value any, sku string) bool {
 
 // doRequest executes outbound requests and normalizes body values.
 func (c *Client) doRequest(req *http.Request) (actionCallResponse, error) {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(req.Context(), "mannaiah/dependency", "falabella.do_request")
+
 	if c == nil || c.httpClient == nil {
-		return actionCallResponse{}, errors.New("falabella http client is nil")
+		err := errors.New("falabella http client is nil")
+		coretelemetry.RecordDependency("falabella", "http_request", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+		return actionCallResponse{}, err
 	}
 
+	req = req.WithContext(spanCtx)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		coretelemetry.RecordDependency("falabella", "http_request", startedAt, err)
+		coretelemetry.EndSpan(span, err)
 		return actionCallResponse{}, err
 	}
 	if resp == nil {
-		return actionCallResponse{}, errors.New("falabella response is nil")
+		err = errors.New("falabella response is nil")
+		coretelemetry.RecordDependency("falabella", "http_request", startedAt, err)
+		coretelemetry.EndSpan(span, err)
+		return actionCallResponse{}, err
 	}
 
 	body, readErr := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	if readErr != nil {
+		coretelemetry.RecordDependency("falabella", "http_request", startedAt, readErr)
+		coretelemetry.EndSpan(span, readErr)
 		return actionCallResponse{}, readErr
 	}
+	coretelemetry.RecordDependency("falabella", "http_request", startedAt, nil)
+	coretelemetry.EndSpan(span, nil)
 
 	return actionCallResponse{
 		StatusCode:   resp.StatusCode,

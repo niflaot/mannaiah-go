@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	watermill "github.com/ThreeDotsLabs/watermill"
 	wmmsg "github.com/ThreeDotsLabs/watermill/message"
 	wmmiddleware "github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"mannaiah/module/core/messaging/bus"
 	correlationctx "mannaiah/module/core/messaging/watermill/internal/correlation"
+	coretelemetry "mannaiah/module/core/telemetry"
 )
 
 var (
@@ -45,7 +49,7 @@ func NewAdapter(publisher wmmsg.Publisher) (*Adapter, error) {
 }
 
 // Publish publishes a bus envelope through the wrapped Watermill publisher.
-func (a *Adapter) Publish(ctx context.Context, msg bus.Message) error {
+func (a *Adapter) Publish(ctx context.Context, msg bus.Message) (err error) {
 	if strings.TrimSpace(msg.ID) == "" {
 		return ErrMessageIDRequired
 	}
@@ -60,10 +64,35 @@ func (a *Adapter) Publish(ctx context.Context, msg bus.Message) error {
 
 	applyCorrelationMetadata(ctx, outgoing)
 	applyEventMetadata(msg.ID, outgoing)
+	applyTraceMetadata(ctx, outgoing)
 
-	if err := a.publisher.Publish(msg.Topic, outgoing); err != nil {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(
+		ctx,
+		"mannaiah/messaging",
+		"messaging.publish",
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "watermill"),
+			attribute.String("messaging.operation", "publish"),
+			attribute.String("messaging.destination.name", msg.Topic),
+		),
+	)
+	defer func() {
+		coretelemetry.EndSpan(span, err)
+		coretelemetry.RecordMessaging(msg.Topic, "publish", startedAt, err)
+	}()
+
+	traceparent := coretelemetry.TraceparentFromContext(spanCtx)
+	if strings.TrimSpace(traceparent) != "" && outgoing.Metadata.Get(bus.MetadataTraceparent) == "" {
+		outgoing.Metadata.Set(bus.MetadataTraceparent, traceparent)
+	}
+
+	if err = a.publisher.Publish(msg.Topic, outgoing); err != nil {
 		return fmt.Errorf("publish topic %q: %w", msg.Topic, err)
 	}
+
+	span.SetAttributes(attribute.String("messaging.message.id", msg.ID))
 
 	return nil
 }
@@ -93,4 +122,18 @@ func applyEventMetadata(messageID string, message *wmmsg.Message) {
 	if message.Metadata.Get(bus.MetadataEventID) == "" {
 		message.Metadata.Set(bus.MetadataEventID, messageID)
 	}
+}
+
+// applyTraceMetadata propagates traceparent metadata from context when absent.
+func applyTraceMetadata(ctx context.Context, message *wmmsg.Message) {
+	if message.Metadata.Get(bus.MetadataTraceparent) != "" {
+		return
+	}
+
+	traceparent := coretelemetry.TraceparentFromContext(ctx)
+	if strings.TrimSpace(traceparent) == "" {
+		return
+	}
+
+	message.Metadata.Set(bus.MetadataTraceparent, traceparent)
 }
