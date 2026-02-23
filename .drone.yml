@@ -108,7 +108,7 @@ steps:
     image: plugins/docker
     settings:
       registry: docker.momlesstomato.dev
-      repo: fl-docker/mannaiah-go
+      repo: docker.momlesstomato.dev/fl-docker/mannaiah-go
       dockerfile: Dockerfile
       username:
         from_secret: nexus_username
@@ -127,7 +127,7 @@ steps:
     image: plugins/docker
     settings:
       registry: docker.momlesstomato.dev
-      repo: fl-docker/mannaiah-go
+      repo: docker.momlesstomato.dev/fl-docker/mannaiah-go
       dockerfile: Dockerfile
       username:
         from_secret: nexus_username
