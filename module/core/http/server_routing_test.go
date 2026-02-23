@@ -204,3 +204,104 @@ func TestZapFiberMiddlewareLogs(t *testing.T) {
 		t.Fatalf("expected zapfiber log payload to include route, got %q", payload)
 	}
 }
+
+// TestZapFiberMiddlewareSkipsWooLookupNoise verifies noisy WooCommerce lookup requests are excluded from access logs.
+func TestZapFiberMiddlewareSkipsWooLookupNoise(t *testing.T) {
+	var output bytes.Buffer
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(&output), zapcore.DebugLevel)
+	logger := zap.New(core)
+
+	server, err := New(Config{Host: "127.0.0.1", Port: 8084}, logger)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.Register(func(app *fiber.App) {
+		app.Get("/contacts", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+		})
+		app.Get("/orders", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+		})
+		app.Get("/contacts/:id", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+		})
+		app.Get("/products", func(ctx *fiber.Ctx) error {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+		})
+	})
+
+	skippedContactsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?email=test%40example.com&limit=1&page=1", nil)
+	skippedContactsResp, skippedContactsErr := server.App().Test(skippedContactsReq)
+	if skippedContactsErr != nil {
+		t.Fatalf("App().Test() contacts error = %v", skippedContactsErr)
+	}
+	if skippedContactsResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("contacts status = %d, want %d", skippedContactsResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedOrdersReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/orders?identifier=1024112&realm=woocommerce&limit=1&page=1", nil)
+	skippedOrdersResp, skippedOrdersErr := server.App().Test(skippedOrdersReq)
+	if skippedOrdersErr != nil {
+		t.Fatalf("App().Test() orders error = %v", skippedOrdersErr)
+	}
+	if skippedOrdersResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("orders status = %d, want %d", skippedOrdersResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedProductsReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/products", nil)
+	skippedProductsResp, skippedProductsErr := server.App().Test(skippedProductsReq)
+	if skippedProductsErr != nil {
+		t.Fatalf("App().Test() products error = %v", skippedProductsErr)
+	}
+	if skippedProductsResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("products status = %d, want %d", skippedProductsResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedOrdersPageReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/orders?page=1&limit=10", nil)
+	skippedOrdersPageResp, skippedOrdersPageErr := server.App().Test(skippedOrdersPageReq)
+	if skippedOrdersPageErr != nil {
+		t.Fatalf("App().Test() paginated orders error = %v", skippedOrdersPageErr)
+	}
+	if skippedOrdersPageResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("paginated orders status = %d, want %d", skippedOrdersPageResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	skippedContactByIDReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts/c480b5cbb751bd434e63b5f9f344f527", nil)
+	skippedContactByIDResp, skippedContactByIDErr := server.App().Test(skippedContactByIDReq)
+	if skippedContactByIDErr != nil {
+		t.Fatalf("App().Test() contact by id error = %v", skippedContactByIDErr)
+	}
+	if skippedContactByIDResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("contact by id status = %d, want %d", skippedContactByIDResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	visibleReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/contacts?email=test%40example.com&limit=2&page=1", nil)
+	visibleResp, visibleErr := server.App().Test(visibleReq)
+	if visibleErr != nil {
+		t.Fatalf("App().Test() visible error = %v", visibleErr)
+	}
+	if visibleResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("visible status = %d, want %d", visibleResp.StatusCode, stdhttp.StatusOK)
+	}
+
+	payload := output.String()
+	if strings.Contains(payload, "/contacts?email=test%40example.com&limit=1&page=1") {
+		t.Fatalf("expected skipped contacts lookup request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/orders?identifier=1024112&realm=woocommerce&limit=1&page=1") {
+		t.Fatalf("expected skipped orders lookup request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/products") {
+		t.Fatalf("expected skipped products request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/orders?page=1&limit=10") {
+		t.Fatalf("expected skipped paginated orders request to be absent from logs, got %q", payload)
+	}
+	if strings.Contains(payload, "/contacts/c480b5cbb751bd434e63b5f9f344f527") {
+		t.Fatalf("expected skipped contact-by-id request to be absent from logs, got %q", payload)
+	}
+	if !strings.Contains(payload, "/contacts?email=test%40example.com&limit=2&page=1") {
+		t.Fatalf("expected visible contacts request to remain logged, got %q", payload)
+	}
+}

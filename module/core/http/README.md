@@ -36,3 +36,8 @@
   - every response includes `X-Ray-ID` tracing header
   - all handler errors are mapped to JSON payload format: `{"message":"...","error":"..."}`
   - HTTP request logs are emitted through zapfiber using the configured Zap logger
+  - noisy read requests are excluded from access logs:
+    - `GET /products`
+    - paginated `GET /orders?page=...&limit=...`
+    - `GET /contacts/<id>`
+    - WooCommerce lookup requests (`GET /contacts?email=...&limit=1&page=1` and `GET /orders?identifier=...&realm=woocommerce&limit=1&page=1`)
