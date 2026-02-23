@@ -89,6 +89,18 @@ type Provider struct {
 	dbStatsDone chan struct{}
 }
 
+// otelZapErrorHandler routes OpenTelemetry runtime errors through Zap logger sinks.
+type otelZapErrorHandler struct {
+	// logger defines the logger sink used for OpenTelemetry runtime errors.
+	logger *zap.Logger
+	// minInterval defines per-error-message deduplication intervals.
+	minInterval time.Duration
+	// mu guards concurrent access to deduplication state.
+	mu sync.Mutex
+	// lastByMessage stores last log times by error message.
+	lastByMessage map[string]time.Time
+}
+
 // Init initializes telemetry providers, metrics instruments, and global propagators.
 func Init(ctx context.Context, cfg Config, providedLogger *zap.Logger) (*Provider, error) {
 	resolvedCfg := cfg.Normalized()
@@ -99,6 +111,7 @@ func Init(ctx context.Context, cfg Config, providedLogger *zap.Logger) (*Provide
 		propagator: propagation.TraceContext{},
 	}
 
+	otel.SetErrorHandler(newOTelZapErrorHandler(provider.logger))
 	provider.configureMetrics()
 	provider.configureTracing(ctx)
 
@@ -541,6 +554,45 @@ func resolveLogger(logger *zap.Logger) *zap.Logger {
 	}
 
 	return logger
+}
+
+// newOTelZapErrorHandler creates an OpenTelemetry error handler backed by Zap.
+func newOTelZapErrorHandler(logger *zap.Logger) *otelZapErrorHandler {
+	return &otelZapErrorHandler{
+		logger:        resolveLogger(logger),
+		minInterval:   time.Minute,
+		lastByMessage: make(map[string]time.Time),
+	}
+}
+
+// Handle routes OpenTelemetry runtime/export errors through Zap with deduplication.
+func (h *otelZapErrorHandler) Handle(err error) {
+	if h == nil || err == nil {
+		return
+	}
+
+	message := strings.TrimSpace(err.Error())
+	if message == "" {
+		message = "unknown opentelemetry error"
+	}
+
+	now := time.Now().UTC()
+	shouldLog := true
+
+	h.mu.Lock()
+	last, exists := h.lastByMessage[message]
+	if exists && now.Sub(last) < h.minInterval {
+		shouldLog = false
+	} else {
+		h.lastByMessage[message] = now
+	}
+	h.mu.Unlock()
+
+	if !shouldLog {
+		return
+	}
+
+	h.logger.Warn("opentelemetry runtime error", zap.Error(err))
 }
 
 // classifyResult normalizes telemetry result values into bounded labels.

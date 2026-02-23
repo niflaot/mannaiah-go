@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	coredatabase "mannaiah/module/core/database"
 )
 
@@ -148,5 +152,28 @@ func TestStartSQLStatsCollector(t *testing.T) {
 	body := string(bodyBytes)
 	if !strings.Contains(body, "mannaiah_db_pool_open_connections") {
 		t.Fatalf("expected DB pool metrics in exposition output")
+	}
+}
+
+// TestOTelZapErrorHandlerDeduplicates verifies repeated OTel errors are deduplicated and logged through Zap.
+func TestOTelZapErrorHandlerDeduplicates(t *testing.T) {
+	core, observed := observer.New(zapcore.WarnLevel)
+	logger := zap.New(core)
+	handler := newOTelZapErrorHandler(logger)
+	handler.minInterval = time.Hour
+
+	handler.Handle(errors.New("traces export: resolver produced zero addresses"))
+	handler.Handle(errors.New("traces export: resolver produced zero addresses"))
+	handler.Handle(nil)
+
+	entries := observed.FilterMessage("opentelemetry runtime error").All()
+	if len(entries) != 1 {
+		t.Fatalf("log entry count = %d, want %d", len(entries), 1)
+	}
+
+	fields := entries[0].ContextMap()
+	errorField, ok := fields["error"].(string)
+	if !ok || !strings.Contains(errorField, "resolver produced zero addresses") {
+		t.Fatalf("unexpected error field = %v", fields["error"])
 	}
 }
