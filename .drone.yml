@@ -21,7 +21,7 @@ steps:
       CGO_ENABLED: "1"
     commands:
       - |
-        set -euo pipefail
+        bash -euo pipefail <<'BASH'
         for module in \
           module/core \
           module/auth \
@@ -32,9 +32,10 @@ steps:
           module/falabella \
           module/woocommerce
         do
-          echo "Running tests for ${module}"
-          (cd "${module}" && go test ./...)
+          echo "Running tests for $module"
+          (cd "$module" && go test ./...)
         done
+        BASH
     volumes:
       - name: go-mod-cache
         path: /go/pkg/mod
@@ -49,24 +50,25 @@ steps:
       CGO_ENABLED: "1"
     commands:
       - |
-        set -euo pipefail
+        bash -euo pipefail <<'BASH'
         first_log="root-e2e-attempt-1.log"
         retry_log="root-e2e-attempt-2.log"
 
         echo "Running root E2E suite (attempt 1)..."
-        if go test ./e2e -v -count=1 2>&1 | tee "${first_log}"; then
+        if go test ./e2e -v -count=1 2>&1 | tee "$first_log"; then
           exit 0
         fi
 
         echo "Root E2E suite failed on attempt 1. Retrying once..."
-        if go test ./e2e -v -count=1 2>&1 | tee "${retry_log}"; then
+        if go test ./e2e -v -count=1 2>&1 | tee "$retry_log"; then
           echo "Root E2E suite passed on retry (attempt 2)."
           exit 0
         fi
 
         echo "Root E2E suite failed after retry. Failing tests from logs:"
-        grep -E '^--- FAIL: ' "${first_log}" "${retry_log}" || true
+        grep -E '^--- FAIL: ' "$first_log" "$retry_log" || true
         exit 1
+        BASH
     volumes:
       - name: go-mod-cache
         path: /go/pkg/mod
