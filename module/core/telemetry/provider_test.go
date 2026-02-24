@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	coredatabase "mannaiah/module/core/database"
+	corehttp "mannaiah/module/core/http"
 )
 
 // TestInitAndMetricsHandler verifies telemetry initialization and Prometheus exposition.
@@ -93,6 +94,9 @@ func TestHTTPMiddlewareRecordsMetrics(t *testing.T) {
 	}
 	if capturedTraceID != parentSpanContext.TraceID().String() {
 		t.Fatalf("captured trace_id = %q, want parent trace_id %q", capturedTraceID, parentSpanContext.TraceID().String())
+	}
+	if response.Header.Get(corehttp.HeaderRayID) != capturedTraceID {
+		t.Fatalf("%s = %q, want %q", corehttp.HeaderRayID, response.Header.Get(corehttp.HeaderRayID), capturedTraceID)
 	}
 
 	metricsRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)

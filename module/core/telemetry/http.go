@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+	corehttp "mannaiah/module/core/http"
 )
 
 // HTTPMiddleware builds one Fiber middleware for HTTP tracing and metrics.
@@ -55,6 +56,13 @@ func (p *Provider) HTTPMiddleware() fiber.Handler {
 			trace.WithAttributes(spanAttributes...),
 		)
 		ctx.SetUserContext(spanCtx)
+		spanContext := trace.SpanContextFromContext(spanCtx)
+		if spanContext.IsValid() {
+			traceID := spanContext.TraceID().String()
+			// Keep X-Ray-ID aligned with the active trace id for logs and client correlation.
+			ctx.Request().Header.Set(corehttp.HeaderRayID, traceID)
+			ctx.Set(corehttp.HeaderRayID, traceID)
+		}
 
 		err := ctx.Next()
 		statusCode := ctx.Response().StatusCode()
