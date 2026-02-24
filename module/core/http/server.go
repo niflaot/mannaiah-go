@@ -53,8 +53,9 @@ func NewWithCore(cfg Config, coreCfg *coreconfig.Core, providedLogger *zap.Logge
 
 	app.Use(rayIDMiddleware)
 	app.Use(fiberzap.New(fiberzap.Config{
-		Logger: logger,
-		Next:   shouldSkipAccessLog,
+		Logger:     logger,
+		Next:       shouldSkipAccessLog,
+		FieldsFunc: accessLogFields,
 	}))
 
 	return &Server{

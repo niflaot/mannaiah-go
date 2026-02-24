@@ -53,9 +53,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.2.1] - Pending Release
+### [v1.2.2] - Pending Release
+- Bump service/version references and badges to `v1.2.2`.
+- Add access-log correlation fields `ray_id` and `trace_id`.
+
+### [v1.2.1] - 2026-02-24
 - Align `X-Ray-ID` with active OpenTelemetry `trace_id` for request correlation.
-- Bump service/version references and badges to `v1.2.1`.
 
 ### [v1.2.0] - 2026-02-23
 - Route OpenTelemetry exporter/runtime errors through Zap logging.
