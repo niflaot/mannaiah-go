@@ -417,6 +417,9 @@ func TestResolveHelpers(t *testing.T) {
 	if resolveValidationTimeout(0) != 3*time.Second {
 		t.Fatalf("resolveValidationTimeout(0) should fallback to 3s")
 	}
+	if resolveSyncTimeout(0) != 10*time.Minute {
+		t.Fatalf("resolveSyncTimeout(0) should fallback to 10m")
+	}
 	if resolveContext(nil) == nil {
 		t.Fatalf("resolveContext(nil) should return background context")
 	}

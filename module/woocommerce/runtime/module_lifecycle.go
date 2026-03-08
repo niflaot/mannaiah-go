@@ -32,7 +32,7 @@ func (m *Module) Start(ctx context.Context) error {
 
 	if m.cfg.SyncContacts {
 		entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.SyncContactsCron), func() {
-			syncCtx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
+			syncCtx, cancel := context.WithTimeout(context.Background(), resolveSyncTimeout(m.cfg.SyncTimeoutMS))
 			defer cancel()
 
 			if _, syncErr := m.contactsSyncService.SyncContacts(syncCtx, "cron"); syncErr != nil {
@@ -48,7 +48,7 @@ func (m *Module) Start(ctx context.Context) error {
 
 	if m.cfg.SyncOrders {
 		entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.SyncOrdersCron), func() {
-			syncCtx, cancel := context.WithTimeout(context.Background(), resolveValidationTimeout(m.cfg.ValidationTimeoutMS))
+			syncCtx, cancel := context.WithTimeout(context.Background(), resolveSyncTimeout(m.cfg.SyncTimeoutMS))
 			defer cancel()
 
 			if _, syncErr := m.ordersSyncService.SyncOrders(syncCtx, "cron"); syncErr != nil {

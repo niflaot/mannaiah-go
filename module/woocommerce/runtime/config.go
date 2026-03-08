@@ -20,6 +20,8 @@ type Config struct {
 	SyncPageSize int `mapstructure:"WOOCOMMERCE_SYNC_PAGE_SIZE" default:"100"`
 	// SyncWorkers defines concurrent upsert worker counts for sync behavior.
 	SyncWorkers int `mapstructure:"WOOCOMMERCE_SYNC_WORKERS" default:"8"`
+	// SyncTimeoutMS defines cron sync execution timeout values in milliseconds.
+	SyncTimeoutMS int `mapstructure:"WOOCOMMERCE_SYNC_TIMEOUT_MS" default:"600000"`
 	// RequestTimeoutMS defines WooCommerce API timeout values in milliseconds.
 	RequestTimeoutMS int `mapstructure:"WOOCOMMERCE_REQUEST_TIMEOUT_MS" default:"5000"`
 	// VerifySSL defines whether WooCommerce TLS certificates must be verified.

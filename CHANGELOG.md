@@ -53,9 +53,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.2.2] - Pending Release
-- Bump service/version references and badges to `v1.2.2`.
+### [v1.2.3] - Pending Release
+- Bump service/version references and badges to `v1.2.3`.
 - Add access-log correlation fields `ray_id` and `trace_id`.
+- Separate WooCommerce cron sync timeout from startup validation timeout.
+- Add `WOOCOMMERCE_SYNC_TIMEOUT_MS` (default `600000`) for scheduled sync execution budget.
+- Keep `WOOCOMMERCE_VALIDATION_TIMEOUT_MS` focused on startup/integration validation.
 
 ### [v1.2.1] - 2026-02-24
 - Align `X-Ray-ID` with active OpenTelemetry `trace_id` for request correlation.

@@ -44,6 +44,15 @@ func resolveValidationTimeout(timeoutMS int) time.Duration {
 	return time.Duration(timeoutMS) * time.Millisecond
 }
 
+// resolveSyncTimeout resolves cron sync execution timeout values.
+func resolveSyncTimeout(timeoutMS int) time.Duration {
+	if timeoutMS <= 0 {
+		return 10 * time.Minute
+	}
+
+	return time.Duration(timeoutMS) * time.Millisecond
+}
+
 // resolveRequestTimeout resolves WooCommerce request timeout values in milliseconds.
 func resolveRequestTimeout(timeoutMS int) int {
 	if timeoutMS <= 0 {
