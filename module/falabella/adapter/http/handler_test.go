@@ -495,3 +495,23 @@ func TestMapErrorSyncStatus(t *testing.T) {
 		t.Fatalf("expected sync entry not found mapping")
 	}
 }
+
+// TestMapSyncEntryResponseVariationIDs verifies variation ID mapping behavior for sync status responses.
+func TestMapSyncEntryResponseVariationIDs(t *testing.T) {
+	response := mapSyncEntryResponse(&syncdomain.SyncEntry{
+		FeedID:       "feed-1",
+		ProductID:    "prod-1",
+		SKU:          "SKU-1",
+		VariationIDs: []string{"v-color", "v-size"},
+		Action:       syncdomain.SyncActionCreate,
+		Status:       syncdomain.SyncStatusPending,
+		SyncedAt:     time.Now().UTC(),
+	})
+
+	if len(response.VariationIDs) != 2 {
+		t.Fatalf("len(response.VariationIDs) = %d, want %d", len(response.VariationIDs), 2)
+	}
+	if response.VariationIDs[0] != "v-color" || response.VariationIDs[1] != "v-size" {
+		t.Fatalf("response.VariationIDs = %#v, want %#v", response.VariationIDs, []string{"v-color", "v-size"})
+	}
+}

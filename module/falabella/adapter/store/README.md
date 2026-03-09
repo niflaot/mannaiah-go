@@ -7,6 +7,7 @@ Contains GORM-backed persistence for Falabella sync status entries.
 - `Repository` — Implements `port.SyncStatusRepository` using GORM.
 - Parent table: `falabella_sync_execution` with columns: `execution_id` (PK), `started_at`.
 - Child table: `falabella_sync_status` with columns: `execution_id` (indexed), `feed_id` (PK), `product_id`, `sku`, `step`, `action`, `status`, `synced_at`, `resolved_at`.
+- Link table: `falabella_sync_status_variation` with columns: `feed_id`, `variation_id` and composite PK (`feed_id`, `variation_id`).
 - `ListPending` — Retrieves unresolved entries ordered by `synced_at ASC` with configurable limit (used by cron resolver).
 - `EnsureSchema` — Auto-migrates with legacy schema detection: drops old tables that have the removed `id` column.
 

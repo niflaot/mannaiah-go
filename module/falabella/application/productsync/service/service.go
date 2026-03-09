@@ -405,14 +405,14 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 			continue
 		}
 
-		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, feedID, syncdomain.SyncStepProduct, productAction)
+		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, feedID, variant.VariationIDs, syncdomain.SyncStepProduct, productAction)
 		imageFeedID := ""
 		imageAction := syncdomain.SyncActionCreate
 		if imageActionResp != nil {
 			imageFeedID = strings.TrimSpace(imageActionResp.RequestID)
 			imageAction = syncActionFromResponse(imageActionResp)
 		}
-		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, imageFeedID, syncdomain.SyncStepImage, imageAction)
+		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, imageFeedID, variant.VariationIDs, syncdomain.SyncStepImage, imageAction)
 
 		result := Result{
 			ProductID: product.ID,
@@ -502,14 +502,14 @@ func (s *ProductSyncService) syncBaseProduct(ctx context.Context, summary *Summa
 		return
 	}
 
-	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, feedID, syncdomain.SyncStepProduct, productAction)
+	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, feedID, nil, syncdomain.SyncStepProduct, productAction)
 	imageFeedID := ""
 	imageAction := syncdomain.SyncActionCreate
 	if imageActionResp != nil {
 		imageFeedID = strings.TrimSpace(imageActionResp.RequestID)
 		imageAction = syncActionFromResponse(imageActionResp)
 	}
-	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, imageFeedID, syncdomain.SyncStepImage, imageAction)
+	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, imageFeedID, nil, syncdomain.SyncStepImage, imageAction)
 
 	result := Result{
 		ProductID: productID,

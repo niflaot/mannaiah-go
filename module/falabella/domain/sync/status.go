@@ -42,6 +42,8 @@ type SyncEntry struct {
 	ProductID string
 	// SKU defines seller SKU values sent to Falabella.
 	SKU string
+	// VariationIDs defines linked product variation identifier values for this feed.
+	VariationIDs []string
 	// FeedID defines Falabella feed identifier values returned on async submission.
 	FeedID string
 	// Step defines the logical step that emitted this feed.

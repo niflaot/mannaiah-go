@@ -66,12 +66,13 @@ func TestCreateAndGetByFeedID(t *testing.T) {
 	_ = repo.EnsureSchema(context.Background())
 
 	entry := &syncdomain.SyncEntry{
-		ProductID: "prod-1",
-		SKU:       "SKU-001",
-		FeedID:    "feed-abc",
-		Action:    syncdomain.SyncActionCreate,
-		Status:    syncdomain.SyncStatusPending,
-		SyncedAt:  time.Now().UTC().Truncate(time.Second),
+		ProductID:    "prod-1",
+		SKU:          "SKU-001",
+		VariationIDs: []string{"v-size", " v-color ", "v-size"},
+		FeedID:       "feed-abc",
+		Action:       syncdomain.SyncActionCreate,
+		Status:       syncdomain.SyncStatusPending,
+		SyncedAt:     time.Now().UTC().Truncate(time.Second),
 	}
 
 	if err := repo.Create(context.Background(), entry); err != nil {
@@ -96,6 +97,12 @@ func TestCreateAndGetByFeedID(t *testing.T) {
 	}
 	if retrieved.Status != syncdomain.SyncStatusPending {
 		t.Fatalf("Status = %q, want %q", retrieved.Status, syncdomain.SyncStatusPending)
+	}
+	if len(retrieved.VariationIDs) != 2 {
+		t.Fatalf("len(VariationIDs) = %d, want %d", len(retrieved.VariationIDs), 2)
+	}
+	if retrieved.VariationIDs[0] != "v-color" || retrieved.VariationIDs[1] != "v-size" {
+		t.Fatalf("VariationIDs = %#v, want %#v", retrieved.VariationIDs, []string{"v-color", "v-size"})
 	}
 }
 
@@ -123,7 +130,7 @@ func TestGetByProductID(t *testing.T) {
 		Action: syncdomain.SyncActionCreate, Status: syncdomain.SyncStatusPending, SyncedAt: now,
 	})
 	_ = repo.Create(context.Background(), &syncdomain.SyncEntry{
-		ProductID: "prod-1", SKU: "SKU-001", FeedID: "feed-2",
+		ProductID: "prod-1", SKU: "SKU-001", VariationIDs: []string{"v-color"}, FeedID: "feed-2",
 		Action: syncdomain.SyncActionUpdate, Status: syncdomain.SyncStatusFinished, SyncedAt: now.Add(time.Minute),
 	})
 	_ = repo.Create(context.Background(), &syncdomain.SyncEntry{
@@ -137,6 +144,9 @@ func TestGetByProductID(t *testing.T) {
 	}
 	if len(entries) != 2 {
 		t.Fatalf("len(entries) = %d, want %d", len(entries), 2)
+	}
+	if len(entries[0].VariationIDs) != 1 || entries[0].VariationIDs[0] != "v-color" {
+		t.Fatalf("entries[0].VariationIDs = %#v, want [v-color]", entries[0].VariationIDs)
 	}
 }
 

@@ -53,7 +53,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.2.3] - Pending Release
+### [v1.2.4] - Pending Release
+- Bump service/version references and badges to `v1.2.4`.
+- Persist Falabella feed-to-variation links for sync entries (`variationIds`) and expose them in sync status responses.
+- Add SQL migrations `000006_falabella_sync_variations` (MySQL + SQLite) with rollback files.
+
+### [v1.2.3] - 2026-03-08
 - Bump service/version references and badges to `v1.2.3`.
 - Add access-log correlation fields `ray_id` and `trace_id`.
 - Separate WooCommerce cron sync timeout from startup validation timeout.

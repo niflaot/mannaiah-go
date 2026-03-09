@@ -320,6 +320,8 @@ type syncStatusEntryResponse struct {
 	ProductID string `json:"productId"`
 	// SKU defines seller SKU values.
 	SKU string `json:"sku"`
+	// VariationIDs defines linked product variation identifier values.
+	VariationIDs []string `json:"variationIds,omitempty"`
 	// Step defines logical feed step values (product/image).
 	Step string `json:"step,omitempty"`
 	// Action defines sync operation type values.
@@ -347,14 +349,15 @@ func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
 	}
 
 	response := syncStatusEntryResponse{
-		ExecutionID: entry.ExecutionID,
-		FeedID:      entry.FeedID,
-		ProductID:   entry.ProductID,
-		SKU:         entry.SKU,
-		Step:        entry.Step.String(),
-		Action:      entry.Action.String(),
-		Status:      entry.Status.String(),
-		SyncedAt:    entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		ExecutionID:  entry.ExecutionID,
+		FeedID:       entry.FeedID,
+		ProductID:    entry.ProductID,
+		SKU:          entry.SKU,
+		VariationIDs: append([]string(nil), entry.VariationIDs...),
+		Step:         entry.Step.String(),
+		Action:       entry.Action.String(),
+		Status:       entry.Status.String(),
+		SyncedAt:     entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	if entry.ResolvedAt != nil {
 		response.ResolvedAt = entry.ResolvedAt.UTC().Format("2006-01-02T15:04:05Z")

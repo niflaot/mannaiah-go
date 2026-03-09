@@ -4,7 +4,7 @@ Contains Falabella sync status domain entities and feed response models.
 
 ## Key Types
 
-- `SyncEntry` — Represents a persisted sync status entry tracking product synchronization lifecycle. Uses `FeedID` (the Falabella-assigned feed UUID) as the natural primary key.
+- `SyncEntry` — Represents a persisted sync status entry tracking product synchronization lifecycle, including linked `VariationIDs`. Uses `FeedID` (the Falabella-assigned feed UUID) as the natural primary key.
 - `SyncAction` — Typed enum for sync operations (`create` / `update`).
 - `SyncStatus` — Typed enum for feed resolution states (`pending` / `finished` / `failed`).
 - `FeedResponse` — XML-mapped model for parsing Falabella FeedStatus API responses.

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,7 +38,16 @@ func (s *ProductSyncService) SetLogger(logger *zap.Logger) {
 }
 
 // recordSyncEntry persists sync status entries when a recorder is configured.
-func (s *ProductSyncService) recordSyncEntry(ctx context.Context, executionID, productID, sku, feedID string, step syncdomain.SyncStep, action syncdomain.SyncAction) {
+func (s *ProductSyncService) recordSyncEntry(
+	ctx context.Context,
+	executionID string,
+	productID string,
+	sku string,
+	feedID string,
+	variationIDs []string,
+	step syncdomain.SyncStep,
+	action syncdomain.SyncAction,
+) {
 	if s.recorder == nil || strings.TrimSpace(feedID) == "" {
 		return
 	}
@@ -49,14 +59,15 @@ func (s *ProductSyncService) recordSyncEntry(ctx context.Context, executionID, p
 	}
 
 	entry := &syncdomain.SyncEntry{
-		ExecutionID: strings.TrimSpace(executionID),
-		ProductID:   strings.TrimSpace(productID),
-		SKU:         strings.TrimSpace(sku),
-		FeedID:      strings.TrimSpace(feedID),
-		Step:        step,
-		Action:      action,
-		Status:      syncdomain.SyncStatusPending,
-		SyncedAt:    time.Now().UTC(),
+		ExecutionID:  strings.TrimSpace(executionID),
+		ProductID:    strings.TrimSpace(productID),
+		SKU:          strings.TrimSpace(sku),
+		VariationIDs: normalizeVariationIDs(variationIDs),
+		FeedID:       strings.TrimSpace(feedID),
+		Step:         step,
+		Action:       action,
+		Status:       syncdomain.SyncStatusPending,
+		SyncedAt:     time.Now().UTC(),
 	}
 
 	if err := s.recorder.RecordEntry(ctx, entry); err != nil {
@@ -67,6 +78,34 @@ func (s *ProductSyncService) recordSyncEntry(ctx context.Context, executionID, p
 			zap.Error(err),
 		)
 	}
+}
+
+// normalizeVariationIDs resolves sorted, deduplicated, trimmed variation identifier values.
+func normalizeVariationIDs(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	sort.Strings(normalized)
+	return normalized
 }
 
 // parseSyncResponse extracts ActionResponse from Falabella sync response payloads.

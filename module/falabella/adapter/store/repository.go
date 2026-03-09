@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,6 +42,14 @@ type syncStatusRecord struct {
 	ResolvedAt *time.Time
 }
 
+// syncStatusVariationRecord defines sync status variation-link persistence schema.
+type syncStatusVariationRecord struct {
+	// FeedID defines Falabella feed identifier values.
+	FeedID string `gorm:"primaryKey;size:191;not null"`
+	// VariationID defines linked product variation identifier values.
+	VariationID string `gorm:"primaryKey;size:128;not null"`
+}
+
 // syncExecutionRecord defines parent sync execution persistence schema.
 type syncExecutionRecord struct {
 	// ExecutionID defines one unique sync execution identifier.
@@ -57,6 +66,11 @@ func (syncExecutionRecord) TableName() string {
 // TableName defines storage table name.
 func (syncStatusRecord) TableName() string {
 	return "falabella_sync_status"
+}
+
+// TableName defines storage table name.
+func (syncStatusVariationRecord) TableName() string {
+	return "falabella_sync_status_variation"
 }
 
 // Repository implements sync status persistence using GORM.
@@ -117,6 +131,7 @@ func (r *Repository) Create(ctx context.Context, entry *syncdomain.SyncEntry) er
 	}
 
 	record := toRecord(*entry)
+	variationRecords := toVariationRecords(record.FeedID, entry.VariationIDs)
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		execution := syncExecutionRecord{ExecutionID: record.ExecutionID, StartedAt: record.SyncedAt}
 		if execution.ExecutionID == "" {
@@ -132,6 +147,11 @@ func (r *Repository) Create(ctx context.Context, entry *syncdomain.SyncEntry) er
 
 		if createEntryErr := tx.Create(&record).Error; createEntryErr != nil {
 			return wrapWriteError("create", createEntryErr)
+		}
+		if len(variationRecords) > 0 {
+			if createVariationErr := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&variationRecords).Error; createVariationErr != nil {
+				return fmt.Errorf("create sync status variation records: %w", createVariationErr)
+			}
 		}
 
 		return nil
@@ -171,7 +191,12 @@ func (r *Repository) GetByFeedID(ctx context.Context, feedID string) (*syncdomai
 		return nil, fmt.Errorf("get sync status record: %w", err)
 	}
 
-	entity := toDomain(record)
+	variationIDs, err := r.listVariationIDsByFeedIDs(ctx, []string{record.FeedID})
+	if err != nil {
+		return nil, err
+	}
+
+	entity := toDomain(record, variationIDs[record.FeedID])
 	return &entity, nil
 }
 
@@ -184,12 +209,7 @@ func (r *Repository) ListByExecutionID(ctx context.Context, executionID string) 
 		return nil, fmt.Errorf("list sync status records by execution: %w", err)
 	}
 
-	entries := make([]syncdomain.SyncEntry, 0, len(records))
-	for _, record := range records {
-		entries = append(entries, toDomain(record))
-	}
-
-	return entries, nil
+	return r.toDomainEntriesWithVariations(ctx, records)
 }
 
 // GetByProductID retrieves sync status entries by source product identifier.
@@ -201,12 +221,7 @@ func (r *Repository) GetByProductID(ctx context.Context, productID string) ([]sy
 		return nil, fmt.Errorf("list sync status records: %w", err)
 	}
 
-	entries := make([]syncdomain.SyncEntry, 0, len(records))
-	for _, record := range records {
-		entries = append(entries, toDomain(record))
-	}
-
-	return entries, nil
+	return r.toDomainEntriesWithVariations(ctx, records)
 }
 
 // ListPending retrieves unresolved sync status entries ordered by submission time.
@@ -225,12 +240,7 @@ func (r *Repository) ListPending(ctx context.Context, limit int) ([]syncdomain.S
 		return nil, fmt.Errorf("list pending sync status records: %w", err)
 	}
 
-	entries := make([]syncdomain.SyncEntry, 0, len(records))
-	for _, record := range records {
-		entries = append(entries, toDomain(record))
-	}
-
-	return entries, nil
+	return r.toDomainEntriesWithVariations(ctx, records)
 }
 
 // UpdateStatus updates the status and resolution timestamp of a sync status entry.
@@ -280,18 +290,120 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 }
 
 // toDomain maps persistence records to domain sync entries.
-func toDomain(record syncStatusRecord) syncdomain.SyncEntry {
+func toDomain(record syncStatusRecord, variationIDs []string) syncdomain.SyncEntry {
 	return syncdomain.SyncEntry{
-		ExecutionID: record.ExecutionID,
-		FeedID:      record.FeedID,
-		ProductID:   record.ProductID,
-		SKU:         record.SKU,
-		Step:        syncdomain.SyncStep(record.Step),
-		Action:      syncdomain.SyncAction(record.Action),
-		Status:      syncdomain.SyncStatus(record.Status),
-		SyncedAt:    record.SyncedAt,
-		ResolvedAt:  record.ResolvedAt,
+		ExecutionID:  record.ExecutionID,
+		FeedID:       record.FeedID,
+		ProductID:    record.ProductID,
+		SKU:          record.SKU,
+		VariationIDs: append([]string(nil), variationIDs...),
+		Step:         syncdomain.SyncStep(record.Step),
+		Action:       syncdomain.SyncAction(record.Action),
+		Status:       syncdomain.SyncStatus(record.Status),
+		SyncedAt:     record.SyncedAt,
+		ResolvedAt:   record.ResolvedAt,
 	}
+}
+
+// toVariationRecords maps feed-linked variation identifiers into persistence records.
+func toVariationRecords(feedID string, variationIDs []string) []syncStatusVariationRecord {
+	trimmedFeedID := strings.TrimSpace(feedID)
+	if trimmedFeedID == "" {
+		return nil
+	}
+
+	normalizedVariationIDs := normalizeVariationIDs(variationIDs)
+	if len(normalizedVariationIDs) == 0 {
+		return nil
+	}
+
+	records := make([]syncStatusVariationRecord, 0, len(normalizedVariationIDs))
+	for _, variationID := range normalizedVariationIDs {
+		records = append(records, syncStatusVariationRecord{
+			FeedID:      trimmedFeedID,
+			VariationID: variationID,
+		})
+	}
+
+	return records
+}
+
+// toDomainEntriesWithVariations maps status records into domain entries and resolves linked variation identifiers.
+func (r *Repository) toDomainEntriesWithVariations(ctx context.Context, records []syncStatusRecord) ([]syncdomain.SyncEntry, error) {
+	entries := make([]syncdomain.SyncEntry, 0, len(records))
+	if len(records) == 0 {
+		return entries, nil
+	}
+
+	feedIDs := make([]string, 0, len(records))
+	for _, record := range records {
+		feedIDs = append(feedIDs, record.FeedID)
+	}
+
+	variationIDsByFeedID, err := r.listVariationIDsByFeedIDs(ctx, feedIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, record := range records {
+		entries = append(entries, toDomain(record, variationIDsByFeedID[record.FeedID]))
+	}
+
+	return entries, nil
+}
+
+// listVariationIDsByFeedIDs resolves linked variation identifiers grouped by feed identifier values.
+func (r *Repository) listVariationIDsByFeedIDs(ctx context.Context, feedIDs []string) (map[string][]string, error) {
+	result := map[string][]string{}
+	if len(feedIDs) == 0 {
+		return result, nil
+	}
+
+	normalizedFeedIDs := normalizeVariationIDs(feedIDs)
+	if len(normalizedFeedIDs) == 0 {
+		return result, nil
+	}
+
+	var records []syncStatusVariationRecord
+	if err := r.db.WithContext(ctx).
+		Where("feed_id IN ?", normalizedFeedIDs).
+		Order("variation_id ASC").
+		Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("list sync status variation records: %w", err)
+	}
+
+	for _, record := range records {
+		result[record.FeedID] = append(result[record.FeedID], record.VariationID)
+	}
+
+	return result, nil
+}
+
+// normalizeVariationIDs resolves sorted, deduplicated, trimmed identifier values.
+func normalizeVariationIDs(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	sort.Strings(normalized)
+	return normalized
 }
 
 // wrapWriteError normalizes persistence write errors to stable repository errors.

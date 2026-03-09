@@ -41,6 +41,10 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Components.Schemas["FalabellaSyncStatusEntry"] == nil {
 		t.Fatalf("expected FalabellaSyncStatusEntry schema")
 	}
+	entrySchema := spec.Components.Schemas["FalabellaSyncStatusEntry"]
+	if entrySchema == nil || entrySchema.Value == nil || entrySchema.Value.Properties["variationIds"] == nil {
+		t.Fatalf("expected variationIds property in FalabellaSyncStatusEntry schema")
+	}
 	if spec.Components.Schemas["FalabellaResolveResult"] == nil {
 		t.Fatalf("expected FalabellaResolveResult schema")
 	}

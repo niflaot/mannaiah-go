@@ -220,6 +220,7 @@ func syncStatusEntrySchema() *openapi3.Schema {
 		WithProperty("feedId", openapi3.NewStringSchema()).
 		WithProperty("productId", openapi3.NewStringSchema()).
 		WithProperty("sku", openapi3.NewStringSchema()).
+		WithProperty("variationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("action", openapi3.NewStringSchema()).
 		WithProperty("status", openapi3.NewStringSchema()).
 		WithProperty("syncedAt", openapi3.NewStringSchema()).
