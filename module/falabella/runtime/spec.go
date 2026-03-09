@@ -20,6 +20,7 @@ func OpenAPISpec() *openapi3.T {
 	components.Schemas = openapi3.Schemas{
 		"FalabellaSyncProductsRequest": &openapi3.SchemaRef{Value: syncProductsRequestSchema()},
 		"FalabellaSyncSummary":         &openapi3.SchemaRef{Value: syncSummarySchema()},
+		"FalabellaSyncStatusExecution": &openapi3.SchemaRef{Value: syncStatusExecutionSchema()},
 		"FalabellaSyncStatusEntry":     &openapi3.SchemaRef{Value: syncStatusEntrySchema()},
 		"FalabellaResolveResult":       &openapi3.SchemaRef{Value: resolveResultSchema()},
 	}
@@ -31,11 +32,18 @@ func OpenAPISpec() *openapi3.T {
 			Version: "1.0.0",
 		},
 		Paths: openapi3.NewPaths(
+			openapi3.WithPath("/falabella/images/transcoded", &openapi3.PathItem{Get: transcodeImageOperation()}),
 			openapi3.WithPath("/falabella/brands", &openapi3.PathItem{Get: getBrandsOperation()}),
 			openapi3.WithPath("/falabella/sync/products", &openapi3.PathItem{Post: syncProductsOperation()}),
 			openapi3.WithPath("/falabella/sync/products/{id}", &openapi3.PathItem{Post: syncProductByIDOperation()}),
 			openapi3.WithPath("/falabella/sync/status/feed/{feedId}", &openapi3.PathItem{
 				Get: getSyncStatusByFeedOperation(),
+			}),
+			openapi3.WithPath("/falabella/sync/status/execution/{executionId}", &openapi3.PathItem{
+				Get: getSyncStatusExecutionOperation(),
+			}),
+			openapi3.WithPath("/falabella/sync/status/execution/{executionId}/feeds", &openapi3.PathItem{
+				Get: getSyncStatusByExecutionOperation(),
 			}),
 			openapi3.WithPath("/falabella/sync/status/product/{productId}", &openapi3.PathItem{
 				Get: getSyncStatusByProductOperation(),
@@ -48,6 +56,27 @@ func OpenAPISpec() *openapi3.T {
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: falabellaTag},
 		},
+	}
+}
+
+// transcodeImageOperation defines OpenAPI operations for Falabella image transcode endpoints.
+func transcodeImageOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "FalabellaController_transcodeImage",
+		Summary:     "Transcode a source image URL to image/jpeg",
+		Tags:        []string{falabellaTag},
+		Parameters: openapi3.Parameters{
+			&openapi3.ParameterRef{
+				Value: openapi3.NewQueryParameter("src").WithDescription("Source image URL to transcode."),
+			},
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("JPEG image payload.")),
+			openapi3.WithStatus(400, responseWithDescription("Invalid source image URL.")),
+			openapi3.WithStatus(403, responseWithDescription("Source image URL is not allowed.")),
+			openapi3.WithStatus(422, responseWithDescription("Source image payload is not a decodable image.")),
+			openapi3.WithStatus(503, responseWithDescription("Image transcode is disabled.")),
+		),
 	}
 }
 
@@ -143,8 +172,19 @@ func syncResultSchema() *openapi3.Schema {
 		WithProperty("status", openapi3.NewStringSchema()).
 		WithProperty("reason", openapi3.NewStringSchema()).
 		WithProperty("feedId", openapi3.NewStringSchema()).
+		WithProperty("feeds", openapi3.NewArraySchema().WithItems(syncFeedSchema())).
 		WithProperty("warnings", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithRequired([]string{"productId", "sku", "status"})
+}
+
+// syncFeedSchema defines OpenAPI schema values for per-feed sync result values.
+func syncFeedSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("step", openapi3.NewStringSchema()).
+		WithProperty("task", openapi3.NewStringSchema()).
+		WithProperty("action", openapi3.NewStringSchema()).
+		WithProperty("feedId", openapi3.NewStringSchema()).
+		WithRequired([]string{"step", "task", "feedId"})
 }
 
 // getSyncStatusByFeedOperation defines OpenAPI operations for feed sync status lookup endpoints.
@@ -190,6 +230,49 @@ func getSyncStatusByProductOperation() *openapi3.Operation {
 	}
 }
 
+// getSyncStatusExecutionOperation defines OpenAPI operations for execution sync status parent lookup endpoints.
+func getSyncStatusExecutionOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "FalabellaController_getSyncStatusExecution",
+		Summary:     "Retrieve sync execution by execution ID",
+		Tags:        []string{falabellaTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			&openapi3.ParameterRef{
+				Value: openapi3.NewPathParameter("executionId").WithDescription("Sync execution ID."),
+			},
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithJSONSchema("Sync execution.", "#/components/schemas/FalabellaSyncStatusExecution")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden.")),
+			openapi3.WithStatus(404, responseWithDescription("Sync execution not found.")),
+		),
+	}
+}
+
+// getSyncStatusByExecutionOperation defines OpenAPI operations for execution child feed lookup endpoints.
+func getSyncStatusByExecutionOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "FalabellaController_getSyncStatusByExecution",
+		Summary:     "Retrieve sync status entries by execution ID",
+		Tags:        []string{falabellaTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			&openapi3.ParameterRef{
+				Value: openapi3.NewPathParameter("executionId").WithDescription("Sync execution ID."),
+			},
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithJSONArraySchema("Sync status entries.", "#/components/schemas/FalabellaSyncStatusEntry")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden.")),
+		),
+	}
+}
+
 // resolveFeedStatusOperation defines OpenAPI operations for feed status resolution endpoints.
 func resolveFeedStatusOperation() *openapi3.Operation {
 	return &openapi3.Operation{
@@ -221,17 +304,29 @@ func syncStatusEntrySchema() *openapi3.Schema {
 		WithProperty("productId", openapi3.NewStringSchema()).
 		WithProperty("sku", openapi3.NewStringSchema()).
 		WithProperty("variationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("step", openapi3.NewStringSchema()).
 		WithProperty("action", openapi3.NewStringSchema()).
+		WithProperty("task", openapi3.NewStringSchema()).
 		WithProperty("status", openapi3.NewStringSchema()).
 		WithProperty("syncedAt", openapi3.NewStringSchema()).
 		WithProperty("resolvedAt", openapi3.NewStringSchema()).
 		WithRequired([]string{"feedId", "productId", "sku", "action", "status", "syncedAt"})
 }
 
+// syncStatusExecutionSchema defines OpenAPI schemas for sync execution response values.
+func syncStatusExecutionSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("executionId", openapi3.NewStringSchema()).
+		WithProperty("startedAt", openapi3.NewStringSchema()).
+		WithRequired([]string{"executionId", "startedAt"})
+}
+
 // resolveResultSchema defines OpenAPI schemas for feed resolution result values.
 func resolveResultSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("feedId", openapi3.NewStringSchema()).
+		WithProperty("step", openapi3.NewStringSchema()).
+		WithProperty("task", openapi3.NewStringSchema()).
 		WithProperty("status", openapi3.NewStringSchema()).
 		WithProperty("action", openapi3.NewStringSchema()).
 		WithProperty("totalRecords", openapi3.NewIntegerSchema()).

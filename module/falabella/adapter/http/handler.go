@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	corehttp "mannaiah/module/core/http"
 	brandservice "mannaiah/module/falabella/application/brand/service"
@@ -71,6 +73,22 @@ type Handler struct {
 	syncStatusService SyncStatusService
 	// authorizer defines optional auth dependency for protected endpoints.
 	authorizer Authorizer
+	// imageTranscode defines optional image-transcoding endpoint configuration.
+	imageTranscode ImageTranscodeConfig
+}
+
+// ImageTranscodeConfig defines image-transcoding endpoint behavior configuration values.
+type ImageTranscodeConfig struct {
+	// Enabled defines whether the image transcode endpoint should process requests.
+	Enabled bool
+	// AllowedSourcePrefixes defines optional source URL prefixes allowed for transcode requests.
+	AllowedSourcePrefixes []string
+	// RequestTimeout defines source image fetch timeout values.
+	RequestTimeout time.Duration
+	// MaxInputBytes defines maximum source payload bytes read before decode.
+	MaxInputBytes int64
+	// HTTPClient defines optional custom HTTP client dependencies used to fetch source images.
+	HTTPClient *http.Client
 }
 
 // NewHandler creates Falabella HTTP handlers.
@@ -87,7 +105,15 @@ func NewHandler(service Service, productSyncService ProductSyncService, syncStat
 		syncStatusService = syncStatusServices[0]
 	}
 
-	return &Handler{service: service, productSyncService: productSyncService, syncStatusService: syncStatusService}, nil
+	return &Handler{
+		service:            service,
+		productSyncService: productSyncService,
+		syncStatusService:  syncStatusService,
+		imageTranscode: ImageTranscodeConfig{
+			RequestTimeout: 15 * time.Second,
+			MaxInputBytes:  20 << 20,
+		},
+	}, nil
 }
 
 // SetAuthorizer configures endpoint authentication and authorization dependencies.
@@ -99,8 +125,39 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	h.authorizer = authorizer
 }
 
+// SetImageTranscodeConfig configures image-transcoding endpoint behavior.
+func (h *Handler) SetImageTranscodeConfig(cfg ImageTranscodeConfig) {
+	if h == nil {
+		return
+	}
+
+	resolved := cfg
+	if resolved.RequestTimeout <= 0 {
+		resolved.RequestTimeout = 15 * time.Second
+	}
+	if resolved.MaxInputBytes <= 0 {
+		resolved.MaxInputBytes = 20 << 20
+	}
+	if resolved.HTTPClient == nil {
+		resolved.HTTPClient = &http.Client{Timeout: resolved.RequestTimeout}
+	}
+
+	allowed := make([]string, 0, len(resolved.AllowedSourcePrefixes))
+	for _, prefix := range resolved.AllowedSourcePrefixes {
+		trimmed := strings.TrimRight(strings.TrimSpace(prefix), "/")
+		if trimmed == "" {
+			continue
+		}
+		allowed = append(allowed, trimmed)
+	}
+	resolved.AllowedSourcePrefixes = allowed
+
+	h.imageTranscode = resolved
+}
+
 // RegisterRoutes registers Falabella integration routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
+	router.Get("/falabella/images/transcoded", h.transcodeImage)
 	router.Get("/falabella/brands", h.protect("products:read", h.getBrands))
 	router.Post("/falabella/sync/products", h.protect("products:update", h.syncProducts))
 	router.Post("/falabella/sync/products/:id", h.protect("products:update", h.syncProductByID))
@@ -324,6 +381,8 @@ type syncStatusEntryResponse struct {
 	VariationIDs []string `json:"variationIds,omitempty"`
 	// Step defines logical feed step values (product/image).
 	Step string `json:"step,omitempty"`
+	// Task defines high-level sync task category values (data/image).
+	Task string `json:"task,omitempty"`
 	// Action defines sync operation type values.
 	Action string `json:"action"`
 	// Status defines feed resolution status values.
@@ -355,9 +414,13 @@ func mapSyncEntryResponse(entry *syncdomain.SyncEntry) syncStatusEntryResponse {
 		SKU:          entry.SKU,
 		VariationIDs: append([]string(nil), entry.VariationIDs...),
 		Step:         entry.Step.String(),
+		Task:         entry.Task.String(),
 		Action:       entry.Action.String(),
 		Status:       entry.Status.String(),
 		SyncedAt:     entry.SyncedAt.UTC().Format("2006-01-02T15:04:05Z"),
+	}
+	if response.Task == "" {
+		response.Task = entry.Step.Task().String()
 	}
 	if entry.ResolvedAt != nil {
 		response.ResolvedAt = entry.ResolvedAt.UTC().Format("2006-01-02T15:04:05Z")

@@ -40,6 +40,14 @@ type Config struct {
 	ProductSyncWorkers int `mapstructure:"FALABELLA_PRODUCT_SYNC_WORKERS" default:"4"`
 	// ProductImageBaseURL defines public base URL values used to expose asset keys as Falabella image URLs.
 	ProductImageBaseURL string `mapstructure:"FALABELLA_PRODUCT_IMAGE_BASE_URL" default:""`
+	// ProductImageTranscodeEnabled defines whether image URLs should be routed through jpg transcode endpoint values before sync.
+	ProductImageTranscodeEnabled bool `mapstructure:"FALABELLA_PRODUCT_IMAGE_TRANSCODE_ENABLED" default:"false"`
+	// ProductImageTranscodePublicBaseURL defines public API base URL values used to build jpg transcode endpoint URLs.
+	ProductImageTranscodePublicBaseURL string `mapstructure:"FALABELLA_PRODUCT_IMAGE_TRANSCODE_PUBLIC_BASE_URL" default:""`
+	// ProductImageTranscodeAllowedPrefixes defines comma-separated source URL prefixes allowed by the transcode endpoint.
+	ProductImageTranscodeAllowedPrefixes string `mapstructure:"FALABELLA_PRODUCT_IMAGE_TRANSCODE_ALLOWED_PREFIXES" default:""`
+	// ProductImageTranscodeTimeoutMS defines source image fetch timeout values for transcode endpoint requests.
+	ProductImageTranscodeTimeoutMS int `mapstructure:"FALABELLA_PRODUCT_IMAGE_TRANSCODE_TIMEOUT_MS" default:"15000"`
 	// SyncStatusCron defines the cron expression used for periodic feed status resolution.
 	SyncStatusCron string `mapstructure:"FALABELLA_SYNC_STATUS_CRON" default:"*/5 * * * *"`
 	// SyncStatusBatchSize defines the maximum number of pending feeds resolved per cron tick.

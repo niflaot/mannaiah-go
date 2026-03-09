@@ -77,6 +77,10 @@ type Service interface {
 type ResolveResult struct {
 	// FeedID defines the Falabella feed identifier.
 	FeedID string `json:"feedId"`
+	// Step defines the logical sync step for this feed (product/image) when known.
+	Step string `json:"step,omitempty"`
+	// Task defines high-level sync task category values (data/image) when known.
+	Task string `json:"task,omitempty"`
 	// Status defines the resolved sync status.
 	Status string `json:"status"`
 	// Action defines the feed action type.
@@ -181,6 +185,16 @@ func (s *SyncStatusService) ResolveFeedStatus(ctx context.Context, feedID string
 	if trimmed == "" {
 		return nil, ErrInvalidFeedID
 	}
+	var (
+		entryStep string
+		entryTask string
+	)
+	if entry, entryErr := s.repo.GetByFeedID(ctx, trimmed); entryErr == nil && entry != nil {
+		entryStep = entry.Step.String()
+		entryTask = entry.Task.String()
+	} else if entryErr != nil && !errors.Is(entryErr, port.ErrSyncEntryNotFound) {
+		return nil, fmt.Errorf("get sync status entry: %w", entryErr)
+	}
 
 	rawPayload, err := s.source.GetFeedStatus(ctx, trimmed)
 	if err != nil {
@@ -220,6 +234,8 @@ func (s *SyncStatusService) ResolveFeedStatus(ctx context.Context, feedID string
 
 	return &ResolveResult{
 		FeedID:           detail.Feed,
+		Step:             entryStep,
+		Task:             entryTask,
 		Status:           detail.Status,
 		Action:           detail.Action,
 		TotalRecords:     detail.TotalRecords,

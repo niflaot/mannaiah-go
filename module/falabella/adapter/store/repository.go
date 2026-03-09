@@ -32,6 +32,8 @@ type syncStatusRecord struct {
 	SKU string `gorm:"size:128;not null"`
 	// Step defines logical step values for this feed (product/image).
 	Step string `gorm:"size:16;not null"`
+	// Task defines high-level task category values for this feed (data/image).
+	Task string `gorm:"index;size:16;not null"`
 	// Action defines sync operation type values.
 	Action string `gorm:"size:16;not null"`
 	// Status defines feed resolution status values.
@@ -271,6 +273,10 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 	if !step.IsValid() {
 		step = syncdomain.SyncStepProduct
 	}
+	task := entry.Task
+	if !task.IsValid() {
+		task = step.Task()
+	}
 	syncedAt := entry.SyncedAt
 	if syncedAt.IsZero() {
 		syncedAt = time.Now().UTC()
@@ -282,6 +288,7 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 		ProductID:   strings.TrimSpace(entry.ProductID),
 		SKU:         strings.TrimSpace(entry.SKU),
 		Step:        step.String(),
+		Task:        task.String(),
 		Action:      string(entry.Action),
 		Status:      string(entry.Status),
 		SyncedAt:    syncedAt,
@@ -291,13 +298,20 @@ func toRecord(entry syncdomain.SyncEntry) syncStatusRecord {
 
 // toDomain maps persistence records to domain sync entries.
 func toDomain(record syncStatusRecord, variationIDs []string) syncdomain.SyncEntry {
+	step := syncdomain.SyncStep(record.Step)
+	task := syncdomain.SyncTask(record.Task)
+	if !task.IsValid() {
+		task = step.Task()
+	}
+
 	return syncdomain.SyncEntry{
 		ExecutionID:  record.ExecutionID,
 		FeedID:       record.FeedID,
 		ProductID:    record.ProductID,
 		SKU:          record.SKU,
 		VariationIDs: append([]string(nil), variationIDs...),
-		Step:         syncdomain.SyncStep(record.Step),
+		Step:         step,
+		Task:         task,
 		Action:       syncdomain.SyncAction(record.Action),
 		Status:       syncdomain.SyncStatus(record.Status),
 		SyncedAt:     record.SyncedAt,

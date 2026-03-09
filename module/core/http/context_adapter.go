@@ -45,6 +45,16 @@ func (a *fiberContextAdapter) SendStatus(status int) error {
 	return a.ctx.SendStatus(status)
 }
 
+// SetHeader writes response header values.
+func (a *fiberContextAdapter) SetHeader(key string, value string) {
+	a.ctx.Set(key, value)
+}
+
+// SendBytes writes binary response payload values.
+func (a *fiberContextAdapter) SendBytes(body []byte) error {
+	return a.ctx.Send(body)
+}
+
 // Params reads path parameter values.
 func (a *fiberContextAdapter) Params(key string, defaultValue ...string) string {
 	return a.ctx.Params(key, defaultValue...)

@@ -95,6 +95,9 @@ func TestCreateAndGetByFeedID(t *testing.T) {
 	if retrieved.Action != syncdomain.SyncActionCreate {
 		t.Fatalf("Action = %q, want %q", retrieved.Action, syncdomain.SyncActionCreate)
 	}
+	if retrieved.Task != syncdomain.SyncTaskData {
+		t.Fatalf("Task = %q, want %q", retrieved.Task, syncdomain.SyncTaskData)
+	}
 	if retrieved.Status != syncdomain.SyncStatusPending {
 		t.Fatalf("Status = %q, want %q", retrieved.Status, syncdomain.SyncStatusPending)
 	}
@@ -103,6 +106,35 @@ func TestCreateAndGetByFeedID(t *testing.T) {
 	}
 	if retrieved.VariationIDs[0] != "v-color" || retrieved.VariationIDs[1] != "v-size" {
 		t.Fatalf("VariationIDs = %#v, want %#v", retrieved.VariationIDs, []string{"v-color", "v-size"})
+	}
+}
+
+// TestCreateAndGetByFeedIDImageTask verifies image-task persistence behavior for image-step feed entries.
+func TestCreateAndGetByFeedIDImageTask(t *testing.T) {
+	db := newTestDB(t)
+	repo, _ := NewRepository(db)
+	_ = repo.EnsureSchema(context.Background())
+
+	entry := &syncdomain.SyncEntry{
+		ProductID: "prod-1",
+		SKU:       "SKU-001",
+		FeedID:    "feed-img",
+		Step:      syncdomain.SyncStepImage,
+		Action:    syncdomain.SyncActionCreate,
+		Status:    syncdomain.SyncStatusPending,
+		SyncedAt:  time.Now().UTC().Truncate(time.Second),
+	}
+
+	if err := repo.Create(context.Background(), entry); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	retrieved, err := repo.GetByFeedID(context.Background(), "feed-img")
+	if err != nil {
+		t.Fatalf("GetByFeedID() error = %v", err)
+	}
+	if retrieved.Task != syncdomain.SyncTaskImage {
+		t.Fatalf("Task = %q, want %q", retrieved.Task, syncdomain.SyncTaskImage)
 	}
 }
 

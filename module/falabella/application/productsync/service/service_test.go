@@ -232,14 +232,54 @@ func TestSyncProductWithImageFeedAggregation(t *testing.T) {
 	if summary.Results[0].Feeds[0].Step != "product" {
 		t.Fatalf("first feed step = %q, want %q", summary.Results[0].Feeds[0].Step, "product")
 	}
+	if summary.Results[0].Feeds[0].Task != "data" {
+		t.Fatalf("first feed task = %q, want %q", summary.Results[0].Feeds[0].Task, "data")
+	}
 	if summary.Results[0].Feeds[0].FeedID != "feed-abc-123" {
 		t.Fatalf("first feed id = %q, want %q", summary.Results[0].Feeds[0].FeedID, "feed-abc-123")
 	}
 	if summary.Results[0].Feeds[1].Step != "image" {
 		t.Fatalf("second feed step = %q, want %q", summary.Results[0].Feeds[1].Step, "image")
 	}
+	if summary.Results[0].Feeds[1].Task != "image" {
+		t.Fatalf("second feed task = %q, want %q", summary.Results[0].Feeds[1].Task, "image")
+	}
 	if summary.Results[0].Feeds[1].FeedID != "feed-img-999" {
 		t.Fatalf("second feed id = %q, want %q", summary.Results[0].Feeds[1].FeedID, "feed-img-999")
+	}
+}
+
+// TestSyncProductImageTranscodeURLs verifies image transcode URL wrapping behavior before image sync.
+func TestSyncProductImageTranscodeURLs(t *testing.T) {
+	source := &sourceMock{syncImagesResponse: []byte(testImageSyncResponseXML)}
+	service, err := NewService(source, catalogMock{
+		product: &port.CatalogProduct{
+			ID:  "p-1",
+			SKU: "SKU-1",
+			Datasheets: []port.CatalogDatasheet{
+				{Realm: "falabella", Name: "Backpack", Description: "Backpack description"},
+			},
+			Images: []port.CatalogImage{
+				{URL: "https://cdn.example.com/image.webp"},
+			},
+		},
+	}, Config{
+		Realm:                 "falabella",
+		ImageTranscodeEnabled: true,
+		ImageTranscodeBaseURL: "https://api.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if _, syncErr := service.SyncProduct(context.Background(), "p-1"); syncErr != nil {
+		t.Fatalf("SyncProduct() error = %v", syncErr)
+	}
+	if len(source.syncedImages) != 1 || len(source.syncedImages[0].URLs) != 1 {
+		t.Fatalf("syncedImages = %#v, want one image sync request with one URL", source.syncedImages)
+	}
+	if source.syncedImages[0].URLs[0] != "https://api.example.com/falabella/images/transcoded?src=https%3A%2F%2Fcdn.example.com%2Fimage.webp" {
+		t.Fatalf("transcoded image URL = %q", source.syncedImages[0].URLs[0])
 	}
 }
 

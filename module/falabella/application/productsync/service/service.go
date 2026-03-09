@@ -6,6 +6,7 @@ import (
 	"fmt"
 	syncdomain "mannaiah/module/falabella/domain/sync"
 	"mannaiah/module/falabella/port"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,10 @@ type Config struct {
 	OperatorCode string
 	// SyncWorkers defines max concurrent workers for batch product sync.
 	SyncWorkers int
+	// ImageTranscodeEnabled defines whether image URLs should be routed through the jpg transcode endpoint before sync.
+	ImageTranscodeEnabled bool
+	// ImageTranscodeBaseURL defines public API base URL values used to build jpg transcode endpoint URLs.
+	ImageTranscodeBaseURL string
 }
 
 // Result defines per-product sync result values.
@@ -85,6 +90,8 @@ type Result struct {
 type ResultFeed struct {
 	// Step defines the logical sync step that emitted this feed (for example, product or image).
 	Step string `json:"step"`
+	// Task defines high-level task categories (data/image) for this feed.
+	Task string `json:"task"`
 	// Action defines Falabella request action values (for example, ProductCreate, ProductUpdate, Image).
 	Action string `json:"action,omitempty"`
 	// FeedID defines Falabella feed identifier values.
@@ -151,6 +158,10 @@ func NewService(source Source, catalog ProductCatalog, cfg Config) (*ProductSync
 	}
 	if strings.TrimSpace(resolved.OperatorCode) == "" {
 		resolved.OperatorCode = "FACO"
+	}
+	resolved.ImageTranscodeBaseURL = strings.TrimRight(strings.TrimSpace(resolved.ImageTranscodeBaseURL), "/")
+	if resolved.ImageTranscodeBaseURL == "" {
+		resolved.ImageTranscodeEnabled = false
 	}
 	if resolved.SyncWorkers <= 0 {
 		resolved.SyncWorkers = defaultSyncWorkers
@@ -531,8 +542,9 @@ func (s *ProductSyncService) syncImages(ctx context.Context, sku string, urls []
 	if len(normalized) == 0 {
 		return nil, nil
 	}
+	resolvedURLs := s.resolveImageSyncURLs(normalized)
 
-	response, err := s.source.SyncProductImages(ctx, port.SyncProductImagesRequest{SKU: strings.TrimSpace(sku), URLs: normalized})
+	response, err := s.source.SyncProductImages(ctx, port.SyncProductImagesRequest{SKU: strings.TrimSpace(sku), URLs: resolvedURLs})
 	if err != nil {
 		return nil, fmt.Errorf("sync falabella product images: %w", err)
 	}
@@ -552,9 +564,36 @@ func appendFeedResult(result *Result, step string, actionResp *syncdomain.Action
 	}
 	result.Feeds = append(result.Feeds, ResultFeed{
 		Step:   strings.TrimSpace(step),
+		Task:   syncdomain.SyncStep(strings.TrimSpace(step)).Task().String(),
 		Action: strings.TrimSpace(actionResp.RequestAction),
 		FeedID: feedID,
 	})
+}
+
+// resolveImageSyncURLs resolves image URLs that should be sent to Falabella image-sync requests.
+func (s *ProductSyncService) resolveImageSyncURLs(urls []string) []string {
+	resolved := uniqueTrimmedValues(urls)
+	if !s.cfg.ImageTranscodeEnabled || s.cfg.ImageTranscodeBaseURL == "" || len(resolved) == 0 {
+		return resolved
+	}
+
+	transcoded := make([]string, 0, len(resolved))
+	for _, imageURL := range resolved {
+		transcoded = append(transcoded, buildTranscodedImageURL(s.cfg.ImageTranscodeBaseURL, imageURL))
+	}
+
+	return transcoded
+}
+
+// buildTranscodedImageURL builds transcode endpoint URLs that return image/jpeg payloads for the source URL.
+func buildTranscodedImageURL(baseURL string, sourceURL string) string {
+	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	trimmedSourceURL := strings.TrimSpace(sourceURL)
+	if trimmedBaseURL == "" || trimmedSourceURL == "" {
+		return trimmedSourceURL
+	}
+
+	return fmt.Sprintf("%s/falabella/images/transcoded?src=%s", trimmedBaseURL, url.QueryEscape(trimmedSourceURL))
 }
 
 // syncActionFromResponse resolves persisted sync action values from Falabella action responses.

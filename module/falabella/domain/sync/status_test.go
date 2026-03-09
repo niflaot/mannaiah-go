@@ -57,6 +57,29 @@ func TestSyncStatusIsValid(t *testing.T) {
 	}
 }
 
+// TestSyncStepTask verifies step-to-task mapping behavior.
+func TestSyncStepTask(t *testing.T) {
+	if got := SyncStepProduct.Task(); got != SyncTaskData {
+		t.Fatalf("SyncStepProduct.Task() = %q, want %q", got, SyncTaskData)
+	}
+	if got := SyncStepImage.Task(); got != SyncTaskImage {
+		t.Fatalf("SyncStepImage.Task() = %q, want %q", got, SyncTaskImage)
+	}
+}
+
+// TestSyncTaskIsValid verifies sync task validation behavior.
+func TestSyncTaskIsValid(t *testing.T) {
+	if !SyncTaskData.IsValid() {
+		t.Fatalf("SyncTaskData.IsValid() = false, want true")
+	}
+	if !SyncTaskImage.IsValid() {
+		t.Fatalf("SyncTaskImage.IsValid() = false, want true")
+	}
+	if SyncTask("").IsValid() {
+		t.Fatalf("SyncTask(\"\").IsValid() = true, want false")
+	}
+}
+
 // TestSyncStatusString verifies sync status string conversion behavior.
 func TestSyncStatusString(t *testing.T) {
 	if got := SyncStatusPending.String(); got != "pending" {

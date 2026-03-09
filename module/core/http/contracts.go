@@ -24,6 +24,10 @@ type Context interface {
 	SendString(body string) error
 	// SendStatus writes a response with status code only.
 	SendStatus(status int) error
+	// SetHeader writes response header values.
+	SetHeader(key string, value string)
+	// SendBytes writes binary response payload values.
+	SendBytes(body []byte) error
 	// Params reads path parameter values.
 	Params(key string, defaultValue ...string) string
 	// Query reads query string values.

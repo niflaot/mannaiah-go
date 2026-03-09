@@ -503,6 +503,7 @@ func TestMapSyncEntryResponseVariationIDs(t *testing.T) {
 		ProductID:    "prod-1",
 		SKU:          "SKU-1",
 		VariationIDs: []string{"v-color", "v-size"},
+		Step:         syncdomain.SyncStepImage,
 		Action:       syncdomain.SyncActionCreate,
 		Status:       syncdomain.SyncStatusPending,
 		SyncedAt:     time.Now().UTC(),
@@ -513,5 +514,8 @@ func TestMapSyncEntryResponseVariationIDs(t *testing.T) {
 	}
 	if response.VariationIDs[0] != "v-color" || response.VariationIDs[1] != "v-size" {
 		t.Fatalf("response.VariationIDs = %#v, want %#v", response.VariationIDs, []string{"v-color", "v-size"})
+	}
+	if response.Task != "image" {
+		t.Fatalf("response.Task = %q, want %q", response.Task, "image")
 	}
 }

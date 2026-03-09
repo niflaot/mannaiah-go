@@ -103,6 +103,9 @@ func TestRecordSyncEntryWithRecorder(t *testing.T) {
 	if probe.entries[0].Step != syncdomain.SyncStepProduct {
 		t.Fatalf("Step = %q, want %q", probe.entries[0].Step, syncdomain.SyncStepProduct)
 	}
+	if probe.entries[0].Task != syncdomain.SyncTaskData {
+		t.Fatalf("Task = %q, want %q", probe.entries[0].Task, syncdomain.SyncTaskData)
+	}
 	if probe.entries[0].FeedID != "feed-abc" {
 		t.Fatalf("FeedID = %q, want %q", probe.entries[0].FeedID, "feed-abc")
 	}
@@ -135,6 +138,9 @@ func TestRecordSyncEntryUpdateAction(t *testing.T) {
 	}
 	if probe.entries[0].Step != syncdomain.SyncStepImage {
 		t.Fatalf("Step = %q, want %q", probe.entries[0].Step, syncdomain.SyncStepImage)
+	}
+	if probe.entries[0].Task != syncdomain.SyncTaskImage {
+		t.Fatalf("Task = %q, want %q", probe.entries[0].Task, syncdomain.SyncTaskImage)
 	}
 }
 

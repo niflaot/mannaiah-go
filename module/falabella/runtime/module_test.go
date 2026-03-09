@@ -1,15 +1,25 @@
 package runtime
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"testing"
 
+	coredbmigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // loaderProbe defines startup loader behavior for module tests.
@@ -164,6 +174,71 @@ func TestConfigureSyncStatusNilDB(t *testing.T) {
 
 	if configErr := module.ConfigureSyncStatus(nil); configErr != nil {
 		t.Fatalf("ConfigureSyncStatus(nil) error = %v", configErr)
+	}
+}
+
+// TestConfigureSyncStatusPreservesImageTranscode verifies sync-status wiring keeps image-transcode endpoint behavior.
+func TestConfigureSyncStatusPreservesImageTranscode(t *testing.T) {
+	sourceImage := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	sourceImage.Set(0, 0, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+	sourceBuffer := bytes.Buffer{}
+	if err := png.Encode(&sourceBuffer, sourceImage); err != nil {
+		t.Fatalf("png.Encode() error = %v", err)
+	}
+
+	sourceServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_ = request
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(sourceBuffer.Bytes())
+	}))
+	defer sourceServer.Close()
+
+	module, err := New(Config{
+		URL:                                  sourceServer.URL,
+		UserID:                               "user-1",
+		APIKey:                               "key-1",
+		ProductImageTranscodeEnabled:         true,
+		ProductImageTranscodeAllowedPrefixes: sourceServer.URL,
+	}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open() error = %v", err)
+	}
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("migration.Apply() error = %v", err)
+	}
+	if err := module.ConfigureSyncStatus(db); err != nil {
+		t.Fatalf("ConfigureSyncStatus() error = %v", err)
+	}
+
+	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8307}, nil)
+	if err != nil {
+		t.Fatalf("corehttp.New() error = %v", err)
+	}
+	server.RegisterRoutes(module.RegisterRoutes)
+
+	request, _ := http.NewRequest(
+		http.MethodGet,
+		"/falabella/images/transcoded?src="+neturl.QueryEscape(sourceServer.URL+"/sample.png"),
+		nil,
+	)
+	response, testErr := server.App().Test(request)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	body := bytes.Buffer{}
+	if _, readErr := body.ReadFrom(response.Body); readErr != nil {
+		t.Fatalf("ReadFrom(response body) error = %v", readErr)
+	}
+	if _, decodeErr := jpeg.Decode(bytes.NewReader(body.Bytes())); decodeErr != nil {
+		t.Fatalf("jpeg.Decode() error = %v", decodeErr)
 	}
 }
 

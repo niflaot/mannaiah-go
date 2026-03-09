@@ -101,12 +101,14 @@ func New(cfg Config, providedLogger *zap.Logger, catalogs ...port.ProductCatalog
 
 	productCatalog := resolveCatalog(catalogs...)
 	productSyncService, err := productsyncservice.NewService(source, productCatalog, productsyncservice.Config{
-		Realm:            cfg.ProductRealm,
-		CategoryID:       cfg.ProductCategoryID,
-		GlobalIdentifier: cfg.ProductGlobalIdentifier,
-		AttributeSetID:   cfg.ProductAttributeSetID,
-		OperatorCode:     cfg.ProductOperatorCode,
-		SyncWorkers:      cfg.ProductSyncWorkers,
+		Realm:                 cfg.ProductRealm,
+		CategoryID:            cfg.ProductCategoryID,
+		GlobalIdentifier:      cfg.ProductGlobalIdentifier,
+		AttributeSetID:        cfg.ProductAttributeSetID,
+		OperatorCode:          cfg.ProductOperatorCode,
+		SyncWorkers:           cfg.ProductSyncWorkers,
+		ImageTranscodeEnabled: cfg.ProductImageTranscodeEnabled,
+		ImageTranscodeBaseURL: cfg.ProductImageTranscodePublicBaseURL,
 	})
 	if err != nil {
 		return nil, err
@@ -116,6 +118,7 @@ func New(cfg Config, providedLogger *zap.Logger, catalogs ...port.ProductCatalog
 	if err != nil {
 		return nil, err
 	}
+	handler.SetImageTranscodeConfig(resolveImageTranscodeConfig(cfg))
 
 	module := &Module{cfg: cfg, service: service, productSyncService: productSyncService, handler: handler, logger: logger}
 	productSyncService.SetLogger(logger)
@@ -162,6 +165,7 @@ func (m *Module) ConfigureSyncStatus(db *gorm.DB) error {
 	if handlerErr != nil {
 		return handlerErr
 	}
+	handler.SetImageTranscodeConfig(resolveImageTranscodeConfig(m.cfg))
 	m.handler = handler
 
 	return nil

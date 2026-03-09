@@ -65,6 +65,7 @@ func (s *ProductSyncService) recordSyncEntry(
 		VariationIDs: normalizeVariationIDs(variationIDs),
 		FeedID:       strings.TrimSpace(feedID),
 		Step:         step,
+		Task:         step.Task(),
 		Action:       action,
 		Status:       syncdomain.SyncStatusPending,
 		SyncedAt:     time.Now().UTC(),

@@ -135,6 +135,21 @@ func TestFalabellaSyncStatusEndpointsE2E(t *testing.T) {
 	}
 	server.RegisterRoutes(module.RegisterRoutes)
 
+	tracer.Step("seed sync status image-task row")
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := db.WithContext(context.Background()).Exec(
+		"INSERT INTO falabella_sync_execution (execution_id, started_at) VALUES (?, ?)",
+		"exec-e2e-image", now,
+	).Error; err != nil {
+		t.Fatalf("seed execution error = %v", err)
+	}
+	if err := db.WithContext(context.Background()).Exec(
+		"INSERT INTO falabella_sync_status (execution_id, feed_id, product_id, sku, step, task, action, status, synced_at, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"exec-e2e-image", "feed-e2e-image", "prod-e2e-1", "SKU-E2E-1", "image", "image", "create", "pending", now, nil,
+	).Error; err != nil {
+		t.Fatalf("seed sync status error = %v", err)
+	}
+
 	tracer.Step("verify sync status feed endpoint returns 404 for unknown feed")
 	req, _ := http.NewRequest(http.MethodGet, "/falabella/sync/status/feed/nonexistent-feed", nil)
 	resp, testErr := server.App().Test(req)
@@ -153,6 +168,26 @@ func TestFalabellaSyncStatusEndpointsE2E(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /sync/status/product/nonexistent status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	tracer.Step("verify sync status feed endpoint exposes step and task fields")
+	req, _ = http.NewRequest(http.MethodGet, "/falabella/sync/status/feed/feed-e2e-image", nil)
+	resp, testErr = server.App().Test(req)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /sync/status/feed/feed-e2e-image status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var feedBody map[string]any
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&feedBody); decodeErr != nil {
+		t.Fatalf("decode feed response error = %v", decodeErr)
+	}
+	if feedBody["step"] != "image" {
+		t.Fatalf("feed step = %v, want %q", feedBody["step"], "image")
+	}
+	if feedBody["task"] != "image" {
+		t.Fatalf("feed task = %v, want %q", feedBody["task"], "image")
 	}
 
 	tracer.Step("verify resolve endpoint returns 404 for non-tracked feed")
@@ -178,7 +213,7 @@ func TestFalabellaSyncStatusEndpointsE2E(t *testing.T) {
 		t.Fatalf("resolve status = %v, want %q", resolveBody["status"], "Finished")
 	}
 
-	tracer.AssertStepCount(6)
+	tracer.AssertStepCount(8)
 }
 
 // TestFalabellaSyncStatusLifecycleE2E verifies the scheduler Start/Stop lifecycle.

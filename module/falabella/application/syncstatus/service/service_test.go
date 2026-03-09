@@ -334,7 +334,7 @@ func TestGetByProductIDEmpty(t *testing.T) {
 // TestResolveFeedStatusSuccess verifies successful feed resolution behavior.
 func TestResolveFeedStatusSuccess(t *testing.T) {
 	repo := &repoMock{entries: map[string]*syncdomain.SyncEntry{
-		"feed-abc": {FeedID: "feed-abc", Status: syncdomain.SyncStatusPending},
+		"feed-abc": {FeedID: "feed-abc", Step: syncdomain.SyncStepImage, Task: syncdomain.SyncTaskImage, Status: syncdomain.SyncStatusPending},
 	}}
 	svc, _ := NewService(repo, &sourceMock{payload: []byte(feedStatusFinishedSuccessXML)})
 
@@ -347,6 +347,12 @@ func TestResolveFeedStatusSuccess(t *testing.T) {
 	}
 	if result.Status != "Finished" {
 		t.Fatalf("Status = %q, want %q", result.Status, "Finished")
+	}
+	if result.Step != "image" {
+		t.Fatalf("Step = %q, want %q", result.Step, "image")
+	}
+	if result.Task != "image" {
+		t.Fatalf("Task = %q, want %q", result.Task, "image")
 	}
 	if result.FailedRecords != 0 {
 		t.Fatalf("FailedRecords = %d, want %d", result.FailedRecords, 0)
@@ -364,7 +370,7 @@ func TestResolveFeedStatusSuccess(t *testing.T) {
 // TestResolveFeedStatusFailed verifies failed feed resolution behavior.
 func TestResolveFeedStatusFailed(t *testing.T) {
 	repo := &repoMock{entries: map[string]*syncdomain.SyncEntry{
-		"feed-abc": {FeedID: "feed-abc", Status: syncdomain.SyncStatusPending},
+		"feed-abc": {FeedID: "feed-abc", Step: syncdomain.SyncStepProduct, Task: syncdomain.SyncTaskData, Status: syncdomain.SyncStatusPending},
 	}}
 	svc, _ := NewService(repo, &sourceMock{payload: []byte(feedStatusFinishedFailedXML)})
 

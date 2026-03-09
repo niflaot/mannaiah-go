@@ -17,6 +17,9 @@ func TestOpenAPISpec(t *testing.T) {
 	if path := spec.Paths.Value("/falabella/brands"); path == nil || path.Get == nil {
 		t.Fatalf("expected GET /falabella/brands path")
 	}
+	if path := spec.Paths.Value("/falabella/images/transcoded"); path == nil || path.Get == nil {
+		t.Fatalf("expected GET /falabella/images/transcoded path")
+	}
 	if path := spec.Paths.Value("/falabella/sync/products"); path == nil || path.Post == nil {
 		t.Fatalf("expected POST /falabella/sync/products path")
 	}
@@ -25,6 +28,12 @@ func TestOpenAPISpec(t *testing.T) {
 	}
 	if path := spec.Paths.Value("/falabella/sync/status/feed/{feedId}"); path == nil || path.Get == nil {
 		t.Fatalf("expected GET /falabella/sync/status/feed/{feedId} path")
+	}
+	if path := spec.Paths.Value("/falabella/sync/status/execution/{executionId}"); path == nil || path.Get == nil {
+		t.Fatalf("expected GET /falabella/sync/status/execution/{executionId} path")
+	}
+	if path := spec.Paths.Value("/falabella/sync/status/execution/{executionId}/feeds"); path == nil || path.Get == nil {
+		t.Fatalf("expected GET /falabella/sync/status/execution/{executionId}/feeds path")
 	}
 	if path := spec.Paths.Value("/falabella/sync/status/product/{productId}"); path == nil || path.Get == nil {
 		t.Fatalf("expected GET /falabella/sync/status/product/{productId} path")
@@ -45,7 +54,17 @@ func TestOpenAPISpec(t *testing.T) {
 	if entrySchema == nil || entrySchema.Value == nil || entrySchema.Value.Properties["variationIds"] == nil {
 		t.Fatalf("expected variationIds property in FalabellaSyncStatusEntry schema")
 	}
+	if entrySchema.Value.Properties["task"] == nil {
+		t.Fatalf("expected task property in FalabellaSyncStatusEntry schema")
+	}
+	if spec.Components.Schemas["FalabellaSyncStatusExecution"] == nil {
+		t.Fatalf("expected FalabellaSyncStatusExecution schema")
+	}
 	if spec.Components.Schemas["FalabellaResolveResult"] == nil {
 		t.Fatalf("expected FalabellaResolveResult schema")
+	}
+	resolveSchema := spec.Components.Schemas["FalabellaResolveResult"]
+	if resolveSchema == nil || resolveSchema.Value == nil || resolveSchema.Value.Properties["task"] == nil {
+		t.Fatalf("expected task property in FalabellaResolveResult schema")
 	}
 }

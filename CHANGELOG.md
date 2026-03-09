@@ -53,7 +53,22 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.2.4] - Pending Release
+### [v1.3.0] - Pending Release
+- Bump service/version references and badges to `v1.3.0`.
+- Add Falabella image-transcode support so image sync can send JPG-only URLs to Falabella (`GET /falabella/images/transcoded`).
+- Add Falabella transcode runtime config:
+  - `FALABELLA_PRODUCT_IMAGE_TRANSCODE_ENABLED`
+  - `FALABELLA_PRODUCT_IMAGE_TRANSCODE_PUBLIC_BASE_URL`
+  - `FALABELLA_PRODUCT_IMAGE_TRANSCODE_ALLOWED_PREFIXES`
+  - `FALABELLA_PRODUCT_IMAGE_TRANSCODE_TIMEOUT_MS`
+- Expose feed task metadata to distinguish sync results:
+  - `task=data` for product data feeds
+  - `task=image` for image feeds
+- Include task metadata in sync summary feed results, sync-status API responses, and feed resolve responses.
+- Add SQL migrations `000007_falabella_sync_task` (MySQL + SQLite) with rollback files.
+- Extend Falabella OpenAPI documentation and module READMEs with transcode + execution status endpoints.
+
+### [v1.2.4] - 2026-03-09
 - Bump service/version references and badges to `v1.2.4`.
 - Persist Falabella feed-to-variation links for sync entries (`variationIds`) and expose them in sync status responses.
 - Add SQL migrations `000006_falabella_sync_variations` (MySQL + SQLite) with rollback files.

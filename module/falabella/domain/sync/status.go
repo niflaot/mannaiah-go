@@ -22,6 +22,16 @@ const (
 	SyncStepImage SyncStep = "image"
 )
 
+// SyncTask defines high-level sync task categories for feed submissions.
+type SyncTask string
+
+const (
+	// SyncTaskData defines product-data feed task values.
+	SyncTaskData SyncTask = "data"
+	// SyncTaskImage defines image feed task values.
+	SyncTaskImage SyncTask = "image"
+)
+
 // SyncStatus defines Falabella feed resolution status values.
 type SyncStatus string
 
@@ -48,6 +58,8 @@ type SyncEntry struct {
 	FeedID string
 	// Step defines the logical step that emitted this feed.
 	Step SyncStep
+	// Task defines high-level task categories (data/image) for this feed.
+	Task SyncTask
 	// Action defines whether the sync was a creation or update.
 	Action SyncAction
 	// Status defines current feed resolution status values.
@@ -84,6 +96,25 @@ func (s SyncStep) IsValid() bool {
 // String returns the string representation of sync step values.
 func (s SyncStep) String() string {
 	return string(s)
+}
+
+// Task resolves high-level sync task values from sync step values.
+func (s SyncStep) Task() SyncTask {
+	if s == SyncStepImage {
+		return SyncTaskImage
+	}
+
+	return SyncTaskData
+}
+
+// IsValid reports whether sync task values are recognized.
+func (t SyncTask) IsValid() bool {
+	return t == SyncTaskData || t == SyncTaskImage
+}
+
+// String returns the string representation of sync task values.
+func (t SyncTask) String() string {
+	return string(t)
 }
 
 // IsValid reports whether sync status values are recognized.
