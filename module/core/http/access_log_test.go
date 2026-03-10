@@ -72,8 +72,8 @@ func TestAccessLogIncludesRayID(t *testing.T) {
 	if fields["ray_id"] != "external-ray-id" {
 		t.Fatalf("ray_id = %v, want %q", fields["ray_id"], "external-ray-id")
 	}
-	if fields["trace_id"] != "external-ray-id" {
-		t.Fatalf("trace_id = %v, want %q", fields["trace_id"], "external-ray-id")
+	if fields["trace_id"] != "" {
+		t.Fatalf("trace_id = %v, want empty value", fields["trace_id"])
 	}
 }
 

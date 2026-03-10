@@ -48,7 +48,7 @@ func shouldSkipAccessLog(ctx *fiber.Ctx) bool {
 // accessLogFields builds per-request correlation fields appended to access logs.
 func accessLogFields(ctx *fiber.Ctx) []zap.Field {
 	rayID := resolveAccessRayID(ctx)
-	traceID := resolveAccessTraceID(ctx, rayID)
+	traceID := resolveAccessTraceID(ctx)
 
 	return []zap.Field{
 		zap.String("ray_id", rayID),
@@ -71,9 +71,9 @@ func resolveAccessRayID(ctx *fiber.Ctx) string {
 }
 
 // resolveAccessTraceID resolves the OpenTelemetry trace identifier for access logs.
-func resolveAccessTraceID(ctx *fiber.Ctx, fallback string) string {
+func resolveAccessTraceID(ctx *fiber.Ctx) string {
 	if ctx == nil {
-		return strings.TrimSpace(fallback)
+		return ""
 	}
 
 	spanContext := trace.SpanContextFromContext(ctx.UserContext())
@@ -81,5 +81,5 @@ func resolveAccessTraceID(ctx *fiber.Ctx, fallback string) string {
 		return spanContext.TraceID().String()
 	}
 
-	return strings.TrimSpace(fallback)
+	return ""
 }

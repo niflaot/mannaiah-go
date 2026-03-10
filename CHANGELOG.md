@@ -67,6 +67,7 @@ Keep newest entries on top. Add one section per version.
 - Include task metadata in sync summary feed results, sync-status API responses, and feed resolve responses.
 - Add SQL migrations `000007_falabella_sync_task` (MySQL + SQLite) with rollback files.
 - Extend Falabella OpenAPI documentation and module READMEs with transcode + execution status endpoints.
+- Stop forcing `X-Ray-ID` from telemetry middleware and keep access-log `trace_id` empty when no active trace span exists.
 
 ### [v1.2.4] - 2026-03-09
 - Bump service/version references and badges to `v1.2.4`.
