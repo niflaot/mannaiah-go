@@ -138,6 +138,19 @@ func TestRepositoryListByTagNames(t *testing.T) {
 		t.Fatalf("Create(assetThree) error = %v", err)
 	}
 
+	assetFour := &domain.Asset{
+		ID:           "a-4",
+		Key:          "assets/a-4.jpg",
+		Name:         "Asset Four",
+		OriginalName: "a-4.jpg",
+		MimeType:     "image/jpeg",
+		Size:         100,
+		Tags:         []domain.Tag{{Name: "marketplaces", Color: "#333333"}},
+	}
+	if err := repository.Create(ctx, assetFour); err != nil {
+		t.Fatalf("Create(assetFour) error = %v", err)
+	}
+
 	listed, err := repository.ListByTagNames(ctx, []string{"marketplaces"}, 10)
 	if err != nil {
 		t.Fatalf("ListByTagNames() error = %v", err)
@@ -154,6 +167,9 @@ func TestRepositoryListByTagNames(t *testing.T) {
 	}
 	if _, exists := listedIDs[assetThree.ID]; !exists {
 		t.Fatalf("expected asset id %q in listed result", assetThree.ID)
+	}
+	if _, exists := listedIDs[assetFour.ID]; exists {
+		t.Fatalf("did not expect already-jpg asset id %q in listed result", assetFour.ID)
 	}
 
 	deduped, dedupeErr := repository.ListByTagNames(ctx, []string{"marketplaces", "feeds"}, 10)
@@ -173,6 +189,9 @@ func TestRepositoryListByTagNames(t *testing.T) {
 	}
 	if _, exists := ids[assetThree.ID]; !exists {
 		t.Fatalf("expected asset id %q in deduped list", assetThree.ID)
+	}
+	if _, exists := ids[assetFour.ID]; exists {
+		t.Fatalf("did not expect already-jpg asset id %q in deduped list", assetFour.ID)
 	}
 }
 

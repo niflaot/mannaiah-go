@@ -100,7 +100,7 @@ type Repository interface {
 	Update(ctx context.Context, id string, update AssetUpdate) (*domain.Asset, error)
 	// UpdateBinary updates binary-related fields for an existing asset.
 	UpdateBinary(ctx context.Context, id string, update AssetBinaryUpdate) (*domain.Asset, error)
-	// ListByTagNames loads assets that contain one or more provided tag names.
+	// ListByTagNames loads tagged assets that still require JPG conversion.
 	ListByTagNames(ctx context.Context, tagNames []string, limit int) ([]domain.Asset, error)
 	// SoftDelete soft-deletes asset metadata rows.
 	SoftDelete(ctx context.Context, id string) error

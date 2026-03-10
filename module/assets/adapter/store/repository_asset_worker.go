@@ -67,7 +67,7 @@ func (r *Repository) UpdateBinary(ctx context.Context, id string, update port.As
 	return r.GetByID(ctx, trimmedID)
 }
 
-// ListByTagNames loads assets that contain one or more provided tag names.
+// ListByTagNames loads tagged assets that still require JPG conversion.
 func (r *Repository) ListByTagNames(ctx context.Context, tagNames []string, limit int) ([]domain.Asset, error) {
 	normalizedTagNames := normalizeTagNames(tagNames)
 	if len(normalizedTagNames) == 0 {
@@ -82,6 +82,12 @@ func (r *Repository) ListByTagNames(ctx context.Context, tagNames []string, limi
 		Joins("JOIN asset_tags ON asset_tags.asset_id = assets.id").
 		Where("asset_tags.name IN ?", normalizedTagNames).
 		Where("assets.deleted_at IS NULL").
+		Where(
+			"NOT (LOWER(TRIM(assets.mime_type)) = ? AND LOWER(TRIM(assets.key)) LIKE ? AND LOWER(TRIM(assets.original_name)) LIKE ?)",
+			"image/jpeg",
+			"%.jpg",
+			"%.jpg",
+		).
 		Group("assets.id, assets.updated_at").
 		Order("assets.updated_at ASC, assets.id ASC").
 		Limit(resolvedLimit).
