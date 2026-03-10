@@ -1,8 +1,10 @@
 package s3
 
 import (
+	"bytes"
 	"context"
 	errorspkg "errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +21,8 @@ import (
 type apiMock struct {
 	// putFn defines put-object behavior.
 	putFn func(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.Options)) (*awss3.PutObjectOutput, error)
+	// getFn defines get-object behavior.
+	getFn func(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.Options)) (*awss3.GetObjectOutput, error)
 	// deleteFn defines delete-object behavior.
 	deleteFn func(ctx context.Context, params *awss3.DeleteObjectInput, optFns ...func(*awss3.Options)) (*awss3.DeleteObjectOutput, error)
 	// headFn defines head-object behavior.
@@ -28,6 +32,15 @@ type apiMock struct {
 // PutObject executes configured put-object behavior.
 func (m apiMock) PutObject(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.Options)) (*awss3.PutObjectOutput, error) {
 	return m.putFn(ctx, params, optFns...)
+}
+
+// GetObject executes configured get-object behavior.
+func (m apiMock) GetObject(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.Options)) (*awss3.GetObjectOutput, error) {
+	if m.getFn == nil {
+		return &awss3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(nil))}, nil
+	}
+
+	return m.getFn(ctx, params, optFns...)
 }
 
 // DeleteObject executes configured delete-object behavior.
@@ -94,6 +107,9 @@ func TestUploadSuccess(t *testing.T) {
 				gotKey = *params.Key
 				return &awss3.PutObjectOutput{}, nil
 			},
+			getFn: func(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.Options)) (*awss3.GetObjectOutput, error) {
+				return &awss3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader([]byte("payload")))}, nil
+			},
 			deleteFn: func(ctx context.Context, params *awss3.DeleteObjectInput, optFns ...func(*awss3.Options)) (*awss3.DeleteObjectOutput, error) {
 				return &awss3.DeleteObjectOutput{}, nil
 			},
@@ -124,6 +140,9 @@ func TestUploadValidation(t *testing.T) {
 	if err := client.Upload(context.Background(), UploadRequest{Key: "key", Body: nil}); !errorspkg.Is(err, ErrEmptyBody) {
 		t.Fatalf("Upload(empty body) error = %v, want ErrEmptyBody", err)
 	}
+	if _, err := client.Download(context.Background(), " "); !errorspkg.Is(err, ErrInvalidKey) {
+		t.Fatalf("Download(empty key) error = %v, want ErrInvalidKey", err)
+	}
 }
 
 // TestDeleteAndExists verifies delete and exists behavior.
@@ -132,6 +151,9 @@ func TestDeleteAndExists(t *testing.T) {
 		api: apiMock{
 			putFn: func(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.Options)) (*awss3.PutObjectOutput, error) {
 				return &awss3.PutObjectOutput{}, nil
+			},
+			getFn: func(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.Options)) (*awss3.GetObjectOutput, error) {
+				return &awss3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader([]byte("payload")))}, nil
 			},
 			deleteFn: func(ctx context.Context, params *awss3.DeleteObjectInput, optFns ...func(*awss3.Options)) (*awss3.DeleteObjectOutput, error) {
 				return &awss3.DeleteObjectOutput{}, nil
@@ -149,6 +171,14 @@ func TestDeleteAndExists(t *testing.T) {
 
 	if err := client.Delete(context.Background(), "assets/a.png"); err != nil {
 		t.Fatalf("Delete() error = %v", err)
+	}
+
+	downloaded, downloadErr := client.Download(context.Background(), "assets/a.png")
+	if downloadErr != nil {
+		t.Fatalf("Download() error = %v", downloadErr)
+	}
+	if string(downloaded) != "payload" {
+		t.Fatalf("Download() = %q, want %q", string(downloaded), "payload")
 	}
 
 	exists, err := client.Exists(context.Background(), "assets/a.png")
@@ -257,6 +287,9 @@ func TestS3OperationsEmitDependencyMetrics(t *testing.T) {
 		api: apiMock{
 			putFn: func(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.Options)) (*awss3.PutObjectOutput, error) {
 				return &awss3.PutObjectOutput{}, nil
+			},
+			getFn: func(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.Options)) (*awss3.GetObjectOutput, error) {
+				return &awss3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader([]byte("data")))}, nil
 			},
 			deleteFn: func(ctx context.Context, params *awss3.DeleteObjectInput, optFns ...func(*awss3.Options)) (*awss3.DeleteObjectOutput, error) {
 				return &awss3.DeleteObjectOutput{}, nil

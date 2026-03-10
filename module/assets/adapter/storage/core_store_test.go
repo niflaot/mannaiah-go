@@ -13,6 +13,8 @@ import (
 type coreStoreMock struct {
 	// uploadFn defines upload behavior.
 	uploadFn func(ctx context.Context, request corestorage.UploadRequest) error
+	// downloadFn defines download behavior.
+	downloadFn func(ctx context.Context, key string) ([]byte, error)
 	// deleteFn defines delete behavior.
 	deleteFn func(ctx context.Context, key string) error
 	// existsFn defines exists behavior.
@@ -24,6 +26,11 @@ type coreStoreMock struct {
 // Upload executes configured upload behavior.
 func (m coreStoreMock) Upload(ctx context.Context, request corestorage.UploadRequest) error {
 	return m.uploadFn(ctx, request)
+}
+
+// Download executes configured download behavior.
+func (m coreStoreMock) Download(ctx context.Context, key string) ([]byte, error) {
+	return m.downloadFn(ctx, key)
 }
 
 // Delete executes configured delete behavior.
@@ -51,9 +58,10 @@ func TestNewCoreStoreAdapter(t *testing.T) {
 // TestCoreStoreAdapter verifies delegated behavior.
 func TestCoreStoreAdapter(t *testing.T) {
 	adapter, err := NewCoreStoreAdapter(coreStoreMock{
-		uploadFn: func(ctx context.Context, request corestorage.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
+		uploadFn:        func(ctx context.Context, request corestorage.UploadRequest) error { return nil },
+		downloadFn:      func(ctx context.Context, key string) ([]byte, error) { return []byte("payload"), nil },
+		deleteFn:        func(ctx context.Context, key string) error { return nil },
+		existsFn:        func(ctx context.Context, key string) (bool, error) { return true, nil },
 		availabilityErr: errorspkg.New("disabled"),
 	})
 	if err != nil {
@@ -66,6 +74,13 @@ func TestCoreStoreAdapter(t *testing.T) {
 		Body:        []byte("payload"),
 	}); uploadErr != nil {
 		t.Fatalf("Upload() error = %v", uploadErr)
+	}
+	downloaded, downloadErr := adapter.Download(context.Background(), "assets/a.png")
+	if downloadErr != nil {
+		t.Fatalf("Download() error = %v", downloadErr)
+	}
+	if string(downloaded) != "payload" {
+		t.Fatalf("Download() = %q, want %q", string(downloaded), "payload")
 	}
 	if deleteErr := adapter.Delete(context.Background(), "assets/a.png"); deleteErr != nil {
 		t.Fatalf("Delete() error = %v", deleteErr)

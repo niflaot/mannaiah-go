@@ -122,7 +122,8 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	contactsModule.SetAuthorizer(authModule)
 
 	tracer.Step("initialize assets module")
-	assetsModule, err := assets.New(db, newInMemoryAssetStorage(), assetPublisher)
+	assetStorage := newInMemoryAssetStorage()
+	assetsModule, err := assets.New(db, assetStorage, assetPublisher)
 	if err != nil {
 		t.Fatalf("assets.New() error = %v", err)
 	}
@@ -173,6 +174,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 		server:             server,
 		contactsModule:     contactsModule,
 		assetsModule:       assetsModule,
+		assetStorage:       assetStorage,
 		productsModule:     productsModule,
 		ordersModule:       ordersModule,
 		createdEvents:      createdEvents,

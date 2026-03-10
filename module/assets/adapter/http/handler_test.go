@@ -30,6 +30,8 @@ type serviceMock struct {
 	deleteFn func(ctx context.Context, id string) error
 	// existsFn defines exists behavior.
 	existsFn func(ctx context.Context, id string) (bool, error)
+	// runJPGWorkerFn defines jpg worker behavior.
+	runJPGWorkerFn func(ctx context.Context, command assetsapplication.JPGWorkerCommand) (*assetsapplication.JPGWorkerResult, error)
 	// createFolderFn defines folder-create behavior.
 	createFolderFn func(ctx context.Context, command assetsapplication.CreateFolderCommand) (*domain.Folder, error)
 	// getFolderFn defines folder-get behavior.
@@ -77,6 +79,11 @@ func (m serviceMock) Delete(ctx context.Context, id string) error {
 // Exists executes configured exists behavior.
 func (m serviceMock) Exists(ctx context.Context, id string) (bool, error) {
 	return m.existsFn(ctx, id)
+}
+
+// RunJPGWorker executes configured jpg-worker behavior.
+func (m serviceMock) RunJPGWorker(ctx context.Context, command assetsapplication.JPGWorkerCommand) (*assetsapplication.JPGWorkerResult, error) {
+	return m.runJPGWorkerFn(ctx, command)
 }
 
 // CreateFolder executes configured folder-create behavior.
@@ -428,6 +435,9 @@ func newServiceMock() serviceMock {
 		},
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 		existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil },
+		runJPGWorkerFn: func(ctx context.Context, command assetsapplication.JPGWorkerCommand) (*assetsapplication.JPGWorkerResult, error) {
+			return &assetsapplication.JPGWorkerResult{}, nil
+		},
 		createFolderFn: func(ctx context.Context, command assetsapplication.CreateFolderCommand) (*domain.Folder, error) {
 			return &domain.Folder{ID: "f-1", Name: command.Name, Slug: "hero", ParentFolderID: command.ParentFolderID}, nil
 		},

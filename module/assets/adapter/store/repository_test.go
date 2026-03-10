@@ -91,6 +91,89 @@ func TestRepositoryAssetCRUD(t *testing.T) {
 	}
 }
 
+// TestRepositoryListByTagNames verifies tag-filtered asset listing behavior.
+func TestRepositoryListByTagNames(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	ctx := context.Background()
+
+	assetOne := &domain.Asset{
+		ID:           "a-1",
+		Key:          "assets/a-1.webp",
+		Name:         "Asset One",
+		OriginalName: "a-1.webp",
+		MimeType:     "image/webp",
+		Size:         100,
+		Tags:         []domain.Tag{{Name: "marketplaces", Color: "#ff0000"}},
+	}
+	if err := repository.Create(ctx, assetOne); err != nil {
+		t.Fatalf("Create(assetOne) error = %v", err)
+	}
+
+	assetTwo := &domain.Asset{
+		ID:           "a-2",
+		Key:          "assets/a-2.png",
+		Name:         "Asset Two",
+		OriginalName: "a-2.png",
+		MimeType:     "image/png",
+		Size:         100,
+		Tags:         []domain.Tag{{Name: "website", Color: "#00ff00"}},
+	}
+	if err := repository.Create(ctx, assetTwo); err != nil {
+		t.Fatalf("Create(assetTwo) error = %v", err)
+	}
+
+	listed, err := repository.ListByTagNames(ctx, []string{"marketplaces"}, 10)
+	if err != nil {
+		t.Fatalf("ListByTagNames() error = %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("len(listed) = %d, want %d", len(listed), 1)
+	}
+	if listed[0].ID != assetOne.ID {
+		t.Fatalf("listed[0].ID = %q, want %q", listed[0].ID, assetOne.ID)
+	}
+}
+
+// TestRepositoryUpdateBinary verifies binary metadata replacement behavior.
+func TestRepositoryUpdateBinary(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	ctx := context.Background()
+
+	asset := &domain.Asset{
+		ID:           "a-1",
+		Key:          "assets/a-1.webp",
+		Name:         "Asset One",
+		OriginalName: "a-1.webp",
+		MimeType:     "image/webp",
+		Size:         100,
+	}
+	if err := repository.Create(ctx, asset); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	updated, err := repository.UpdateBinary(ctx, asset.ID, port.AssetBinaryUpdate{
+		Key:          "assets/a-1.jpg",
+		OriginalName: "a-1.jpg",
+		MimeType:     "image/jpeg",
+		Size:         150,
+	})
+	if err != nil {
+		t.Fatalf("UpdateBinary() error = %v", err)
+	}
+	if updated.Key != "assets/a-1.jpg" {
+		t.Fatalf("updated.Key = %q, want %q", updated.Key, "assets/a-1.jpg")
+	}
+	if updated.OriginalName != "a-1.jpg" {
+		t.Fatalf("updated.OriginalName = %q, want %q", updated.OriginalName, "a-1.jpg")
+	}
+	if updated.MimeType != "image/jpeg" {
+		t.Fatalf("updated.MimeType = %q, want %q", updated.MimeType, "image/jpeg")
+	}
+	if updated.Size != 150 {
+		t.Fatalf("updated.Size = %d, want %d", updated.Size, 150)
+	}
+}
+
 // TestRepositoryFolderCRUD verifies folder persistence behavior.
 func TestRepositoryFolderCRUD(t *testing.T) {
 	repository := newRepositoryForTest(t)

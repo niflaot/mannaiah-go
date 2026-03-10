@@ -37,6 +37,25 @@ func (s *inMemoryAssetStorage) Upload(ctx context.Context, request assetport.Upl
 	return nil
 }
 
+// Download loads payload bytes by key.
+func (s *inMemoryAssetStorage) Download(ctx context.Context, key string) ([]byte, error) {
+	if s == nil {
+		return nil, errors.New("asset storage is nil")
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	payload, exists := s.objects[key]
+	if !exists {
+		return nil, errors.New("asset object does not exist")
+	}
+
+	copied := make([]byte, len(payload))
+	copy(copied, payload)
+	return copied, nil
+}
+
 // Delete removes payloads by key.
 func (s *inMemoryAssetStorage) Delete(ctx context.Context, key string) error {
 	if s == nil {

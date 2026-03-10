@@ -53,7 +53,21 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.3.0] - Pending Release
+### [v1.3.1] - Pending Release
+- Bump service/version references and badges to `v1.3.1`.
+- Add assets JPG worker with cron lifecycle and env-driven configuration:
+  - `ASSETS_JPG_WORKER_ENABLED`
+  - `ASSETS_JPG_WORKER_CRON`
+  - `ASSETS_JPG_WORKER_TAGS` (comma-separated)
+  - `ASSETS_JPG_WORKER_BATCH_SIZE`
+  - `ASSETS_JPG_WORKER_JPEG_QUALITY`
+  - `ASSETS_JPG_WORKER_TIMEOUT_MS`
+- Convert selected tagged assets to `image/jpeg`, upload `.jpg` replacements, update asset binary metadata, and delete previous source objects.
+- Add storage download capability to assets/core storage ports and S3 adapter (`Download`).
+- Add SQL migrations `000008_assets_jpg_worker_tag_index` (MySQL + SQLite) with rollback files.
+- Add unit and e2e coverage for JPG worker conversion/replacement flow.
+
+### [v1.3.0] - 2026-03-09
 - Bump service/version references and badges to `v1.3.0`.
 - Add Falabella image-transcode support so image sync can send JPG-only URLs to Falabella (`GET /falabella/images/transcoded`).
 - Add Falabella transcode runtime config:

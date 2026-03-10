@@ -7,6 +7,7 @@ AWS SDK v2 S3 implementation for object storage.
   - `s3.New(cfg, logger)`
   - `s3.Disabled(reason)`
   - `(*Client).Upload(ctx, request)`
+  - `(*Client).Download(ctx, key)`
   - `(*Client).Delete(ctx, key)`
   - `(*Client).Exists(ctx, key)`
   - `(*Client).AvailabilityError()`

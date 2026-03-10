@@ -64,6 +64,18 @@ type AssetUpdate struct {
 	Metadata *map[string]string
 }
 
+// AssetBinaryUpdate defines immutable-ish binary field updates.
+type AssetBinaryUpdate struct {
+	// Key defines storage object key paths.
+	Key string
+	// OriginalName defines uploaded file names.
+	OriginalName string
+	// MimeType defines payload mime types.
+	MimeType string
+	// Size defines payload size in bytes.
+	Size int64
+}
+
 // FolderUpdate defines partial folder update operations.
 type FolderUpdate struct {
 	// Name defines optional folder name updates.
@@ -86,6 +98,10 @@ type Repository interface {
 	List(ctx context.Context, query ListQuery) (*PageResult, error)
 	// Update updates asset metadata fields.
 	Update(ctx context.Context, id string, update AssetUpdate) (*domain.Asset, error)
+	// UpdateBinary updates binary-related fields for an existing asset.
+	UpdateBinary(ctx context.Context, id string, update AssetBinaryUpdate) (*domain.Asset, error)
+	// ListByTagNames loads assets that contain one or more provided tag names.
+	ListByTagNames(ctx context.Context, tagNames []string, limit int) ([]domain.Asset, error)
 	// SoftDelete soft-deletes asset metadata rows.
 	SoftDelete(ctx context.Context, id string) error
 	// CreateFolder persists folder metadata rows.

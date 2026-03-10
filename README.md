@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v1.3.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v1.3.1-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -39,6 +39,17 @@ go run ./module/core/cmd/api
 ```
 
 The API listens on `CORE_HOST:CORE_PORT` (`0.0.0.0:8080` by default).
+
+### Assets JPG Worker
+
+Use these env vars to convert tagged assets to `.jpg` through scheduled jobs:
+
+- `ASSETS_JPG_WORKER_ENABLED`
+- `ASSETS_JPG_WORKER_CRON`
+- `ASSETS_JPG_WORKER_TAGS` (comma-separated tag names, for example `marketplaces,feeds`)
+- `ASSETS_JPG_WORKER_BATCH_SIZE`
+- `ASSETS_JPG_WORKER_JPEG_QUALITY`
+- `ASSETS_JPG_WORKER_TIMEOUT_MS`
 
 ## Testing
 

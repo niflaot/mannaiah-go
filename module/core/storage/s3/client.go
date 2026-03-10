@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -46,6 +47,8 @@ type Client struct {
 type s3API interface {
 	// PutObject uploads object bytes.
 	PutObject(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.Options)) (*awss3.PutObjectOutput, error)
+	// GetObject loads object bytes by key.
+	GetObject(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.Options)) (*awss3.GetObjectOutput, error)
 	// DeleteObject removes objects by key.
 	DeleteObject(ctx context.Context, params *awss3.DeleteObjectInput, optFns ...func(*awss3.Options)) (*awss3.DeleteObjectOutput, error)
 	// HeadObject checks object existence by key.
@@ -168,6 +171,50 @@ func (c *Client) Upload(ctx context.Context, request UploadRequest) error {
 
 	coretelemetry.RecordDependency("s3", "upload", startedAt, nil)
 	return nil
+}
+
+// Download loads object bytes from storage.
+func (c *Client) Download(ctx context.Context, key string) ([]byte, error) {
+	startedAt := time.Now()
+	spanCtx, span := coretelemetry.StartSpan(ctx, "mannaiah/dependency", "s3.download")
+	defer span.End()
+
+	if err := c.validateAvailability(); err != nil {
+		coretelemetry.RecordDependency("s3", "download", startedAt, err)
+		return nil, err
+	}
+
+	trimmedKey := strings.TrimSpace(key)
+	if trimmedKey == "" {
+		coretelemetry.RecordDependency("s3", "download", startedAt, ErrInvalidKey)
+		return nil, ErrInvalidKey
+	}
+
+	var payload []byte
+	err := c.execute(spanCtx, func(operationCtx context.Context) error {
+		output, operationErr := c.api.GetObject(operationCtx, &awss3.GetObjectInput{
+			Bucket: &c.bucketName,
+			Key:    &trimmedKey,
+		})
+		if operationErr != nil {
+			return fmt.Errorf("get object key %q: %w", trimmedKey, operationErr)
+		}
+		defer output.Body.Close()
+
+		body, readErr := io.ReadAll(output.Body)
+		if readErr != nil {
+			return fmt.Errorf("read object key %q: %w", trimmedKey, readErr)
+		}
+		payload = body
+		return nil
+	})
+	if err != nil {
+		coretelemetry.RecordDependency("s3", "download", startedAt, err)
+		return nil, err
+	}
+
+	coretelemetry.RecordDependency("s3", "download", startedAt, nil)
+	return payload, nil
 }
 
 // Delete removes object keys from storage.

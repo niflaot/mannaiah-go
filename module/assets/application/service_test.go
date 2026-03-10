@@ -23,6 +23,10 @@ type repositoryMock struct {
 	listFn func(ctx context.Context, query port.ListQuery) (*port.PageResult, error)
 	// updateFn defines update behavior.
 	updateFn func(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error)
+	// updateBinaryFn defines binary update behavior.
+	updateBinaryFn func(ctx context.Context, id string, update port.AssetBinaryUpdate) (*domain.Asset, error)
+	// listByTagNamesFn defines tag-based asset list behavior.
+	listByTagNamesFn func(ctx context.Context, tagNames []string, limit int) ([]domain.Asset, error)
 	// softDeleteFn defines soft-delete behavior.
 	softDeleteFn func(ctx context.Context, id string) error
 	// createFolderFn defines folder-create behavior.
@@ -62,6 +66,16 @@ func (m repositoryMock) List(ctx context.Context, query port.ListQuery) (*port.P
 // Update executes configured update behavior.
 func (m repositoryMock) Update(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error) {
 	return m.updateFn(ctx, id, update)
+}
+
+// UpdateBinary executes configured binary update behavior.
+func (m repositoryMock) UpdateBinary(ctx context.Context, id string, update port.AssetBinaryUpdate) (*domain.Asset, error) {
+	return m.updateBinaryFn(ctx, id, update)
+}
+
+// ListByTagNames executes configured tag-based list behavior.
+func (m repositoryMock) ListByTagNames(ctx context.Context, tagNames []string, limit int) ([]domain.Asset, error) {
+	return m.listByTagNamesFn(ctx, tagNames, limit)
 }
 
 // SoftDelete executes configured soft-delete behavior.
@@ -108,6 +122,8 @@ func (m repositoryMock) ExistsFolder(ctx context.Context, id string) (bool, erro
 type storageMock struct {
 	// uploadFn defines upload behavior.
 	uploadFn func(ctx context.Context, request port.UploadRequest) error
+	// downloadFn defines download behavior.
+	downloadFn func(ctx context.Context, key string) ([]byte, error)
 	// deleteFn defines delete behavior.
 	deleteFn func(ctx context.Context, key string) error
 	// existsFn defines exists behavior.
@@ -119,6 +135,11 @@ type storageMock struct {
 // Upload executes configured upload behavior.
 func (m storageMock) Upload(ctx context.Context, request port.UploadRequest) error {
 	return m.uploadFn(ctx, request)
+}
+
+// Download executes configured download behavior.
+func (m storageMock) Download(ctx context.Context, key string) ([]byte, error) {
+	return m.downloadFn(ctx, key)
 }
 
 // Delete executes configured delete behavior.
@@ -627,6 +648,18 @@ func newRepositoryMockWith(overrides repositoryMock) repositoryMock {
 		updateFn: func(ctx context.Context, id string, update port.AssetUpdate) (*domain.Asset, error) {
 			return &domain.Asset{ID: id}, nil
 		},
+		updateBinaryFn: func(ctx context.Context, id string, update port.AssetBinaryUpdate) (*domain.Asset, error) {
+			return &domain.Asset{
+				ID:           id,
+				Key:          update.Key,
+				OriginalName: update.OriginalName,
+				MimeType:     update.MimeType,
+				Size:         update.Size,
+			}, nil
+		},
+		listByTagNamesFn: func(ctx context.Context, tagNames []string, limit int) ([]domain.Asset, error) {
+			return []domain.Asset{}, nil
+		},
 		softDeleteFn:   func(ctx context.Context, id string) error { return nil },
 		createFolderFn: func(ctx context.Context, folder *domain.Folder) error { return nil },
 		getFolderByIDFn: func(ctx context.Context, id string) (*domain.Folder, error) {
@@ -659,6 +692,12 @@ func newRepositoryMockWith(overrides repositoryMock) repositoryMock {
 	if overrides.updateFn != nil {
 		mock.updateFn = overrides.updateFn
 	}
+	if overrides.updateBinaryFn != nil {
+		mock.updateBinaryFn = overrides.updateBinaryFn
+	}
+	if overrides.listByTagNamesFn != nil {
+		mock.listByTagNamesFn = overrides.listByTagNamesFn
+	}
 	if overrides.softDeleteFn != nil {
 		mock.softDeleteFn = overrides.softDeleteFn
 	}
@@ -690,9 +729,10 @@ func newRepositoryMockWith(overrides repositoryMock) repositoryMock {
 // newStorageMock creates storage mocks with default behaviors.
 func newStorageMock() storageMock {
 	return storageMock{
-		uploadFn: func(ctx context.Context, request port.UploadRequest) error { return nil },
-		deleteFn: func(ctx context.Context, key string) error { return nil },
-		existsFn: func(ctx context.Context, key string) (bool, error) { return true, nil },
+		uploadFn:   func(ctx context.Context, request port.UploadRequest) error { return nil },
+		downloadFn: func(ctx context.Context, key string) ([]byte, error) { return []byte("payload"), nil },
+		deleteFn:   func(ctx context.Context, key string) error { return nil },
+		existsFn:   func(ctx context.Context, key string) (bool, error) { return true, nil },
 	}
 }
 

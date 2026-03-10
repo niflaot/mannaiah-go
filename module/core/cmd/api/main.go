@@ -63,11 +63,12 @@ func run(ctx context.Context, envFile string) error {
 	var messagingCfg coremsgplatform.Config
 	var authCfg auth.Config
 	var cronCfg corecron.Config
+	var assetsCfg assets.Config
 	var falabellaCfg falabella.Config
 	var wooCfg woocommerce.Config
 	var telemetryCfg coretelemetry.Config
 
-	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &falabellaCfg, &wooCfg, &telemetryCfg); err != nil {
+	if err := coreconfig.Load(envFile, zap.NewNop(), &coreCfg, &httpCfg, &dbCfg, &storageCfg, &messagingCfg, &authCfg, &cronCfg, &assetsCfg, &falabellaCfg, &wooCfg, &telemetryCfg); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
 
@@ -135,7 +136,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "1.3.0",
+		Version:     "1.3.1",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -182,14 +183,31 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("load contacts module: %w", err)
 	}
 
-	assetsModule, err := assets.New(db, assetStorage, assetPublisher)
+	var assetsScheduler corecron.Scheduler
+	if assetsCfg.JPGWorkerEnabled {
+		assetsScheduler, err = corecron.NewScheduler(cronCfg, logger)
+		if err != nil {
+			return fmt.Errorf("create assets scheduler: %w", err)
+		}
+	}
+
+	assetsModule, err := assets.NewWithConfig(assetsCfg, db, assetStorage, logger, assetPublisher)
 	if err != nil {
 		return fmt.Errorf("initialize assets module: %w", err)
 	}
+	assetsModule.ConfigureScheduler(assetsScheduler)
 	assetsModule.SetAuthorizer(authModule)
 	if err := assetsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load assets module: %w", err)
 	}
+	if err := assetsModule.Start(ctx); err != nil {
+		return fmt.Errorf("start assets module: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = assetsModule.Stop(stopCtx)
+	}()
 
 	productsModule, err := products.New(db, assetsModule.Service())
 	if err != nil {

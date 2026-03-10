@@ -22,6 +22,11 @@ type runtimeStorageMock struct{}
 // Upload ignores upload behavior for runtime tests.
 func (runtimeStorageMock) Upload(ctx context.Context, request port.UploadRequest) error { return nil }
 
+// Download ignores download behavior for runtime tests.
+func (runtimeStorageMock) Download(ctx context.Context, key string) ([]byte, error) {
+	return []byte("payload"), nil
+}
+
 // Delete ignores delete behavior for runtime tests.
 func (runtimeStorageMock) Delete(ctx context.Context, key string) error { return nil }
 
@@ -64,6 +69,18 @@ func TestNewRejectsNilDependencies(t *testing.T) {
 	db := newDBForTest(t)
 	if _, err := New(db, nil); !errors.Is(err, application.ErrNilStorage) {
 		t.Fatalf("New(db,nil) error = %v, want application.ErrNilStorage", err)
+	}
+}
+
+// TestNewWithConfig verifies config-aware constructor wiring behavior.
+func TestNewWithConfig(t *testing.T) {
+	db := newDBForTest(t)
+	module, err := NewWithConfig(Config{JPGWorkerEnabled: true}, db, runtimeStorageMock{}, nil)
+	if err != nil {
+		t.Fatalf("NewWithConfig() error = %v", err)
+	}
+	if module == nil {
+		t.Fatalf("expected module instance")
 	}
 }
 

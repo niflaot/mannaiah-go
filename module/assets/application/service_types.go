@@ -39,6 +39,8 @@ var (
 	ErrFileTooLarge = errors.New("asset file size exceeds max 10MB")
 	// ErrStorageUnavailable is returned when storage integration is unavailable.
 	ErrStorageUnavailable = errors.New("asset storage is unavailable")
+	// ErrJPGWorkerTagsRequired is returned when JPG worker tags are missing.
+	ErrJPGWorkerTagsRequired = errors.New("asset jpg worker tags are required")
 )
 
 // CreateCommand defines create-asset command payloads.
@@ -71,6 +73,28 @@ type UpdateCommand struct {
 	Tags *[]domain.Tag
 	// Metadata defines optional metadata replacement updates.
 	Metadata *map[string]string
+}
+
+// JPGWorkerCommand defines JPG worker execution inputs.
+type JPGWorkerCommand struct {
+	// Tags defines asset tag filters eligible for conversion.
+	Tags []string
+	// BatchSize defines maximum assets processed in one execution tick.
+	BatchSize int
+	// JPEGQuality defines jpg encoding quality values.
+	JPEGQuality int
+}
+
+// JPGWorkerResult defines JPG worker execution counters.
+type JPGWorkerResult struct {
+	// Scanned defines selected assets for this execution.
+	Scanned int
+	// Converted defines successfully converted assets.
+	Converted int
+	// Skipped defines assets already matching target JPG format.
+	Skipped int
+	// Failed defines assets that failed conversion/replacement.
+	Failed int
 }
 
 // ListQuery defines list-asset query values.
@@ -121,6 +145,8 @@ type Service interface {
 	Delete(ctx context.Context, id string) error
 	// Exists verifies whether metadata rows exist by id.
 	Exists(ctx context.Context, id string) (bool, error)
+	// RunJPGWorker converts selected tagged assets to JPG and replaces storage keys.
+	RunJPGWorker(ctx context.Context, command JPGWorkerCommand) (*JPGWorkerResult, error)
 	// CreateFolder creates logical folders.
 	CreateFolder(ctx context.Context, command CreateFolderCommand) (*domain.Folder, error)
 	// GetFolder retrieves folders by id.

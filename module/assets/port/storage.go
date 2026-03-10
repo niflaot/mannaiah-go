@@ -6,6 +6,8 @@ import "context"
 type Storage interface {
 	// Upload uploads object bytes to storage.
 	Upload(ctx context.Context, request UploadRequest) error
+	// Download loads object bytes from storage.
+	Download(ctx context.Context, key string) ([]byte, error)
 	// Delete removes object keys from storage.
 	Delete(ctx context.Context, key string) error
 	// Exists verifies whether object keys exist.

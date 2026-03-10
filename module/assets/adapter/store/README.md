@@ -10,6 +10,6 @@ Persistence is normalized across root and relation tables:
 - `folder_tags`
 
 ## Key methods / endpoints / events
-- Methods: `NewRepository(db)`, `(*Repository).EnsureSchema`, `(*Repository).Create`, `(*Repository).GetByID`, `(*Repository).List`, `(*Repository).Update`, `(*Repository).SoftDelete`, `(*Repository).CreateFolder`, `(*Repository).GetFolderByID`, `(*Repository).ListFolders`, `(*Repository).ListAllFolders`, `(*Repository).UpdateFolder`, `(*Repository).SoftDeleteFolder`, `(*Repository).ExistsFolder`
+- Methods: `NewRepository(db)`, `(*Repository).EnsureSchema`, `(*Repository).Create`, `(*Repository).GetByID`, `(*Repository).List`, `(*Repository).ListByTagNames`, `(*Repository).Update`, `(*Repository).UpdateBinary`, `(*Repository).SoftDelete`, `(*Repository).CreateFolder`, `(*Repository).GetFolderByID`, `(*Repository).ListFolders`, `(*Repository).ListAllFolders`, `(*Repository).UpdateFolder`, `(*Repository).SoftDeleteFolder`, `(*Repository).ExistsFolder`
 - Endpoints: supports `/assets*`, `/assets/folders*`, and `/assets/folders/tree` handlers.
 - Events: none directly (events are emitted by application service).

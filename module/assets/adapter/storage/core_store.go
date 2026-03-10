@@ -42,6 +42,11 @@ func (a *CoreStoreAdapter) Upload(ctx context.Context, request port.UploadReques
 	})
 }
 
+// Download loads object bytes from storage.
+func (a *CoreStoreAdapter) Download(ctx context.Context, key string) ([]byte, error) {
+	return a.store.Download(ctx, key)
+}
+
 // Delete removes object keys from storage.
 func (a *CoreStoreAdapter) Delete(ctx context.Context, key string) error {
 	return a.store.Delete(ctx, key)

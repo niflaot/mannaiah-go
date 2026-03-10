@@ -1,22 +1,45 @@
 package runtime
 
 import (
+	"errors"
 	assethttp "mannaiah/module/assets/adapter/http"
 	assetstore "mannaiah/module/assets/adapter/store"
 	assetsapplication "mannaiah/module/assets/application"
 	"mannaiah/module/assets/port"
+	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
+	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+)
+
+var (
+	// ErrModuleNotInitialized is returned when module startup methods are called on nil receivers.
+	ErrModuleNotInitialized = errors.New("assets module is not initialized")
+	// ErrNilSchedulerWhenEnabled is returned when JPG worker is enabled without scheduler dependencies.
+	ErrNilSchedulerWhenEnabled = errors.New("assets scheduler must not be nil when jpg worker is enabled")
 )
 
 // Module defines composition-root wiring for asset endpoints.
 type Module struct {
+	// cfg defines assets integration config values.
+	cfg Config
 	// handler defines HTTP adapter used for route registration.
 	handler *assethttp.Handler
 	// service defines application service dependencies for module integrations.
 	service assetsapplication.Service
+	// scheduler defines optional cron scheduler dependencies.
+	scheduler corecron.Scheduler
+	// schedulerEntryID defines optional scheduled worker entry identifiers.
+	schedulerEntryID corecron.EntryID
+	// logger defines structured logging dependencies.
+	logger *zap.Logger
+	// mutex guards scheduler lifecycle state.
+	mutex sync.Mutex
+	// started reports whether scheduler lifecycle start logic has completed.
+	started bool
 }
 
 // Loader defines bootstrap hooks required by assets modules.
@@ -29,6 +52,11 @@ type Loader interface {
 
 // New creates an assets module with adapter wiring.
 func New(db *gorm.DB, storage port.Storage, publishers ...port.IntegrationEventPublisher) (*Module, error) {
+	return NewWithConfig(Config{}, db, storage, nil, publishers...)
+}
+
+// NewWithConfig creates an assets module with config-driven worker wiring.
+func NewWithConfig(cfg Config, db *gorm.DB, storage port.Storage, providedLogger *zap.Logger, publishers ...port.IntegrationEventPublisher) (*Module, error) {
 	repository, err := assetstore.NewRepository(db)
 	if err != nil {
 		return nil, err
@@ -44,7 +72,12 @@ func New(db *gorm.DB, storage port.Storage, publishers ...port.IntegrationEventP
 		return nil, err
 	}
 
-	return &Module{handler: handler, service: service}, nil
+	return &Module{
+		cfg:     cfg,
+		handler: handler,
+		service: service,
+		logger:  resolveLogger(providedLogger),
+	}, nil
 }
 
 // RegisterRoutes registers asset routes on the provided router.
@@ -100,4 +133,13 @@ func resolvePublisher(publishers []port.IntegrationEventPublisher) port.Integrat
 	}
 
 	return publishers[0]
+}
+
+// resolveLogger resolves nil logger dependencies into no-op logger values.
+func resolveLogger(providedLogger *zap.Logger) *zap.Logger {
+	if providedLogger == nil {
+		return zap.NewNop()
+	}
+
+	return providedLogger
 }

@@ -114,6 +114,8 @@ type contactsE2EHarness struct {
 	contactsModule *contacts.Module
 	// assetsModule defines assets module runtime dependency.
 	assetsModule *assets.Module
+	// assetStorage defines in-memory asset storage dependency.
+	assetStorage *inMemoryAssetStorage
 	// productsModule defines products module runtime dependency.
 	productsModule *products.Module
 	// ordersModule defines orders module runtime dependency.

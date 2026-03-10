@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"go.uber.org/zap"
 	"mannaiah/module/assets/port"
 	coredb "mannaiah/module/core/database"
 )
@@ -13,6 +14,11 @@ type storageMock struct{}
 
 // Upload ignores upload behavior for facade tests.
 func (storageMock) Upload(ctx context.Context, request port.UploadRequest) error { return nil }
+
+// Download ignores download behavior for facade tests.
+func (storageMock) Download(ctx context.Context, key string) ([]byte, error) {
+	return []byte("payload"), nil
+}
 
 // Delete ignores delete behavior for facade tests.
 func (storageMock) Delete(ctx context.Context, key string) error { return nil }
@@ -52,6 +58,30 @@ func TestNewFacade(t *testing.T) {
 	module, err := New(db, storageMock{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
+	}
+	if module == nil {
+		t.Fatalf("expected module instance")
+	}
+}
+
+// TestNewWithConfigFacade verifies config-aware facade module-constructor behavior.
+func TestNewWithConfigFacade(t *testing.T) {
+	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("coredb.Open() error = %v", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+	})
+
+	module, err := NewWithConfig(Config{JPGWorkerEnabled: true}, db, storageMock{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewWithConfig() error = %v", err)
 	}
 	if module == nil {
 		t.Fatalf("expected module instance")
