@@ -222,9 +222,11 @@ func (c *Catalog) resolveCatalogImages(ctx context.Context, gallery []productdom
 		}
 
 		images = append(images, port.CatalogImage{
-			URL:            url,
-			ExcludedRealms: append([]string(nil), item.ExcludedRealms...),
-			VariationIDs:   append([]string(nil), item.VariationIDs...),
+			URL:               url,
+			Position:          cloneIntPointer(item.Position),
+			VariationPosition: cloneIntPointer(item.VariationPosition),
+			ExcludedRealms:    append([]string(nil), item.ExcludedRealms...),
+			VariationIDs:      append([]string(nil), item.VariationIDs...),
 		})
 	}
 
@@ -282,4 +284,14 @@ func buildAssetURL(baseURL string, key string) string {
 	}
 
 	return trimmedBaseURL + "/" + trimmedKey
+}
+
+// cloneIntPointer copies optional integer pointer values.
+func cloneIntPointer(value *int) *int {
+	if value == nil {
+		return nil
+	}
+
+	resolved := *value
+	return &resolved
 }

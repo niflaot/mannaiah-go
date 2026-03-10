@@ -19,6 +19,10 @@ var (
 type GalleryItem struct {
 	// AssetID is the referenced asset identifier.
 	AssetID string `json:"assetId"`
+	// Position defines explicit gallery ordering values for drag-and-drop sorting.
+	Position *int `json:"position,omitempty"`
+	// VariationPosition defines optional variation-scoped ordering values for variation-linked images.
+	VariationPosition *int `json:"variationPosition,omitempty"`
 	// IsMain reports whether this asset is the primary image.
 	IsMain bool `json:"isMain"`
 	// ExcludedRealms defines realms where this asset is hidden.
@@ -80,6 +84,8 @@ func (p *Product) Normalize() {
 	p.SKU = strings.TrimSpace(p.SKU)
 	for index := range p.Gallery {
 		p.Gallery[index].AssetID = strings.TrimSpace(p.Gallery[index].AssetID)
+		p.Gallery[index].Position = normalizeOptionalPosition(p.Gallery[index].Position)
+		p.Gallery[index].VariationPosition = normalizeOptionalPosition(p.Gallery[index].VariationPosition)
 		for excludedIndex := range p.Gallery[index].ExcludedRealms {
 			p.Gallery[index].ExcludedRealms[excludedIndex] = strings.TrimSpace(p.Gallery[index].ExcludedRealms[excludedIndex])
 		}
@@ -162,4 +168,18 @@ func MergeDatasheets(existing []Datasheet, incoming []Datasheet) []Datasheet {
 	}
 
 	return merged
+}
+
+// normalizeOptionalPosition normalizes optional position values to non-negative integers.
+func normalizeOptionalPosition(value *int) *int {
+	if value == nil {
+		return nil
+	}
+
+	resolved := *value
+	if resolved < 0 {
+		resolved = 0
+	}
+
+	return &resolved
 }

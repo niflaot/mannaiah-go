@@ -53,6 +53,19 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.3.4] - Pending Release
+- Bump service/version references and badges to `v1.3.4`.
+- Add explicit gallery sort fields for drag-and-drop ordering:
+  - `gallery[].position` (global image order)
+  - `gallery[].variationPosition` (variation-scoped image order)
+- Persist gallery and variation image positions in products schema and API responses.
+- Enforce deterministic Falabella image payload ordering:
+  - variation-linked images by `variationPosition` (fallback to `position`)
+  - then shared images by `position`
+  - stable fallback by source order
+- Add SQL migrations `000009_products_gallery_variation_position` (MySQL + SQLite) with rollback files.
+- Add unit and e2e coverage for position persistence and Falabella image ordering.
+
 ### [v1.3.3] - Pending Release
 - Bump service/version references and badges to `v1.3.3`.
 - Add Falabella product-feed resolution backoff gate before image sync dispatch.

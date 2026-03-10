@@ -40,6 +40,10 @@ type CatalogVariant struct {
 type CatalogImage struct {
 	// URL defines public image URL values.
 	URL string
+	// Position defines optional gallery ordering values.
+	Position *int
+	// VariationPosition defines optional variation-scoped ordering values.
+	VariationPosition *int
 	// ExcludedRealms defines realm identifiers where this image must be excluded.
 	ExcludedRealms []string
 	// VariationIDs defines optional linked variation identifier values.

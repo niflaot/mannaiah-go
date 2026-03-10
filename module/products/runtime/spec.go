@@ -224,6 +224,8 @@ func productSchema() *openapi3.Schema {
 func galleryItemSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("assetId", openapi3.NewStringSchema()).
+		WithProperty("position", openapi3.NewInt32Schema()).
+		WithProperty("variationPosition", openapi3.NewInt32Schema()).
 		WithProperty("isMain", openapi3.NewBoolSchema()).
 		WithProperty("excludedRealms", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("variationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).

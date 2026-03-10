@@ -342,18 +342,39 @@ func TestMapVariantProductScopedAttributes(t *testing.T) {
 // TestResolveImageURLs verifies image URL filtering behavior.
 func TestResolveImageURLs(t *testing.T) {
 	images := []port.CatalogImage{
-		{URL: "https://cdn.example.com/parent.jpg"},
-		{URL: "https://cdn.example.com/variant.jpg", VariationIDs: []string{"v-color"}},
+		{URL: "https://cdn.example.com/parent.jpg", Position: intPtr(2)},
+		{URL: "https://cdn.example.com/variant.jpg", Position: intPtr(4), VariationPosition: intPtr(1), VariationIDs: []string{"v-color"}},
+		{URL: "https://cdn.example.com/variant-priority.jpg", Position: intPtr(3), VariationPosition: intPtr(0), VariationIDs: []string{"v-color"}},
+		{URL: "https://cdn.example.com/parent-priority.jpg", Position: intPtr(0)},
 		{URL: "https://cdn.example.com/excluded.jpg", ExcludedRealms: []string{"falabella"}},
 	}
 
 	parentURLs := resolveImageURLs(images, "falabella", nil)
-	if len(parentURLs) != 1 || parentURLs[0] != "https://cdn.example.com/parent.jpg" {
-		t.Fatalf("parentURLs = %#v, want [https://cdn.example.com/parent.jpg]", parentURLs)
+	if len(parentURLs) != 2 {
+		t.Fatalf("parentURLs = %#v, want 2 urls", parentURLs)
+	}
+	if parentURLs[0] != "https://cdn.example.com/parent-priority.jpg" || parentURLs[1] != "https://cdn.example.com/parent.jpg" {
+		t.Fatalf("parentURLs = %#v, want parent-priority then parent", parentURLs)
 	}
 
 	variantURLs := resolveImageURLs(images, "falabella", []string{"v-color", "v-size"})
-	if len(variantURLs) != 2 {
-		t.Fatalf("variantURLs = %#v, want 2 urls", variantURLs)
+	if len(variantURLs) != 4 {
+		t.Fatalf("variantURLs = %#v, want 4 urls", variantURLs)
 	}
+	expected := []string{
+		"https://cdn.example.com/variant-priority.jpg",
+		"https://cdn.example.com/variant.jpg",
+		"https://cdn.example.com/parent-priority.jpg",
+		"https://cdn.example.com/parent.jpg",
+	}
+	for index, expectedURL := range expected {
+		if variantURLs[index] != expectedURL {
+			t.Fatalf("variantURLs[%d] = %q, want %q", index, variantURLs[index], expectedURL)
+		}
+	}
+}
+
+func intPtr(value int) *int {
+	resolved := value
+	return &resolved
 }

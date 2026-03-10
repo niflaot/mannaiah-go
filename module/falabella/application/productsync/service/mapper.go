@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"mannaiah/module/falabella/port"
@@ -226,9 +227,10 @@ func resolveImageURLs(images []port.CatalogImage, realm string, variantVariation
 
 	normalizedVariantVariationIDs := normalizeTrimmedSet(variantVariationIDs)
 	isVariantSelection := len(variantVariationIDs) > 0
+	orderedImages := sortCatalogImages(images, isVariantSelection)
 	result := make([]string, 0, len(images))
 	seen := make(map[string]struct{}, len(images))
-	for _, item := range images {
+	for _, item := range orderedImages {
 		if isRealmExcluded(item.ExcludedRealms, realm) {
 			continue
 		}
@@ -252,6 +254,92 @@ func resolveImageURLs(images []port.CatalogImage, realm string, variantVariation
 	}
 
 	return result
+}
+
+type orderedCatalogImage struct {
+	// image defines catalog image values.
+	image port.CatalogImage
+	// sourceIndex defines original source-order values used for stable fallback ordering.
+	sourceIndex int
+}
+
+// sortCatalogImages resolves deterministic catalog-image ordering for base and variation-specific sync flows.
+func sortCatalogImages(images []port.CatalogImage, variantSelection bool) []port.CatalogImage {
+	if len(images) <= 1 {
+		return append([]port.CatalogImage(nil), images...)
+	}
+
+	ordered := make([]orderedCatalogImage, 0, len(images))
+	for index, image := range images {
+		ordered = append(ordered, orderedCatalogImage{image: image, sourceIndex: index})
+	}
+
+	sort.SliceStable(ordered, func(left, right int) bool {
+		leftImage := ordered[left]
+		rightImage := ordered[right]
+
+		if variantSelection {
+			leftBucket := resolveVariationBucket(leftImage.image)
+			rightBucket := resolveVariationBucket(rightImage.image)
+			if leftBucket != rightBucket {
+				return leftBucket < rightBucket
+			}
+
+			leftVariationPosition := resolveVariationSortPosition(leftImage.image, leftImage.sourceIndex)
+			rightVariationPosition := resolveVariationSortPosition(rightImage.image, rightImage.sourceIndex)
+			if leftVariationPosition != rightVariationPosition {
+				return leftVariationPosition < rightVariationPosition
+			}
+		}
+
+		leftPosition := resolveGallerySortPosition(leftImage.image, leftImage.sourceIndex)
+		rightPosition := resolveGallerySortPosition(rightImage.image, rightImage.sourceIndex)
+		if leftPosition != rightPosition {
+			return leftPosition < rightPosition
+		}
+
+		return leftImage.sourceIndex < rightImage.sourceIndex
+	})
+
+	result := make([]port.CatalogImage, 0, len(ordered))
+	for _, item := range ordered {
+		result = append(result, item.image)
+	}
+
+	return result
+}
+
+// resolveVariationBucket resolves ordering buckets for variation-specific image sync.
+func resolveVariationBucket(image port.CatalogImage) int {
+	if len(image.VariationIDs) > 0 {
+		return 0
+	}
+
+	return 1
+}
+
+// resolveGallerySortPosition resolves stable gallery sort positions with source-index fallback values.
+func resolveGallerySortPosition(image port.CatalogImage, fallback int) int {
+	if image.Position == nil {
+		return fallback
+	}
+	if *image.Position < 0 {
+		return 0
+	}
+
+	return *image.Position
+}
+
+// resolveVariationSortPosition resolves variation-scoped sort positions with gallery-position fallback values.
+func resolveVariationSortPosition(image port.CatalogImage, fallback int) int {
+	if image.VariationPosition == nil {
+		return resolveGallerySortPosition(image, fallback)
+	}
+	if *image.VariationPosition < 0 {
+		return 0
+	}
+
+	return *image.VariationPosition
 }
 
 // normalizeTrimmedSet resolves normalized string set values.

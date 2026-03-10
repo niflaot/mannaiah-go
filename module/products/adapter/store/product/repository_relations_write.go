@@ -86,11 +86,14 @@ func clearProductRelations(tx *gorm.DB, productID string) error {
 // createGalleryRelations persists gallery relation rows.
 func createGalleryRelations(tx *gorm.DB, productID string, values []productdomain.GalleryItem) error {
 	for index, item := range values {
+		position := resolveGalleryPosition(item.Position, index)
+		variationPosition := resolveGalleryVariationPosition(item.VariationPosition, len(item.VariationIDs) > 0)
 		galleryRecord := productGalleryRecord{
-			ProductID: strings.TrimSpace(productID),
-			Position:  index,
-			AssetID:   strings.TrimSpace(item.AssetID),
-			IsMain:    item.IsMain,
+			ProductID:         strings.TrimSpace(productID),
+			Position:          position,
+			VariationPosition: variationPosition,
+			AssetID:           strings.TrimSpace(item.AssetID),
+			IsMain:            item.IsMain,
 		}
 		if err := tx.Create(&galleryRecord).Error; err != nil {
 			return fmt.Errorf("create gallery relation: %w", err)
@@ -119,6 +122,34 @@ func createGalleryRelations(tx *gorm.DB, productID string, values []productdomai
 	}
 
 	return nil
+}
+
+// resolveGalleryPosition resolves persisted gallery position values from explicit payload values or fallback index values.
+func resolveGalleryPosition(value *int, fallback int) int {
+	if value == nil {
+		return fallback
+	}
+
+	resolved := *value
+	if resolved < 0 {
+		return 0
+	}
+
+	return resolved
+}
+
+// resolveGalleryVariationPosition resolves persisted variation-scoped gallery positions for variation-linked images.
+func resolveGalleryVariationPosition(value *int, hasVariationIDs bool) *int {
+	if !hasVariationIDs || value == nil {
+		return nil
+	}
+
+	resolved := *value
+	if resolved < 0 {
+		resolved = 0
+	}
+
+	return &resolved
 }
 
 // createDatasheetRelations persists datasheet relation rows.

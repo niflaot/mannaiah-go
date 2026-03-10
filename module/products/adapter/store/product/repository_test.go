@@ -26,7 +26,8 @@ func TestRepositoryCRUD(t *testing.T) {
 	entity := &productdomain.Product{
 		SKU: "SKU-1",
 		Gallery: []productdomain.GalleryItem{
-			{AssetID: "asset-1", IsMain: true, ExcludedRealms: []string{"b2b"}, VariationIDs: []string{"v1"}},
+			{AssetID: "asset-2", Position: productIntPointer(3), IsMain: false},
+			{AssetID: "asset-1", Position: productIntPointer(1), VariationPosition: productIntPointer(0), IsMain: true, ExcludedRealms: []string{"b2b"}, VariationIDs: []string{"v1"}},
 		},
 		Datasheets: []productdomain.Datasheet{
 			{Realm: "default", Name: "Name", Description: "Desc", Attributes: map[string]any{"weight": 12}},
@@ -49,8 +50,23 @@ func TestRepositoryCRUD(t *testing.T) {
 	if stored.SKU != "SKU-1" {
 		t.Fatalf("stored.SKU = %q, want %q", stored.SKU, "SKU-1")
 	}
-	if len(stored.Gallery) != 1 || stored.Gallery[0].AssetID != "asset-1" {
-		t.Fatalf("stored.Gallery = %#v, want one asset-1 item", stored.Gallery)
+	if len(stored.Gallery) != 2 {
+		t.Fatalf("stored.Gallery = %#v, want two gallery items", stored.Gallery)
+	}
+	if stored.Gallery[0].AssetID != "asset-1" || stored.Gallery[1].AssetID != "asset-2" {
+		t.Fatalf("stored.Gallery order = %#v, want asset-1 then asset-2 by position", stored.Gallery)
+	}
+	if stored.Gallery[0].Position == nil || *stored.Gallery[0].Position != 1 {
+		t.Fatalf("stored.Gallery[0].Position = %v, want 1", stored.Gallery[0].Position)
+	}
+	if stored.Gallery[0].VariationPosition == nil || *stored.Gallery[0].VariationPosition != 0 {
+		t.Fatalf("stored.Gallery[0].VariationPosition = %v, want 0", stored.Gallery[0].VariationPosition)
+	}
+	if stored.Gallery[1].Position == nil || *stored.Gallery[1].Position != 3 {
+		t.Fatalf("stored.Gallery[1].Position = %v, want 3", stored.Gallery[1].Position)
+	}
+	if stored.Gallery[1].VariationPosition != nil {
+		t.Fatalf("stored.Gallery[1].VariationPosition = %v, want nil", stored.Gallery[1].VariationPosition)
 	}
 	if len(stored.Datasheets) != 1 || stored.Datasheets[0].Realm != "default" {
 		t.Fatalf("stored.Datasheets = %#v, want one default datasheet", stored.Datasheets)
@@ -194,4 +210,9 @@ func newRepositoryForTest(t *testing.T) *Repository {
 	}
 
 	return repository
+}
+
+func productIntPointer(value int) *int {
+	resolved := value
+	return &resolved
 }

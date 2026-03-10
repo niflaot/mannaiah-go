@@ -19,13 +19,15 @@ func (r *Repository) loadProductAggregate(ctx context.Context, record productRec
 	}
 
 	galleryRows := make([]productGalleryRecord, 0)
-	if err := r.db.WithContext(ctx).Where("product_id = ?", record.ID).Order("position ASC").Find(&galleryRows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("product_id = ?", record.ID).Order("position ASC, id ASC").Find(&galleryRows).Error; err != nil {
 		return productdomain.Product{}, fmt.Errorf("load product gallery relations: %w", err)
 	}
 	for _, galleryRow := range galleryRows {
 		item := productdomain.GalleryItem{
-			AssetID: galleryRow.AssetID,
-			IsMain:  galleryRow.IsMain,
+			AssetID:           galleryRow.AssetID,
+			Position:          intPointer(galleryRow.Position),
+			VariationPosition: copyIntPointer(galleryRow.VariationPosition),
+			IsMain:            galleryRow.IsMain,
 		}
 
 		excludedRows := make([]productGalleryExcludedRealmRecord, 0)
@@ -103,4 +105,20 @@ func (r *Repository) loadProductAggregate(ctx context.Context, record productRec
 	entity.Normalize()
 
 	return entity, nil
+}
+
+// intPointer returns pointer copies for integer values.
+func intPointer(value int) *int {
+	resolved := value
+	return &resolved
+}
+
+// copyIntPointer returns pointer copies for optional integer values.
+func copyIntPointer(value *int) *int {
+	if value == nil {
+		return nil
+	}
+
+	resolved := *value
+	return &resolved
 }

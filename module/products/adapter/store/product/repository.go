@@ -48,6 +48,8 @@ type productGalleryRecord struct {
 	ProductID string `gorm:"size:64;not null;index"`
 	// Position defines stable gallery ordering.
 	Position int `gorm:"not null;index"`
+	// VariationPosition defines optional variation-scoped gallery ordering.
+	VariationPosition *int `gorm:"index"`
 	// AssetID defines referenced asset identifiers.
 	AssetID string `gorm:"size:64;not null"`
 	// IsMain reports primary-image state.

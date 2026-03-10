@@ -219,8 +219,8 @@ func TestCatalogGetProductWithImages(t *testing.T) {
 				ID:  "p-1",
 				SKU: "SKU-1",
 				Gallery: []productdomain.GalleryItem{
-					{AssetID: "asset-1"},
-					{AssetID: "asset-2", VariationIDs: []string{"v-color"}, ExcludedRealms: []string{"woo"}},
+					{AssetID: "asset-1", Position: catalogIntPointer(0)},
+					{AssetID: "asset-2", Position: catalogIntPointer(2), VariationPosition: catalogIntPointer(1), VariationIDs: []string{"v-color"}, ExcludedRealms: []string{"woo"}},
 				},
 			},
 		},
@@ -249,9 +249,20 @@ func TestCatalogGetProductWithImages(t *testing.T) {
 	if entity.Images[1].URL != "https://cdn.example.com/custom.jpg" {
 		t.Fatalf("entity.Images[1].URL = %q, want %q", entity.Images[1].URL, "https://cdn.example.com/custom.jpg")
 	}
+	if entity.Images[0].Position == nil || *entity.Images[0].Position != 0 {
+		t.Fatalf("entity.Images[0].Position = %v, want 0", entity.Images[0].Position)
+	}
+	if entity.Images[1].VariationPosition == nil || *entity.Images[1].VariationPosition != 1 {
+		t.Fatalf("entity.Images[1].VariationPosition = %v, want 1", entity.Images[1].VariationPosition)
+	}
 	if len(entity.Images[1].VariationIDs) != 1 || entity.Images[1].VariationIDs[0] != "v-color" {
 		t.Fatalf("entity.Images[1].VariationIDs = %#v, want [v-color]", entity.Images[1].VariationIDs)
 	}
+}
+
+func catalogIntPointer(value int) *int {
+	resolved := value
+	return &resolved
 }
 
 // TestCatalogAssetLookupError verifies asset lookup error propagation behavior.
