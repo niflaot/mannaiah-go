@@ -122,15 +122,57 @@ func TestRepositoryListByTagNames(t *testing.T) {
 		t.Fatalf("Create(assetTwo) error = %v", err)
 	}
 
+	assetThree := &domain.Asset{
+		ID:           "a-3",
+		Key:          "assets/a-3.webp",
+		Name:         "Asset Three",
+		OriginalName: "a-3.webp",
+		MimeType:     "image/webp",
+		Size:         100,
+		Tags: []domain.Tag{
+			{Name: "marketplaces", Color: "#111111"},
+			{Name: "feeds", Color: "#222222"},
+		},
+	}
+	if err := repository.Create(ctx, assetThree); err != nil {
+		t.Fatalf("Create(assetThree) error = %v", err)
+	}
+
 	listed, err := repository.ListByTagNames(ctx, []string{"marketplaces"}, 10)
 	if err != nil {
 		t.Fatalf("ListByTagNames() error = %v", err)
 	}
-	if len(listed) != 1 {
-		t.Fatalf("len(listed) = %d, want %d", len(listed), 1)
+	if len(listed) != 2 {
+		t.Fatalf("len(listed) = %d, want %d", len(listed), 2)
 	}
-	if listed[0].ID != assetOne.ID {
-		t.Fatalf("listed[0].ID = %q, want %q", listed[0].ID, assetOne.ID)
+	listedIDs := map[string]struct{}{}
+	for _, entity := range listed {
+		listedIDs[entity.ID] = struct{}{}
+	}
+	if _, exists := listedIDs[assetOne.ID]; !exists {
+		t.Fatalf("expected asset id %q in listed result", assetOne.ID)
+	}
+	if _, exists := listedIDs[assetThree.ID]; !exists {
+		t.Fatalf("expected asset id %q in listed result", assetThree.ID)
+	}
+
+	deduped, dedupeErr := repository.ListByTagNames(ctx, []string{"marketplaces", "feeds"}, 10)
+	if dedupeErr != nil {
+		t.Fatalf("ListByTagNames(deduped) error = %v", dedupeErr)
+	}
+	if len(deduped) != 2 {
+		t.Fatalf("len(deduped) = %d, want %d", len(deduped), 2)
+	}
+
+	ids := map[string]struct{}{}
+	for _, entity := range deduped {
+		ids[entity.ID] = struct{}{}
+	}
+	if _, exists := ids[assetOne.ID]; !exists {
+		t.Fatalf("expected asset id %q in deduped list", assetOne.ID)
+	}
+	if _, exists := ids[assetThree.ID]; !exists {
+		t.Fatalf("expected asset id %q in deduped list", assetThree.ID)
 	}
 }
 

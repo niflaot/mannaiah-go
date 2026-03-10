@@ -77,15 +77,15 @@ func (r *Repository) ListByTagNames(ctx context.Context, tagNames []string, limi
 	resolvedLimit := resolveTagListLimit(limit)
 	assetIDs := make([]string, 0, resolvedLimit)
 	if err := r.db.WithContext(ctx).
-		Model(&assetTagRecord{}).
-		Distinct("asset_tags.asset_id").
-		Select("asset_tags.asset_id").
-		Joins("JOIN assets ON assets.id = asset_tags.asset_id").
+		Model(&assetRecord{}).
+		Select("assets.id").
+		Joins("JOIN asset_tags ON asset_tags.asset_id = assets.id").
 		Where("asset_tags.name IN ?", normalizedTagNames).
 		Where("assets.deleted_at IS NULL").
+		Group("assets.id, assets.updated_at").
 		Order("assets.updated_at ASC, assets.id ASC").
 		Limit(resolvedLimit).
-		Pluck("asset_tags.asset_id", &assetIDs).Error; err != nil {
+		Pluck("assets.id", &assetIDs).Error; err != nil {
 		return nil, fmt.Errorf("list tagged asset ids: %w", err)
 	}
 	if len(assetIDs) == 0 {
