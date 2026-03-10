@@ -190,6 +190,12 @@ func TestAssetEndpoints(t *testing.T) {
 		t.Fatalf("DELETE /assets/:id status = %d, want %d", deleteResp.StatusCode, http.StatusOK)
 	}
 
+	runWorkerReq, _ := http.NewRequest(http.MethodPost, "/assets/workers/jpg/run", nil)
+	runWorkerResp := runRequest(t, server, runWorkerReq)
+	if runWorkerResp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /assets/workers/jpg/run status = %d, want %d", runWorkerResp.StatusCode, http.StatusOK)
+	}
+
 	createFolderReq, _ := http.NewRequest(http.MethodPost, "/assets/folders", bytes.NewBufferString(`{"name":"Hero","parentFolderId":"root","tags":[{"name":"hero","color":"#ff0000"}]}`))
 	createFolderReq.Header.Set("Content-Type", "application/json")
 	createFolderResp := runRequest(t, server, createFolderReq)
@@ -241,6 +247,7 @@ func TestHandlerErrorMapping(t *testing.T) {
 		assetsapplication.ErrInvalidFolderParent,
 		assetsapplication.ErrFileRequired,
 		assetsapplication.ErrFileTooLarge,
+		assetsapplication.ErrJPGWorkerTagsRequired,
 		domain.ErrKeyRequired,
 		domain.ErrFolderNameRequired,
 		domain.ErrFolderParentSelfReference,
@@ -304,6 +311,45 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 	forbiddenReq.Header.Set("Authorization", "Bearer forbidden")
 	if response := runRequest(t, server, forbiddenReq); response.StatusCode != http.StatusForbidden {
 		t.Fatalf("forbidden status = %d, want %d", response.StatusCode, http.StatusForbidden)
+	}
+}
+
+// TestRunJPGWorkerRouteOverrides verifies manual JPG-worker route overrides and validation behavior.
+func TestRunJPGWorkerRouteOverrides(t *testing.T) {
+	captured := assetsapplication.JPGWorkerCommand{}
+	service := newServiceMock()
+	service.runJPGWorkerFn = func(ctx context.Context, command assetsapplication.JPGWorkerCommand) (*assetsapplication.JPGWorkerResult, error) {
+		captured = command
+		return &assetsapplication.JPGWorkerResult{Scanned: 1, Converted: 1}, nil
+	}
+
+	handler := newHandlerForTest(t, service)
+	handler.SetJPGWorkerDefaults(assetsapplication.JPGWorkerCommand{
+		Tags:        []string{"marketplaces"},
+		BatchSize:   100,
+		JPEGQuality: 90,
+	})
+	server := newHTTPServerForHandler(t, handler)
+
+	request, _ := http.NewRequest(http.MethodPost, "/assets/workers/jpg/run?tags=ops,feeds&batchSize=5&jpegQuality=75", nil)
+	response := runRequest(t, server, request)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("POST /assets/workers/jpg/run override status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if len(captured.Tags) != 2 || captured.Tags[0] != "ops" || captured.Tags[1] != "feeds" {
+		t.Fatalf("captured.Tags = %#v, want [ops feeds]", captured.Tags)
+	}
+	if captured.BatchSize != 5 {
+		t.Fatalf("captured.BatchSize = %d, want %d", captured.BatchSize, 5)
+	}
+	if captured.JPEGQuality != 75 {
+		t.Fatalf("captured.JPEGQuality = %d, want %d", captured.JPEGQuality, 75)
+	}
+
+	invalidRequest, _ := http.NewRequest(http.MethodPost, "/assets/workers/jpg/run?batchSize=bad", nil)
+	invalidResponse := runRequest(t, server, invalidRequest)
+	if invalidResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST /assets/workers/jpg/run invalid batchSize status = %d, want %d", invalidResponse.StatusCode, http.StatusBadRequest)
 	}
 }
 

@@ -53,7 +53,16 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.3.1] - Pending Release
+### [v1.3.2] - Pending Release
+- Bump service/version references and badges to `v1.3.2`.
+- Add manual JPG worker trigger endpoint while keeping scheduled worker behavior:
+  - `POST /assets/workers/jpg/run`
+  - optional query overrides: `tags`, `batchSize`, `jpegQuality`
+- Route executes the same JPG conversion flow used by the scheduled worker and returns execution counters.
+- Extend assets OpenAPI documentation and runtime/module READMEs with manual worker endpoint details.
+- Add unit and e2e coverage for manual JPG worker route behavior.
+
+### [v1.3.1] - 2026-03-09
 - Bump service/version references and badges to `v1.3.1`.
 - Add assets JPG worker with cron lifecycle and env-driven configuration:
   - `ASSETS_JPG_WORKER_ENABLED`

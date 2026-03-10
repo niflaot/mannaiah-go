@@ -34,6 +34,8 @@ type Handler struct {
 	service assetsapplication.Service
 	// authorizer defines optional endpoint auth dependencies.
 	authorizer Authorizer
+	// jpgWorkerDefaults defines fallback execution values for manual JPG worker runs.
+	jpgWorkerDefaults assetsapplication.JPGWorkerCommand
 }
 
 // listResponse defines response payload for paginated asset listing.
@@ -97,6 +99,15 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	h.authorizer = authorizer
 }
 
+// SetJPGWorkerDefaults configures fallback execution values for manual JPG worker runs.
+func (h *Handler) SetJPGWorkerDefaults(command assetsapplication.JPGWorkerCommand) {
+	if h == nil {
+		return
+	}
+
+	h.jpgWorkerDefaults = command
+}
+
 // RegisterRoutes registers asset and folder CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/assets/folders", h.protect("assets:create", h.createFolder))
@@ -111,6 +122,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/assets/:id", h.protect("assets:read", h.findAssetByID))
 	router.Patch("/assets/:id", h.protect("assets:update", h.updateAsset))
 	router.Delete("/assets/:id", h.protect("assets:delete", h.deleteAsset))
+	router.Post("/assets/workers/jpg/run", h.protect("assets:update", h.runJPGWorker))
 }
 
 // protect wraps handlers with optional auth checks.
@@ -165,6 +177,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, assetsapplication.ErrFileTooLarge) {
 		return corehttp.NewAppError(400, "file_too_large", err)
+	}
+	if errors.Is(err, assetsapplication.ErrJPGWorkerTagsRequired) {
+		return corehttp.NewAppError(400, "invalid_jpg_worker_tags", err)
 	}
 	if errors.Is(err, domain.ErrKeyRequired) ||
 		errors.Is(err, domain.ErrOriginalNameRequired) ||

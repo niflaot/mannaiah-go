@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	assetsapplication "mannaiah/module/assets/application"
 )
 
 // TestAssetsJPGWorkerE2E verifies tagged asset JPG conversion and object replacement behavior.
@@ -20,6 +18,7 @@ func TestAssetsJPGWorkerE2E(t *testing.T) {
 
 	assetsCreateToken := harness.SignToken(t, "assets:create")
 	assetsReadToken := harness.SignToken(t, "assets:read")
+	assetsUpdateToken := harness.SignToken(t, "assets:update")
 
 	harness.tracer.Step("upload tagged asset eligible for jpg worker")
 	status, payload := doAssetUploadRequest(t, harness, assetsCreateToken, "morral_traveler_camo_negro_frente.webp", samplePNGFixture(t), map[string]string{
@@ -38,16 +37,16 @@ func TestAssetsJPGWorkerE2E(t *testing.T) {
 		t.Fatalf("oldKey = %q, want .webp suffix", oldKey)
 	}
 
-	harness.tracer.Step("run jpg worker with marketplaces tag filter")
-	result, runErr := harness.assetsModule.Service().RunJPGWorker(context.Background(), assetsapplication.JPGWorkerCommand{
-		Tags:      []string{"marketplaces"},
-		BatchSize: 10,
-	})
-	if runErr != nil {
-		t.Fatalf("RunJPGWorker() error = %v", runErr)
+	harness.tracer.Step("run jpg worker manually through route with marketplaces tag filter")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/assets/workers/jpg/run?tags=marketplaces&batchSize=10", assetsUpdateToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	if result.Converted != 1 || result.Failed != 0 {
-		t.Fatalf("result = %#v, want converted=1 failed=0", result)
+	if payload["converted"] != float64(1) {
+		t.Fatalf("payload.converted = %v, want %d", payload["converted"], 1)
+	}
+	if payload["failed"] != float64(0) {
+		t.Fatalf("payload.failed = %v, want %d", payload["failed"], 0)
 	}
 
 	harness.tracer.Step("fetch updated asset and verify jpg metadata")

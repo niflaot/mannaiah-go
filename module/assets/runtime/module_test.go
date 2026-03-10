@@ -84,6 +84,30 @@ func TestNewWithConfig(t *testing.T) {
 	}
 }
 
+// TestNewWithConfigRegistersManualJPGWorkerRoute verifies manual worker route behavior with configured defaults.
+func TestNewWithConfigRegistersManualJPGWorkerRoute(t *testing.T) {
+	db := newDBForTest(t)
+	module, err := NewWithConfig(Config{JPGWorkerTags: "marketplaces"}, db, runtimeStorageMock{}, nil)
+	if err != nil {
+		t.Fatalf("NewWithConfig() error = %v", err)
+	}
+
+	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8133}, nil)
+	if err != nil {
+		t.Fatalf("corehttp.New() error = %v", err)
+	}
+	server.RegisterRoutes(module.RegisterRoutes)
+
+	request, _ := http.NewRequest(http.MethodPost, "/assets/workers/jpg/run", nil)
+	response, testErr := server.App().Test(request)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+}
+
 // loaderProbe defines startup loader behavior for module tests.
 type loaderProbe struct {
 	// registered indicates whether routes were registered.

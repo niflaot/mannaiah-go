@@ -71,6 +71,11 @@ func NewWithConfig(cfg Config, db *gorm.DB, storage port.Storage, providedLogger
 	if err != nil {
 		return nil, err
 	}
+	handler.SetJPGWorkerDefaults(assetsapplication.JPGWorkerCommand{
+		Tags:        resolveWorkerTags(cfg.JPGWorkerTags),
+		BatchSize:   cfg.JPGWorkerBatchSize,
+		JPEGQuality: cfg.JPGWorkerQuality,
+	})
 
 	return &Module{
 		cfg:     cfg,

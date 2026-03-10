@@ -27,7 +27,8 @@ func OpenAPISpec() *openapi3.T {
 		"PaginatedFolderResponse": &openapi3.SchemaRef{
 			Value: paginatedFolderResponseSchema(),
 		},
-		"AssetPaginationMeta": &openapi3.SchemaRef{Value: assetPaginationMetaSchema()},
+		"AssetPaginationMeta":  &openapi3.SchemaRef{Value: assetPaginationMetaSchema()},
+		"RunJPGWorkerResponse": &openapi3.SchemaRef{Value: runJPGWorkerResponseSchema()},
 	}
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
@@ -42,6 +43,7 @@ func OpenAPISpec() *openapi3.T {
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/assets", assetsPathItem()),
 			openapi3.WithPath("/assets/{id}", assetByIDPathItem()),
+			openapi3.WithPath("/assets/workers/jpg/run", &openapi3.PathItem{Post: runJPGWorkerOperation()}),
 			openapi3.WithPath("/assets/folders", foldersPathItem()),
 			openapi3.WithPath("/assets/folders/tree", &openapi3.PathItem{Get: listFolderTreeOperation()}),
 			openapi3.WithPath("/assets/folders/{id}", folderByIDPathItem()),
@@ -193,6 +195,28 @@ func deleteAssetOperation() *openapi3.Operation {
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Asset not found.")),
+		),
+	}
+}
+
+// runJPGWorkerOperation defines the OpenAPI operation for manual JPG worker execution.
+func runJPGWorkerOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "AssetsController_runJPGWorker",
+		Summary:     "Run JPG worker manually",
+		Tags:        []string{assetsTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			queryParameter("tags", false, "Optional comma-separated tag filters overriding configured defaults.", openapi3.NewStringSchema()),
+			queryParameter("batchSize", false, "Optional batch size overriding configured defaults.", openapi3.NewIntegerSchema()),
+			queryParameter("jpegQuality", false, "Optional JPEG quality (1-100) overriding configured defaults.", openapi3.NewIntegerSchema()),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Return JPG worker execution counters.")),
+			openapi3.WithStatus(400, responseWithDescription("Invalid parameters or missing tag filters.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(503, responseWithDescription("Storage integration unavailable.")),
 		),
 	}
 }
@@ -449,4 +473,16 @@ func paginatedFolderResponseSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("data", openapi3.NewArraySchema().WithItems(folderSchema())).
 		WithProperty("meta", assetPaginationMetaSchema())
+}
+
+// runJPGWorkerResponseSchema returns the response schema for manual JPG worker execution.
+func runJPGWorkerResponseSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("scanned", openapi3.NewIntegerSchema()).
+		WithProperty("converted", openapi3.NewIntegerSchema()).
+		WithProperty("skipped", openapi3.NewIntegerSchema()).
+		WithProperty("failed", openapi3.NewIntegerSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("batchSize", openapi3.NewIntegerSchema()).
+		WithProperty("jpegQuality", openapi3.NewIntegerSchema())
 }
