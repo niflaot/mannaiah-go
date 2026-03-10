@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	errorspkg "errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,8 @@ type sourceMock struct {
 	validateErr error
 	// syncErr defines SyncProduct() errors.
 	syncErr error
+	// syncResponse defines SyncProduct() payload values.
+	syncResponse []byte
 	// synced defines captured sync payload values.
 	synced []port.SyncProductRequest
 	// syncImagesErr defines SyncProductImages() errors.
@@ -25,6 +28,14 @@ type sourceMock struct {
 	syncedImages []port.SyncProductImagesRequest
 	// syncImagesResponse defines SyncProductImages() payload values.
 	syncImagesResponse []byte
+	// feedStatusErr defines GetFeedStatus() errors.
+	feedStatusErr error
+	// feedStatusResponse defines default GetFeedStatus() payload values.
+	feedStatusResponse []byte
+	// feedStatusResponses defines sequential GetFeedStatus() payload values by call index.
+	feedStatusResponses [][]byte
+	// feedStatusCalls defines GetFeedStatus() call counts.
+	feedStatusCalls int
 }
 
 const testSyncResponseXML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -60,6 +71,57 @@ const testImageSyncResponseXML = `<?xml version="1.0" encoding="UTF-8"?>
 	<Body/>
 </SuccessResponse>`
 
+const testFeedStatusQueuedXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SuccessResponse>
+  <Head>
+    <RequestAction>FeedStatus</RequestAction>
+  </Head>
+  <Body>
+    <FeedDetail>
+      <Feed>feed-abc-123</Feed>
+      <Status>Queued</Status>
+      <Action>ProductCreate</Action>
+      <TotalRecords>1</TotalRecords>
+      <ProcessedRecords>0</ProcessedRecords>
+      <FailedRecords>0</FailedRecords>
+    </FeedDetail>
+  </Body>
+</SuccessResponse>`
+
+const testFeedStatusFinishedXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SuccessResponse>
+  <Head>
+    <RequestAction>FeedStatus</RequestAction>
+  </Head>
+  <Body>
+    <FeedDetail>
+      <Feed>feed-abc-123</Feed>
+      <Status>Finished</Status>
+      <Action>ProductCreate</Action>
+      <TotalRecords>1</TotalRecords>
+      <ProcessedRecords>1</ProcessedRecords>
+      <FailedRecords>0</FailedRecords>
+    </FeedDetail>
+  </Body>
+</SuccessResponse>`
+
+const testFeedStatusFailedXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SuccessResponse>
+  <Head>
+    <RequestAction>FeedStatus</RequestAction>
+  </Head>
+  <Body>
+    <FeedDetail>
+      <Feed>feed-abc-123</Feed>
+      <Status>Finished</Status>
+      <Action>ProductCreate</Action>
+      <TotalRecords>1</TotalRecords>
+      <ProcessedRecords>1</ProcessedRecords>
+      <FailedRecords>1</FailedRecords>
+    </FeedDetail>
+  </Body>
+</SuccessResponse>`
+
 // Validate returns configured integration-validation errors.
 func (m *sourceMock) Validate(ctx context.Context) error {
 	return m.validateErr
@@ -70,6 +132,9 @@ func (m *sourceMock) SyncProduct(ctx context.Context, request port.SyncProductRe
 	m.synced = append(m.synced, request)
 	if m.syncErr != nil {
 		return nil, m.syncErr
+	}
+	if len(m.syncResponse) > 0 {
+		return m.syncResponse, nil
 	}
 
 	return []byte(testSyncResponseXML), nil
@@ -86,6 +151,26 @@ func (m *sourceMock) SyncProductImages(ctx context.Context, request port.SyncPro
 	}
 
 	return []byte(`<SuccessResponse/>`), nil
+}
+
+// GetFeedStatus captures polling requests and returns configured feed-status payload/errors.
+func (m *sourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	m.feedStatusCalls++
+	if m.feedStatusErr != nil {
+		return nil, m.feedStatusErr
+	}
+	if len(m.feedStatusResponses) > 0 {
+		index := m.feedStatusCalls - 1
+		if index >= len(m.feedStatusResponses) {
+			index = len(m.feedStatusResponses) - 1
+		}
+		return m.feedStatusResponses[index], nil
+	}
+	if len(m.feedStatusResponse) > 0 {
+		return m.feedStatusResponse, nil
+	}
+
+	return []byte(testFeedStatusFinishedXML), nil
 }
 
 // catalogMock defines product-catalog behavior for sync-service tests.
@@ -283,6 +368,137 @@ func TestSyncProductImageTranscodeURLs(t *testing.T) {
 	}
 }
 
+// TestSyncProductWaitsForFeedResolutionBeforeImageSync verifies image sync waits for successful feed resolution.
+func TestSyncProductWaitsForFeedResolutionBeforeImageSync(t *testing.T) {
+	source := &sourceMock{
+		syncImagesResponse: []byte(testImageSyncResponseXML),
+		feedStatusResponses: [][]byte{
+			[]byte(testFeedStatusQueuedXML),
+			[]byte(testFeedStatusFinishedXML),
+		},
+	}
+	service, err := NewService(source, catalogMock{
+		product: &port.CatalogProduct{
+			ID:  "p-1",
+			SKU: "SKU-1",
+			Datasheets: []port.CatalogDatasheet{
+				{Realm: "falabella", Name: "Backpack", Description: "Backpack description"},
+			},
+			Images: []port.CatalogImage{
+				{URL: "https://cdn.example.com/image.webp"},
+			},
+		},
+	}, Config{
+		Realm:                          "falabella",
+		FeedResolutionAttempts:         3,
+		FeedResolutionBackoffMS:        1,
+		FeedResolutionRequestTimeoutMS: 50,
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncProduct(context.Background(), "p-1")
+	if syncErr != nil {
+		t.Fatalf("SyncProduct() error = %v", syncErr)
+	}
+	if summary.Synced != 1 || summary.Failed != 0 {
+		t.Fatalf("summary = %#v, want synced=1 failed=0", summary)
+	}
+	if source.feedStatusCalls != 2 {
+		t.Fatalf("feedStatusCalls = %d, want %d", source.feedStatusCalls, 2)
+	}
+	if len(source.syncedImages) != 1 {
+		t.Fatalf("len(source.syncedImages) = %d, want %d", len(source.syncedImages), 1)
+	}
+}
+
+// TestSyncProductSkipsImageSyncWhenFeedNotFinished verifies image sync does not run when product feed is still pending.
+func TestSyncProductSkipsImageSyncWhenFeedNotFinished(t *testing.T) {
+	source := &sourceMock{
+		feedStatusResponses: [][]byte{
+			[]byte(testFeedStatusQueuedXML),
+		},
+	}
+	service, err := NewService(source, catalogMock{
+		product: &port.CatalogProduct{
+			ID:  "p-1",
+			SKU: "SKU-1",
+			Datasheets: []port.CatalogDatasheet{
+				{Realm: "falabella", Name: "Backpack", Description: "Backpack description"},
+			},
+			Images: []port.CatalogImage{
+				{URL: "https://cdn.example.com/image.webp"},
+			},
+		},
+	}, Config{
+		Realm:                          "falabella",
+		FeedResolutionAttempts:         1,
+		FeedResolutionBackoffMS:        1,
+		FeedResolutionRequestTimeoutMS: 50,
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncProduct(context.Background(), "p-1")
+	if syncErr != nil {
+		t.Fatalf("SyncProduct() error = %v", syncErr)
+	}
+	if summary.Synced != 0 || summary.Failed != 1 {
+		t.Fatalf("summary = %#v, want synced=0 failed=1", summary)
+	}
+	if len(source.syncedImages) != 0 {
+		t.Fatalf("len(source.syncedImages) = %d, want %d", len(source.syncedImages), 0)
+	}
+	if !strings.Contains(summary.Results[0].Reason, "was not finished") {
+		t.Fatalf("Reason = %q, want contains %q", summary.Results[0].Reason, "was not finished")
+	}
+}
+
+// TestSyncProductSkipsImageSyncWhenFeedFails verifies image sync does not run when product feed resolves with failures.
+func TestSyncProductSkipsImageSyncWhenFeedFails(t *testing.T) {
+	source := &sourceMock{
+		feedStatusResponses: [][]byte{
+			[]byte(testFeedStatusFailedXML),
+		},
+	}
+	service, err := NewService(source, catalogMock{
+		product: &port.CatalogProduct{
+			ID:  "p-1",
+			SKU: "SKU-1",
+			Datasheets: []port.CatalogDatasheet{
+				{Realm: "falabella", Name: "Backpack", Description: "Backpack description"},
+			},
+			Images: []port.CatalogImage{
+				{URL: "https://cdn.example.com/image.webp"},
+			},
+		},
+	}, Config{
+		Realm:                          "falabella",
+		FeedResolutionAttempts:         1,
+		FeedResolutionBackoffMS:        1,
+		FeedResolutionRequestTimeoutMS: 50,
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, syncErr := service.SyncProduct(context.Background(), "p-1")
+	if syncErr != nil {
+		t.Fatalf("SyncProduct() error = %v", syncErr)
+	}
+	if summary.Synced != 0 || summary.Failed != 1 {
+		t.Fatalf("summary = %#v, want synced=0 failed=1", summary)
+	}
+	if len(source.syncedImages) != 0 {
+		t.Fatalf("len(source.syncedImages) = %d, want %d", len(source.syncedImages), 0)
+	}
+	if !strings.Contains(summary.Results[0].Reason, "finished with 1 failed records") {
+		t.Fatalf("Reason = %q, want contains %q", summary.Results[0].Reason, "finished with 1 failed records")
+	}
+}
+
 // TestSyncProductWithVariants verifies parent/child variant sync behavior.
 func TestSyncProductWithVariants(t *testing.T) {
 	source := &sourceMock{}
@@ -413,6 +629,11 @@ func (m *concurrentSourceMock) SyncProduct(ctx context.Context, request port.Syn
 // SyncProductImages returns no-op responses.
 func (m *concurrentSourceMock) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
 	return []byte(`<SuccessResponse/>`), nil
+}
+
+// GetFeedStatus returns finished feed status for concurrency tests.
+func (m *concurrentSourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	return []byte(testFeedStatusFinishedXML), nil
 }
 
 // TestSyncProductsUsesConcurrentWorkers verifies batch sync uses bounded parallelism.
@@ -623,6 +844,11 @@ func (m *warningSourceMock) SyncProductImages(ctx context.Context, request port.
 	return []byte(`<SuccessResponse/>`), nil
 }
 
+// GetFeedStatus returns finished feed status for warning tests.
+func (m *warningSourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	return []byte(testFeedStatusFinishedXML), nil
+}
+
 // TestSyncProductWithRequiredFieldWarnings verifies required-field violation warnings cause sync failure.
 func TestSyncProductWithRequiredFieldWarnings(t *testing.T) {
 	source := &warningSourceMock{}
@@ -696,6 +922,11 @@ func (m *benignWarningSourceMock) SyncProduct(ctx context.Context, request port.
 // SyncProductImages returns a no-op response.
 func (m *benignWarningSourceMock) SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error) {
 	return []byte(`<SuccessResponse/>`), nil
+}
+
+// GetFeedStatus returns finished feed status for benign-warning tests.
+func (m *benignWarningSourceMock) GetFeedStatus(ctx context.Context, feedID string) ([]byte, error) {
+	return []byte(testFeedStatusFinishedXML), nil
 }
 
 // TestSyncProductWithBenignWarnings verifies benign warnings do not cause sync failure.

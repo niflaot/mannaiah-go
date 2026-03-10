@@ -53,6 +53,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.3.3] - Pending Release
+- Bump service/version references and badges to `v1.3.3`.
+- Add Falabella product-feed resolution backoff gate before image sync dispatch.
+- Block image sync when latest `ProductCreate`/`ProductUpdate` feed is not `Finished` with `FailedRecords=0`.
+- Add Falabella feed-resolution backoff env configuration:
+  - `FALABELLA_PRODUCT_FEED_RESOLUTION_ATTEMPTS`
+  - `FALABELLA_PRODUCT_FEED_RESOLUTION_BACKOFF_MS`
+  - `FALABELLA_PRODUCT_FEED_RESOLUTION_REQUEST_TIMEOUT_MS`
+- Record product feed status entries before image sync attempts to keep cron feed-resolution visibility even when image sync is blocked.
+- Add unit and e2e coverage for feed-resolution gating and backoff behavior.
+
 ### [v1.3.2] - Pending Release
 - Bump service/version references and badges to `v1.3.2`.
 - Add manual JPG worker trigger endpoint while keeping scheduled worker behavior:

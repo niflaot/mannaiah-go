@@ -26,8 +26,14 @@ var (
 )
 
 const (
-	defaultSyncWorkers = 4
-	maxSyncWorkers     = 16
+	defaultSyncWorkers                    = 4
+	maxSyncWorkers                        = 16
+	defaultFeedResolutionAttempts         = 6
+	maxFeedResolutionAttempts             = 30
+	defaultFeedResolutionBackoffMS        = 1000
+	maxFeedResolutionBackoffMS            = 30000
+	defaultFeedResolutionRequestTimeoutMS = 5000
+	maxFeedResolutionRequestTimeoutMS     = 30000
 )
 
 // Source defines Falabella product-sync source behavior required by this service.
@@ -38,6 +44,8 @@ type Source interface {
 	SyncProduct(ctx context.Context, request port.SyncProductRequest) ([]byte, error)
 	// SyncProductImages configures image URLs for a product SKU.
 	SyncProductImages(ctx context.Context, request port.SyncProductImagesRequest) ([]byte, error)
+	// GetFeedStatus retrieves Falabella feed status by feed identifier.
+	GetFeedStatus(ctx context.Context, feedID string) ([]byte, error)
 }
 
 // ProductCatalog defines product lookup behavior required by Falabella sync services.
@@ -66,6 +74,12 @@ type Config struct {
 	ImageTranscodeEnabled bool
 	// ImageTranscodeBaseURL defines public API base URL values used to build jpg transcode endpoint URLs.
 	ImageTranscodeBaseURL string
+	// FeedResolutionAttempts defines max polling attempts before image sync starts.
+	FeedResolutionAttempts int
+	// FeedResolutionBackoffMS defines backoff duration in milliseconds between feed-status polls.
+	FeedResolutionBackoffMS int
+	// FeedResolutionRequestTimeoutMS defines timeout in milliseconds for each feed-status request.
+	FeedResolutionRequestTimeoutMS int
 }
 
 // Result defines per-product sync result values.
@@ -165,6 +179,24 @@ func NewService(source Source, catalog ProductCatalog, cfg Config) (*ProductSync
 	}
 	if resolved.SyncWorkers <= 0 {
 		resolved.SyncWorkers = defaultSyncWorkers
+	}
+	if resolved.FeedResolutionAttempts <= 0 {
+		resolved.FeedResolutionAttempts = defaultFeedResolutionAttempts
+	}
+	if resolved.FeedResolutionAttempts > maxFeedResolutionAttempts {
+		resolved.FeedResolutionAttempts = maxFeedResolutionAttempts
+	}
+	if resolved.FeedResolutionBackoffMS <= 0 {
+		resolved.FeedResolutionBackoffMS = defaultFeedResolutionBackoffMS
+	}
+	if resolved.FeedResolutionBackoffMS > maxFeedResolutionBackoffMS {
+		resolved.FeedResolutionBackoffMS = maxFeedResolutionBackoffMS
+	}
+	if resolved.FeedResolutionRequestTimeoutMS <= 0 {
+		resolved.FeedResolutionRequestTimeoutMS = defaultFeedResolutionRequestTimeoutMS
+	}
+	if resolved.FeedResolutionRequestTimeoutMS > maxFeedResolutionRequestTimeoutMS {
+		resolved.FeedResolutionRequestTimeoutMS = maxFeedResolutionRequestTimeoutMS
 	}
 
 	return &ProductSyncService{source: source, catalog: catalog, cfg: resolved, logger: zap.NewNop()}, nil
@@ -398,9 +430,10 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 			summary.Results = append(summary.Results, result)
 			continue
 		}
+		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, feedID, variant.VariationIDs, syncdomain.SyncStepProduct, productAction)
 
 		variantImageURLs := resolveImageURLs(product.Images, s.cfg.Realm, variant.VariationIDs)
-		imageActionResp, imageErr := s.syncImages(ctx, request.SKU, variantImageURLs)
+		imageActionResp, imageErr := s.syncImagesAfterProductFeedResolved(ctx, request.SKU, variantImageURLs, feedID)
 		if imageErr != nil {
 			result := Result{
 				ProductID: product.ID,
@@ -416,7 +449,6 @@ func (s *ProductSyncService) syncOne(ctx context.Context, summary *Summary, prod
 			continue
 		}
 
-		s.recordSyncEntry(ctx, summary.ExecutionID, product.ID, request.SKU, feedID, variant.VariationIDs, syncdomain.SyncStepProduct, productAction)
 		imageFeedID := ""
 		imageAction := syncdomain.SyncActionCreate
 		if imageActionResp != nil {
@@ -496,8 +528,9 @@ func (s *ProductSyncService) syncBaseProduct(ctx context.Context, summary *Summa
 		summary.Results = append(summary.Results, result)
 		return
 	}
+	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, feedID, nil, syncdomain.SyncStepProduct, productAction)
 
-	imageActionResp, imageErr := s.syncImages(ctx, request.SKU, imageURLs)
+	imageActionResp, imageErr := s.syncImagesAfterProductFeedResolved(ctx, request.SKU, imageURLs, feedID)
 	if imageErr != nil {
 		result := Result{
 			ProductID: productID,
@@ -513,7 +546,6 @@ func (s *ProductSyncService) syncBaseProduct(ctx context.Context, summary *Summa
 		return
 	}
 
-	s.recordSyncEntry(ctx, summary.ExecutionID, productID, request.SKU, feedID, nil, syncdomain.SyncStepProduct, productAction)
 	imageFeedID := ""
 	imageAction := syncdomain.SyncActionCreate
 	if imageActionResp != nil {
