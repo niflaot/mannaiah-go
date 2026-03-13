@@ -24,7 +24,20 @@ func TestMapOrderToCommand(t *testing.T) {
 		BillingCity:      "Bogota",
 		CreatedAt:        orderCreatedAt,
 		ID:               9001,
-		Metadata:         map[string]string{billingDocumentMetaKey: "  98765 "},
+		Metadata: map[string]string{
+			billingDocumentMetaKey:                          "  98765 ",
+			"flock_checker_privacy_accept":                  "yes",
+			"flock_checker_privacy_accept_accepted_at":      "2026-03-13 13:05:22",
+			"flock_checker_privacy_accept_accepted_at_utc":  "2026-03-13T18:05:22Z",
+			"flock_checker_circle_optin":                    "yes",
+			"flock_checker_circle_optin_accepted_at":        "2026-03-13 13:05:22",
+			"flock_checker_circle_optin_accepted_at_utc":    "2026-03-13T18:05:22Z",
+			"flock_checker_terminos_extra":                  "no",
+			"flock_checker_terminos_extra_accepted_at":      "2026-03-13 13:05:22",
+			"flock_checker_terminos_extra_accepted_at_utc":  "2026-03-13T18:05:22Z",
+			"integration.woocommerce.order_id":              "ignored-for-contact-sync",
+			"flock_checker_unknown_dynamic_checker_enabled": "yes",
+		},
 	})
 	if !shouldProcess {
 		t.Fatalf("expected order to be processed")
@@ -50,6 +63,36 @@ func TestMapOrderToCommand(t *testing.T) {
 	if command.Metadata[syncMetadataOldestOrderAtKey] != "2024-01-02T03:04:05Z" {
 		t.Fatalf("command.Metadata[oldest_order_created_at] = %q, want %q", command.Metadata[syncMetadataOldestOrderAtKey], "2024-01-02T03:04:05Z")
 	}
+	if command.Metadata["flock_checker_privacy_accept"] != "yes" {
+		t.Fatalf("command.Metadata[flock_checker_privacy_accept] = %q, want %q", command.Metadata["flock_checker_privacy_accept"], "yes")
+	}
+	if command.Metadata["flock_checker_privacy_accept_accepted_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("command.Metadata[flock_checker_privacy_accept_accepted_at] = %q, want %q", command.Metadata["flock_checker_privacy_accept_accepted_at"], "2026-03-13 13:05:22")
+	}
+	if command.Metadata["flock_checker_privacy_accept_accepted_at_utc"] != "2026-03-13T18:05:22Z" {
+		t.Fatalf("command.Metadata[flock_checker_privacy_accept_accepted_at_utc] = %q, want %q", command.Metadata["flock_checker_privacy_accept_accepted_at_utc"], "2026-03-13T18:05:22Z")
+	}
+	if command.Metadata["flock_checker_circle_optin"] != "yes" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin] = %q, want %q", command.Metadata["flock_checker_circle_optin"], "yes")
+	}
+	if command.Metadata["flock_checker_circle_optin_accepted_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin_accepted_at] = %q, want %q", command.Metadata["flock_checker_circle_optin_accepted_at"], "2026-03-13 13:05:22")
+	}
+	if command.Metadata["flock_checker_circle_optin_accepted_at_utc"] != "2026-03-13T18:05:22Z" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin_accepted_at_utc] = %q, want %q", command.Metadata["flock_checker_circle_optin_accepted_at_utc"], "2026-03-13T18:05:22Z")
+	}
+	if command.Metadata["flock_checker_terminos_extra"] != "no" {
+		t.Fatalf("command.Metadata[flock_checker_terminos_extra] = %q, want %q", command.Metadata["flock_checker_terminos_extra"], "no")
+	}
+	if command.Metadata["flock_checker_terminos_extra_accepted_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("command.Metadata[flock_checker_terminos_extra_accepted_at] = %q, want %q", command.Metadata["flock_checker_terminos_extra_accepted_at"], "2026-03-13 13:05:22")
+	}
+	if command.Metadata["flock_checker_terminos_extra_accepted_at_utc"] != "2026-03-13T18:05:22Z" {
+		t.Fatalf("command.Metadata[flock_checker_terminos_extra_accepted_at_utc] = %q, want %q", command.Metadata["flock_checker_terminos_extra_accepted_at_utc"], "2026-03-13T18:05:22Z")
+	}
+	if command.Metadata["flock_checker_unknown_dynamic_checker_enabled"] != "yes" {
+		t.Fatalf("command.Metadata[flock_checker_unknown_dynamic_checker_enabled] = %q, want %q", command.Metadata["flock_checker_unknown_dynamic_checker_enabled"], "yes")
+	}
 
 	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "   "})
 	if shouldProcess {
@@ -69,6 +112,32 @@ func TestMapOrderToCommand(t *testing.T) {
 	_, shouldProcess = mapOrderToCommand(port.WooOrder{BillingEmail: "user@example.com", BillingFirstName: "", BillingLastName: "Doe", BillingCompany: ""})
 	if shouldProcess {
 		t.Fatalf("expected order without personal names and company to be skipped")
+	}
+}
+
+// TestMapOrderToCommandBackfillsCircleOptInAcceptedAt verifies checker accepted-at fallback behavior.
+func TestMapOrderToCommandBackfillsCircleOptInAcceptedAt(t *testing.T) {
+	command, shouldProcess := mapOrderToCommand(port.WooOrder{
+		BillingEmail:     "user@example.com",
+		BillingFirstName: "First",
+		BillingLastName:  "Last",
+		CreatedAt:        time.Date(2026, time.March, 13, 18, 5, 22, 0, time.UTC),
+		ID:               9100,
+		Metadata: map[string]string{
+			"flock_checker_circle_optin": "yes",
+		},
+	})
+	if !shouldProcess {
+		t.Fatalf("expected order to be processed")
+	}
+	if command.Metadata["flock_checker_circle_optin"] != "yes" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin] = %q, want %q", command.Metadata["flock_checker_circle_optin"], "yes")
+	}
+	if command.Metadata["flock_checker_circle_optin_accepted_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin_accepted_at] = %q, want %q", command.Metadata["flock_checker_circle_optin_accepted_at"], "2026-03-13 13:05:22")
+	}
+	if command.Metadata["flock_checker_circle_optin_accepted_at_utc"] != "2026-03-13T18:05:22Z" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin_accepted_at_utc] = %q, want %q", command.Metadata["flock_checker_circle_optin_accepted_at_utc"], "2026-03-13T18:05:22Z")
 	}
 }
 

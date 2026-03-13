@@ -265,6 +265,53 @@ func TestUpsertByEmailDuplicateCreate(t *testing.T) {
 	}
 }
 
+// TestUpsertByEmailDuplicateDocumentFallbackByDocument verifies duplicate-document fallback lookup behavior.
+func TestUpsertByEmailDuplicateDocumentFallbackByDocument(t *testing.T) {
+	mock := &serviceMock{
+		createErr: fmt.Errorf("create failed: %w", contactport.ErrDuplicateDocument),
+		listSequence: []*contactapplication.ListResult{
+			nil,
+			{Data: []contactdomain.Contact{}},
+			{Data: []contactdomain.Contact{{
+				ID:             "contact-doc-1",
+				Email:          "old.email@example.com",
+				DocumentType:   contactdomain.DocumentTypeCC,
+				DocumentNumber: "71264931",
+				FirstName:      "Juan",
+				LastName:       "Zapata",
+				Metadata:       map[string]string{"integration.source": "woocommerce"},
+			}}, TotalPages: 1},
+		},
+	}
+	upserter, err := NewUpserter(mock)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+
+	outcome, upsertErr := upserter.UpsertByEmail(context.Background(), port.ContactSyncCommand{
+		Email:          "jzapatam@gmail.com",
+		FirstName:      "Juan",
+		LastName:       "Zapata",
+		DocumentType:   "CC",
+		DocumentNumber: "71264931",
+		Metadata: map[string]string{
+			"flock_checker_privacy_accept": "yes",
+		},
+	})
+	if upsertErr != nil {
+		t.Fatalf("UpsertByEmail() error = %v", upsertErr)
+	}
+	if outcome != port.UpsertOutcomeUpdated {
+		t.Fatalf("outcome = %q, want %q", outcome, port.UpsertOutcomeUpdated)
+	}
+	if len(mock.updateIDs) != 1 || mock.updateIDs[0] != "contact-doc-1" {
+		t.Fatalf("updateIDs = %v, want [contact-doc-1]", mock.updateIDs)
+	}
+	if mock.updates[0].Metadata == nil || (*mock.updates[0].Metadata)["flock_checker_privacy_accept"] != "yes" {
+		t.Fatalf("updates[0].Metadata = %#v, want flock_checker_privacy_accept=yes", mock.updates[0].Metadata)
+	}
+}
+
 // TestFindByEmailError verifies list error handling behavior.
 func TestFindByEmailError(t *testing.T) {
 	mock := &serviceMock{listErr: errorspkg.New("list failed")}
@@ -275,6 +322,19 @@ func TestFindByEmailError(t *testing.T) {
 
 	if _, findErr := upserter.findByEmail(context.Background(), "x@example.com"); findErr == nil {
 		t.Fatalf("expected findByEmail() error")
+	}
+}
+
+// TestFindByDocumentError verifies list error handling behavior for document fallback queries.
+func TestFindByDocumentError(t *testing.T) {
+	mock := &serviceMock{listErr: errorspkg.New("list failed")}
+	upserter, err := NewUpserter(mock)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+
+	if _, findErr := upserter.findByDocument(context.Background(), "CC", "1"); findErr == nil {
+		t.Fatalf("expected findByDocument() error")
 	}
 }
 

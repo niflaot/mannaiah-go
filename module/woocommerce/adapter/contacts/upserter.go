@@ -18,6 +18,11 @@ var (
 	ErrNilService = errors.New("contacts upserter service must not be nil")
 )
 
+const (
+	// findByDocumentPageSize defines page size values used by document fallback lookup flows.
+	findByDocumentPageSize = 100
+)
+
 // Upserter defines contact upsert behavior backed by contacts application services.
 type Upserter struct {
 	// service defines contacts application service dependencies.
@@ -71,6 +76,12 @@ func (u *Upserter) UpsertByEmail(ctx context.Context, command port.ContactSyncCo
 				return "", findErr
 			}
 			if latest == nil {
+				latest, findErr = u.findByDocument(ctx, command.DocumentType, command.DocumentNumber)
+				if findErr != nil {
+					return "", findErr
+				}
+			}
+			if latest == nil {
 				return "", fmt.Errorf("create contact for woocommerce sync: %w", createErr)
 			}
 			if !hasMeaningfulChange(*latest, command, normalizedMetadata) {
@@ -112,6 +123,51 @@ func (u *Upserter) findByEmail(ctx context.Context, email string) (*contactdomai
 
 	contact := result.Data[0]
 	return &contact, nil
+}
+
+// findByDocument retrieves an optional contact by document identity values.
+func (u *Upserter) findByDocument(ctx context.Context, documentType string, documentNumber string) (*contactdomain.Contact, error) {
+	normalizedType := strings.TrimSpace(documentType)
+	normalizedNumber := strings.TrimSpace(documentNumber)
+	if normalizedType == "" || normalizedNumber == "" {
+		return nil, nil
+	}
+
+	page := 1
+	for {
+		result, err := u.service.List(ctx, contactport.ListQuery{
+			Page:  page,
+			Limit: findByDocumentPageSize,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list contacts by document: %w", err)
+		}
+		for index := range result.Data {
+			candidate := result.Data[index]
+			if !strings.EqualFold(strings.TrimSpace(string(candidate.DocumentType)), normalizedType) {
+				continue
+			}
+			if strings.TrimSpace(candidate.DocumentNumber) != normalizedNumber {
+				continue
+			}
+
+			return &candidate, nil
+		}
+
+		if len(result.Data) == 0 {
+			break
+		}
+		totalPages := result.TotalPages
+		if totalPages <= 0 {
+			totalPages = 1
+		}
+		if page >= totalPages {
+			break
+		}
+		page++
+	}
+
+	return nil, nil
 }
 
 // updateExisting applies update payload values to existing contacts.

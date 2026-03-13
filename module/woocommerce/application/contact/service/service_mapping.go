@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -9,10 +10,18 @@ import (
 )
 
 const (
-	syncMetadataSourceKey        = "integration.source"
-	syncMetadataSourceValue      = "woocommerce"
-	syncMetadataOldestOrderIDKey = "integration.woocommerce.oldest_order_id"
-	syncMetadataOldestOrderAtKey = "integration.woocommerce.oldest_order_created_at"
+	syncMetadataSourceKey                 = "integration.source"
+	syncMetadataSourceValue               = "woocommerce"
+	syncMetadataOldestOrderIDKey          = "integration.woocommerce.oldest_order_id"
+	syncMetadataOldestOrderAtKey          = "integration.woocommerce.oldest_order_created_at"
+	checkerMetadataPrefix                 = "flock_checker_"
+	checkerMetadataAcceptedAtSuffix       = "_accepted_at"
+	checkerMetadataAcceptedAtUTCSuffix    = "_accepted_at_utc"
+	checkerMetadataAcceptedAtLocalLayout  = "2006-01-02 15:04:05"
+	checkerMetadataAcceptedAtLocalZone    = "America/Bogota"
+	checkerMetadataAcceptedAtFixedZone    = "UTC-05"
+	checkerMetadataAcceptedAtFixedOffset  = -5 * 60 * 60
+	checkerMetadataAcceptedValueConfirmed = "yes"
 )
 
 // mapOrderToCommand maps WooCommerce orders into contact upsert command values.
@@ -54,7 +63,7 @@ func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
 		DocumentType:   documentType,
 		DocumentNumber: documentNumber,
 		CreatedAt:      createdAt,
-		Metadata:       buildSyncMetadata(order.ID, createdAt),
+		Metadata:       buildSyncMetadata(order.ID, createdAt, order.Metadata),
 	}, true
 }
 
@@ -90,7 +99,7 @@ func resolveCreatedAt(value time.Time) *time.Time {
 }
 
 // buildSyncMetadata resolves sync metadata values stored on synchronized contacts.
-func buildSyncMetadata(orderID int, createdAt *time.Time) map[string]string {
+func buildSyncMetadata(orderID int, createdAt *time.Time, orderMetadata map[string]string) map[string]string {
 	metadata := map[string]string{
 		syncMetadataSourceKey: syncMetadataSourceValue,
 	}
@@ -100,6 +109,99 @@ func buildSyncMetadata(orderID int, createdAt *time.Time) map[string]string {
 	if createdAt != nil {
 		metadata[syncMetadataOldestOrderAtKey] = createdAt.UTC().Format(time.RFC3339)
 	}
+	mergeCheckerMetadata(metadata, orderMetadata, createdAt)
 
 	return metadata
+}
+
+// mergeCheckerMetadata maps Woo metadata checker key groups into contact metadata payload values.
+func mergeCheckerMetadata(target map[string]string, source map[string]string, createdAt *time.Time) {
+	if len(source) == 0 {
+		return
+	}
+
+	baseKeys := checkerMetadataKeys(source)
+	for _, baseKey := range baseKeys {
+		decision := normalizeCheckerDecision(source[baseKey])
+		if decision == "" {
+			continue
+		}
+		target[baseKey] = decision
+
+		acceptedAtKey := baseKey + checkerMetadataAcceptedAtSuffix
+		acceptedAtUTCKey := baseKey + checkerMetadataAcceptedAtUTCSuffix
+
+		acceptedAt := strings.TrimSpace(source[acceptedAtKey])
+		acceptedAtUTC := strings.TrimSpace(source[acceptedAtUTCKey])
+
+		if decision == checkerMetadataAcceptedValueConfirmed {
+			fallbackAcceptedAt, fallbackAcceptedAtUTC := checkerAcceptedAtFallback(createdAt)
+			if acceptedAt == "" {
+				acceptedAt = fallbackAcceptedAt
+			}
+			if acceptedAtUTC == "" {
+				acceptedAtUTC = fallbackAcceptedAtUTC
+			}
+		}
+
+		if acceptedAt != "" {
+			target[acceptedAtKey] = acceptedAt
+		}
+		if acceptedAtUTC != "" {
+			target[acceptedAtUTCKey] = acceptedAtUTC
+		}
+	}
+}
+
+// checkerMetadataKeys resolves checker decision-key metadata values from order metadata maps.
+func checkerMetadataKeys(source map[string]string) []string {
+	keys := make([]string, 0, len(source))
+	for key := range source {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			continue
+		}
+		if !strings.HasPrefix(trimmedKey, checkerMetadataPrefix) {
+			continue
+		}
+		if strings.HasSuffix(trimmedKey, checkerMetadataAcceptedAtSuffix) || strings.HasSuffix(trimmedKey, checkerMetadataAcceptedAtUTCSuffix) {
+			continue
+		}
+
+		keys = append(keys, trimmedKey)
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+
+	sort.Strings(keys)
+	return keys
+}
+
+// normalizeCheckerDecision normalizes checker decision values to lowercase yes/no values when possible.
+func normalizeCheckerDecision(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if strings.EqualFold(trimmed, "yes") {
+		return "yes"
+	}
+	if strings.EqualFold(trimmed, "no") {
+		return "no"
+	}
+
+	return trimmed
+}
+
+// checkerAcceptedAtFallback resolves fallback checker accepted-at timestamps from source order creation timestamps.
+func checkerAcceptedAtFallback(createdAt *time.Time) (string, string) {
+	if createdAt == nil || createdAt.IsZero() {
+		return "", ""
+	}
+
+	utc := createdAt.UTC()
+	location, err := time.LoadLocation(checkerMetadataAcceptedAtLocalZone)
+	if err != nil {
+		location = time.FixedZone(checkerMetadataAcceptedAtFixedZone, checkerMetadataAcceptedAtFixedOffset)
+	}
+
+	return utc.In(location).Format(checkerMetadataAcceptedAtLocalLayout), utc.Format(time.RFC3339)
 }

@@ -53,6 +53,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.3.6] - 2026-03-13
+- Bump service/version references and badges to `v1.3.6`.
+- Fix WooCommerce contact sync metadata mapping (`POST /woo/sync/contacts`) to propagate checker consent keys from order metadata into contact metadata:
+  - `flock_checker_<key>`
+  - `flock_checker_<key>_accepted_at`
+  - `flock_checker_<key>_accepted_at_utc`
+- Add fallback accepted-at timestamp generation for checker values set to `yes` when source order metadata omits accepted-at fields.
+- Fix duplicate-document contact sync behavior:
+  - when contact creation fails with duplicate document constraints, fallback lookup now searches existing contacts by `(documentType, documentNumber)` and updates that contact instead of failing the sync upsert.
+- Add/extend unit coverage for checker metadata propagation and duplicate-document fallback update flows.
+
 ### [v1.3.5] - 2026-03-13
 - Bump service/version references and badges to `v1.3.5`.
 - Extend WooCommerce order-to-contact sync metadata extraction for checker payloads:
