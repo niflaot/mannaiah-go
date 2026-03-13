@@ -53,7 +53,7 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.3.5] - Pending Release
+### [v1.3.5] - 2026-03-13
 - Bump service/version references and badges to `v1.3.5`.
 - Extend WooCommerce order-to-contact sync metadata extraction for checker payloads:
   - `flock_checker_<key>`
