@@ -53,6 +53,23 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.3.5] - Pending Release
+- Bump service/version references and badges to `v1.3.5`.
+- Extend WooCommerce order-to-contact sync metadata extraction for checker payloads:
+  - `flock_checker_<key>`
+  - `flock_checker_<key>_accepted_at`
+  - `flock_checker_<key>_accepted_at_utc`
+- Preserve checker metadata dynamically for custom keys (for example, `flock_checker_terminos_extra`).
+- Ensure `flock_checker_circle_optin=yes` syncs accepted-at metadata even when timestamps are absent in order metadata (fallback to order creation timestamp).
+- Add protected contact consent helper endpoints (requires `contacts:manage`):
+  - `POST /contacts/optin` (by email)
+  - `POST /contacts/optout` (by email)
+- Persist opt-in/out actions in contact metadata keys:
+  - `flock_checker_circle_optin`
+  - `flock_checker_circle_optin_accepted_at`
+  - `flock_checker_circle_optin_accepted_at_utc`
+- Extend contacts OpenAPI/runtime/docs and add unit coverage for new consent routes and Woo checker metadata mapping.
+
 ### [v1.3.4] - Pending Release
 - Bump service/version references and badges to `v1.3.4`.
 - Add explicit gallery sort fields for drag-and-drop ordering:

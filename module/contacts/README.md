@@ -21,6 +21,8 @@
 - Endpoints:
   - `POST /contacts`
   - `GET /contacts` (supports `metadataKey` and `metadataValue` filters)
+  - `POST /contacts/optin` (updates circle opt-in metadata by email; requires `contacts:manage`)
+  - `POST /contacts/optout` (updates circle opt-in metadata by email; requires `contacts:manage`)
   - `GET /contacts/:id`
   - `PATCH /contacts/:id`
   - `DELETE /contacts/:id`

@@ -8,11 +8,20 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Paths.Value("/contacts") == nil {
 		t.Fatalf("expected /contacts path spec")
 	}
+	if spec.Paths.Value("/contacts/optin") == nil {
+		t.Fatalf("expected /contacts/optin path spec")
+	}
+	if spec.Paths.Value("/contacts/optout") == nil {
+		t.Fatalf("expected /contacts/optout path spec")
+	}
 	if spec.Paths.Value("/contacts/{id}") == nil {
 		t.Fatalf("expected /contacts/{id} path spec")
 	}
 	if spec.Components == nil || spec.Components.Schemas["ContactCreate"] == nil {
 		t.Fatalf("expected ContactCreate schema")
+	}
+	if spec.Components == nil || spec.Components.Schemas["ContactConsentByEmail"] == nil {
+		t.Fatalf("expected ContactConsentByEmail schema")
 	}
 	if spec.Components == nil || spec.Components.SecuritySchemes[bearerSecurityScheme] == nil {
 		t.Fatalf("expected bearer security scheme")
@@ -56,5 +65,23 @@ func TestOpenAPISpec(t *testing.T) {
 	contactByIDPath := spec.Paths.Value("/contacts/{id}")
 	if contactByIDPath == nil || contactByIDPath.Patch == nil || contactByIDPath.Patch.Responses == nil || contactByIDPath.Patch.Responses.Status(409) == nil {
 		t.Fatalf("expected conflict response on contacts update operation")
+	}
+
+	optInPath := spec.Paths.Value("/contacts/optin")
+	if optInPath == nil || optInPath.Post == nil {
+		t.Fatalf("expected opt-in endpoint operation")
+	}
+	if optInPath.Post.Security == nil || len(*optInPath.Post.Security) == 0 {
+		t.Fatalf("expected bearer security requirements on opt-in operation")
+	}
+	if optInPath.Post.RequestBody == nil || optInPath.Post.RequestBody.Value == nil {
+		t.Fatalf("expected opt-in request body schema")
+	}
+	optOutPath := spec.Paths.Value("/contacts/optout")
+	if optOutPath == nil || optOutPath.Post == nil {
+		t.Fatalf("expected opt-out endpoint operation")
+	}
+	if optOutPath.Post.Responses == nil || optOutPath.Post.Responses.Status(404) == nil {
+		t.Fatalf("expected not-found response on opt-out operation")
 	}
 }

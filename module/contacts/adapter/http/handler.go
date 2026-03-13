@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"mannaiah/module/contacts/application"
 	"mannaiah/module/contacts/domain"
@@ -36,6 +37,8 @@ type Handler struct {
 	service application.Service
 	// authorizer defines optional auth dependency for protected endpoints.
 	authorizer Authorizer
+	// now resolves current timestamps for metadata updates.
+	now func() time.Time
 }
 
 // createRequest defines request payload for contact creation.
@@ -121,7 +124,11 @@ func NewHandler(service application.Service, authorizers ...Authorizer) (*Handle
 		authorizer = authorizers[0]
 	}
 
-	return &Handler{service: service, authorizer: authorizer}, nil
+	return &Handler{
+		service:    service,
+		authorizer: authorizer,
+		now:        time.Now,
+	}, nil
 }
 
 // SetAuthorizer configures auth dependencies for protected endpoints.
@@ -137,6 +144,8 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/contacts", h.protect("contacts:create", h.create))
 	router.Get("/contacts", h.protect("contacts:read", h.findAll))
+	router.Post("/contacts/optin", h.protect("contacts:manage", h.optInByEmail))
+	router.Post("/contacts/optout", h.protect("contacts:manage", h.optOutByEmail))
 	router.Get("/contacts/:id", h.protect("contacts:read", h.findOne))
 	router.Patch("/contacts/:id", h.protect("contacts:update", h.update))
 	router.Delete("/contacts/:id", h.protect("contacts:delete", h.remove))
