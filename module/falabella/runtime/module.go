@@ -46,6 +46,8 @@ type Module struct {
 	handler *falabellahttp.Handler
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
+	// syncRecorder defines optional sync-run recording dependencies.
+	syncRecorder port.SyncRecorder
 	// scheduler defines optional cron scheduler dependencies.
 	scheduler corecron.Scheduler
 	// schedulerEntryID defines the cron entry identifier for feed status resolution.
@@ -123,8 +125,16 @@ func New(cfg Config, providedLogger *zap.Logger, catalogs ...port.ProductCatalog
 	}
 	handler.SetImageTranscodeConfig(resolveImageTranscodeConfig(cfg))
 
-	module := &Module{cfg: cfg, service: service, productSyncService: productSyncService, handler: handler, logger: logger}
+	module := &Module{
+		cfg:                cfg,
+		service:            service,
+		productSyncService: productSyncService,
+		handler:            handler,
+		logger:             logger,
+		syncRecorder:       port.NoopSyncRecorder{},
+	}
 	productSyncService.SetLogger(logger)
+	handler.SetSyncRecorder(module.syncRecorder)
 	module.validateAtStartup(resolveContext(context.Background()))
 	return module, nil
 }
@@ -169,6 +179,7 @@ func (m *Module) ConfigureSyncStatus(db *gorm.DB) error {
 		return handlerErr
 	}
 	handler.SetImageTranscodeConfig(resolveImageTranscodeConfig(m.cfg))
+	handler.SetSyncRecorder(m.syncRecorder)
 	m.handler = handler
 
 	return nil
@@ -190,6 +201,21 @@ func (m *Module) SetAuthorizer(authorizer falabellahttp.Authorizer) {
 	}
 
 	m.handler.SetAuthorizer(authorizer)
+}
+
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (m *Module) SetSyncRecorder(recorder port.SyncRecorder) {
+	if m == nil {
+		return
+	}
+	if recorder == nil {
+		m.syncRecorder = port.NoopSyncRecorder{}
+	} else {
+		m.syncRecorder = recorder
+	}
+	if m.handler != nil {
+		m.handler.SetSyncRecorder(m.syncRecorder)
+	}
 }
 
 // OpenAPISpec returns Falabella module OpenAPI documentation.

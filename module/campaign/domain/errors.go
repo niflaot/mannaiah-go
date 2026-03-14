@@ -1,0 +1,16 @@
+package domain
+
+import "errors"
+
+var (
+	// ErrInvalidID is returned when campaign id values are invalid.
+	ErrInvalidID = errors.New("campaign id is required")
+	// ErrInvalidName is returned when campaign name values are invalid.
+	ErrInvalidName = errors.New("campaign name is required")
+	// ErrInvalidSlug is returned when campaign slug values are invalid.
+	ErrInvalidSlug = errors.New("campaign slug is required")
+	// ErrNotFound is returned when campaign rows are missing.
+	ErrNotFound = errors.New("campaign not found")
+	// ErrSendConflict is returned when send operations are called after processing/sent states.
+	ErrSendConflict = errors.New("campaign cannot be sent in current status")
+)

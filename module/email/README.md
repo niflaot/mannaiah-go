@@ -1,0 +1,12 @@
+# Email Module
+
+Transactional email delivery module with provider abstraction and status tracking.
+
+## Key methods / endpoints / events
+- Methods:
+  - `Module.Service()`
+- Endpoints:
+  - `POST /email/send`
+  - `GET /email/deliveries/:id`
+  - `POST /email/webhooks/ses`
+- Events: none.

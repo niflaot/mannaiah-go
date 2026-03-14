@@ -193,7 +193,7 @@ func (s *ContactSyncService) processCommands(ctx context.Context, commands []por
 			defer workerWait.Done()
 			for command := range workChannel {
 				if err := ctx.Err(); err != nil {
-					resultChannel <- upsertResult{err: err}
+					resultChannel <- upsertResult{command: command, err: err}
 					continue
 				}
 
@@ -203,7 +203,7 @@ func (s *ContactSyncService) processCommands(ctx context.Context, commands []por
 					outcome, operationErr = s.target.UpsertByEmail(ctx, command)
 					return operationErr
 				})
-				resultChannel <- upsertResult{outcome: outcome, err: upsertErr}
+				resultChannel <- upsertResult{command: command, outcome: outcome, err: upsertErr}
 			}
 		}()
 	}
@@ -253,6 +253,7 @@ func (s *ContactSyncService) processCommands(ctx context.Context, commands []por
 		}
 
 		applyOutcome(summary, result.outcome)
+		s.stampMembership(ctx, result.command)
 	}
 
 	if dispatchErr := <-dispatchErrChannel; dispatchErr != nil && canceledErr == nil {

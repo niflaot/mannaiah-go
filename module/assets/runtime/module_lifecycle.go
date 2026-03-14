@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	assetsapplication "mannaiah/module/assets/application"
+	"mannaiah/module/assets/port"
 	corecron "mannaiah/module/core/cron"
 	"strings"
 	"time"
@@ -57,6 +58,14 @@ func (m *Module) Start(_ context.Context) error {
 	entryID, err := m.scheduler.AddFunc(cronSpec, func() {
 		tickCtx, cancel := context.WithTimeout(context.Background(), resolveWorkerTimeout(m.cfg.JPGWorkerTimeoutMS))
 		defer cancel()
+		runID := ""
+		if m.syncRecorder != nil {
+			recordRunID, recordErr := m.syncRecorder.StartRun(tickCtx, "assets.jpg_conversion", "cron")
+			if recordErr != nil {
+				m.logger.Warn("assets jpg worker sync recorder start failed", zap.Error(recordErr))
+			}
+			runID = recordRunID
+		}
 
 		result, runErr := m.service.RunJPGWorker(tickCtx, assetsapplication.JPGWorkerCommand{
 			Tags:        workerTags,
@@ -65,7 +74,18 @@ func (m *Module) Start(_ context.Context) error {
 		})
 		if runErr != nil {
 			m.logger.Warn("assets jpg worker failed", zap.Error(runErr))
+			if m.syncRecorder != nil && strings.TrimSpace(runID) != "" {
+				_ = m.syncRecorder.FailRun(tickCtx, runID, 0, 0, 0, 0, []port.SyncError{{
+					Type:    "worker",
+					Code:    "assets_jpg_worker_failed",
+					Message: runErr.Error(),
+				}})
+			}
 			return
+		}
+		if m.syncRecorder != nil && strings.TrimSpace(runID) != "" {
+			succeeded := result.Converted + result.Skipped
+			_ = m.syncRecorder.CompleteRun(tickCtx, runID, result.Scanned, succeeded, result.Failed, result.Skipped)
 		}
 
 		m.logger.Debug("assets jpg worker completed",

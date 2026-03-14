@@ -4,10 +4,16 @@ use (
 	.
 	./module/assets
 	./module/auth
+	./module/campaign
 	./module/contacts
 	./module/core
+	./module/email
 	./module/falabella
+	./module/membership
 	./module/orders
 	./module/products
+	./module/segment
+	./module/syncrecord
 	./module/woocommerce
+	./module/analytics
 )

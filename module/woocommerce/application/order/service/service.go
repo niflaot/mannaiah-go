@@ -97,6 +97,8 @@ type OrderSyncService struct {
 	sourceBreaker CircuitBreaker
 	// upsertBreaker guards order-upsert calls.
 	upsertBreaker CircuitBreaker
+	// syncRecorder defines optional sync-run recording dependencies.
+	syncRecorder port.SyncRecorder
 }
 
 // upsertResult defines command upsert result payload values.
@@ -131,7 +133,21 @@ func NewService(cfg SyncConfig, source port.OrderSource, target port.OrderSyncTa
 		cfg:           normalizeSyncConfig(cfg),
 		sourceBreaker: resolvedBreakers.Source,
 		upsertBreaker: resolvedBreakers.Upsert,
+		syncRecorder:  port.NoopSyncRecorder{},
 	}, nil
+}
+
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (s *OrderSyncService) SetSyncRecorder(recorder port.SyncRecorder) {
+	if s == nil {
+		return
+	}
+	if recorder == nil {
+		s.syncRecorder = port.NoopSyncRecorder{}
+		return
+	}
+
+	s.syncRecorder = recorder
 }
 
 // ValidateIntegration verifies sync preconditions and WooCommerce connectivity.

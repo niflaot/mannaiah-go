@@ -36,6 +36,8 @@ type Module struct {
 	schedulerEntryID corecron.EntryID
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
+	// syncRecorder defines optional sync-run recording dependencies.
+	syncRecorder port.SyncRecorder
 	// mutex guards scheduler lifecycle state.
 	mutex sync.Mutex
 	// started reports whether scheduler lifecycle start logic has completed.
@@ -78,10 +80,11 @@ func NewWithConfig(cfg Config, db *gorm.DB, storage port.Storage, providedLogger
 	})
 
 	return &Module{
-		cfg:     cfg,
-		handler: handler,
-		service: service,
-		logger:  resolveLogger(providedLogger),
+		cfg:          cfg,
+		handler:      handler,
+		service:      service,
+		logger:       resolveLogger(providedLogger),
+		syncRecorder: port.NoopSyncRecorder{},
 	}, nil
 }
 
@@ -110,6 +113,19 @@ func (m *Module) SetAuthorizer(authorizer assethttp.Authorizer) {
 	}
 
 	m.handler.SetAuthorizer(authorizer)
+}
+
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (m *Module) SetSyncRecorder(recorder port.SyncRecorder) {
+	if m == nil {
+		return
+	}
+	if recorder == nil {
+		m.syncRecorder = port.NoopSyncRecorder{}
+		return
+	}
+
+	m.syncRecorder = recorder
 }
 
 // OpenAPISpec returns assets-module OpenAPI documentation.

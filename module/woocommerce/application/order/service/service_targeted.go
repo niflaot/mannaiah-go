@@ -20,8 +20,13 @@ type singleOrderSource interface {
 }
 
 // syncOrdersWithResolver performs sync lifecycle behavior using provided command-resolution behavior.
-func (s *OrderSyncService) syncOrdersWithResolver(ctx context.Context, trigger string, resolver commandResolver) (*SyncSummary, error) {
-	summary := &SyncSummary{Trigger: normalizeTrigger(trigger)}
+func (s *OrderSyncService) syncOrdersWithResolver(ctx context.Context, trigger string, resolver commandResolver) (summary *SyncSummary, err error) {
+	summary = &SyncSummary{Trigger: normalizeTrigger(trigger)}
+	runID := s.startSyncRunRecord(ctx, summary.Trigger)
+	defer func() {
+		s.finishSyncRunRecord(ctx, runID, summary, err)
+	}()
+
 	s.publishEvent(ctx, wooorderevent.NewSyncStartedEvent(summary.Trigger))
 
 	if err := s.ValidateIntegration(ctx); err != nil {

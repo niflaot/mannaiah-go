@@ -195,6 +195,31 @@ func (m *Module) SetAuthorizer(authorizer http.Authorizer) {
 	m.handler.SetAuthorizer(authorizer)
 }
 
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (m *Module) SetSyncRecorder(recorder port.SyncRecorder) {
+	if m == nil {
+		return
+	}
+
+	if contactSyncService, ok := m.contactsSyncService.(*woocontactservice.ContactSyncService); ok {
+		contactSyncService.SetSyncRecorder(recorder)
+	}
+	if orderSyncService, ok := m.ordersSyncService.(*wooorderservice.OrderSyncService); ok {
+		orderSyncService.SetSyncRecorder(recorder)
+	}
+}
+
+// SetMembershipStamper configures optional membership stamp dependencies.
+func (m *Module) SetMembershipStamper(stamper port.MembershipStamper) {
+	if m == nil {
+		return
+	}
+
+	if contactSyncService, ok := m.contactsSyncService.(*woocontactservice.ContactSyncService); ok {
+		contactSyncService.SetMembershipStamper(stamper)
+	}
+}
+
 // OpenAPISpec returns WooCommerce module OpenAPI documentation.
 func (m *Module) OpenAPISpec() *openapi3.T {
 	return OpenAPISpec()

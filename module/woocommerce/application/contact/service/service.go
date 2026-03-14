@@ -102,10 +102,16 @@ type ContactSyncService struct {
 	sourceBreaker CircuitBreaker
 	// upsertBreaker guards contact-upsert calls.
 	upsertBreaker CircuitBreaker
+	// syncRecorder defines optional sync-run recording dependencies.
+	syncRecorder port.SyncRecorder
+	// membershipStamper defines optional membership stamp dependencies.
+	membershipStamper port.MembershipStamper
 }
 
 // upsertResult defines command upsert result payload values.
 type upsertResult struct {
+	// command defines source sync command values.
+	command port.ContactSyncCommand
 	// outcome defines upsert outcomes.
 	outcome port.UpsertOutcome
 	// err defines upsert execution errors.
@@ -129,14 +135,42 @@ func NewService(cfg SyncConfig, source port.OrderSource, target port.ContactSync
 	resolvedBreakers := resolveCircuitBreakers(breakers)
 
 	return &ContactSyncService{
-		source:        source,
-		target:        target,
-		publisher:     woocontactevent.ResolvePublisher(publisher),
-		logger:        resolveLogger(providedLogger),
-		cfg:           normalizeSyncConfig(cfg),
-		sourceBreaker: resolvedBreakers.Source,
-		upsertBreaker: resolvedBreakers.Upsert,
+		source:            source,
+		target:            target,
+		publisher:         woocontactevent.ResolvePublisher(publisher),
+		logger:            resolveLogger(providedLogger),
+		cfg:               normalizeSyncConfig(cfg),
+		sourceBreaker:     resolvedBreakers.Source,
+		upsertBreaker:     resolvedBreakers.Upsert,
+		syncRecorder:      port.NoopSyncRecorder{},
+		membershipStamper: port.NoopMembershipStamper{},
 	}, nil
+}
+
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (s *ContactSyncService) SetSyncRecorder(recorder port.SyncRecorder) {
+	if s == nil {
+		return
+	}
+	if recorder == nil {
+		s.syncRecorder = port.NoopSyncRecorder{}
+		return
+	}
+
+	s.syncRecorder = recorder
+}
+
+// SetMembershipStamper configures optional membership stamp dependencies.
+func (s *ContactSyncService) SetMembershipStamper(stamper port.MembershipStamper) {
+	if s == nil {
+		return
+	}
+	if stamper == nil {
+		s.membershipStamper = port.NoopMembershipStamper{}
+		return
+	}
+
+	s.membershipStamper = stamper
 }
 
 // ValidateIntegration verifies sync preconditions and WooCommerce connectivity.
@@ -174,8 +208,13 @@ func (s *ContactSyncService) SyncContactByEmail(ctx context.Context, trigger str
 }
 
 // syncContactsWithLoader performs contact synchronization using provided page-loader behavior.
-func (s *ContactSyncService) syncContactsWithLoader(ctx context.Context, trigger string, loader pageLoader, requireCommands bool) (*SyncSummary, error) {
-	summary := &SyncSummary{Trigger: normalizeTrigger(trigger)}
+func (s *ContactSyncService) syncContactsWithLoader(ctx context.Context, trigger string, loader pageLoader, requireCommands bool) (summary *SyncSummary, err error) {
+	summary = &SyncSummary{Trigger: normalizeTrigger(trigger)}
+	runID := s.startSyncRunRecord(ctx, summary.Trigger)
+	defer func() {
+		s.finishSyncRunRecord(ctx, runID, summary, err)
+	}()
+
 	s.publishEvent(ctx, woocontactevent.NewSyncStartedEvent(summary.Trigger))
 
 	if err := s.ValidateIntegration(ctx); err != nil {

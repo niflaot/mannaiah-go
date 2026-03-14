@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v1.3.7-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.0.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -15,6 +15,12 @@ Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture
 - `module/assets`: asset/storage domain.
 - `module/falabella`: Falabella integration module.
 - `module/woocommerce`: WooCommerce integration module.
+- `module/syncrecord`: centralized sync execution registry and query API.
+- `module/membership`: auditable consent/membership stamping module.
+- `module/analytics`: optional ClickHouse analytics integration module.
+- `module/segment`: audience segment definitions and resolution module.
+- `module/email`: optional email delivery tracking and webhook module.
+- `module/campaign`: campaign lifecycle and fan-out orchestration module.
 - `e2e/`: root end-to-end validation flows.
 
 ## Key Runtime Endpoints
@@ -57,6 +63,14 @@ Use these env vars to convert tagged assets to `.jpg` through scheduled jobs:
 
 ```bash
 for module in module/core module/auth module/contacts module/orders module/assets module/products module/falabella module/woocommerce; do
+  (cd "$module" && go test ./...)
+done
+```
+
+Extended module sweep including marketing modules:
+
+```bash
+for module in module/syncrecord module/membership module/analytics module/segment module/email module/campaign; do
   (cd "$module" && go test ./...)
 done
 ```

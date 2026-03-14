@@ -31,6 +31,28 @@ type Authorizer interface {
 	IsForbidden(err error) bool
 }
 
+// MembershipStampCommand defines membership stamp payload values.
+type MembershipStampCommand struct {
+	// ContactID defines optional contact identifier values.
+	ContactID string
+	// Email defines optional contact lookup email values.
+	Email string
+	// Channel defines channel values.
+	Channel string
+	// Action defines action values.
+	Action string
+	// Source defines source values.
+	Source string
+	// OccurredAt defines optional action timestamp values.
+	OccurredAt *time.Time
+}
+
+// MembershipStamper defines optional membership stamp behavior.
+type MembershipStamper interface {
+	// Stamp persists membership stamps and updates latest status snapshots.
+	Stamp(ctx context.Context, command MembershipStampCommand) error
+}
+
 // Handler defines HTTP route handlers for contacts.
 type Handler struct {
 	// service defines contact use-case dependency.
@@ -39,6 +61,8 @@ type Handler struct {
 	authorizer Authorizer
 	// now resolves current timestamps for metadata updates.
 	now func() time.Time
+	// membershipStamper defines optional membership stamp dependencies.
+	membershipStamper MembershipStamper
 }
 
 // createRequest defines request payload for contact creation.
@@ -138,6 +162,15 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	}
 
 	h.authorizer = authorizer
+}
+
+// SetMembershipStamper configures optional membership stamp dependencies.
+func (h *Handler) SetMembershipStamper(stamper MembershipStamper) {
+	if h == nil {
+		return
+	}
+
+	h.membershipStamper = stamper
 }
 
 // RegisterRoutes registers contact CRUD endpoints.

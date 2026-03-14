@@ -75,6 +75,8 @@ type Handler struct {
 	authorizer Authorizer
 	// imageTranscode defines optional image-transcoding endpoint configuration.
 	imageTranscode ImageTranscodeConfig
+	// syncRecorder defines optional sync-run recording dependencies.
+	syncRecorder port.SyncRecorder
 }
 
 // ImageTranscodeConfig defines image-transcoding endpoint behavior configuration values.
@@ -109,6 +111,7 @@ func NewHandler(service Service, productSyncService ProductSyncService, syncStat
 		service:            service,
 		productSyncService: productSyncService,
 		syncStatusService:  syncStatusService,
+		syncRecorder:       port.NoopSyncRecorder{},
 		imageTranscode: ImageTranscodeConfig{
 			RequestTimeout: 15 * time.Second,
 			MaxInputBytes:  20 << 20,
@@ -155,6 +158,19 @@ func (h *Handler) SetImageTranscodeConfig(cfg ImageTranscodeConfig) {
 	h.imageTranscode = resolved
 }
 
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (h *Handler) SetSyncRecorder(recorder port.SyncRecorder) {
+	if h == nil {
+		return
+	}
+	if recorder == nil {
+		h.syncRecorder = port.NoopSyncRecorder{}
+		return
+	}
+
+	h.syncRecorder = recorder
+}
+
 // RegisterRoutes registers Falabella integration routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/falabella/images/transcoded", h.transcodeImage)
@@ -192,10 +208,13 @@ func (h *Handler) syncProducts(ctx corehttp.Context) error {
 		}
 	}
 
+	runID := h.startSyncRun(ctx.Context(), "falabella.products", "manual")
 	summary, err := h.productSyncService.SyncProducts(ctx.Context(), request.IDs)
 	if err != nil {
+		h.failSyncRun(ctx.Context(), runID, 0, 0, 0, err)
 		return h.mapError(err)
 	}
+	h.completeSyncRun(ctx.Context(), runID, summary.Requested, summary.Synced, summary.Failed, summary.Skipped)
 
 	return ctx.Status(200).JSON(summary)
 }
@@ -216,10 +235,13 @@ func shouldParseBody(ctx corehttp.Context) bool {
 
 // syncProductByID syncs one product to Falabella.
 func (h *Handler) syncProductByID(ctx corehttp.Context) error {
+	runID := h.startSyncRun(ctx.Context(), "falabella.products", "manual")
 	summary, err := h.productSyncService.SyncProduct(ctx.Context(), strings.TrimSpace(ctx.Params("id")))
 	if err != nil {
+		h.failSyncRun(ctx.Context(), runID, 0, 0, 0, err)
 		return h.mapError(err)
 	}
+	h.completeSyncRun(ctx.Context(), runID, summary.Requested, summary.Synced, summary.Failed, summary.Skipped)
 
 	return ctx.Status(200).JSON(summary)
 }
@@ -296,12 +318,51 @@ func (h *Handler) resolveFeedStatus(ctx corehttp.Context) error {
 		return corehttp.NewAppError(503, "sync_status_unavailable", errors.New("sync status service is not configured"))
 	}
 
+	runID := h.startSyncRun(ctx.Context(), "falabella.status_resolution", "manual")
 	result, err := h.syncStatusService.ResolveFeedStatus(ctx.Context(), strings.TrimSpace(ctx.Params("feedId")))
 	if err != nil {
+		h.failSyncRun(ctx.Context(), runID, 1, 0, 1, err)
 		return h.mapError(err)
 	}
+	h.completeSyncRun(ctx.Context(), runID, 1, 1, 0, 0)
 
 	return ctx.Status(200).JSON(result)
+}
+
+// startSyncRun starts sync recorder runs and ignores recorder failures.
+func (h *Handler) startSyncRun(ctx context.Context, kind string, trigger string) string {
+	if h == nil || h.syncRecorder == nil {
+		return ""
+	}
+
+	runID, err := h.syncRecorder.StartRun(ctx, kind, trigger)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(runID)
+}
+
+// completeSyncRun completes sync recorder runs and ignores recorder failures.
+func (h *Handler) completeSyncRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int) {
+	if h == nil || h.syncRecorder == nil || strings.TrimSpace(runID) == "" {
+		return
+	}
+
+	_ = h.syncRecorder.CompleteRun(ctx, runID, processed, succeeded, failed, skipped)
+}
+
+// failSyncRun fails sync recorder runs and ignores recorder failures.
+func (h *Handler) failSyncRun(ctx context.Context, runID string, processed int, succeeded int, skipped int, failure error) {
+	if h == nil || h.syncRecorder == nil || strings.TrimSpace(runID) == "" || failure == nil {
+		return
+	}
+
+	_ = h.syncRecorder.FailRun(ctx, runID, processed, succeeded, 1, skipped, []port.SyncError{{
+		Type:    "sync",
+		Code:    "falabella_sync_failed",
+		Message: failure.Error(),
+	}})
 }
 
 // protect wraps endpoint handlers with optional authentication and permission checks.

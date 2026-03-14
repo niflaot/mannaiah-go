@@ -68,9 +68,26 @@ func (h *Handler) updateCircleOptInByEmail(ctx corehttp.Context, decision string
 	if err != nil {
 		return h.mapError(err)
 	}
+	now := h.currentTime()
+	if h.membershipStamper != nil {
+		action := "opt_out"
+		if decision == circleOptInYesValue {
+			action = "opt_in"
+		}
+		if stampErr := h.membershipStamper.Stamp(ctx.Context(), MembershipStampCommand{
+			ContactID:  contact.ID,
+			Email:      contact.Email,
+			Channel:    "email",
+			Action:     action,
+			Source:     "api",
+			OccurredAt: &now,
+		}); stampErr != nil {
+			return h.mapError(stampErr)
+		}
+	}
 
 	metadata := cloneMetadata(contact.Metadata)
-	localAcceptedAt, utcAcceptedAt := consentAcceptedAtValues(h.currentTime())
+	localAcceptedAt, utcAcceptedAt := consentAcceptedAtValues(now)
 	metadata[circleOptInMetadataKey] = decision
 	switch decision {
 	case circleOptInYesValue:

@@ -30,7 +30,13 @@ steps:
           module/assets \
           module/products \
           module/falabella \
-          module/woocommerce
+          module/woocommerce \
+          module/syncrecord \
+          module/membership \
+          module/analytics \
+          module/segment \
+          module/email \
+          module/campaign
         do
           echo "Running tests for $module"
           (cd "$module" && go test ./...)
@@ -100,9 +106,29 @@ depends_on:
 
 trigger:
   event:
+    - push
     - tag
 
 steps:
+  - name: publish-main
+    image: plugins/docker
+    settings:
+      registry: docker.momlesstomato.dev
+      repo: docker.momlesstomato.dev/fl-docker/mannaiah-go
+      dockerfile: Dockerfile
+      username:
+        from_secret: nexus_username
+      password:
+        from_secret: nexus_password
+      tags:
+        - latest
+        - ${DRONE_COMMIT_SHA}
+    when:
+      event:
+        - push
+      branch:
+        - main
+
   - name: publish-tag
     image: plugins/docker
     settings:

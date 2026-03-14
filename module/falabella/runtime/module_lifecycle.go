@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"mannaiah/module/falabella/port"
 	"strings"
 	"time"
 
@@ -47,11 +48,28 @@ func (m *Module) Start(_ context.Context) error {
 	entryID, err := m.scheduler.AddFunc(cronSpec, func() {
 		tickCtx, cancel := context.WithTimeout(context.Background(), resolveRequestTimeout(m.cfg.RequestTimeoutMS))
 		defer cancel()
+		runID := ""
+		if m.syncRecorder != nil {
+			recordRunID, recordErr := m.syncRecorder.StartRun(tickCtx, "falabella.status_resolution", "cron")
+			if recordErr == nil {
+				runID = recordRunID
+			}
+		}
 
 		result, resolveErr := m.syncStatusService.ResolvePendingFeeds(tickCtx, batchSize)
 		if resolveErr != nil {
 			m.logger.Warn("falabella cron feed status resolution failed", zap.Error(resolveErr))
+			if m.syncRecorder != nil && strings.TrimSpace(runID) != "" {
+				_ = m.syncRecorder.FailRun(tickCtx, runID, 0, 0, 0, 0, []port.SyncError{{
+					Type:    "sync",
+					Code:    "falabella_status_resolution_failed",
+					Message: resolveErr.Error(),
+				}})
+			}
 			return
+		}
+		if m.syncRecorder != nil && strings.TrimSpace(runID) != "" {
+			_ = m.syncRecorder.CompleteRun(tickCtx, runID, result.Checked, result.Resolved, result.Errored, result.StillPending)
 		}
 
 		m.logger.Debug("falabella cron feed status resolution completed",
