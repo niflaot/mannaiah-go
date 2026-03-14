@@ -195,6 +195,63 @@ func TestUpsertByEmailUpdate(t *testing.T) {
 	}
 }
 
+// TestUpsertByEmailRemovesCircleMetadata verifies legacy circle checker metadata is removed from contacts.
+func TestUpsertByEmailRemovesCircleMetadata(t *testing.T) {
+	mock := &serviceMock{
+		listResult: &contactapplication.ListResult{
+			Data: []contactdomain.Contact{{
+				ID:        "contact-circle-1",
+				Email:     "existing@example.com",
+				FirstName: "Existing",
+				LastName:  "User",
+				Metadata: map[string]string{
+					"integration.source":                         "woocommerce",
+					"flock_checker_circle_optin":                 "yes",
+					"flock_checker_circle_optin_accepted_at":     "2026-03-13 13:05:22",
+					"flock_checker_circle_optin_accepted_at_utc": "2026-03-13T18:05:22Z",
+				},
+			}},
+		},
+	}
+
+	upserter, err := NewUpserter(mock)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+
+	outcome, upsertErr := upserter.UpsertByEmail(context.Background(), port.ContactSyncCommand{
+		Email:     "existing@example.com",
+		FirstName: "Existing",
+		LastName:  "User",
+		Metadata:  map[string]string{"integration.source": "woocommerce"},
+	})
+	if upsertErr != nil {
+		t.Fatalf("UpsertByEmail() error = %v", upsertErr)
+	}
+	if outcome != port.UpsertOutcomeUpdated {
+		t.Fatalf("outcome = %q, want %q", outcome, port.UpsertOutcomeUpdated)
+	}
+	if len(mock.updates) != 1 {
+		t.Fatalf("len(updates) = %d, want 1", len(mock.updates))
+	}
+	if mock.updates[0].Metadata == nil {
+		t.Fatalf("updates[0].Metadata should not be nil")
+	}
+	metadata := *mock.updates[0].Metadata
+	if _, exists := metadata["flock_checker_circle_optin"]; exists {
+		t.Fatalf("expected flock_checker_circle_optin metadata to be removed")
+	}
+	if _, exists := metadata["flock_checker_circle_optin_accepted_at"]; exists {
+		t.Fatalf("expected flock_checker_circle_optin_accepted_at metadata to be removed")
+	}
+	if _, exists := metadata["flock_checker_circle_optin_accepted_at_utc"]; exists {
+		t.Fatalf("expected flock_checker_circle_optin_accepted_at_utc metadata to be removed")
+	}
+	if metadata["integration.source"] != "woocommerce" {
+		t.Fatalf("metadata[integration.source] = %q, want %q", metadata["integration.source"], "woocommerce")
+	}
+}
+
 // TestUpsertByEmailUnchanged verifies unchanged-path behavior.
 func TestUpsertByEmailUnchanged(t *testing.T) {
 	mock := &serviceMock{
@@ -532,11 +589,8 @@ func TestPrivateHelpers(t *testing.T) {
 			"flock_checker_circle_optin_accepted_at": "2026-03-13 13:05:22",
 		},
 	)
-	if merged["flock_checker_circle_optin"] != "yes" {
-		t.Fatalf("merged opt-in decision = %q, want yes", merged["flock_checker_circle_optin"])
-	}
-	if _, exists := merged["flock_checker_circle_optin_rejected_at"]; exists {
-		t.Fatalf("expected rejected_at metadata to be cleared when opt-in is yes")
+	if len(merged) != 0 {
+		t.Fatalf("expected circle metadata to be removed, got %#v", merged)
 	}
 	merged = mergeMetadata(
 		map[string]string{
@@ -547,14 +601,8 @@ func TestPrivateHelpers(t *testing.T) {
 			"flock_checker_circle_optin": "no",
 		},
 	)
-	if merged["flock_checker_circle_optin"] != "no" {
-		t.Fatalf("merged opt-in decision = %q, want no", merged["flock_checker_circle_optin"])
-	}
-	if merged["flock_checker_circle_optin_rejected_at"] != "2026-03-13 13:05:22" {
-		t.Fatalf("merged rejected_at = %q, want 2026-03-13 13:05:22", merged["flock_checker_circle_optin_rejected_at"])
-	}
-	if _, exists := merged["flock_checker_circle_optin_accepted_at"]; exists {
-		t.Fatalf("expected accepted_at metadata to be cleared when opt-in is no")
+	if len(merged) != 0 {
+		t.Fatalf("expected circle metadata to be removed, got %#v", merged)
 	}
 	if !metadataEqual(map[string]string{"x": "1"}, map[string]string{"x": "1"}) {
 		t.Fatalf("metadataEqual() should match equal maps")

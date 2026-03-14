@@ -15,12 +15,16 @@ func OpenAPISpec() *openapi3.T {
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
 	}
+	components.Schemas = openapi3.Schemas{
+		"AnalyticsStatus": {Value: analyticsStatusSchema()},
+		"AnalyticsSeed":   {Value: analyticsSeedSchema()},
+	}
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Analytics API",
-			Version: "2.0.4",
+			Version: "2.0.5",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/analytics/status", &openapi3.PathItem{Get: statusOperation()}),
@@ -41,7 +45,9 @@ func statusOperation() *openapi3.Operation {
 		Tags:        []string{analyticsTag},
 		Security:    bearerSecurityRequirements(),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("Analytics status.")),
+			openapi3.WithStatus(200, jsonResponse("Analytics status.", "#/components/schemas/AnalyticsStatus")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		),
 	}
 }
@@ -54,14 +60,42 @@ func seedOperation() *openapi3.Operation {
 		Tags:        []string{analyticsTag},
 		Security:    bearerSecurityRequirements(),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("Analytics seed summary.")),
+			openapi3.WithStatus(200, jsonResponse("Analytics seed summary.", "#/components/schemas/AnalyticsSeed")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(503, responseWithDescription("Analytics backend unavailable or disabled.")),
 		),
 	}
+}
+
+// analyticsStatusSchema defines analytics status response schema values.
+func analyticsStatusSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("enabled", openapi3.NewBoolSchema()).
+		WithProperty("backendHealthy", openapi3.NewBoolSchema()).
+		WithProperty("error", openapi3.NewStringSchema())
+}
+
+// analyticsSeedSchema defines analytics seed summary schema values.
+func analyticsSeedSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("contacts", openapi3.NewInt64Schema()).
+		WithProperty("orders", openapi3.NewInt64Schema()).
+		WithProperty("orderItems", openapi3.NewInt64Schema()).
+		WithProperty("membershipEvents", openapi3.NewInt64Schema()).
+		WithProperty("campaignEvents", openapi3.NewInt64Schema())
 }
 
 // bearerSecurityRequirements builds bearer-auth operation security requirements.
 func bearerSecurityRequirements() *openapi3.SecurityRequirements {
 	return openapi3.NewSecurityRequirements().With(openapi3.NewSecurityRequirement().Authenticate(bearerSecurityScheme))
+}
+
+// jsonResponse builds a JSON response with a schema reference.
+func jsonResponse(description string, schemaRef string) *openapi3.ResponseRef {
+	return &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription(description).WithContent(openapi3.Content{
+		"application/json": &openapi3.MediaType{Schema: &openapi3.SchemaRef{Ref: schemaRef}},
+	})}
 }
 
 // responseWithDescription builds an OpenAPI response from a plain description.

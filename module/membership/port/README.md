@@ -6,6 +6,7 @@ Defines repository, contact lookup, integration event, and stamper contracts.
 - Methods:
   - `Repository.SaveStamp(...)`
   - `Repository.GetStatus(...)`
+  - `Repository.GetStatuses(...)`
   - `Repository.ListStamps(...)`
   - `ContactLookup.FindByEmail(...)`
   - `Stamper.Stamp(...)`

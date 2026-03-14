@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ func NewRepository(db *gorm.DB) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// SaveStamp persists immutable stamps and updates latest status snapshots.
+// SaveStamp persists immutable stamps and resolves latest effective status values.
 func (r *Repository) SaveStamp(ctx context.Context, input port.StampInput) (*port.StampResult, error) {
 	trimmedContactID := strings.TrimSpace(input.ContactID)
 	if trimmedContactID == "" {
@@ -59,21 +60,16 @@ func (r *Repository) SaveStamp(ctx context.Context, input port.StampInput) (*por
 
 	var result port.StampResult
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		latest := stampModel{}
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("contact_id = ? AND channel = ?", trimmedContactID, string(input.Channel)).
-			Order("occurred_at DESC, id DESC").
-			First(&latest).
-			Error
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("select latest membership stamp: %w", err)
+		latestStatus, latestErr := r.selectLatestStatusTx(
+			tx.Clauses(clause.Locking{Strength: "UPDATE"}),
+			trimmedContactID,
+			input.Channel,
+		)
+		if latestErr != nil && !errors.Is(latestErr, domain.ErrStatusNotFound) {
+			return latestErr
 		}
-		if err == nil && strings.TrimSpace(latest.Action) == string(input.Action) {
-			status, statusErr := r.selectStatusTx(tx, trimmedContactID, input.Channel)
-			if statusErr != nil {
-				return statusErr
-			}
-			result = port.StampResult{Status: *status, Created: false}
+		if latestStatus != nil && latestStatus.Action == input.Action {
+			result = port.StampResult{Status: *latestStatus, Created: false}
 			return nil
 		}
 
@@ -94,29 +90,12 @@ func (r *Repository) SaveStamp(ctx context.Context, input port.StampInput) (*por
 			return fmt.Errorf("insert membership stamp: %w", createErr)
 		}
 
-		statusRow := statusModel{
-			ContactID:  trimmedContactID,
-			Channel:    string(input.Channel),
-			Action:     string(input.Action),
-			Source:     stampRow.Source,
-			OccurredAt: occurredAt,
-			UpdatedAt:  now,
-		}
-		if upsertErr := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "contact_id"}, {Name: "channel"}},
-			DoUpdates: clause.AssignmentColumns([]string{"action", "source", "occurred_at", "updated_at"}),
-		}).Create(&statusRow).Error; upsertErr != nil {
-			return fmt.Errorf("upsert membership status: %w", upsertErr)
+		currentStatus, statusErr := r.selectLatestStatusTx(tx, trimmedContactID, input.Channel)
+		if statusErr != nil {
+			return statusErr
 		}
 
-		result = port.StampResult{Status: domain.Status{
-			ContactID:  statusRow.ContactID,
-			Channel:    domain.Channel(statusRow.Channel),
-			Action:     domain.Action(statusRow.Action),
-			Source:     statusRow.Source,
-			OccurredAt: statusRow.OccurredAt.UTC(),
-			UpdatedAt:  statusRow.UpdatedAt.UTC(),
-		}, Created: true}
+		result = port.StampResult{Status: *currentStatus, Created: true}
 		return nil
 	})
 	if err != nil {
@@ -126,9 +105,64 @@ func (r *Repository) SaveStamp(ctx context.Context, input port.StampInput) (*por
 	return &result, nil
 }
 
-// GetStatus retrieves latest status by contact and channel.
+// GetStatus retrieves latest effective status by contact and channel.
 func (r *Repository) GetStatus(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error) {
-	return r.selectStatusTx(r.db.WithContext(ctx), strings.TrimSpace(contactID), channel)
+	return r.selectLatestStatusTx(r.db.WithContext(ctx), strings.TrimSpace(contactID), channel)
+}
+
+// GetStatuses retrieves effective statuses for every contact channel.
+func (r *Repository) GetStatuses(ctx context.Context, contactID string) ([]domain.Status, error) {
+	trimmedContactID := strings.TrimSpace(contactID)
+	if trimmedContactID == "" {
+		return nil, domain.ErrInvalidContactID
+	}
+
+	rows := make([]string, 0, 8)
+	err := r.db.WithContext(ctx).
+		Table((stampModel{}).TableName()).
+		Distinct("channel").
+		Where("contact_id = ? AND channel <> ?", trimmedContactID, string(domain.ChannelAll)).
+		Scan(&rows).
+		Error
+	if err != nil {
+		return nil, fmt.Errorf("select membership status channels: %w", err)
+	}
+
+	channelSet := map[domain.Channel]struct{}{
+		domain.ChannelEmail: {},
+	}
+	for _, row := range rows {
+		resolved := domain.Channel(strings.TrimSpace(row))
+		if !resolved.IsValid() || resolved == domain.ChannelAll {
+			continue
+		}
+		channelSet[resolved] = struct{}{}
+	}
+
+	channels := make([]domain.Channel, 0, len(channelSet))
+	for channel := range channelSet {
+		channels = append(channels, channel)
+	}
+	sort.Slice(channels, func(left int, right int) bool {
+		return channels[left] < channels[right]
+	})
+
+	statuses := make([]domain.Status, 0, len(channels))
+	for _, channel := range channels {
+		status, statusErr := r.selectLatestStatusTx(r.db.WithContext(ctx), trimmedContactID, channel)
+		if errors.Is(statusErr, domain.ErrStatusNotFound) {
+			continue
+		}
+		if statusErr != nil {
+			return nil, statusErr
+		}
+		statuses = append(statuses, *status)
+	}
+	if len(statuses) == 0 {
+		return nil, domain.ErrStatusNotFound
+	}
+
+	return statuses, nil
 }
 
 // ListStamps retrieves stamps by contact and channel filters.
@@ -164,23 +198,35 @@ func (r *Repository) ListStamps(ctx context.Context, contactID string, channel d
 	return stamps, nil
 }
 
-// selectStatusTx retrieves status rows within tx or db contexts.
-func (r *Repository) selectStatusTx(tx *gorm.DB, contactID string, channel domain.Channel) (*domain.Status, error) {
-	row := statusModel{}
-	err := tx.Where("contact_id = ? AND channel = ?", contactID, string(channel)).First(&row).Error
+// selectLatestStatusTx resolves latest effective status from immutable stamp rows.
+func (r *Repository) selectLatestStatusTx(tx *gorm.DB, contactID string, channel domain.Channel) (*domain.Status, error) {
+	query := tx.Where("contact_id = ?", contactID)
+	if channel == domain.ChannelAll {
+		query = query.Where("channel = ?", string(domain.ChannelAll))
+	} else {
+		query = query.Where("(channel = ? OR channel = ?)", string(channel), string(domain.ChannelAll))
+	}
+
+	row := stampModel{}
+	err := query.Order("occurred_at DESC, id DESC").First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrStatusNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("select membership status: %w", err)
+		return nil, fmt.Errorf("select membership latest status: %w", err)
+	}
+
+	resolvedChannel := channel
+	if resolvedChannel == "" {
+		resolvedChannel = domain.Channel(strings.TrimSpace(row.Channel))
 	}
 
 	return &domain.Status{
-		ContactID:  row.ContactID,
-		Channel:    domain.Channel(row.Channel),
-		Action:     domain.Action(row.Action),
-		Source:     row.Source,
+		ContactID:  strings.TrimSpace(row.ContactID),
+		Channel:    resolvedChannel,
+		Action:     domain.Action(strings.TrimSpace(row.Action)),
+		Source:     strings.TrimSpace(row.Source),
 		OccurredAt: row.OccurredAt.UTC(),
-		UpdatedAt:  row.UpdatedAt.UTC(),
+		UpdatedAt:  row.CreatedAt.UTC(),
 	}, nil
 }

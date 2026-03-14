@@ -12,50 +12,21 @@ import (
 	"mannaiah/module/membership/port"
 )
 
-const (
-	// circleOptInMetadataKey defines circle opt-in metadata key values.
-	circleOptInMetadataKey = "flock_checker_circle_optin"
-	// circleOptInAcceptedAtMetadataKey defines local accepted-at metadata key values.
-	circleOptInAcceptedAtMetadataKey = "flock_checker_circle_optin_accepted_at"
-	// circleOptInAcceptedAtUTCMetadataKey defines UTC accepted-at metadata key values.
-	circleOptInAcceptedAtUTCMetadataKey = "flock_checker_circle_optin_accepted_at_utc"
-	// circleOptInRejectedAtMetadataKey defines local rejected-at metadata key values.
-	circleOptInRejectedAtMetadataKey = "flock_checker_circle_optin_rejected_at"
-	// circleOptInRejectedAtUTCMetadataKey defines UTC rejected-at metadata key values.
-	circleOptInRejectedAtUTCMetadataKey = "flock_checker_circle_optin_rejected_at_utc"
-	// circleOptInLocalTimestampLayout defines local timestamp layout values.
-	circleOptInLocalTimestampLayout = "2006-01-02 15:04:05"
-	// circleOptInLocalTimezoneName defines local timezone values.
-	circleOptInLocalTimezoneName = "America/Bogota"
-)
-
 var (
 	// ErrNilRepository is returned when repository dependencies are nil.
 	ErrNilRepository = errors.New("membership repository must not be nil")
 )
 
-// MigrateSummary defines migration execution summary values.
-type MigrateSummary struct {
-	// Processed defines contacts processed during migration.
-	Processed int `json:"processed"`
-	// Created defines created stamp counts.
-	Created int `json:"created"`
-	// Skipped defines skipped contact counts.
-	Skipped int `json:"skipped"`
-	// Failed defines failed contact counts.
-	Failed int `json:"failed"`
-}
-
 // Service defines membership use-case behavior.
 type Service interface {
-	// Stamp persists membership stamps and updates latest status snapshots.
+	// Stamp persists membership stamps and resolves latest status values.
 	Stamp(ctx context.Context, command port.StampCommand) (*domain.Status, error)
 	// GetStatus retrieves one current status by contact and channel.
 	GetStatus(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error)
+	// GetStatuses retrieves current statuses by contact across all channels.
+	GetStatuses(ctx context.Context, contactID string) ([]domain.Status, error)
 	// ListStamps retrieves stamps by contact and channel filters.
 	ListStamps(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error)
-	// MigrateFromContactMetadata migrates legacy contact metadata values to membership stamps.
-	MigrateFromContactMetadata(ctx context.Context, pageSize int) (*MigrateSummary, error)
 }
 
 // MembershipService implements membership use-cases.
@@ -109,7 +80,7 @@ func (s *MembershipService) SetSyncRecorder(recorder port.SyncRecorder) {
 	s.syncRecorder = recorder
 }
 
-// Stamp persists membership stamps and updates latest status snapshots.
+// Stamp persists membership stamps and resolves latest status values.
 func (s *MembershipService) Stamp(ctx context.Context, command port.StampCommand) (*domain.Status, error) {
 	status, _, err := s.stamp(ctx, command)
 	if err != nil {
@@ -121,7 +92,7 @@ func (s *MembershipService) Stamp(ctx context.Context, command port.StampCommand
 
 // stamp persists membership stamps and returns status with creation flags.
 func (s *MembershipService) stamp(ctx context.Context, command port.StampCommand) (*domain.Status, bool, error) {
-	channel := command.Channel
+	channel := domain.Channel(strings.ToLower(strings.TrimSpace(string(command.Channel))))
 	if !channel.IsValid() {
 		return nil, false, domain.ErrInvalidChannel
 	}
@@ -188,6 +159,7 @@ func (s *MembershipService) GetStatus(ctx context.Context, contactID string, cha
 	if trimmedContactID == "" {
 		return nil, domain.ErrInvalidContactID
 	}
+	channel = domain.Channel(strings.ToLower(strings.TrimSpace(string(channel))))
 	if !channel.IsValid() {
 		return nil, domain.ErrInvalidChannel
 	}
@@ -200,12 +172,28 @@ func (s *MembershipService) GetStatus(ctx context.Context, contactID string, cha
 	return status, nil
 }
 
+// GetStatuses retrieves current statuses by contact across all channels.
+func (s *MembershipService) GetStatuses(ctx context.Context, contactID string) ([]domain.Status, error) {
+	trimmedContactID := strings.TrimSpace(contactID)
+	if trimmedContactID == "" {
+		return nil, domain.ErrInvalidContactID
+	}
+
+	statuses, err := s.repository.GetStatuses(ctx, trimmedContactID)
+	if err != nil {
+		return nil, fmt.Errorf("get membership statuses: %w", err)
+	}
+
+	return statuses, nil
+}
+
 // ListStamps retrieves stamps by contact and channel filters.
 func (s *MembershipService) ListStamps(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error) {
 	trimmedContactID := strings.TrimSpace(contactID)
 	if trimmedContactID == "" {
 		return nil, domain.ErrInvalidContactID
 	}
+	channel = domain.Channel(strings.ToLower(strings.TrimSpace(string(channel))))
 	if !channel.IsValid() {
 		return nil, domain.ErrInvalidChannel
 	}
@@ -219,106 +207,6 @@ func (s *MembershipService) ListStamps(ctx context.Context, contactID string, ch
 	}
 
 	return rows, nil
-}
-
-// MigrateFromContactMetadata migrates legacy contact metadata values to membership stamps.
-func (s *MembershipService) MigrateFromContactMetadata(ctx context.Context, pageSize int) (*MigrateSummary, error) {
-	runID := ""
-	if s.syncRecorder != nil {
-		startedRunID, runErr := s.syncRecorder.StartRun(ctx, "membership.migration", "manual")
-		if runErr == nil {
-			runID = startedRunID
-		}
-	}
-	syncErrors := make([]port.SyncError, 0, 16)
-	appendSyncError := func(errorType string, errorCode string, message string) {
-		trimmedMessage := strings.TrimSpace(message)
-		if trimmedMessage == "" {
-			return
-		}
-		syncErrors = append(syncErrors, port.SyncError{
-			Type:    strings.TrimSpace(errorType),
-			Code:    strings.TrimSpace(errorCode),
-			Message: trimmedMessage,
-		})
-	}
-	finalizeSyncRecord := func(summary *MigrateSummary) {
-		if summary == nil || strings.TrimSpace(runID) == "" || s.syncRecorder == nil {
-			return
-		}
-		if summary.Failed > 0 {
-			_ = s.syncRecorder.FailRun(ctx, runID, summary.Processed, summary.Created, summary.Failed, summary.Skipped, syncErrors)
-			return
-		}
-
-		_ = s.syncRecorder.CompleteRun(ctx, runID, summary.Processed, summary.Created, summary.Failed, summary.Skipped)
-	}
-
-	if s.contacts == nil {
-		summary := &MigrateSummary{}
-		finalizeSyncRecord(summary)
-		return summary, nil
-	}
-	if pageSize <= 0 {
-		pageSize = 500
-	}
-
-	summary := &MigrateSummary{}
-	page := 1
-	for {
-		contacts, total, err := s.contacts.ListByMetadata(ctx, circleOptInMetadataKey, "", page, pageSize)
-		if err != nil {
-			appendSyncError("repository", "list_contacts", err.Error())
-			finalizeSyncRecord(summary)
-			return nil, fmt.Errorf("list contacts for membership migration: %w", err)
-		}
-		if len(contacts) == 0 {
-			break
-		}
-
-		for _, contact := range contacts {
-			if err := ctx.Err(); err != nil {
-				appendSyncError("context", "canceled", err.Error())
-				finalizeSyncRecord(summary)
-				return nil, err
-			}
-			summary.Processed++
-			action, occurredAt, ok := parseLegacyCircleOptIn(contact.Metadata)
-			if !ok {
-				summary.Skipped++
-				continue
-			}
-
-			_, created, stampErr := s.stamp(ctx, port.StampCommand{
-				ContactID: contact.ID,
-				Channel:   domain.ChannelEmail,
-				Action:    action,
-				Source:    "migration",
-				OccurredAt: func() *time.Time {
-					value := occurredAt.UTC()
-					return &value
-				}(),
-			})
-			if stampErr != nil {
-				summary.Failed++
-				appendSyncError("stamp", "save_stamp", stampErr.Error())
-				continue
-			}
-			if created {
-				summary.Created++
-			} else {
-				summary.Skipped++
-			}
-		}
-
-		if int64(page*pageSize) >= total {
-			break
-		}
-		page++
-	}
-
-	finalizeSyncRecord(summary)
-	return summary, nil
 }
 
 // publishChanged publishes membership change integration events.
@@ -340,38 +228,4 @@ func (s *MembershipService) publishChanged(ctx context.Context, status domain.St
 			OccurredAt: status.OccurredAt.UTC(),
 		},
 	})
-}
-
-// parseLegacyCircleOptIn maps legacy checker metadata into action and timestamp values.
-func parseLegacyCircleOptIn(metadata map[string]string) (domain.Action, time.Time, bool) {
-	if len(metadata) == 0 {
-		return "", time.Time{}, false
-	}
-
-	decision := strings.ToLower(strings.TrimSpace(metadata[circleOptInMetadataKey]))
-	switch decision {
-	case "yes":
-		return domain.ActionOptIn, parseLegacyOccurredAt(metadata[circleOptInAcceptedAtUTCMetadataKey], metadata[circleOptInAcceptedAtMetadataKey]), true
-	case "no":
-		return domain.ActionOptOut, parseLegacyOccurredAt(metadata[circleOptInRejectedAtUTCMetadataKey], metadata[circleOptInRejectedAtMetadataKey]), true
-	default:
-		return "", time.Time{}, false
-	}
-}
-
-// parseLegacyOccurredAt resolves legacy UTC/local metadata into a timestamp.
-func parseLegacyOccurredAt(utcValue string, localValue string) time.Time {
-	if parsedUTC, err := time.Parse(time.RFC3339, strings.TrimSpace(utcValue)); err == nil {
-		return parsedUTC.UTC()
-	}
-
-	location, locErr := time.LoadLocation(circleOptInLocalTimezoneName)
-	if locErr != nil {
-		location = time.FixedZone("UTC-05", -5*60*60)
-	}
-	if parsedLocal, err := time.ParseInLocation(circleOptInLocalTimestampLayout, strings.TrimSpace(localValue), location); err == nil {
-		return parsedLocal.UTC()
-	}
-
-	return time.Now().UTC()
 }

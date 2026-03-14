@@ -31,10 +31,12 @@ type StampResult struct {
 
 // Repository defines membership persistence behavior.
 type Repository interface {
-	// SaveStamp persists immutable stamps and updates latest status snapshots.
+	// SaveStamp persists immutable stamps and resolves latest effective status values.
 	SaveStamp(ctx context.Context, input StampInput) (*StampResult, error)
-	// GetStatus retrieves latest status by contact and channel.
+	// GetStatus retrieves latest effective status by contact and channel.
 	GetStatus(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error)
+	// GetStatuses retrieves effective statuses for every contact channel.
+	GetStatuses(ctx context.Context, contactID string) ([]domain.Status, error)
 	// ListStamps retrieves stamps by contact and channel filters.
 	ListStamps(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error)
 }

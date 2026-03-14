@@ -52,6 +52,28 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.5] - 2026-03-14
+- Membership consent model changes:
+  - remove `POST /membership/migrate` route and OpenAPI path.
+  - add `channel=all` consent flow support and default `/membership/optin`/`/membership/optout` to `all`.
+  - `GET /membership/status/{contactId}` now returns channel-agnostic status payload (`contactId` + `statuses[]`).
+  - status resolution now reads latest effective rows from `membership_stamps` only (no snapshot-table dependency).
+- WooCommerce consent mapping changes:
+  - Circle checker metadata is no longer persisted to Mannaiah contact metadata.
+  - Circle checker still drives membership stamping (`opt_in`/`opt_out`) through `channel=all`.
+  - Privacy checker metadata continues to persist on contact metadata with date fields.
+- OpenAPI response documentation improvements for the 2.0+ modules:
+  - `membership`, `analytics`, `segment`, `campaign`, and `syncrecord` now expose concrete JSON response schemas instead of generic `Success` descriptions.
+- Schema rollout:
+  - add migration `000015_membership_drop_status_snapshot` (MySQL + SQLite) to drop `membership_status` snapshot table and keep stamps as source of truth.
+- Bump release references and badges to `v2.0.5`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - updated module OpenAPI spec versions
+  - `README.md` and `module/woocommerce/README.md`
+
 ### [v2.0.4] - 2026-03-14
 - Fix startup regression from `v2.0.3` affecting root E2E startup flow:
   - `module/segment/runtime/config.go` default now sets `SEGMENT_ENABLED=false`.

@@ -25,6 +25,6 @@ type StampCommand struct {
 
 // Stamper defines stamp behavior used by external modules.
 type Stamper interface {
-	// Stamp persists membership stamps and updates latest status snapshots.
+	// Stamp persists membership stamps and resolves latest status values.
 	Stamp(ctx context.Context, command StampCommand) (*domain.Status, error)
 }

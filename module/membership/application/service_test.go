@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"mannaiah/module/membership/domain"
 	"mannaiah/module/membership/port"
@@ -12,12 +11,13 @@ import (
 
 // repositoryMock defines membership repository behavior for service tests.
 type repositoryMock struct {
-	saveStampFn  func(ctx context.Context, input port.StampInput) (*port.StampResult, error)
-	getStatusFn  func(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error)
-	listStampsFn func(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error)
+	saveStampFn   func(ctx context.Context, input port.StampInput) (*port.StampResult, error)
+	getStatusFn   func(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error)
+	getStatusesFn func(ctx context.Context, contactID string) ([]domain.Status, error)
+	listStampsFn  func(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error)
 }
 
-// SaveStamp persists immutable stamps and updates latest status snapshots.
+// SaveStamp persists immutable stamps and resolves latest effective status values.
 func (m repositoryMock) SaveStamp(ctx context.Context, input port.StampInput) (*port.StampResult, error) {
 	return m.saveStampFn(ctx, input)
 }
@@ -25,6 +25,11 @@ func (m repositoryMock) SaveStamp(ctx context.Context, input port.StampInput) (*
 // GetStatus retrieves latest status by contact and channel.
 func (m repositoryMock) GetStatus(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error) {
 	return m.getStatusFn(ctx, contactID, channel)
+}
+
+// GetStatuses retrieves effective statuses for every contact channel.
+func (m repositoryMock) GetStatuses(ctx context.Context, contactID string) ([]domain.Status, error) {
+	return m.getStatusesFn(ctx, contactID)
 }
 
 // ListStamps retrieves stamps by contact and channel filters.
@@ -61,6 +66,9 @@ func TestStampByEmail(t *testing.T) {
 			getStatusFn: func(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error) {
 				return nil, nil
 			},
+			getStatusesFn: func(ctx context.Context, contactID string) ([]domain.Status, error) {
+				return nil, nil
+			},
 			listStampsFn: func(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error) {
 				return nil, nil
 			},
@@ -95,6 +103,9 @@ func TestGetStatusValidation(t *testing.T) {
 			getStatusFn: func(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error) {
 				return nil, domain.ErrStatusNotFound
 			},
+			getStatusesFn: func(ctx context.Context, contactID string) ([]domain.Status, error) {
+				return nil, nil
+			},
 			listStampsFn: func(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error) {
 				return nil, nil
 			},
@@ -111,15 +122,29 @@ func TestGetStatusValidation(t *testing.T) {
 	}
 }
 
-// TestParseLegacyOccurredAt verifies timestamp parsing behavior.
-func TestParseLegacyOccurredAt(t *testing.T) {
-	value := parseLegacyOccurredAt("2026-03-01T10:00:00Z", "")
-	if value.IsZero() {
-		t.Fatalf("parseLegacyOccurredAt() returned zero")
+// TestGetStatusesValidation verifies contact-id validation behavior for channel-agnostic status queries.
+func TestGetStatusesValidation(t *testing.T) {
+	svc, err := NewService(
+		repositoryMock{
+			saveStampFn: func(ctx context.Context, input port.StampInput) (*port.StampResult, error) { return nil, nil },
+			getStatusFn: func(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error) {
+				return nil, nil
+			},
+			getStatusesFn: func(ctx context.Context, contactID string) ([]domain.Status, error) {
+				return []domain.Status{}, nil
+			},
+			listStampsFn: func(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error) {
+				return nil, nil
+			},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
 	}
 
-	fallback := parseLegacyOccurredAt("", "")
-	if time.Since(fallback) > time.Minute {
-		t.Fatalf("fallback timestamp is stale: %v", fallback)
+	_, getErr := svc.GetStatuses(context.Background(), " ")
+	if !errors.Is(getErr, domain.ErrInvalidContactID) {
+		t.Fatalf("GetStatuses() error = %v, want ErrInvalidContactID", getErr)
 	}
 }

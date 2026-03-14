@@ -1,14 +1,14 @@
 # Membership Application Package
 
-Implements stamp, status-query, and migration use-cases.
+Implements stamp and status-query use-cases.
 
 ## Key methods / endpoints / events
 - Methods:
   - `NewService(...)`
   - `(*MembershipService).Stamp(...)`
   - `(*MembershipService).GetStatus(...)`
+  - `(*MembershipService).GetStatuses(...)`
   - `(*MembershipService).ListStamps(...)`
-  - `(*MembershipService).MigrateFromContactMetadata(...)`
 - Endpoints: none.
 - Events:
   - `membership.v1.changed`

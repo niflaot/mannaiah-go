@@ -1,6 +1,10 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"strings"
+	"unicode"
+)
 
 var (
 	// ErrInvalidContactID is returned when contact id values are invalid.
@@ -19,12 +23,19 @@ var (
 
 // IsValid reports whether the channel is recognized.
 func (c Channel) IsValid() bool {
-	switch c {
-	case ChannelEmail:
-		return true
-	default:
+	value := strings.ToLower(strings.TrimSpace(string(c)))
+	if value == "" {
 		return false
 	}
+
+	for _, character := range value {
+		if unicode.IsLetter(character) || unicode.IsDigit(character) || character == '_' || character == '-' {
+			continue
+		}
+		return false
+	}
+
+	return true
 }
 
 // IsValid reports whether the action is recognized.

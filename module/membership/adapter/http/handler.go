@@ -7,7 +7,6 @@ import (
 	"time"
 
 	corehttp "mannaiah/module/core/http"
-	"mannaiah/module/membership/application"
 	"mannaiah/module/membership/domain"
 	"mannaiah/module/membership/port"
 )
@@ -29,14 +28,14 @@ type Authorizer interface {
 
 // Service defines membership use-case behavior required by HTTP handlers.
 type Service interface {
-	// Stamp persists membership stamps and updates latest status snapshots.
+	// Stamp persists membership stamps and resolves latest status values.
 	Stamp(ctx context.Context, command port.StampCommand) (*domain.Status, error)
 	// GetStatus retrieves one current status by contact and channel.
 	GetStatus(ctx context.Context, contactID string, channel domain.Channel) (*domain.Status, error)
+	// GetStatuses retrieves current statuses by contact across all channels.
+	GetStatuses(ctx context.Context, contactID string) ([]domain.Status, error)
 	// ListStamps retrieves stamps by contact and channel filters.
 	ListStamps(ctx context.Context, contactID string, channel domain.Channel, limit int) ([]domain.Stamp, error)
-	// MigrateFromContactMetadata migrates legacy contact metadata values to membership stamps.
-	MigrateFromContactMetadata(ctx context.Context, pageSize int) (*application.MigrateSummary, error)
 }
 
 // Handler defines HTTP route handlers for membership endpoints.
@@ -77,10 +76,12 @@ type actionRequest struct {
 	OccurredAt *time.Time `json:"occurredAt"`
 }
 
-// migrateRequest defines migration endpoint request payload values.
-type migrateRequest struct {
-	// PageSize defines batch size values used in migration iteration.
-	PageSize int `json:"pageSize"`
+// statusResponse defines membership statuses grouped by contact values.
+type statusResponse struct {
+	// ContactID defines contact identifier values.
+	ContactID string `json:"contactId"`
+	// Statuses defines effective statuses by channel.
+	Statuses []domain.Status `json:"statuses"`
 }
 
 // NewHandler creates membership HTTP handlers.
@@ -115,7 +116,6 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/membership/status/:contactId/:channel", h.protect("marketing:manage", h.statusByChannel))
 	router.Get("/membership/status/:contactId/stamps", h.protect("marketing:manage", h.stamps))
 	router.Get("/membership/stamps/:contactId/:channel", h.protect("marketing:manage", h.stampsByChannel))
-	router.Post("/membership/migrate", h.protect("marketing:manage", h.migrate))
 }
 
 // optIn handles membership opt-in requests.
@@ -137,7 +137,7 @@ func (h *Handler) action(ctx corehttp.Context, action domain.Action) error {
 
 	channel := strings.TrimSpace(request.Channel)
 	if channel == "" {
-		channel = string(domain.ChannelEmail)
+		channel = string(domain.ChannelAll)
 	}
 
 	status, err := h.service.Stamp(ctx.Context(), port.StampCommand{
@@ -191,16 +191,36 @@ func (h *Handler) stamp(ctx corehttp.Context) error {
 
 // status handles membership status-by-contact requests.
 func (h *Handler) status(ctx corehttp.Context) error {
-	status, err := h.service.GetStatus(
+	contactID := strings.TrimSpace(ctx.Params("contactId"))
+	resolvedChannel := strings.TrimSpace(ctx.Query("channel"))
+	if resolvedChannel != "" {
+		status, err := h.service.GetStatus(
+			ctx.Context(),
+			contactID,
+			domain.Channel(resolvedChannel),
+		)
+		if err != nil {
+			return h.mapError(err)
+		}
+
+		return ctx.Status(200).JSON(statusResponse{
+			ContactID: contactID,
+			Statuses:  []domain.Status{*status},
+		})
+	}
+
+	statuses, err := h.service.GetStatuses(
 		ctx.Context(),
-		strings.TrimSpace(ctx.Params("contactId")),
-		domain.Channel(strings.TrimSpace(ctx.Query("channel", string(domain.ChannelEmail)))),
+		contactID,
 	)
 	if err != nil {
 		return h.mapError(err)
 	}
 
-	return ctx.Status(200).JSON(status)
+	return ctx.Status(200).JSON(statusResponse{
+		ContactID: contactID,
+		Statuses:  statuses,
+	})
 }
 
 // statusByChannel handles membership status-by-contact-and-channel requests.
@@ -245,19 +265,6 @@ func (h *Handler) stampsByChannel(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(entries)
-}
-
-// migrate handles legacy metadata migration requests.
-func (h *Handler) migrate(ctx corehttp.Context) error {
-	request := migrateRequest{}
-	_ = ctx.BodyParser(&request)
-
-	summary, err := h.service.MigrateFromContactMetadata(ctx.Context(), request.PageSize)
-	if err != nil {
-		return h.mapError(err)
-	}
-
-	return ctx.Status(200).JSON(summary)
 }
 
 // protect wraps endpoint handlers with optional authentication and permission checks.

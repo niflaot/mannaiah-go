@@ -24,7 +24,7 @@ func (s *ContactSyncService) stampMembership(ctx context.Context, command port.C
 		return
 	}
 
-	if err := s.membershipStamper.StampByEmail(ctx, email, "email", action, "woocommerce_sync", occurredAt); err != nil {
+	if err := s.membershipStamper.StampByEmail(ctx, email, "all", action, "woocommerce_sync", occurredAt); err != nil {
 		s.logger.Warn("woocommerce contact sync membership stamp failed", zap.Error(err), zap.String("email", email))
 	}
 }

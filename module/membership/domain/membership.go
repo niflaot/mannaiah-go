@@ -6,6 +6,8 @@ import "time"
 type Channel string
 
 const (
+	// ChannelAll defines global consent channels.
+	ChannelAll Channel = "all"
 	// ChannelEmail defines email consent channels.
 	ChannelEmail Channel = "email"
 )

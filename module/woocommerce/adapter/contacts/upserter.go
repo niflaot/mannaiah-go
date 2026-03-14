@@ -21,14 +21,6 @@ var (
 const (
 	// circleOptInMetadataKey defines metadata key used for circle opt-in decisions.
 	circleOptInMetadataKey = "flock_checker_circle_optin"
-	// checkerMetadataAcceptedAtSuffix defines checker accepted-at metadata key suffixes.
-	checkerMetadataAcceptedAtSuffix = "_accepted_at"
-	// checkerMetadataAcceptedAtUTCSuffix defines checker accepted-at UTC metadata key suffixes.
-	checkerMetadataAcceptedAtUTCSuffix = "_accepted_at_utc"
-	// checkerMetadataRejectedAtSuffix defines checker rejected-at metadata key suffixes.
-	checkerMetadataRejectedAtSuffix = "_rejected_at"
-	// checkerMetadataRejectedAtUTCSuffix defines checker rejected-at UTC metadata key suffixes.
-	checkerMetadataRejectedAtUTCSuffix = "_rejected_at_utc"
 )
 
 // Upserter defines contact upsert behavior backed by contacts application services.
@@ -286,6 +278,7 @@ func normalizeSyncMetadata(metadata map[string]string) map[string]string {
 	if len(normalized) == 0 {
 		return nil
 	}
+	stripCircleOptInMetadata(normalized)
 
 	return normalized
 }
@@ -303,37 +296,20 @@ func mergeMetadata(existing map[string]string, syncMetadata map[string]string) m
 	for key, value := range syncMetadata {
 		merged[key] = value
 	}
-	normalizeCircleOptInMetadata(merged)
+	stripCircleOptInMetadata(merged)
 
 	return merged
 }
 
-// normalizeCircleOptInMetadata normalizes circle opt-in metadata transitions in merged metadata maps.
-func normalizeCircleOptInMetadata(metadata map[string]string) {
+// stripCircleOptInMetadata removes circle opt-in metadata keys from contact metadata payload values.
+func stripCircleOptInMetadata(metadata map[string]string) {
 	if len(metadata) == 0 {
 		return
 	}
 
-	decision := strings.ToLower(strings.TrimSpace(metadata[circleOptInMetadataKey]))
-	acceptedAtKey := circleOptInMetadataKey + checkerMetadataAcceptedAtSuffix
-	acceptedAtUTCKey := circleOptInMetadataKey + checkerMetadataAcceptedAtUTCSuffix
-	rejectedAtKey := circleOptInMetadataKey + checkerMetadataRejectedAtSuffix
-	rejectedAtUTCKey := circleOptInMetadataKey + checkerMetadataRejectedAtUTCSuffix
-
-	switch decision {
-	case "yes":
-		delete(metadata, rejectedAtKey)
-		delete(metadata, rejectedAtUTCKey)
-	case "no":
-		fallbackRejectedAt := strings.TrimSpace(metadata[acceptedAtKey])
-		fallbackRejectedAtUTC := strings.TrimSpace(metadata[acceptedAtUTCKey])
-		delete(metadata, acceptedAtKey)
-		delete(metadata, acceptedAtUTCKey)
-		if strings.TrimSpace(metadata[rejectedAtKey]) == "" && fallbackRejectedAt != "" {
-			metadata[rejectedAtKey] = fallbackRejectedAt
-		}
-		if strings.TrimSpace(metadata[rejectedAtUTCKey]) == "" && fallbackRejectedAtUTC != "" {
-			metadata[rejectedAtUTCKey] = fallbackRejectedAtUTC
+	for key := range metadata {
+		if strings.HasPrefix(strings.TrimSpace(key), circleOptInMetadataKey) {
+			delete(metadata, key)
 		}
 	}
 }

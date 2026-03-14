@@ -1,12 +1,11 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v2.0.4-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.0.5-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
-Frontend integration manual for the 2.0+ marketing/BI stack:
-- [Mannaiah v2.0.4 User Manual](./MANUAL-v2.0.4.md)
+Frontend integration for the 2.0+ marketing/BI stack is documented through the aggregated API docs at `/docs` and `/openapi.json`.
 
 ## Architecture
 
