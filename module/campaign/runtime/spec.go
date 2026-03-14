@@ -18,7 +18,7 @@ func OpenAPISpec() *openapi3.T {
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Campaign API", Version: "2.0.3"},
+		Info:    &openapi3.Info{Title: "Campaign API", Version: "2.0.4"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/campaigns", &openapi3.PathItem{Post: operation("CampaignController_create", "Create campaign"), Get: operation("CampaignController_list", "List campaigns")}),
 			openapi3.WithPath("/campaigns/{id}", &openapi3.PathItem{Get: operation("CampaignController_get", "Get campaign"), Patch: operation("CampaignController_update", "Update campaign"), Delete: operation("CampaignController_delete", "Delete campaign")}),

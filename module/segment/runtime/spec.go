@@ -18,7 +18,7 @@ func OpenAPISpec() *openapi3.T {
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Segment API", Version: "2.0.3"},
+		Info:    &openapi3.Info{Title: "Segment API", Version: "2.0.4"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/segments", &openapi3.PathItem{Post: operation("SegmentController_create", "Create segment"), Get: operation("SegmentController_list", "List segments")}),
 			openapi3.WithPath("/segments/{id}", &openapi3.PathItem{Get: operation("SegmentController_get", "Get segment"), Patch: operation("SegmentController_update", "Update segment"), Delete: operation("SegmentController_delete", "Delete segment")}),

@@ -20,7 +20,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Analytics API",
-			Version: "2.0.3",
+			Version: "2.0.4",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/analytics/status", &openapi3.PathItem{Get: statusOperation()}),

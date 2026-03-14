@@ -52,6 +52,19 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.4] - 2026-03-14
+- Fix startup regression from `v2.0.3` affecting root E2E startup flow:
+  - `module/segment/runtime/config.go` default now sets `SEGMENT_ENABLED=false`.
+  - `.env.example` now sets `SEGMENT_ENABLED=false`.
+- Bump release references and badges to `v2.0.4`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - module OpenAPI specs for analytics/membership/syncrecord/email/campaign/segment
+  - `README.md` and `module/woocommerce/README.md`
+- Add frontend integration guide copy `MANUAL-v2.0.4.md` and update root `README.md` link.
+
 ### [v2.0.3] - 2026-03-14
 - Bump release references and badges to `v2.0.3` across runtime docs/spec defaults:
   - `.env.example`

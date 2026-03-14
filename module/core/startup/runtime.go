@@ -92,7 +92,7 @@ func CoreSpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Core Startup API",
-			Version: "2.0.3",
+			Version: "2.0.4",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/status", &openapi3.PathItem{
