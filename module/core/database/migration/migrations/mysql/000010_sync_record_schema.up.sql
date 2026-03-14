@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS sync_runs (
     id VARCHAR(36) PRIMARY KEY,
     kind VARCHAR(100) NOT NULL,
-    trigger VARCHAR(32) NOT NULL,
+    sync_trigger VARCHAR(32) NOT NULL,
     status VARCHAR(32) NOT NULL,
     started_at DATETIME(3) NOT NULL,
     ended_at DATETIME(3) NULL,

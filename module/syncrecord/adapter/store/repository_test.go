@@ -85,7 +85,7 @@ func applySchemaForTest(t *testing.T, db *gorm.DB) {
 		`CREATE TABLE sync_runs (
 			id TEXT PRIMARY KEY,
 			kind TEXT NOT NULL,
-			trigger TEXT NOT NULL,
+			sync_trigger TEXT NOT NULL,
 			status TEXT NOT NULL,
 			started_at DATETIME NOT NULL,
 			ended_at DATETIME,

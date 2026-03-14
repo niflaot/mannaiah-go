@@ -9,7 +9,7 @@ type runModel struct {
 	// Kind defines synchronization kind values.
 	Kind string `gorm:"column:kind"`
 	// Trigger defines synchronization trigger values.
-	Trigger string `gorm:"column:trigger"`
+	Trigger string `gorm:"column:sync_trigger"`
 	// Status defines run status values.
 	Status string `gorm:"column:status"`
 	// StartedAt defines run start timestamps.

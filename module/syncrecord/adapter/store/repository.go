@@ -235,7 +235,7 @@ func applyListFilters(db *gorm.DB, query port.ListQuery) *gorm.DB {
 	}
 	trigger := strings.TrimSpace(query.Trigger)
 	if trigger != "" {
-		db = db.Where("trigger = ?", trigger)
+		db = db.Where("sync_trigger = ?", trigger)
 	}
 	status := strings.TrimSpace(query.Status)
 	if status != "" {
