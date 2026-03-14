@@ -251,6 +251,14 @@ func applyListQuery(tx *gorm.DB, query port.ListQuery) *gorm.DB {
 	if strings.TrimSpace(query.Email) != "" {
 		next = next.Where("email = ?", strings.TrimSpace(query.Email))
 	}
+	trimmedDocumentType := strings.TrimSpace(query.DocumentType)
+	trimmedDocumentNumber := strings.TrimSpace(query.DocumentNumber)
+	if trimmedDocumentType != "" {
+		next = next.Where("document_type = ?", trimmedDocumentType)
+	}
+	if trimmedDocumentNumber != "" {
+		next = next.Where("document_number = ?", trimmedDocumentNumber)
+	}
 	trimmedMetadataKey := strings.TrimSpace(query.MetadataKey)
 	trimmedMetadataValue := strings.TrimSpace(query.MetadataValue)
 	if trimmedMetadataKey != "" || trimmedMetadataValue != "" {

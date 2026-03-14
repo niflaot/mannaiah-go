@@ -35,6 +35,8 @@ type serviceMock struct {
 	listErrSequence []error
 	// listCalls defines list invocation counters.
 	listCalls int
+	// listQueries stores list invocation query values.
+	listQueries []contactport.ListQuery
 }
 
 // Create creates contacts.
@@ -55,6 +57,7 @@ func (m *serviceMock) Get(ctx context.Context, id string) (*contactdomain.Contac
 func (m *serviceMock) List(ctx context.Context, query contactport.ListQuery) (*contactapplication.ListResult, error) {
 	callIndex := m.listCalls
 	m.listCalls++
+	m.listQueries = append(m.listQueries, query)
 
 	if callIndex < len(m.listErrSequence) && m.listErrSequence[callIndex] != nil {
 		return nil, m.listErrSequence[callIndex]
@@ -310,6 +313,53 @@ func TestUpsertByEmailDuplicateDocumentFallbackByDocument(t *testing.T) {
 	if mock.updates[0].Metadata == nil || (*mock.updates[0].Metadata)["flock_checker_privacy_accept"] != "yes" {
 		t.Fatalf("updates[0].Metadata = %#v, want flock_checker_privacy_accept=yes", mock.updates[0].Metadata)
 	}
+	if len(mock.listQueries) < 3 {
+		t.Fatalf("expected list queries to include document fallback call")
+	}
+	documentQuery := mock.listQueries[2]
+	if documentQuery.DocumentType != "CC" || documentQuery.DocumentNumber != "71264931" {
+		t.Fatalf("document fallback query = %#v, want documentType=CC documentNumber=71264931", documentQuery)
+	}
+}
+
+// TestUpsertByEmailDuplicateSQLMessageFallback verifies duplicate fallback handling for raw SQL duplicate errors.
+func TestUpsertByEmailDuplicateSQLMessageFallback(t *testing.T) {
+	mock := &serviceMock{
+		createErr: errorspkg.New("Error 1062 (23000): Duplicate entry 'CC|71264931' for key 'contacts.idx_contacts_document_key'"),
+		listSequence: []*contactapplication.ListResult{
+			nil,
+			{Data: []contactdomain.Contact{}},
+			{Data: []contactdomain.Contact{{
+				ID:             "contact-doc-raw",
+				Email:          "legacy@example.com",
+				DocumentType:   contactdomain.DocumentTypeCC,
+				DocumentNumber: "71264931",
+				FirstName:      "Juan",
+				LastName:       "Zapata",
+			}}},
+		},
+	}
+	upserter, err := NewUpserter(mock)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+
+	outcome, upsertErr := upserter.UpsertByEmail(context.Background(), port.ContactSyncCommand{
+		Email:          "jzapatam@gmail.com",
+		FirstName:      "Juan",
+		LastName:       "Zapata",
+		DocumentType:   "CC",
+		DocumentNumber: "71264931",
+	})
+	if upsertErr != nil {
+		t.Fatalf("UpsertByEmail() error = %v", upsertErr)
+	}
+	if outcome != port.UpsertOutcomeUpdated {
+		t.Fatalf("outcome = %q, want %q", outcome, port.UpsertOutcomeUpdated)
+	}
+	if len(mock.updateIDs) != 1 || mock.updateIDs[0] != "contact-doc-raw" {
+		t.Fatalf("updateIDs = %v, want [contact-doc-raw]", mock.updateIDs)
+	}
 }
 
 // TestFindByEmailError verifies list error handling behavior.
@@ -438,6 +488,9 @@ func TestPrivateHelpers(t *testing.T) {
 	if isDuplicateCreateError(errorspkg.New("other")) {
 		t.Fatalf("expected non-duplicate errors to be non-retryable")
 	}
+	if !isDuplicateCreateError(errorspkg.New("Error 1062 (23000): Duplicate entry 'x' for key 'idx_contacts_document_key'")) {
+		t.Fatalf("expected mysql duplicate messages to be retryable")
+	}
 
 	documentType := documentTypePointer("CC")
 	if documentType == nil || *documentType != contactdomain.DocumentTypeCC {
@@ -467,6 +520,41 @@ func TestPrivateHelpers(t *testing.T) {
 	merged := mergeMetadata(map[string]string{"a": "1"}, map[string]string{"b": "2"})
 	if len(merged) != 2 || merged["a"] != "1" || merged["b"] != "2" {
 		t.Fatalf("mergeMetadata() should merge maps")
+	}
+	merged = mergeMetadata(
+		map[string]string{
+			"flock_checker_circle_optin":                 "no",
+			"flock_checker_circle_optin_rejected_at":     "2026-03-12 09:00:00",
+			"flock_checker_circle_optin_rejected_at_utc": "2026-03-12T14:00:00Z",
+		},
+		map[string]string{
+			"flock_checker_circle_optin":             "yes",
+			"flock_checker_circle_optin_accepted_at": "2026-03-13 13:05:22",
+		},
+	)
+	if merged["flock_checker_circle_optin"] != "yes" {
+		t.Fatalf("merged opt-in decision = %q, want yes", merged["flock_checker_circle_optin"])
+	}
+	if _, exists := merged["flock_checker_circle_optin_rejected_at"]; exists {
+		t.Fatalf("expected rejected_at metadata to be cleared when opt-in is yes")
+	}
+	merged = mergeMetadata(
+		map[string]string{
+			"flock_checker_circle_optin":             "yes",
+			"flock_checker_circle_optin_accepted_at": "2026-03-13 13:05:22",
+		},
+		map[string]string{
+			"flock_checker_circle_optin": "no",
+		},
+	)
+	if merged["flock_checker_circle_optin"] != "no" {
+		t.Fatalf("merged opt-in decision = %q, want no", merged["flock_checker_circle_optin"])
+	}
+	if merged["flock_checker_circle_optin_rejected_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("merged rejected_at = %q, want 2026-03-13 13:05:22", merged["flock_checker_circle_optin_rejected_at"])
+	}
+	if _, exists := merged["flock_checker_circle_optin_accepted_at"]; exists {
+		t.Fatalf("expected accepted_at metadata to be cleared when opt-in is no")
 	}
 	if !metadataEqual(map[string]string{"x": "1"}, map[string]string{"x": "1"}) {
 		t.Fatalf("metadataEqual() should match equal maps")

@@ -16,11 +16,15 @@ const (
 	checkerMetadataPrefix                 = "flock_checker_"
 	checkerMetadataAcceptedAtSuffix       = "_accepted_at"
 	checkerMetadataAcceptedAtUTCSuffix    = "_accepted_at_utc"
+	checkerMetadataRejectedAtSuffix       = "_rejected_at"
+	checkerMetadataRejectedAtUTCSuffix    = "_rejected_at_utc"
 	checkerMetadataAcceptedAtLocalLayout  = "2006-01-02 15:04:05"
 	checkerMetadataAcceptedAtLocalZone    = "America/Bogota"
 	checkerMetadataAcceptedAtFixedZone    = "UTC-05"
 	checkerMetadataAcceptedAtFixedOffset  = -5 * 60 * 60
 	checkerMetadataAcceptedValueConfirmed = "yes"
+	checkerMetadataRejectedValueConfirmed = "no"
+	circleOptInMetadataKey                = "flock_checker_circle_optin"
 )
 
 // mapOrderSkipReason defines reason codes for skipped order rows.
@@ -255,6 +259,11 @@ func mergeCheckerMetadata(target map[string]string, source map[string]string, cr
 		acceptedAt := strings.TrimSpace(source[acceptedAtKey])
 		acceptedAtUTC := strings.TrimSpace(source[acceptedAtUTCKey])
 
+		rejectedAtKey := baseKey + checkerMetadataRejectedAtSuffix
+		rejectedAtUTCKey := baseKey + checkerMetadataRejectedAtUTCSuffix
+		rejectedAt := strings.TrimSpace(source[rejectedAtKey])
+		rejectedAtUTC := strings.TrimSpace(source[rejectedAtUTCKey])
+
 		if decision == checkerMetadataAcceptedValueConfirmed {
 			fallbackAcceptedAt, fallbackAcceptedAtUTC := checkerAcceptedAtFallback(createdAt)
 			if acceptedAt == "" {
@@ -263,13 +272,43 @@ func mergeCheckerMetadata(target map[string]string, source map[string]string, cr
 			if acceptedAtUTC == "" {
 				acceptedAtUTC = fallbackAcceptedAtUTC
 			}
+			delete(target, rejectedAtKey)
+			delete(target, rejectedAtUTCKey)
+		} else if decision == checkerMetadataRejectedValueConfirmed && baseKey == circleOptInMetadataKey {
+			fallbackAcceptedAt, fallbackAcceptedAtUTC := checkerAcceptedAtFallback(createdAt)
+			if rejectedAt == "" {
+				if acceptedAt != "" {
+					rejectedAt = acceptedAt
+				} else {
+					rejectedAt = fallbackAcceptedAt
+				}
+			}
+			if rejectedAtUTC == "" {
+				if acceptedAtUTC != "" {
+					rejectedAtUTC = acceptedAtUTC
+				} else {
+					rejectedAtUTC = fallbackAcceptedAtUTC
+				}
+			}
+			acceptedAt = ""
+			acceptedAtUTC = ""
 		}
 
 		if acceptedAt != "" {
 			target[acceptedAtKey] = acceptedAt
+		} else if baseKey == circleOptInMetadataKey {
+			delete(target, acceptedAtKey)
 		}
 		if acceptedAtUTC != "" {
 			target[acceptedAtUTCKey] = acceptedAtUTC
+		} else if baseKey == circleOptInMetadataKey {
+			delete(target, acceptedAtUTCKey)
+		}
+		if rejectedAt != "" {
+			target[rejectedAtKey] = rejectedAt
+		}
+		if rejectedAtUTC != "" {
+			target[rejectedAtUTCKey] = rejectedAtUTC
 		}
 	}
 }
@@ -285,7 +324,10 @@ func checkerMetadataKeys(source map[string]string) []string {
 		if !strings.HasPrefix(trimmedKey, checkerMetadataPrefix) {
 			continue
 		}
-		if strings.HasSuffix(trimmedKey, checkerMetadataAcceptedAtSuffix) || strings.HasSuffix(trimmedKey, checkerMetadataAcceptedAtUTCSuffix) {
+		if strings.HasSuffix(trimmedKey, checkerMetadataAcceptedAtSuffix) ||
+			strings.HasSuffix(trimmedKey, checkerMetadataAcceptedAtUTCSuffix) ||
+			strings.HasSuffix(trimmedKey, checkerMetadataRejectedAtSuffix) ||
+			strings.HasSuffix(trimmedKey, checkerMetadataRejectedAtUTCSuffix) {
 			continue
 		}
 

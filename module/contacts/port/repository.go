@@ -30,6 +30,10 @@ type ListQuery struct {
 	OrderDir string
 	// Email defines optional email filter.
 	Email string
+	// DocumentType defines optional document-type filter.
+	DocumentType string
+	// DocumentNumber defines optional document-number filter.
+	DocumentNumber string
 	// ExcludeIDs defines ids excluded from result and total count.
 	ExcludeIDs []string
 	// MetadataKey defines optional metadata-key filters.

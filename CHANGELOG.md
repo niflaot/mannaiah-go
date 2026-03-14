@@ -53,6 +53,33 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.3.7] - 2026-03-14
+- Bump service/version references and badges to `v1.3.7`.
+- Fix WooCommerce contact duplicate-document upsert recovery:
+  - add deterministic document lookup filters (`documentType`, `documentNumber`) in contacts list queries.
+  - use direct `(documentType, documentNumber)` lookup fallback on duplicate create collisions.
+  - treat raw SQL duplicate-key driver messages (for example MySQL `Error 1062`) as duplicate-retryable fallback cases.
+- Fix WooCommerce inbound order status/comment mutation policy:
+  - allow `source=woocommerce_sync` mutations for Woo orders so status transitions are applied during `/woo/sync/orders`.
+  - keep Woo loop suppression for other Woo-origin sources.
+- Add stamp-aware circle opt-in lifecycle behavior:
+  - `POST /contacts/optin` now sets:
+    - `flock_checker_circle_optin=yes`
+    - `flock_checker_circle_optin_accepted_at`
+    - `flock_checker_circle_optin_accepted_at_utc`
+    - and clears `flock_checker_circle_optin_rejected_at*`.
+  - `POST /contacts/optout` now sets:
+    - `flock_checker_circle_optin=no`
+    - `flock_checker_circle_optin_rejected_at`
+    - `flock_checker_circle_optin_rejected_at_utc`
+    - and clears `flock_checker_circle_optin_accepted_at*`.
+  - Woo checker sync now maps `flock_checker_circle_optin=no` into rejected-at metadata and clears accepted-at stamps.
+  - Duplicate-order metadata merge now prefers latest checker values per email and normalizes circle opt-in yes/no stamp cleanup.
+- Add/extend unit coverage for:
+  - Woo duplicate-document fallback by document filters and raw SQL duplicate messages.
+  - Woo status update allowlist for `woocommerce_sync`.
+  - opt-in/opt-out stamp transitions and checker metadata merge precedence.
+
 ### [v1.3.6] - 2026-03-13
 - Bump service/version references and badges to `v1.3.6`.
 - Fix WooCommerce contact sync metadata mapping (`POST /woo/sync/contacts`) to propagate checker consent keys from order metadata into contact metadata:

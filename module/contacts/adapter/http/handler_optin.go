@@ -18,6 +18,10 @@ const (
 	circleOptInAcceptedAtMetadataKey = "flock_checker_circle_optin_accepted_at"
 	// circleOptInAcceptedAtUTCMetadataKey defines contact metadata key used for UTC accepted-at timestamp values.
 	circleOptInAcceptedAtUTCMetadataKey = "flock_checker_circle_optin_accepted_at_utc"
+	// circleOptInRejectedAtMetadataKey defines contact metadata key used for local rejected-at timestamp values.
+	circleOptInRejectedAtMetadataKey = "flock_checker_circle_optin_rejected_at"
+	// circleOptInRejectedAtUTCMetadataKey defines contact metadata key used for UTC rejected-at timestamp values.
+	circleOptInRejectedAtUTCMetadataKey = "flock_checker_circle_optin_rejected_at_utc"
 	// circleOptInLocalTimestampLayout defines layout values used by local accepted-at metadata keys.
 	circleOptInLocalTimestampLayout = "2006-01-02 15:04:05"
 	// circleOptInLocalTimezoneName defines timezone values used by local accepted-at metadata keys.
@@ -68,8 +72,18 @@ func (h *Handler) updateCircleOptInByEmail(ctx corehttp.Context, decision string
 	metadata := cloneMetadata(contact.Metadata)
 	localAcceptedAt, utcAcceptedAt := consentAcceptedAtValues(h.currentTime())
 	metadata[circleOptInMetadataKey] = decision
-	metadata[circleOptInAcceptedAtMetadataKey] = localAcceptedAt
-	metadata[circleOptInAcceptedAtUTCMetadataKey] = utcAcceptedAt
+	switch decision {
+	case circleOptInYesValue:
+		metadata[circleOptInAcceptedAtMetadataKey] = localAcceptedAt
+		metadata[circleOptInAcceptedAtUTCMetadataKey] = utcAcceptedAt
+		delete(metadata, circleOptInRejectedAtMetadataKey)
+		delete(metadata, circleOptInRejectedAtUTCMetadataKey)
+	case circleOptInNoValue:
+		metadata[circleOptInRejectedAtMetadataKey] = localAcceptedAt
+		metadata[circleOptInRejectedAtUTCMetadataKey] = utcAcceptedAt
+		delete(metadata, circleOptInAcceptedAtMetadataKey)
+		delete(metadata, circleOptInAcceptedAtUTCMetadataKey)
+	}
 
 	updated, err := h.service.Update(ctx.Context(), contact.ID, application.UpdateCommand{Metadata: &metadata})
 	if err != nil {

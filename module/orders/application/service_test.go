@@ -849,6 +849,69 @@ func TestUpdateStatusSkipsWooInboundMutation(t *testing.T) {
 	}
 }
 
+// TestUpdateStatusAllowsWooSyncMutation verifies Woo sync status updates are applied for woocommerce_sync source.
+func TestUpdateStatusAllowsWooSyncMutation(t *testing.T) {
+	appendCalled := false
+	repository := repositoryMock{
+		createFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		updateFn: func(ctx context.Context, order *ordersdomain.Order) error { return nil },
+		getByIDFn: func(ctx context.Context, id string) (*ordersdomain.Order, error) {
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: ordersdomain.StatusCreated,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+			}, nil
+		},
+		listFn: func(ctx context.Context, query ordersport.ListQuery) ([]ordersdomain.Order, int64, error) {
+			return nil, 0, nil
+		},
+		appendStatusFn: func(ctx context.Context, id string, entry ordersdomain.StatusEntry) (*ordersdomain.Order, error) {
+			appendCalled = true
+			return &ordersdomain.Order{
+				ID:            id,
+				Identifier:    "1001",
+				Realm:         "woocommerce",
+				ContactID:     "c-1",
+				CurrentStatus: entry.Status,
+				StatusHistory: []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}, entry},
+				Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+			}, nil
+		},
+		appendCommentFn: func(ctx context.Context, id string, comment ordersdomain.Comment) (*ordersdomain.Order, error) {
+			return nil, nil
+		},
+	}
+	customers := customerSourceMock{
+		getByIDFn: func(ctx context.Context, id string) (*ordersport.Customer, error) {
+			return &ordersport.Customer{ID: id}, nil
+		},
+	}
+	publisher := &publisherMock{}
+	service, err := NewServiceWithPublisher(repository, customers, publisher)
+	if err != nil {
+		t.Fatalf("NewServiceWithPublisher() error = %v", err)
+	}
+
+	updated, err := service.UpdateStatus(context.Background(), "o-1", UpdateStatusCommand{
+		Status: ordersdomain.StatusCompleted,
+		Author: "system",
+		Source: "woocommerce_sync",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if !appendCalled {
+		t.Fatalf("expected append status call for woocommerce_sync source")
+	}
+	if updated.CurrentStatus != ordersdomain.StatusCompleted {
+		t.Fatalf("updated.CurrentStatus = %q, want %q", updated.CurrentStatus, ordersdomain.StatusCompleted)
+	}
+}
+
 // TestAddCommentSkipsWooInboundMutation verifies Woo-origin comment-append suppression behavior.
 func TestAddCommentSkipsWooInboundMutation(t *testing.T) {
 	appendCalled := false

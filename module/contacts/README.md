@@ -21,8 +21,14 @@
 - Endpoints:
   - `POST /contacts`
   - `GET /contacts` (supports `metadataKey` and `metadataValue` filters)
-  - `POST /contacts/optin` (updates circle opt-in metadata by email; requires `contacts:manage`)
-  - `POST /contacts/optout` (updates circle opt-in metadata by email; requires `contacts:manage`)
+  - `POST /contacts/optin` (updates circle opt-in metadata by email; requires `contacts:manage`):
+    - sets `flock_checker_circle_optin=yes`
+    - sets `flock_checker_circle_optin_accepted_at`, `flock_checker_circle_optin_accepted_at_utc`
+    - clears `flock_checker_circle_optin_rejected_at`, `flock_checker_circle_optin_rejected_at_utc`
+  - `POST /contacts/optout` (updates circle opt-in metadata by email; requires `contacts:manage`):
+    - sets `flock_checker_circle_optin=no`
+    - sets `flock_checker_circle_optin_rejected_at`, `flock_checker_circle_optin_rejected_at_utc`
+    - clears `flock_checker_circle_optin_accepted_at`, `flock_checker_circle_optin_accepted_at_utc`
   - `GET /contacts/:id`
   - `PATCH /contacts/:id`
   - `DELETE /contacts/:id`

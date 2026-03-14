@@ -117,6 +117,10 @@ func mergeSyncMetadata(existing map[string]string, candidate map[string]string, 
 			merged[trimmedKey] = trimmedValue
 			continue
 		}
+		if isCheckerMetadataKey(trimmedKey) {
+			merged[trimmedKey] = trimmedValue
+			continue
+		}
 		if !isOldestOrderMetadataKey(trimmedKey) {
 			continue
 		}
@@ -124,12 +128,18 @@ func mergeSyncMetadata(existing map[string]string, candidate map[string]string, 
 			merged[trimmedKey] = trimmedValue
 		}
 	}
+	normalizeCircleOptInMetadata(merged)
 
 	if len(merged) == 0 {
 		return nil
 	}
 
 	return merged
+}
+
+// isCheckerMetadataKey reports whether metadata keys belong to checker decision metadata groups.
+func isCheckerMetadataKey(value string) bool {
+	return strings.HasPrefix(strings.TrimSpace(value), checkerMetadataPrefix)
 }
 
 // isOldestOrderMetadataKey reports whether metadata keys depend on oldest-order selection behavior.

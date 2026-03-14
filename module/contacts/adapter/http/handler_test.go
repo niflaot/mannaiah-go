@@ -389,9 +389,14 @@ func TestHandlerCircleOptInEndpoint(t *testing.T) {
 			}
 			return &application.ListResult{
 				Data: []domain.Contact{{
-					ID:       "c-1",
-					Email:    "consent@example.com",
-					Metadata: map[string]string{"integration.source": "woocommerce"},
+					ID:    "c-1",
+					Email: "consent@example.com",
+					Metadata: map[string]string{
+						"integration.source":                         "woocommerce",
+						"flock_checker_circle_optin":                 "no",
+						"flock_checker_circle_optin_rejected_at":     "2026-03-12 10:00:00",
+						"flock_checker_circle_optin_rejected_at_utc": "2026-03-12T15:00:00Z",
+					},
 				}},
 			}, nil
 		},
@@ -410,6 +415,12 @@ func TestHandlerCircleOptInEndpoint(t *testing.T) {
 			}
 			if (*command.Metadata)["flock_checker_circle_optin_accepted_at_utc"] != "2026-03-13T18:05:22Z" {
 				t.Fatalf("flock_checker_circle_optin_accepted_at_utc = %q, want %q", (*command.Metadata)["flock_checker_circle_optin_accepted_at_utc"], "2026-03-13T18:05:22Z")
+			}
+			if _, exists := (*command.Metadata)["flock_checker_circle_optin_rejected_at"]; exists {
+				t.Fatalf("flock_checker_circle_optin_rejected_at should be removed on opt-in")
+			}
+			if _, exists := (*command.Metadata)["flock_checker_circle_optin_rejected_at_utc"]; exists {
+				t.Fatalf("flock_checker_circle_optin_rejected_at_utc should be removed on opt-in")
 			}
 			return &domain.Contact{ID: id, Email: "consent@example.com", Metadata: *command.Metadata}, nil
 		},
@@ -434,7 +445,15 @@ func TestHandlerCircleOptOutEndpoint(t *testing.T) {
 		getFn:    func(ctx context.Context, id string) (*domain.Contact, error) { return nil, nil },
 		listFn: func(ctx context.Context, query port.ListQuery) (*application.ListResult, error) {
 			return &application.ListResult{
-				Data: []domain.Contact{{ID: "c-2", Email: "consent@example.com"}},
+				Data: []domain.Contact{{
+					ID:    "c-2",
+					Email: "consent@example.com",
+					Metadata: map[string]string{
+						"flock_checker_circle_optin":                 "yes",
+						"flock_checker_circle_optin_accepted_at":     "2026-03-10 08:00:00",
+						"flock_checker_circle_optin_accepted_at_utc": "2026-03-10T13:00:00Z",
+					},
+				}},
 			}, nil
 		},
 		updateFn: func(ctx context.Context, id string, command application.UpdateCommand) (*domain.Contact, error) {
@@ -444,11 +463,17 @@ func TestHandlerCircleOptOutEndpoint(t *testing.T) {
 			if (*command.Metadata)["flock_checker_circle_optin"] != "no" {
 				t.Fatalf("flock_checker_circle_optin = %q, want %q", (*command.Metadata)["flock_checker_circle_optin"], "no")
 			}
-			if (*command.Metadata)["flock_checker_circle_optin_accepted_at"] != "2026-03-13 13:05:22" {
-				t.Fatalf("flock_checker_circle_optin_accepted_at = %q, want %q", (*command.Metadata)["flock_checker_circle_optin_accepted_at"], "2026-03-13 13:05:22")
+			if _, exists := (*command.Metadata)["flock_checker_circle_optin_accepted_at"]; exists {
+				t.Fatalf("flock_checker_circle_optin_accepted_at should be removed on opt-out")
 			}
-			if (*command.Metadata)["flock_checker_circle_optin_accepted_at_utc"] != "2026-03-13T18:05:22Z" {
-				t.Fatalf("flock_checker_circle_optin_accepted_at_utc = %q, want %q", (*command.Metadata)["flock_checker_circle_optin_accepted_at_utc"], "2026-03-13T18:05:22Z")
+			if _, exists := (*command.Metadata)["flock_checker_circle_optin_accepted_at_utc"]; exists {
+				t.Fatalf("flock_checker_circle_optin_accepted_at_utc should be removed on opt-out")
+			}
+			if (*command.Metadata)["flock_checker_circle_optin_rejected_at"] != "2026-03-13 13:05:22" {
+				t.Fatalf("flock_checker_circle_optin_rejected_at = %q, want %q", (*command.Metadata)["flock_checker_circle_optin_rejected_at"], "2026-03-13 13:05:22")
+			}
+			if (*command.Metadata)["flock_checker_circle_optin_rejected_at_utc"] != "2026-03-13T18:05:22Z" {
+				t.Fatalf("flock_checker_circle_optin_rejected_at_utc = %q, want %q", (*command.Metadata)["flock_checker_circle_optin_rejected_at_utc"], "2026-03-13T18:05:22Z")
 			}
 			return &domain.Contact{ID: id, Email: "consent@example.com", Metadata: *command.Metadata}, nil
 		},

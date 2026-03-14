@@ -189,3 +189,27 @@ func TestBuildContactMetadataBackfillsCircleOptInAcceptedAt(t *testing.T) {
 		t.Fatalf("circle accepted_at_utc metadata = %q, want %q", metadata["flock_checker_circle_optin_accepted_at_utc"], "2026-03-13T18:05:22Z")
 	}
 }
+
+// TestBuildContactMetadataMapsCircleOptOutToRejectedAt verifies circle opt-out metadata mapping behavior.
+func TestBuildContactMetadataMapsCircleOptOutToRejectedAt(t *testing.T) {
+	createdAt := time.Date(2026, time.March, 13, 18, 5, 22, 0, time.UTC)
+	metadata := buildContactMetadata(port.WooOrder{
+		Metadata: map[string]string{
+			"flock_checker_circle_optin":             "no",
+			"flock_checker_circle_optin_accepted_at": "2026-03-13 13:05:22",
+		},
+	}, &createdAt)
+
+	if metadata["flock_checker_circle_optin"] != "no" {
+		t.Fatalf("circle optin metadata = %q, want %q", metadata["flock_checker_circle_optin"], "no")
+	}
+	if metadata["flock_checker_circle_optin_rejected_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("circle rejected_at metadata = %q, want %q", metadata["flock_checker_circle_optin_rejected_at"], "2026-03-13 13:05:22")
+	}
+	if metadata["flock_checker_circle_optin_rejected_at_utc"] != "2026-03-13T18:05:22Z" {
+		t.Fatalf("circle rejected_at_utc metadata = %q, want %q", metadata["flock_checker_circle_optin_rejected_at_utc"], "2026-03-13T18:05:22Z")
+	}
+	if _, exists := metadata["flock_checker_circle_optin_accepted_at"]; exists {
+		t.Fatalf("expected circle accepted_at metadata to be cleared for no decision")
+	}
+}

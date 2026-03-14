@@ -19,8 +19,16 @@ var (
 )
 
 const (
-	// findByDocumentPageSize defines page size values used by document fallback lookup flows.
-	findByDocumentPageSize = 100
+	// circleOptInMetadataKey defines metadata key used for circle opt-in decisions.
+	circleOptInMetadataKey = "flock_checker_circle_optin"
+	// checkerMetadataAcceptedAtSuffix defines checker accepted-at metadata key suffixes.
+	checkerMetadataAcceptedAtSuffix = "_accepted_at"
+	// checkerMetadataAcceptedAtUTCSuffix defines checker accepted-at UTC metadata key suffixes.
+	checkerMetadataAcceptedAtUTCSuffix = "_accepted_at_utc"
+	// checkerMetadataRejectedAtSuffix defines checker rejected-at metadata key suffixes.
+	checkerMetadataRejectedAtSuffix = "_rejected_at"
+	// checkerMetadataRejectedAtUTCSuffix defines checker rejected-at UTC metadata key suffixes.
+	checkerMetadataRejectedAtUTCSuffix = "_rejected_at_utc"
 )
 
 // Upserter defines contact upsert behavior backed by contacts application services.
@@ -133,41 +141,27 @@ func (u *Upserter) findByDocument(ctx context.Context, documentType string, docu
 		return nil, nil
 	}
 
-	page := 1
-	for {
-		result, err := u.service.List(ctx, contactport.ListQuery{
-			Page:  page,
-			Limit: findByDocumentPageSize,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("list contacts by document: %w", err)
-		}
-		for index := range result.Data {
-			candidate := result.Data[index]
-			if !strings.EqualFold(strings.TrimSpace(string(candidate.DocumentType)), normalizedType) {
-				continue
-			}
-			if strings.TrimSpace(candidate.DocumentNumber) != normalizedNumber {
-				continue
-			}
-
-			return &candidate, nil
-		}
-
-		if len(result.Data) == 0 {
-			break
-		}
-		totalPages := result.TotalPages
-		if totalPages <= 0 {
-			totalPages = 1
-		}
-		if page >= totalPages {
-			break
-		}
-		page++
+	result, err := u.service.List(ctx, contactport.ListQuery{
+		Page:           1,
+		Limit:          1,
+		DocumentType:   normalizedType,
+		DocumentNumber: normalizedNumber,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list contacts by document: %w", err)
+	}
+	if len(result.Data) == 0 {
+		return nil, nil
+	}
+	contact := result.Data[0]
+	if !strings.EqualFold(strings.TrimSpace(string(contact.DocumentType)), normalizedType) {
+		return nil, nil
+	}
+	if strings.TrimSpace(contact.DocumentNumber) != normalizedNumber {
+		return nil, nil
 	}
 
-	return nil, nil
+	return &contact, nil
 }
 
 // updateExisting applies update payload values to existing contacts.
@@ -204,7 +198,27 @@ func (u *Upserter) updateExisting(ctx context.Context, existing contactdomain.Co
 func isDuplicateCreateError(err error) bool {
 	return errors.Is(err, contactport.ErrDuplicateEmail) ||
 		errors.Is(err, contactport.ErrDuplicateContact) ||
-		errors.Is(err, contactport.ErrDuplicateDocument)
+		errors.Is(err, contactport.ErrDuplicateDocument) ||
+		isDuplicateKeyErrorMessage(err)
+}
+
+// isDuplicateKeyErrorMessage reports duplicate-key create errors by SQL driver message fallback.
+func isDuplicateKeyErrorMessage(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	if message == "" {
+		return false
+	}
+	if strings.Contains(message, "error 1062") || strings.Contains(message, "duplicate entry") {
+		return true
+	}
+
+	return strings.Contains(message, "duplicate key") ||
+		strings.Contains(message, "duplicated key") ||
+		strings.Contains(message, "unique constraint failed")
 }
 
 // hasMeaningfulChange reports whether non-document fields changed between existing contacts and sync commands.
@@ -289,8 +303,39 @@ func mergeMetadata(existing map[string]string, syncMetadata map[string]string) m
 	for key, value := range syncMetadata {
 		merged[key] = value
 	}
+	normalizeCircleOptInMetadata(merged)
 
 	return merged
+}
+
+// normalizeCircleOptInMetadata normalizes circle opt-in metadata transitions in merged metadata maps.
+func normalizeCircleOptInMetadata(metadata map[string]string) {
+	if len(metadata) == 0 {
+		return
+	}
+
+	decision := strings.ToLower(strings.TrimSpace(metadata[circleOptInMetadataKey]))
+	acceptedAtKey := circleOptInMetadataKey + checkerMetadataAcceptedAtSuffix
+	acceptedAtUTCKey := circleOptInMetadataKey + checkerMetadataAcceptedAtUTCSuffix
+	rejectedAtKey := circleOptInMetadataKey + checkerMetadataRejectedAtSuffix
+	rejectedAtUTCKey := circleOptInMetadataKey + checkerMetadataRejectedAtUTCSuffix
+
+	switch decision {
+	case "yes":
+		delete(metadata, rejectedAtKey)
+		delete(metadata, rejectedAtUTCKey)
+	case "no":
+		fallbackRejectedAt := strings.TrimSpace(metadata[acceptedAtKey])
+		fallbackRejectedAtUTC := strings.TrimSpace(metadata[acceptedAtUTCKey])
+		delete(metadata, acceptedAtKey)
+		delete(metadata, acceptedAtUTCKey)
+		if strings.TrimSpace(metadata[rejectedAtKey]) == "" && fallbackRejectedAt != "" {
+			metadata[rejectedAtKey] = fallbackRejectedAt
+		}
+		if strings.TrimSpace(metadata[rejectedAtUTCKey]) == "" && fallbackRejectedAtUTC != "" {
+			metadata[rejectedAtUTCKey] = fallbackRejectedAtUTC
+		}
+	}
 }
 
 // metadataEqual compares metadata maps.

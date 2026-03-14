@@ -141,6 +141,36 @@ func TestMapOrderToCommandBackfillsCircleOptInAcceptedAt(t *testing.T) {
 	}
 }
 
+// TestMapOrderToCommandMapsCircleOptOutToRejectedAt verifies circle opt-out metadata mapping behavior.
+func TestMapOrderToCommandMapsCircleOptOutToRejectedAt(t *testing.T) {
+	command, shouldProcess := mapOrderToCommand(port.WooOrder{
+		BillingEmail:     "user@example.com",
+		BillingFirstName: "First",
+		BillingLastName:  "Last",
+		CreatedAt:        time.Date(2026, time.March, 13, 18, 5, 22, 0, time.UTC),
+		ID:               9101,
+		Metadata: map[string]string{
+			"flock_checker_circle_optin":             "no",
+			"flock_checker_circle_optin_accepted_at": "2026-03-13 13:05:22",
+		},
+	})
+	if !shouldProcess {
+		t.Fatalf("expected order to be processed")
+	}
+	if command.Metadata["flock_checker_circle_optin"] != "no" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin] = %q, want %q", command.Metadata["flock_checker_circle_optin"], "no")
+	}
+	if command.Metadata["flock_checker_circle_optin_rejected_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin_rejected_at] = %q, want %q", command.Metadata["flock_checker_circle_optin_rejected_at"], "2026-03-13 13:05:22")
+	}
+	if command.Metadata["flock_checker_circle_optin_rejected_at_utc"] != "2026-03-13T18:05:22Z" {
+		t.Fatalf("command.Metadata[flock_checker_circle_optin_rejected_at_utc] = %q, want %q", command.Metadata["flock_checker_circle_optin_rejected_at_utc"], "2026-03-13T18:05:22Z")
+	}
+	if _, exists := command.Metadata["flock_checker_circle_optin_accepted_at"]; exists {
+		t.Fatalf("expected flock_checker_circle_optin_accepted_at to be cleared when decision is no")
+	}
+}
+
 // TestCollectCommandsFromOrdersKeepsOldestCreatedAt verifies duplicate-email command merge behavior.
 func TestCollectCommandsFromOrdersKeepsOldestCreatedAt(t *testing.T) {
 	summary := &SyncSummary{}
@@ -172,6 +202,48 @@ func TestCollectCommandsFromOrdersKeepsOldestCreatedAt(t *testing.T) {
 	}
 	if summary.Skipped != 1 {
 		t.Fatalf("summary.Skipped = %d, want %d", summary.Skipped, 1)
+	}
+}
+
+// TestCollectCommandsFromOrdersPrefersLatestCheckerMetadata verifies checker metadata values use latest duplicate-order values.
+func TestCollectCommandsFromOrdersPrefersLatestCheckerMetadata(t *testing.T) {
+	summary := &SyncSummary{}
+	commands := collectCommandsFromOrders([]port.WooOrder{
+		{
+			ID:               1001,
+			BillingEmail:     "same@example.com",
+			BillingFirstName: "Same",
+			BillingLastName:  "User",
+			CreatedAt:        time.Date(2026, time.March, 10, 12, 0, 0, 0, time.UTC),
+			Metadata: map[string]string{
+				"flock_checker_circle_optin":                 "no",
+				"flock_checker_circle_optin_rejected_at":     "2026-03-10 07:00:00",
+				"flock_checker_circle_optin_rejected_at_utc": "2026-03-10T12:00:00Z",
+			},
+		},
+		{
+			ID:               1002,
+			BillingEmail:     "same@example.com",
+			BillingFirstName: "Same",
+			BillingLastName:  "User",
+			CreatedAt:        time.Date(2026, time.March, 13, 18, 5, 22, 0, time.UTC),
+			Metadata: map[string]string{
+				"flock_checker_circle_optin":             "yes",
+				"flock_checker_circle_optin_accepted_at": "2026-03-13 13:05:22",
+			},
+		},
+	}, map[string]int{}, nil, summary)
+	if len(commands) != 1 {
+		t.Fatalf("len(commands) = %d, want 1", len(commands))
+	}
+	if commands[0].Metadata["flock_checker_circle_optin"] != "yes" {
+		t.Fatalf("commands[0].Metadata[flock_checker_circle_optin] = %q, want yes", commands[0].Metadata["flock_checker_circle_optin"])
+	}
+	if commands[0].Metadata["flock_checker_circle_optin_accepted_at"] != "2026-03-13 13:05:22" {
+		t.Fatalf("commands[0].Metadata[flock_checker_circle_optin_accepted_at] = %q, want %q", commands[0].Metadata["flock_checker_circle_optin_accepted_at"], "2026-03-13 13:05:22")
+	}
+	if _, exists := commands[0].Metadata["flock_checker_circle_optin_rejected_at"]; exists {
+		t.Fatalf("expected rejected_at metadata to be cleared when latest checker decision is yes")
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 	"mannaiah/module/woocommerce"
 )
 
-// TestWooCommerceOrdersSyncE2E verifies WooCommerce order sync behavior including contact fallback and Woo-origin update suppression.
+// TestWooCommerceOrdersSyncE2E verifies WooCommerce order sync behavior including contact fallback and Woo-origin status/comment updates.
 func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
@@ -103,37 +103,33 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 	harness.tracer.Step("update mock order source to completed with note comment")
 	setState("completed", "Delivered by carrier")
 
-	harness.tracer.Step("trigger manual woocommerce orders sync and expect Woo-origin updates to be ignored")
+	harness.tracer.Step("trigger manual woocommerce orders sync and apply Woo-origin updates")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/orders", ordersManageToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	if payload["updated"] != float64(0) {
-		t.Fatalf("payload.updated = %v, want %v", payload["updated"], float64(0))
+	updated, ok := payload["updated"].(float64)
+	if !ok || updated < float64(1) {
+		t.Fatalf("payload.updated = %v, want >= %v", payload["updated"], float64(1))
 	}
-	unchanged, ok := payload["unchanged"].(float64)
-	if !ok || unchanged < float64(1) {
-		t.Fatalf("payload.unchanged = %v, want >= %v", payload["unchanged"], float64(1))
-	}
-
-	harness.tracer.Step("verify order status and comments were not mutated by Woo-origin sync")
+	harness.tracer.Step("verify order status and comments were mutated by Woo-origin sync")
 	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/orders/"+orderID, ordersReadToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
-	if payload["currentStatus"] != "CREATED" {
-		t.Fatalf("order currentStatus = %v, want %q", payload["currentStatus"], "CREATED")
+	if payload["currentStatus"] != "COMPLETED" {
+		t.Fatalf("order currentStatus = %v, want %q", payload["currentStatus"], "COMPLETED")
 	}
 	history, ok := payload["statusHistory"].([]any)
-	if !ok || len(history) != 1 {
-		t.Fatalf("statusHistory = %v, want exactly 1 entry", payload["statusHistory"])
+	if !ok || len(history) < 2 {
+		t.Fatalf("statusHistory = %v, want at least 2 entries", payload["statusHistory"])
 	}
 	comments, ok := payload["comments"].([]any)
 	if !ok {
 		t.Fatalf("comments = %v, want array payload", payload["comments"])
 	}
-	if len(comments) != 0 {
-		t.Fatalf("comments = %v, want no synced comment entries", payload["comments"])
+	if len(comments) < 1 {
+		t.Fatalf("comments = %v, want synced comment entries", payload["comments"])
 	}
 
 	harness.tracer.Step("trigger targeted woocommerce orders sync by id")
