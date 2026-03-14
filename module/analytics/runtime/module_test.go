@@ -21,3 +21,15 @@ func TestNew(t *testing.T) {
 		t.Fatalf("module or resolver is nil")
 	}
 }
+
+// TestNewEnabledRequiresDSN verifies enabled analytics constructor validation behavior.
+func TestNewEnabledRequiresDSN(t *testing.T) {
+	db, err := coredatabase.Open(coredatabase.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+
+	if _, err := New(Config{Enabled: true}, db, nil); err == nil {
+		t.Fatalf("New(enabled without dsn) expected error")
+	}
+}

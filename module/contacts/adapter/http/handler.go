@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"mannaiah/module/contacts/application"
 	"mannaiah/module/contacts/domain"
@@ -31,38 +30,12 @@ type Authorizer interface {
 	IsForbidden(err error) bool
 }
 
-// MembershipStampCommand defines membership stamp payload values.
-type MembershipStampCommand struct {
-	// ContactID defines optional contact identifier values.
-	ContactID string
-	// Email defines optional contact lookup email values.
-	Email string
-	// Channel defines channel values.
-	Channel string
-	// Action defines action values.
-	Action string
-	// Source defines source values.
-	Source string
-	// OccurredAt defines optional action timestamp values.
-	OccurredAt *time.Time
-}
-
-// MembershipStamper defines optional membership stamp behavior.
-type MembershipStamper interface {
-	// Stamp persists membership stamps and updates latest status snapshots.
-	Stamp(ctx context.Context, command MembershipStampCommand) error
-}
-
 // Handler defines HTTP route handlers for contacts.
 type Handler struct {
 	// service defines contact use-case dependency.
 	service application.Service
 	// authorizer defines optional auth dependency for protected endpoints.
 	authorizer Authorizer
-	// now resolves current timestamps for metadata updates.
-	now func() time.Time
-	// membershipStamper defines optional membership stamp dependencies.
-	membershipStamper MembershipStamper
 }
 
 // createRequest defines request payload for contact creation.
@@ -151,7 +124,6 @@ func NewHandler(service application.Service, authorizers ...Authorizer) (*Handle
 	return &Handler{
 		service:    service,
 		authorizer: authorizer,
-		now:        time.Now,
 	}, nil
 }
 
@@ -164,21 +136,10 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	h.authorizer = authorizer
 }
 
-// SetMembershipStamper configures optional membership stamp dependencies.
-func (h *Handler) SetMembershipStamper(stamper MembershipStamper) {
-	if h == nil {
-		return
-	}
-
-	h.membershipStamper = stamper
-}
-
 // RegisterRoutes registers contact CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/contacts", h.protect("contacts:create", h.create))
 	router.Get("/contacts", h.protect("contacts:read", h.findAll))
-	router.Post("/contacts/optin", h.protect("contacts:manage", h.optInByEmail))
-	router.Post("/contacts/optout", h.protect("contacts:manage", h.optOutByEmail))
 	router.Get("/contacts/:id", h.protect("contacts:read", h.findOne))
 	router.Patch("/contacts/:id", h.protect("contacts:update", h.update))
 	router.Delete("/contacts/:id", h.protect("contacts:delete", h.remove))

@@ -1,6 +1,6 @@
 # Analytics ClickHouse Adapter
 
-Provides optional ClickHouse connectivity and health checks.
+Provides ClickHouse connectivity, schema migration execution, analytical writes, and segment-query resolution.
 
 ## Key methods / endpoints / events
 - Methods:

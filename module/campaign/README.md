@@ -12,4 +12,5 @@ Campaign planning and asynchronous audience send orchestration.
   - `PATCH /campaigns/:id`
   - `DELETE /campaigns/:id`
   - `POST /campaigns/:id/send`
-- Events: none.
+- Events:
+  - publishes `campaign.v1.delivery` for per-recipient send outcomes.

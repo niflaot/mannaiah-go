@@ -52,6 +52,54 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.3] - 2026-03-14
+- Bump release references and badges to `v2.0.3` across runtime docs/spec defaults:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - module OpenAPI specs for analytics/membership/syncrecord/email/campaign/segment
+  - `README.md` and `module/woocommerce/README.md`
+- Add frontend integration guide `MANUAL-v2.0.3.md` and link it from root `README.md`.
+- Publish ClickHouse-first marketing BI stack updates from the 2.0 line:
+  - analytics ingestion + seed + ClickHouse schema bootstrap,
+  - segment resolver hard dependency on analytics backend,
+  - campaign delivery integration events,
+  - contacts consent endpoint removal in favor of membership routes.
+
+### [v2.0.2] - 2026-03-14
+- Add frontend-facing manual with complete contracts and use-case flows for analytics, membership, segments, campaigns, email, and sync monitoring.
+- Remove planning artifacts `plan/MARKETING.md` and `plan/SYNC-RECORD.md` after implementation handoff.
+- Harden analytics/segment behavior for ClickHouse-first BI compliance:
+  - segment resolution now depends on analytics resolver and no longer falls back to MySQL query paths.
+  - startup guard: `SEGMENT_ENABLED=true` requires `ANALYTICS_ENABLED=true`.
+- Expand analytics module capabilities:
+  - ClickHouse schema migrations embedded under `module/analytics/adapter/clickhouse/migrations/*.up.sql`.
+  - runtime applies ClickHouse schema on startup when enabled.
+  - event consumers wired for:
+    - `contacts.v1.created`
+    - `contacts.v1.updated`
+    - `orders.v1.created`
+    - `orders.v1.updated`
+    - `orders.v1.status.updated`
+    - `membership.v1.changed`
+    - `campaign.v1.delivery`
+  - analytics seed now backfills ClickHouse data (contacts snapshot, orders facts, order item facts, membership events, campaign events derived from delivery history).
+- Remove legacy contacts consent endpoints from contacts module:
+  - deleted `POST /contacts/optin` and `POST /contacts/optout`.
+  - consent writes now flow through membership endpoints/module only.
+- Expand segment filter DSL mapping/validation to support BI-oriented filters:
+  - `city`
+  - `order_recency`
+  - `no_order_recency`
+  - `category`
+  - `top_spenders` (limit or percentage)
+  - `first_purchase_only`
+  - `subscribed_no_buy`
+  - `opt_in_status`
+  - `metadata`
+  - plus existing compatibility filters (`city_code_in`, `min_total_spend`, `email_opt_in`, `purchased_sku`).
+
 ### [v2.0.0] - 2026-03-14
 - Bump service/version references and badges to `v2.0.0`.
 - Add centralized sync execution registry module (`module/syncrecord`):

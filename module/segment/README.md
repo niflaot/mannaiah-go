@@ -1,6 +1,6 @@
 # Segment Module
 
-Stores reusable audience segment definitions and resolves contact IDs.
+Stores reusable audience segment definitions and resolves contact IDs through the analytics resolver (ClickHouse-backed).
 
 ## Key methods / endpoints / events
 - Methods:

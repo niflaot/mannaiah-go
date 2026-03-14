@@ -13,9 +13,8 @@ const (
 func OpenAPISpec() *openapi3.T {
 	components := openapi3.NewComponents()
 	components.Schemas = openapi3.Schemas{
-		"ContactCreate":         &openapi3.SchemaRef{Value: contactCreateSchema()},
-		"ContactUpdate":         &openapi3.SchemaRef{Value: contactUpdateSchema()},
-		"ContactConsentByEmail": &openapi3.SchemaRef{Value: contactConsentByEmailSchema()},
+		"ContactCreate": &openapi3.SchemaRef{Value: contactCreateSchema()},
+		"ContactUpdate": &openapi3.SchemaRef{Value: contactUpdateSchema()},
 	}
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{
@@ -31,28 +30,12 @@ func OpenAPISpec() *openapi3.T {
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/contacts", contactsPathItem()),
-			openapi3.WithPath("/contacts/optin", contactOptInPathItem()),
-			openapi3.WithPath("/contacts/optout", contactOptOutPathItem()),
 			openapi3.WithPath("/contacts/{id}", contactByIDPathItem()),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: contactsTag},
 		},
-	}
-}
-
-// contactOptInPathItem returns OpenAPI path operations for by-email opt-in endpoints.
-func contactOptInPathItem() *openapi3.PathItem {
-	return &openapi3.PathItem{
-		Post: optInByEmailOperation(),
-	}
-}
-
-// contactOptOutPathItem returns OpenAPI path operations for by-email opt-out endpoints.
-func contactOptOutPathItem() *openapi3.PathItem {
-	return &openapi3.PathItem{
-		Post: optOutByEmailOperation(),
 	}
 }
 
@@ -177,42 +160,6 @@ func deleteContactOperation() *openapi3.Operation {
 	}
 }
 
-// optInByEmailOperation defines the OpenAPI operation for contact opt-in updates by email.
-func optInByEmailOperation() *openapi3.Operation {
-	return &openapi3.Operation{
-		OperationID: "ContactsController_optInByEmail",
-		Summary:     "Opt in a contact by email",
-		Tags:        []string{contactsTag},
-		Security:    bearerSecurityRequirements(),
-		RequestBody: jsonRequestBodyRef("#/components/schemas/ContactConsentByEmail"),
-		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The contact has been successfully opted in.")),
-			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
-			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
-			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
-			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
-		),
-	}
-}
-
-// optOutByEmailOperation defines the OpenAPI operation for contact opt-out updates by email.
-func optOutByEmailOperation() *openapi3.Operation {
-	return &openapi3.Operation{
-		OperationID: "ContactsController_optOutByEmail",
-		Summary:     "Opt out a contact by email",
-		Tags:        []string{contactsTag},
-		Security:    bearerSecurityRequirements(),
-		RequestBody: jsonRequestBodyRef("#/components/schemas/ContactConsentByEmail"),
-		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The contact has been successfully opted out.")),
-			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
-			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
-			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
-			openapi3.WithStatus(404, responseWithDescription("Contact not found.")),
-		),
-	}
-}
-
 // bearerSecurityRequirements builds bearer-auth operation security requirements.
 func bearerSecurityRequirements() *openapi3.SecurityRequirements {
 	return openapi3.NewSecurityRequirements().With(openapi3.NewSecurityRequirement().Authenticate(bearerSecurityScheme))
@@ -299,13 +246,6 @@ func contactUpdateSchema() *openapi3.Schema {
 		WithProperty("addressExtra", openapi3.NewStringSchema()).
 		WithProperty("cityCode", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema())
-}
-
-// contactConsentByEmailSchema returns the request schema for by-email consent update payloads.
-func contactConsentByEmailSchema() *openapi3.Schema {
-	return openapi3.NewObjectSchema().
-		WithProperty("email", openapi3.NewStringSchema()).
-		WithRequired([]string{"email"})
 }
 
 // documentTypeSchema returns the document-type enum schema used by contact contracts.

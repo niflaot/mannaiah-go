@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"gorm.io/gorm"
 	analyticsdomain "mannaiah/module/analytics/domain"
 	analyticsport "mannaiah/module/analytics/port"
 	"mannaiah/module/segment/domain"
@@ -18,8 +17,8 @@ import (
 var (
 	// ErrNilRepository is returned when nil repository dependencies are provided.
 	ErrNilRepository = errors.New("segment repository must not be nil")
-	// ErrNilDB is returned when nil db dependencies are provided.
-	ErrNilDB = errors.New("segment db must not be nil")
+	// ErrResolverUnavailable is returned when analytics resolver dependencies are unavailable.
+	ErrResolverUnavailable = errors.New("segment resolver is not configured")
 )
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
@@ -94,20 +93,14 @@ type SegmentService struct {
 	repository port.Repository
 	// resolver defines optional analytics resolver dependencies.
 	resolver analyticsport.Resolver
-	// db defines transactional database dependencies for fallback resolution.
-	db *gorm.DB
 }
 
 // NewService creates segment services.
-func NewService(repository port.Repository, resolver analyticsport.Resolver, db *gorm.DB) (*SegmentService, error) {
+func NewService(repository port.Repository, resolver analyticsport.Resolver) (*SegmentService, error) {
 	if repository == nil {
 		return nil, ErrNilRepository
 	}
-	if db == nil {
-		return nil, ErrNilDB
-	}
-
-	return &SegmentService{repository: repository, resolver: resolver, db: db}, nil
+	return &SegmentService{repository: repository, resolver: resolver}, nil
 }
 
 // Create persists segment rows.
@@ -119,6 +112,9 @@ func (s *SegmentService) Create(ctx context.Context, command CreateCommand) (*do
 	slug := strings.TrimSpace(strings.ToLower(command.Slug))
 	if slug == "" || !slugPattern.MatchString(slug) {
 		return nil, domain.ErrInvalidSlug
+	}
+	if err := validateFilters(command.Filters); err != nil {
+		return nil, err
 	}
 
 	segment := &domain.Segment{Name: name, Slug: slug, Channel: strings.TrimSpace(command.Channel), Filters: normalizeFilters(command.Filters)}
@@ -190,6 +186,9 @@ func (s *SegmentService) Update(ctx context.Context, id string, command UpdateCo
 		segment.Channel = strings.TrimSpace(*command.Channel)
 	}
 	if command.Filters != nil {
+		if err := validateFilters(*command.Filters); err != nil {
+			return nil, err
+		}
 		segment.Filters = normalizeFilters(*command.Filters)
 	}
 
@@ -254,85 +253,27 @@ func (s *SegmentService) Count(ctx context.Context, id string) (int64, error) {
 
 // resolveWithAnalytics resolves contact ids using analytics resolver with SQL fallback.
 func (s *SegmentService) resolveWithAnalytics(ctx context.Context, filter analyticsdomain.SegmentFilter, page int, limit int) ([]string, error) {
-	if s.resolver != nil {
-		rows, err := s.resolver.ResolveContacts(ctx, filter, page, limit)
-		if err == nil {
-			return rows, nil
-		}
+	if s.resolver == nil {
+		return nil, ErrResolverUnavailable
 	}
 
-	return s.resolveFallback(ctx, filter, page, limit)
+	rows, err := s.resolver.ResolveContacts(ctx, filter, page, limit)
+	if err != nil {
+		return nil, fmt.Errorf("resolve analytics segment contacts: %w", err)
+	}
+
+	return rows, nil
 }
 
 // resolveCountWithAnalytics resolves contact counts using analytics resolver with SQL fallback.
 func (s *SegmentService) resolveCountWithAnalytics(ctx context.Context, filter analyticsdomain.SegmentFilter) (int64, error) {
-	if s.resolver != nil {
-		var (
-			total int64
-			page  = 1
-			limit = 1000
-		)
-		for {
-			rows, err := s.resolver.ResolveContacts(ctx, filter, page, limit)
-			if err != nil {
-				break
-			}
-
-			total += int64(len(rows))
-			if len(rows) < limit {
-				return total, nil
-			}
-			page++
-		}
+	if s.resolver == nil {
+		return 0, ErrResolverUnavailable
 	}
 
-	return s.resolveCountFallback(ctx, filter)
-}
-
-// resolveFallback resolves contact ids directly from transactional MySQL/SQLite tables.
-func (s *SegmentService) resolveFallback(ctx context.Context, filter analyticsdomain.SegmentFilter, page int, limit int) ([]string, error) {
-	offset := (page - 1) * limit
-	db := s.db.WithContext(ctx).Table("contacts c").Select("c.id").Where("c.deleted_at IS NULL")
-	if len(filter.CityCodes) > 0 {
-		db = db.Where("c.city_code IN ?", filter.CityCodes)
-	}
-	if filter.RequireEmailOptIn {
-		db = db.Where("EXISTS (SELECT 1 FROM membership_status ms WHERE ms.contact_id = c.id AND ms.channel = ? AND ms.action = ?)", "email", "opt_in")
-	}
-	if filter.MinTotalSpend != nil {
-		db = db.Where("EXISTS (SELECT 1 FROM orders o WHERE o.contact_id = c.id GROUP BY o.contact_id HAVING SUM(o.total_value) >= ?)", *filter.MinTotalSpend)
-	}
-	if strings.TrimSpace(filter.PurchasedSKU) != "" {
-		db = db.Where("EXISTS (SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.contact_id = c.id AND oi.sku = ?)", strings.TrimSpace(filter.PurchasedSKU))
-	}
-
-	ids := make([]string, 0, limit)
-	if err := db.Order("c.id ASC").Offset(offset).Limit(limit).Scan(&ids).Error; err != nil {
-		return nil, fmt.Errorf("resolve segment fallback contacts: %w", err)
-	}
-
-	return ids, nil
-}
-
-// resolveCountFallback resolves contact counts directly from transactional MySQL/SQLite tables.
-func (s *SegmentService) resolveCountFallback(ctx context.Context, filter analyticsdomain.SegmentFilter) (int64, error) {
-	db := s.db.WithContext(ctx).Table("contacts c").Where("c.deleted_at IS NULL")
-	if len(filter.CityCodes) > 0 {
-		db = db.Where("c.city_code IN ?", filter.CityCodes)
-	}
-	if filter.RequireEmailOptIn {
-		db = db.Where("EXISTS (SELECT 1 FROM membership_status ms WHERE ms.contact_id = c.id AND ms.channel = ? AND ms.action = ?)", "email", "opt_in")
-	}
-	if filter.MinTotalSpend != nil {
-		db = db.Where("EXISTS (SELECT 1 FROM orders o WHERE o.contact_id = c.id GROUP BY o.contact_id HAVING SUM(o.total_value) >= ?)", *filter.MinTotalSpend)
-	}
-	if strings.TrimSpace(filter.PurchasedSKU) != "" {
-		db = db.Where("EXISTS (SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.contact_id = c.id AND oi.sku = ?)", strings.TrimSpace(filter.PurchasedSKU))
-	}
-
-	var count int64
-	if err := db.Select("COUNT(DISTINCT c.id)").Scan(&count).Error; err != nil {
-		return 0, fmt.Errorf("resolve segment fallback count: %w", err)
+	count, err := s.resolver.CountContacts(ctx, filter)
+	if err != nil {
+		return 0, fmt.Errorf("count analytics segment contacts: %w", err)
 	}
 
 	return count, nil
@@ -346,7 +287,7 @@ func normalizeFilters(filters []domain.Filter) []domain.Filter {
 		if trimmedType == "" {
 			continue
 		}
-		normalized = append(normalized, domain.Filter{Type: trimmedType, Value: filter.Value})
+		normalized = append(normalized, domain.Filter{Type: trimmedType, Value: filter.Value, Parameters: cloneParameters(filter.Parameters)})
 	}
 
 	return normalized
@@ -356,9 +297,14 @@ func normalizeFilters(filters []domain.Filter) []domain.Filter {
 func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 	result := analyticsdomain.SegmentFilter{}
 	for _, filter := range filters {
-		switch strings.TrimSpace(strings.ToLower(filter.Type)) {
+		filterType := strings.TrimSpace(strings.ToLower(filter.Type))
+		switch filterType {
 		case "city_code_in":
 			if values, ok := asStringSlice(filter.Value); ok {
+				result.CityCodes = values
+			}
+		case "city":
+			if values, ok := asStringSlice(filterParameter(filter, "codes")); ok {
 				result.CityCodes = values
 			}
 		case "min_total_spend":
@@ -367,13 +313,133 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 			}
 		case "email_opt_in":
 			if value, ok := asBool(filter.Value); ok {
-				result.RequireEmailOptIn = value
+				result.RequireEmailOptIn = &value
 			}
 		case "purchased_sku":
 			if value, ok := filter.Value.(string); ok {
 				result.PurchasedSKU = strings.TrimSpace(value)
 			}
+		case "order_recency":
+			if value, ok := asInt(filterParameter(filter, "days")); ok && value > 0 {
+				result.OrderRecencyDays = &value
+			}
+		case "no_order_recency":
+			if value, ok := asInt(filterParameter(filter, "days")); ok && value > 0 {
+				result.NoOrderRecencyDays = &value
+			}
+		case "category":
+			if value, ok := asString(filterParameter(filter, "pattern")); ok {
+				result.CategoryPattern = value
+			}
+		case "top_spenders":
+			if value, ok := asInt(filterParameter(filter, "limit")); ok && value > 0 {
+				result.TopSpendersLimit = &value
+			}
+			if value, ok := asFloat64(filterParameter(filter, "percentage")); ok && value > 0 {
+				result.TopSpendersPercentage = &value
+			}
+		case "first_purchase_only":
+			if value, ok := asBool(filterParameter(filter, "enabled")); ok {
+				result.FirstPurchaseOnly = value
+			} else {
+				result.FirstPurchaseOnly = true
+			}
+		case "subscribed_no_buy":
+			if value, ok := asBool(filterParameter(filter, "enabled")); ok {
+				result.SubscribedNoBuy = value
+			} else {
+				result.SubscribedNoBuy = true
+			}
+		case "opt_in_status":
+			if channel, ok := asString(filterParameter(filter, "channel")); ok {
+				result.OptInChannel = channel
+			}
+			if status, ok := asString(filterParameter(filter, "status")); ok {
+				result.OptInAction = status
+			}
+		case "metadata":
+			if key, ok := asString(filterParameter(filter, "key")); ok {
+				result.MetadataKey = key
+			}
+			if value, ok := asString(filterParameter(filter, "value")); ok {
+				result.MetadataValue = value
+			}
 		}
+	}
+
+	return result
+}
+
+// validateFilters validates filter types and parameters.
+func validateFilters(filters []domain.Filter) error {
+	for _, filter := range filters {
+		filterType := strings.TrimSpace(strings.ToLower(filter.Type))
+		switch filterType {
+		case "city_code_in", "min_total_spend", "email_opt_in", "purchased_sku":
+		case "city":
+			if _, ok := asStringSlice(filterParameter(filter, "codes")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "order_recency", "no_order_recency":
+			value, ok := asInt(filterParameter(filter, "days"))
+			if !ok || value <= 0 {
+				return domain.ErrInvalidFilter
+			}
+		case "category":
+			if _, ok := asString(filterParameter(filter, "pattern")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "top_spenders":
+			_, hasLimit := asInt(filterParameter(filter, "limit"))
+			_, hasPercentage := asFloat64(filterParameter(filter, "percentage"))
+			if !hasLimit && !hasPercentage {
+				return domain.ErrInvalidFilter
+			}
+		case "first_purchase_only", "subscribed_no_buy":
+		case "opt_in_status":
+			if _, ok := asString(filterParameter(filter, "channel")); !ok {
+				return domain.ErrInvalidFilter
+			}
+			if _, ok := asString(filterParameter(filter, "status")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "metadata":
+			if _, ok := asString(filterParameter(filter, "key")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		default:
+			return domain.ErrInvalidFilter
+		}
+	}
+
+	return nil
+}
+
+// filterParameter resolves normalized filter parameter values.
+func filterParameter(filter domain.Filter, key string) any {
+	if len(filter.Parameters) == 0 {
+		return nil
+	}
+
+	return filter.Parameters[strings.TrimSpace(key)]
+}
+
+// cloneParameters clones parameter maps.
+func cloneParameters(value map[string]any) map[string]any {
+	if len(value) == 0 {
+		return nil
+	}
+
+	result := make(map[string]any, len(value))
+	for key, row := range value {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+		result[trimmed] = row
+	}
+	if len(result) == 0 {
+		return nil
 	}
 
 	return result
@@ -417,6 +483,49 @@ func asFloat64(value any) (float64, bool) {
 
 // asBool converts filter values into boolean values.
 func asBool(value any) (bool, bool) {
-	typed, ok := value.(bool)
-	return typed, ok
+	switch typed := value.(type) {
+	case bool:
+		return typed, true
+	case string:
+		trimmed := strings.TrimSpace(strings.ToLower(typed))
+		if trimmed == "true" {
+			return true, true
+		}
+		if trimmed == "false" {
+			return false, true
+		}
+		return false, false
+	default:
+		return false, false
+	}
+}
+
+// asInt converts filter values into integer values.
+func asInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case float32:
+		return int(typed), true
+	default:
+		return 0, false
+	}
+}
+
+// asString converts filter values into string values.
+func asString(value any) (string, bool) {
+	typed, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(typed)
+	if trimmed == "" {
+		return "", false
+	}
+
+	return trimmed, true
 }

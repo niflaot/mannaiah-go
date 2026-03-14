@@ -8,5 +8,7 @@ Implements analytics status, seed, and resolver use-cases.
   - `(*AnalyticsService).Status(...)`
   - `(*AnalyticsService).Seed(...)`
   - `(*AnalyticsService).ResolveContacts(...)`
+  - `(*AnalyticsService).CountContacts(...)`
+  - `(*AnalyticsService).Ingest*...` (contacts/orders/membership/campaign)
 - Endpoints: none.
 - Events: none.

@@ -234,8 +234,11 @@ func (h *Handler) mapError(err error) error {
 			return corehttp.NewAppError(403, "forbidden", err)
 		}
 	}
-	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) {
+	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrInvalidFilter) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	if errors.Is(err, application.ErrResolverUnavailable) {
+		return corehttp.NewAppError(503, "segment_backend_unavailable", err)
 	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "segment_not_found", err)

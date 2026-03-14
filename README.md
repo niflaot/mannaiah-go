@@ -1,9 +1,12 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v2.0.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.0.3-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
+
+Frontend integration manual for the 2.0+ marketing/BI stack:
+- [Mannaiah v2.0.3 User Manual](./MANUAL-v2.0.3.md)
 
 ## Architecture
 
@@ -17,8 +20,8 @@ Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture
 - `module/woocommerce`: WooCommerce integration module.
 - `module/syncrecord`: centralized sync execution registry and query API.
 - `module/membership`: auditable consent/membership stamping module.
-- `module/analytics`: optional ClickHouse analytics integration module.
-- `module/segment`: audience segment definitions and resolution module.
+- `module/analytics`: ClickHouse analytics module with schema bootstrap, event ingestion, and seed endpoint.
+- `module/segment`: audience segment definitions and resolution via analytics resolver.
 - `module/email`: optional email delivery tracking and webhook module.
 - `module/campaign`: campaign lifecycle and fan-out orchestration module.
 - `e2e/`: root end-to-end validation flows.
@@ -45,6 +48,12 @@ go run ./module/core/cmd/api
 ```
 
 The API listens on `CORE_HOST:CORE_PORT` (`0.0.0.0:8080` by default).
+
+### Analytics Bootstrap
+
+- `ANALYTICS_ENABLED=true` enables ClickHouse analytics and integration consumers.
+- `SEGMENT_ENABLED=true` requires analytics to be enabled.
+- Run `POST /analytics/seed` once (admin scope `marketing:manage`) to backfill ClickHouse from transactional data.
 
 ### Assets JPG Worker
 

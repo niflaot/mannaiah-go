@@ -30,12 +30,16 @@ type Module struct {
 
 // New creates segment modules with adapter wiring.
 func New(cfg Config, db *gorm.DB, resolver analyticsport.Resolver) (*Module, error) {
+	if cfg.Enabled && resolver == nil {
+		return nil, application.ErrResolverUnavailable
+	}
+
 	repository, err := segmentstore.NewRepository(db)
 	if err != nil {
 		return nil, err
 	}
 
-	service, err := application.NewService(repository, resolver, db)
+	service, err := application.NewService(repository, resolver)
 	if err != nil {
 		return nil, err
 	}

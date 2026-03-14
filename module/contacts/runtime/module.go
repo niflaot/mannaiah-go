@@ -74,15 +74,6 @@ func (m *Module) SetAuthorizer(authorizer http.Authorizer) {
 	m.handler.SetAuthorizer(authorizer)
 }
 
-// SetMembershipStamper configures optional membership stamp dependencies.
-func (m *Module) SetMembershipStamper(stamper http.MembershipStamper) {
-	if m == nil || m.handler == nil {
-		return
-	}
-
-	m.handler.SetMembershipStamper(stamper)
-}
-
 // OpenAPISpec returns contact-module OpenAPI documentation.
 func (m *Module) OpenAPISpec() *openapi3.T {
 	return OpenAPISpec()

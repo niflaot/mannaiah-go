@@ -20,7 +20,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Membership API",
-			Version: "2.0.0",
+			Version: "2.0.3",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/membership/optin", &openapi3.PathItem{Post: optInOperation()}),

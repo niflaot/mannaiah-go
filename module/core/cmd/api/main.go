@@ -20,10 +20,10 @@ import (
 	assetsport "mannaiah/module/assets/port"
 	"mannaiah/module/auth"
 	"mannaiah/module/campaign"
+	campaignevent "mannaiah/module/campaign/adapter/event"
 	campaignport "mannaiah/module/campaign/port"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
-	contacthttp "mannaiah/module/contacts/adapter/http"
 	contactapplication "mannaiah/module/contacts/application"
 	contactport "mannaiah/module/contacts/port"
 	coreconfig "mannaiah/module/core/config"
@@ -184,7 +184,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.0.0",
+		Version:     "2.0.3",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -216,6 +216,10 @@ func run(ctx context.Context, envFile string) error {
 	membershipPublisher, err := membershipevent.NewPublisher(messaging.Publisher())
 	if err != nil {
 		return fmt.Errorf("create membership integration publisher: %w", err)
+	}
+	campaignPublisher, err := campaignevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		return fmt.Errorf("create campaign integration publisher: %w", err)
 	}
 
 	authModule, err := auth.New(authCfg, coreCfg.Environment, logger)
@@ -277,9 +281,9 @@ func run(ctx context.Context, envFile string) error {
 	if err := membershipModule.Load(runtime); err != nil {
 		return fmt.Errorf("load membership module: %w", err)
 	}
-
-	membershipStamper := membershipStamperAdapter{service: membershipModule.Service()}
-	contactsModule.SetMembershipStamper(membershipStamper)
+	if segmentCfg.Enabled && !analyticsCfg.Enabled {
+		return errors.New("segment module requires analytics to be enabled")
+	}
 
 	analyticsModule, err := analytics.New(analyticsCfg, db, messaging.Registrar())
 	if err != nil {
@@ -318,6 +322,7 @@ func run(ctx context.Context, envFile string) error {
 		db,
 		campaignSegmentResolverAdapter{segments: segmentModule.Service(), contacts: contactsModule.Service()},
 		campaignEmailSenderAdapter{service: emailModule.Service()},
+		campaignPublisher,
 	)
 	if err != nil {
 		return fmt.Errorf("initialize campaign module: %w", err)
@@ -721,29 +726,6 @@ func (a membershipContactLookupAdapter) ListByMetadata(ctx context.Context, meta
 	}
 
 	return result, rows.Total, nil
-}
-
-// membershipStamperAdapter adapts membership stamping behavior for contacts endpoints.
-type membershipStamperAdapter struct {
-	// service defines membership stamper dependencies.
-	service membershipport.Stamper
-}
-
-// Stamp persists membership stamps and updates latest status snapshots.
-func (a membershipStamperAdapter) Stamp(ctx context.Context, command contacthttp.MembershipStampCommand) error {
-	if a.service == nil {
-		return nil
-	}
-
-	_, err := a.service.Stamp(ctx, membershipport.StampCommand{
-		ContactID:  command.ContactID,
-		Email:      command.Email,
-		Channel:    membershipdomain.Channel(command.Channel),
-		Action:     membershipdomain.Action(command.Action),
-		Source:     command.Source,
-		OccurredAt: command.OccurredAt,
-	})
-	return err
 }
 
 // membershipWooStamperAdapter adapts membership stamping behavior for WooCommerce sync flows.

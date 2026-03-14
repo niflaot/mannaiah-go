@@ -13,3 +13,6 @@ type SegmentResolver = campaignport.SegmentResolver
 
 // EmailSender defines email dispatch dependencies.
 type EmailSender = campaignport.EmailSender
+
+// IntegrationEventPublisher defines campaign event publication behavior.
+type IntegrationEventPublisher = campaignport.IntegrationEventPublisher

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"mannaiah/module/campaign/domain"
 	"mannaiah/module/campaign/port"
@@ -98,6 +99,8 @@ type CampaignService struct {
 	workers int
 	// syncRecorder defines optional sync run recording dependencies.
 	syncRecorder port.SyncRecorder
+	// publisher defines integration event publication dependencies.
+	publisher port.IntegrationEventPublisher
 	// mutex guards active send guards.
 	mutex sync.Mutex
 	// activeSends prevents duplicate in-memory sends per campaign.
@@ -105,7 +108,7 @@ type CampaignService struct {
 }
 
 // NewService creates campaign services.
-func NewService(repository port.Repository, resolver port.SegmentResolver, sender port.EmailSender, workers int) (*CampaignService, error) {
+func NewService(repository port.Repository, resolver port.SegmentResolver, sender port.EmailSender, workers int, publisher port.IntegrationEventPublisher) (*CampaignService, error) {
 	if repository == nil {
 		return nil, ErrNilRepository
 	}
@@ -119,6 +122,7 @@ func NewService(repository port.Repository, resolver port.SegmentResolver, sende
 		sender:       sender,
 		workers:      workers,
 		syncRecorder: port.NoopSyncRecorder{},
+		publisher:    resolvePublisher(publisher),
 		activeSends:  map[string]struct{}{},
 	}, nil
 }
@@ -429,6 +433,7 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 		if email == "" {
 			campaign.FailedCount++
 			appendSyncError("validation", "missing_email", "contact "+contactID+" has no email")
+			s.publishDeliveryEvent(ctx, campaign.ID, contactID, campaign.Channel, "skipped_ineligible")
 			continue
 		}
 		jobs <- job{contactID: contactID, email: email}
@@ -443,9 +448,11 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 	for result := range results {
 		if result.err == nil {
 			campaign.SentCount++
+			s.publishDeliveryEvent(ctx, campaign.ID, result.contactID, campaign.Channel, "submitted_to_provider")
 		} else {
 			campaign.FailedCount++
 			appendSyncError("delivery", "send_failed", "contact "+result.contactID+" email "+result.email+": "+result.err.Error())
+			s.publishDeliveryEvent(ctx, campaign.ID, result.contactID, campaign.Channel, "failed")
 		}
 	}
 
@@ -456,4 +463,13 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 	}
 	_ = s.repository.Update(ctx, campaign)
 	finalizeSyncRecord(campaign)
+}
+
+// publishDeliveryEvent publishes campaign delivery integration events.
+func (s *CampaignService) publishDeliveryEvent(ctx context.Context, campaignID string, contactID string, channel string, status string) {
+	if s == nil || s.publisher == nil {
+		return
+	}
+
+	_ = s.publisher.Publish(ctx, buildCampaignDeliveryIntegrationEvent(campaignID, contactID, channel, status, 1, time.Now().UTC()))
 }

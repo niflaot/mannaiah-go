@@ -112,6 +112,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, application.ErrDisabled) {
 		return corehttp.NewAppError(503, "analytics_disabled", err)
 	}
+	if errors.Is(err, application.ErrBackendUnavailable) {
+		return corehttp.NewAppError(503, "analytics_backend_unavailable", err)
+	}
 
 	return corehttp.NewAppError(500, "internal_server_error", err)
 }

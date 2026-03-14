@@ -8,6 +8,8 @@ type Filter struct {
 	Type string `json:"type"`
 	// Value defines scalar filter value payloads.
 	Value any `json:"value,omitempty"`
+	// Parameters defines structured filter parameter payloads.
+	Parameters map[string]any `json:"parameters,omitempty"`
 }
 
 // Segment defines audience segment definition values.

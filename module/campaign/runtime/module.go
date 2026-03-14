@@ -29,13 +29,13 @@ type Module struct {
 }
 
 // New creates campaign modules with adapter wiring.
-func New(cfg Config, db *gorm.DB, resolver port.SegmentResolver, sender port.EmailSender) (*Module, error) {
+func New(cfg Config, db *gorm.DB, resolver port.SegmentResolver, sender port.EmailSender, publishers ...port.IntegrationEventPublisher) (*Module, error) {
 	repository, err := campaignstore.NewRepository(db)
 	if err != nil {
 		return nil, err
 	}
 
-	service, err := application.NewService(repository, resolver, sender, cfg.SendWorkers)
+	service, err := application.NewService(repository, resolver, sender, cfg.SendWorkers, resolvePublisher(publishers))
 	if err != nil {
 		return nil, err
 	}
@@ -102,4 +102,13 @@ func (m *Module) Load(loader Loader) error {
 	}
 
 	return nil
+}
+
+// resolvePublisher resolves optional integration event publisher dependencies.
+func resolvePublisher(publishers []port.IntegrationEventPublisher) port.IntegrationEventPublisher {
+	if len(publishers) == 0 {
+		return nil
+	}
+
+	return publishers[0]
 }

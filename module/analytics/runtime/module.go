@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -35,28 +37,32 @@ type Module struct {
 
 // New creates analytics modules with adapter wiring.
 func New(cfg Config, db *gorm.DB, registrar bus.Registrar) (*Module, error) {
-	_ = registrar
-
 	var (
 		store            port.Store
 		clickhouseClient *clickhouse.Client
 	)
-	if cfg.Enabled && cfg.ClickHouseDSN != "" {
+	if cfg.Enabled {
 		client, err := clickhouse.NewClient(clickhouse.Config{
 			DSN:             cfg.ClickHouseDSN,
 			MaxOpenConns:    cfg.MaxOpenConns,
 			MaxIdleConns:    cfg.MaxIdleConns,
 			ConnMaxLifetime: time.Duration(cfg.ConnMaxLifetimeMS) * time.Millisecond,
 		})
-		if err == nil {
-			clickhouseClient = client
-			store = clickhouse.NewStoreAdapter(client)
+		if err != nil {
+			return nil, fmt.Errorf("create clickhouse client: %w", err)
 		}
+		clickhouseClient = client
+		store = clickhouse.NewStoreAdapter(client)
 	}
 
 	service, err := application.NewService(cfg.Enabled, db, store)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.Enabled && cfg.MigrationEnabled && store != nil {
+		if err := store.EnsureSchema(context.Background()); err != nil {
+			return nil, fmt.Errorf("ensure analytics clickhouse schema: %w", err)
+		}
 	}
 
 	handler, err := analyticshttp.NewHandler(service)
@@ -64,7 +70,12 @@ func New(cfg Config, db *gorm.DB, registrar bus.Registrar) (*Module, error) {
 		return nil, err
 	}
 
-	return &Module{cfg: cfg, service: service, handler: handler, clickhouseClient: clickhouseClient}, nil
+	module := &Module{cfg: cfg, service: service, handler: handler, clickhouseClient: clickhouseClient}
+	if err := module.registerIntegrationHandlers(registrar); err != nil {
+		return nil, err
+	}
+
+	return module, nil
 }
 
 // RegisterRoutes registers analytics routes on the provided router.
