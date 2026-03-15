@@ -30,7 +30,7 @@ func (s *StoreAdapter) ResolveContacts(ctx context.Context, filter domain.Segmen
 	}
 
 	whereSQL, args := buildSegmentWhere(filter, topSpenderIDs)
-	query := "SELECT DISTINCT cs.contact_id FROM contacts_snapshot FINAL cs WHERE " + whereSQL + " ORDER BY cs.contact_id ASC LIMIT ? OFFSET ?"
+	query := "SELECT DISTINCT cs.contact_id FROM contacts_snapshot cs FINAL WHERE " + whereSQL + " ORDER BY cs.contact_id ASC LIMIT ? OFFSET ?"
 	args = append(args, limit, (page-1)*limit)
 
 	rows, err := s.client.db.QueryContext(ctx, query, args...)
@@ -71,7 +71,7 @@ func (s *StoreAdapter) CountContacts(ctx context.Context, filter domain.SegmentF
 	}
 
 	whereSQL, args := buildSegmentWhere(filter, topSpenderIDs)
-	query := "SELECT countDistinct(cs.contact_id) FROM contacts_snapshot FINAL cs WHERE " + whereSQL
+	query := "SELECT countDistinct(cs.contact_id) FROM contacts_snapshot cs FINAL WHERE " + whereSQL
 
 	var count int64
 	if err := s.client.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {

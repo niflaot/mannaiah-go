@@ -52,6 +52,18 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.10] - 2026-03-15
+- Fix ClickHouse syntax error in segment contact queries:
+  - `FROM contacts_snapshot FINAL cs` is invalid in ClickHouse — the alias must precede `FINAL`.
+  - Fixed both `ResolveContacts` and `CountContacts` queries to `FROM contacts_snapshot cs FINAL WHERE`.
+  - Symptom: any segment filter that used `cs.` prefixed conditions (e.g. `city_code`) triggered a syntax error at position 66.
+- Bump release references and badges to `v2.0.10`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - `README.md` and `module/woocommerce/README.md`
+
 ### [v2.0.9] - 2026-03-15
 - Add WooCommerce billing/shipping city name → Colombian municipality code resolution:
   - New `internal/citycode` package embeds 1119-entry `cities.json` at compile time via `go:embed`.
