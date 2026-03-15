@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.6] - 2026-03-15
+- Fix MySQL reserved-word syntax error in analytics seed contact metadata query:
+  - `SELECT key,value FROM contact_metadata` failed on MySQL because `key` is a reserved keyword.
+  - Fixed by passing a single raw SQL string with backtick-escaped column to GORM `Select`: `"contact_id, \`key\`, value"`.
+- Bump release references and badges to `v2.0.6`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - `README.md` and `module/woocommerce/README.md`
+
 ### [v2.0.5] - 2026-03-14
 - Membership consent model changes:
   - remove `POST /membership/migrate` route and OpenAPI path.

@@ -338,7 +338,7 @@ func (s *AnalyticsService) seedContacts(ctx context.Context, summary *SeedSummar
 		metadataRows := make([]contactMetadataSeedRow, 0, len(rows)*2)
 		if err := s.db.WithContext(ctx).
 			Table("contact_metadata").
-			Select("contact_id", "`key` AS key", "value").
+			Select("contact_id, `key`, value").
 			Where("contact_id IN ?", ids).
 			Scan(&metadataRows).Error; err != nil {
 			return fmt.Errorf("seed contact metadata batch: %w", err)
