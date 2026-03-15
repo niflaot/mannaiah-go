@@ -35,8 +35,8 @@ func TestBuildSegmentWhereIncludesExtendedFilters(t *testing.T) {
 	for _, fragment := range []string{
 		"cs.city_code IN (?,?)",
 		"membership_events",
-		"orders_fact FINAL",
-		"order_items_fact FINAL",
+		"orders_fact of FINAL",
+		"order_items_fact oi FINAL",
 		"JSONExtractString",
 		"cs.contact_id IN (?,?)",
 	} {

@@ -52,6 +52,26 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.11] - 2026-03-15
+- Fix ClickHouse `FINAL alias` ordering in all segment subqueries:
+  - In ClickHouse the table alias must precede `FINAL` — `FROM table alias FINAL`, not `FROM table FINAL alias`.
+  - Fixed `orders_fact of FINAL` and `order_items_fact oi FINAL` in all EXISTS / NOT EXISTS subqueries inside `buildSegmentWhere` (MinTotalSpend, PurchasedSKU, CategoryPattern, OrderRecency, NoOrderRecency, FirstPurchase, SubscribedNoBuy).
+- Refactor analytics module to comply with 250-line file-size rule:
+  - `adapter/clickhouse/store_query.go` (351 lines) split into:
+    - `store_query.go` — `ResolveContacts` / `CountContacts` public methods.
+    - `store_query_segment.go` — `buildSegmentWhere` and per-filter condition builders.
+    - `store_query_support.go` — top-spender resolution, `orderStatusFragment`, `makePlaceholders`.
+  - `application/service.go` (713 lines) split into:
+    - `service.go` — interface, struct, constructor, ingest and resolve methods.
+    - `service_seed.go` — `Seed` orchestration and sync-record lifecycle.
+    - `service_seed_contacts.go` — contact batch reader and snapshot builder.
+    - `service_seed_orders.go` — order/item batch reader and fact payload builder.
+    - `service_seed_membership.go` — membership stamp batch reader.
+    - `service_seed_campaign.go` — campaign delivery event batch reader.
+  - All files now under 235 lines.
+- Bump release references and badges to `v2.0.11`:
+  - `.env.example`, `module/core/telemetry/config.go`, `module/core/cmd/api/main.go`, `module/core/startup/runtime.go`, `README.md`, `module/woocommerce/README.md`
+
 ### [v2.0.10] - 2026-03-15
 - Fix ClickHouse syntax error in segment contact queries:
   - `FROM contacts_snapshot FINAL cs` is invalid in ClickHouse — the alias must precede `FINAL`.

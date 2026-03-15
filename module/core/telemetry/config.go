@@ -6,7 +6,7 @@ const (
 	// defaultServiceName defines fallback telemetry service-name values.
 	defaultServiceName = "mannaiah-api"
 	// defaultServiceVersion defines fallback telemetry service-version values.
-	defaultServiceVersion = "v2.0.10"
+	defaultServiceVersion = "v2.0.11"
 	// defaultMetricsPath defines fallback Prometheus metrics endpoint paths.
 	defaultMetricsPath = "/metrics"
 	// defaultTracesExporter defines fallback traces exporter values.
