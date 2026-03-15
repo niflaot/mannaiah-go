@@ -52,6 +52,23 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.7] - 2026-03-15
+- Add `order_status` segment filter to scope all order-related subqueries by `current_status`:
+  - `domain.SegmentFilter.OrderStatuses []string` field added.
+  - All `orders_fact` subqueries (`min_total_spend`, `order_recency`, `no_order_recency`, `first_purchase_only`, `subscribed_no_buy`, `top_spenders`) now apply an `IN (...)` clause when statuses are set.
+  - `order_items_fact` subqueries (`purchased_sku`, `category`) apply a nested correlated EXISTS against `orders_fact` for status filtering.
+  - Segment filter type `"order_status"` with `parameters.statuses` wired through segment service mapping and validation.
+- Harden analytics event consumer resilience:
+  - JSON unmarshal failures now return `platform.NonRetriable` — bad payloads skip retry backoff and go directly to DLQ.
+  - Missing required fields (contact id, order id, membership channel/action, campaign id) also marked as non-retriable.
+  - Transient ClickHouse write failures (connection drops, timeouts) remain retriable as before.
+- Bump release references and badges to `v2.0.7`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - `README.md` and `module/woocommerce/README.md`
+
 ### [v2.0.6] - 2026-03-15
 - Fix MySQL reserved-word syntax error in analytics seed contact metadata query:
   - `SELECT key,value FROM contact_metadata` failed on MySQL because `key` is a reserved keyword.

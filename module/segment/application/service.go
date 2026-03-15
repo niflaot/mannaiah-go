@@ -364,6 +364,10 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 			if value, ok := asString(filterParameter(filter, "value")); ok {
 				result.MetadataValue = value
 			}
+		case "order_status":
+			if values, ok := asStringSlice(filterParameter(filter, "statuses")); ok {
+				result.OrderStatuses = values
+			}
 		}
 	}
 
@@ -405,6 +409,11 @@ func validateFilters(filters []domain.Filter) error {
 			}
 		case "metadata":
 			if _, ok := asString(filterParameter(filter, "key")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "order_status":
+			values, ok := asStringSlice(filterParameter(filter, "statuses"))
+			if !ok || len(values) == 0 {
 				return domain.ErrInvalidFilter
 			}
 		default:

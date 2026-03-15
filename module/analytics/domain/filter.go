@@ -32,4 +32,7 @@ type SegmentFilter struct {
 	MetadataKey string
 	// MetadataValue defines optional contact metadata-value filters.
 	MetadataValue string
+	// OrderStatuses defines optional order current-status inclusion filters.
+	// When non-empty, only orders whose current_status is in this list are considered.
+	OrderStatuses []string
 }

@@ -104,8 +104,17 @@ func (s *StoreAdapter) resolveTopSpenderIDs(ctx context.Context, filter domain.S
 		return nil, nil
 	}
 
+	statusArgs := appendOrderStatusArgs(make([]any, 0, len(filter.OrderStatuses)), filter.OrderStatuses)
+	statusWhere := ""
+	if len(filter.OrderStatuses) > 0 {
+		statusWhere = " WHERE current_status IN (" + makePlaceholders(len(filter.OrderStatuses)) + ")"
+	}
+
 	var distinctContacts int64
-	if err := s.client.db.QueryRowContext(ctx, "SELECT countDistinct(contact_id) FROM orders_fact FINAL").Scan(&distinctContacts); err != nil {
+	if err := s.client.db.QueryRowContext(ctx,
+		"SELECT countDistinct(contact_id) FROM orders_fact FINAL"+statusWhere,
+		statusArgs...,
+	).Scan(&distinctContacts); err != nil {
 		return nil, fmt.Errorf("count distinct top spender contacts: %w", err)
 	}
 	if distinctContacts <= 0 {
@@ -117,10 +126,11 @@ func (s *StoreAdapter) resolveTopSpenderIDs(ctx context.Context, filter domain.S
 		return []string{}, nil
 	}
 
+	topArgs := append(append([]any{}, statusArgs...), limit)
 	rows, err := s.client.db.QueryContext(
 		ctx,
-		"SELECT contact_id FROM orders_fact FINAL GROUP BY contact_id ORDER BY sum(total_value) DESC LIMIT ?",
-		limit,
+		"SELECT contact_id FROM orders_fact FINAL"+statusWhere+" GROUP BY contact_id ORDER BY sum(total_value) DESC LIMIT ?",
+		topArgs...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query top spender contacts: %w", err)
@@ -198,50 +208,72 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 	if filter.MinTotalSpend != nil {
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM orders_fact FINAL of
-			WHERE of.contact_id = cs.contact_id
+			WHERE of.contact_id = cs.contact_id`+orderStatusFragment(filter.OrderStatuses, "of")+`
 			GROUP BY of.contact_id
 			HAVING sum(of.total_value) >= ?
 		)`)
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 		args = append(args, *filter.MinTotalSpend)
 	}
 	if strings.TrimSpace(filter.PurchasedSKU) != "" {
+		orderStatusNested := ""
+		if len(filter.OrderStatuses) > 0 {
+			orderStatusNested = `
+			AND EXISTS (
+				SELECT 1 FROM orders_fact FINAL of
+				WHERE of.order_id = oi.order_id AND of.current_status IN (` + makePlaceholders(len(filter.OrderStatuses)) + `)
+			)`
+		}
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM order_items_fact FINAL oi
-			WHERE oi.contact_id = cs.contact_id AND oi.sku = ?
+			WHERE oi.contact_id = cs.contact_id AND oi.sku = ?`+orderStatusNested+`
 		)`)
 		args = append(args, strings.TrimSpace(filter.PurchasedSKU))
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 	}
 	if strings.TrimSpace(filter.CategoryPattern) != "" {
+		orderStatusNested := ""
+		if len(filter.OrderStatuses) > 0 {
+			orderStatusNested = `
+			AND EXISTS (
+				SELECT 1 FROM orders_fact FINAL of
+				WHERE of.order_id = oi.order_id AND of.current_status IN (` + makePlaceholders(len(filter.OrderStatuses)) + `)
+			)`
+		}
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM order_items_fact FINAL oi
-			WHERE oi.contact_id = cs.contact_id AND (lower(oi.sku) LIKE lower(?) OR lower(oi.alternate_name) LIKE lower(?))
+			WHERE oi.contact_id = cs.contact_id AND (lower(oi.sku) LIKE lower(?) OR lower(oi.alternate_name) LIKE lower(?))`+orderStatusNested+`
 		)`)
 		pattern := "%" + strings.TrimSpace(filter.CategoryPattern) + "%"
 		args = append(args, pattern, pattern)
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 	}
 	if filter.OrderRecencyDays != nil && *filter.OrderRecencyDays > 0 {
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM orders_fact FINAL of
 			WHERE of.contact_id = cs.contact_id
-			  AND of.created_at >= (now64(3) - toIntervalDay(?))
+			  AND of.created_at >= (now64(3) - toIntervalDay(?))`+orderStatusFragment(filter.OrderStatuses, "of")+`
 		)`)
 		args = append(args, *filter.OrderRecencyDays)
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 	}
 	if filter.NoOrderRecencyDays != nil && *filter.NoOrderRecencyDays > 0 {
 		conditions = append(conditions, `NOT EXISTS (
 			SELECT 1 FROM orders_fact FINAL of
 			WHERE of.contact_id = cs.contact_id
-			  AND of.created_at >= (now64(3) - toIntervalDay(?))
+			  AND of.created_at >= (now64(3) - toIntervalDay(?))`+orderStatusFragment(filter.OrderStatuses, "of")+`
 		)`)
 		args = append(args, *filter.NoOrderRecencyDays)
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 	}
 	if filter.FirstPurchaseOnly {
 		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM orders_fact FINAL of
-			WHERE of.contact_id = cs.contact_id
+			WHERE of.contact_id = cs.contact_id`+orderStatusFragment(filter.OrderStatuses, "of")+`
 			GROUP BY of.contact_id
 			HAVING countDistinct(of.order_id) = 1
 		)`)
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 	}
 	if filter.SubscribedNoBuy {
 		conditions = append(conditions, `EXISTS (
@@ -255,8 +287,9 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 		)`)
 		conditions = append(conditions, `NOT EXISTS (
 			SELECT 1 FROM orders_fact FINAL of
-			WHERE of.contact_id = cs.contact_id
+			WHERE of.contact_id = cs.contact_id`+orderStatusFragment(filter.OrderStatuses, "of")+`
 		)`)
+		args = appendOrderStatusArgs(args, filter.OrderStatuses)
 	}
 	if topSpenderIDs != nil {
 		if len(topSpenderIDs) == 0 {
@@ -280,6 +313,28 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 	}
 
 	return strings.Join(conditions, " AND "), args
+}
+
+// orderStatusFragment returns an " AND [alias.]current_status IN (?,?,...)" SQL fragment
+// when statuses is non-empty, otherwise returns an empty string.
+// Pass alias="" for queries without a table alias.
+func orderStatusFragment(statuses []string, alias string) string {
+	if len(statuses) == 0 {
+		return ""
+	}
+	col := "current_status"
+	if alias != "" {
+		col = alias + ".current_status"
+	}
+	return " AND " + col + " IN (" + makePlaceholders(len(statuses)) + ")"
+}
+
+// appendOrderStatusArgs appends trimmed status values to the given args slice.
+func appendOrderStatusArgs(args []any, statuses []string) []any {
+	for _, s := range statuses {
+		args = append(args, strings.TrimSpace(s))
+	}
+	return args
 }
 
 func makePlaceholders(count int) string {

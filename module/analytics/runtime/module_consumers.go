@@ -9,6 +9,7 @@ import (
 
 	"mannaiah/module/analytics/port"
 	"mannaiah/module/core/messaging/bus"
+	"mannaiah/module/core/messaging/platform"
 )
 
 const (
@@ -104,7 +105,10 @@ func (m *Module) registerIntegrationHandlers(registrar bus.Registrar) error {
 func (m *Module) handleContactEvent(ctx context.Context, message bus.Message) error {
 	payload := contactEventPayload{}
 	if err := json.Unmarshal(message.Payload, &payload); err != nil {
-		return fmt.Errorf("decode contact event payload: %w", err)
+		return platform.NonRetriable(fmt.Errorf("decode contact event payload: %w", err))
+	}
+	if strings.TrimSpace(payload.ID) == "" {
+		return platform.NonRetriable(fmt.Errorf("contact event missing contact id"))
 	}
 
 	now := time.Now().UTC()
@@ -128,7 +132,13 @@ func (m *Module) handleContactEvent(ctx context.Context, message bus.Message) er
 func (m *Module) handleOrderEvent(ctx context.Context, message bus.Message) error {
 	payload := orderEventPayload{}
 	if err := json.Unmarshal(message.Payload, &payload); err != nil {
-		return fmt.Errorf("decode order event payload: %w", err)
+		return platform.NonRetriable(fmt.Errorf("decode order event payload: %w", err))
+	}
+	if strings.TrimSpace(payload.ID) == "" {
+		return platform.NonRetriable(fmt.Errorf("order event missing order id"))
+	}
+	if strings.TrimSpace(payload.ContactID) == "" {
+		return platform.NonRetriable(fmt.Errorf("order event missing contact id"))
 	}
 
 	now := time.Now().UTC()
@@ -174,7 +184,10 @@ func (m *Module) handleOrderEvent(ctx context.Context, message bus.Message) erro
 func (m *Module) handleMembershipChanged(ctx context.Context, message bus.Message) error {
 	payload := membershipChangedPayload{}
 	if err := json.Unmarshal(message.Payload, &payload); err != nil {
-		return fmt.Errorf("decode membership event payload: %w", err)
+		return platform.NonRetriable(fmt.Errorf("decode membership event payload: %w", err))
+	}
+	if strings.TrimSpace(payload.ContactID) == "" || strings.TrimSpace(payload.Channel) == "" || strings.TrimSpace(payload.Action) == "" {
+		return platform.NonRetriable(fmt.Errorf("membership event missing required fields"))
 	}
 
 	now := time.Now().UTC()
@@ -192,7 +205,10 @@ func (m *Module) handleMembershipChanged(ctx context.Context, message bus.Messag
 func (m *Module) handleCampaignDelivered(ctx context.Context, message bus.Message) error {
 	payload := campaignDeliveryPayload{}
 	if err := json.Unmarshal(message.Payload, &payload); err != nil {
-		return fmt.Errorf("decode campaign event payload: %w", err)
+		return platform.NonRetriable(fmt.Errorf("decode campaign event payload: %w", err))
+	}
+	if strings.TrimSpace(payload.CampaignID) == "" || strings.TrimSpace(payload.ContactID) == "" {
+		return platform.NonRetriable(fmt.Errorf("campaign event missing required fields"))
 	}
 
 	now := time.Now().UTC()
