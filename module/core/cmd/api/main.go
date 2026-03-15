@@ -184,7 +184,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.0.8",
+		Version:     "2.0.9",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)

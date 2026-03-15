@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"mannaiah/module/woocommerce/internal/citycode"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -113,7 +114,7 @@ func mapOrderToContactSyncCommand(order port.WooOrder) (port.ContactSyncCommand,
 		Phone:          normalizePhone(order.BillingPhone),
 		Address:        strings.TrimSpace(order.BillingAddress1),
 		AddressExtra:   strings.TrimSpace(order.BillingAddress2),
-		CityCode:       strings.TrimSpace(order.BillingCity),
+		CityCode:       citycode.Resolve(order.BillingCity),
 		DocumentType:   documentType,
 		DocumentNumber: documentNumber,
 		CreatedAt:      createdAt,
@@ -148,25 +149,44 @@ func mapOrderItems(items []port.WooOrderItem) []port.OrderSyncItem {
 
 // mapShippingAddress maps WooCommerce shipping values and falls back to billing snapshots.
 func mapShippingAddress(order port.WooOrder) *port.OrderSyncShippingAddress {
-	shipping := port.OrderSyncShippingAddress{
-		Address:  strings.TrimSpace(order.ShippingAddressLine1),
-		Address2: strings.TrimSpace(order.ShippingAddressLine2),
-		Phone:    normalizePhone(order.ShippingPhone),
-		CityCode: strings.TrimSpace(order.ShippingCityCode),
-	}
-	billing := port.OrderSyncShippingAddress{
-		Address:  strings.TrimSpace(order.BillingAddress1),
-		Address2: strings.TrimSpace(order.BillingAddress2),
-		Phone:    normalizePhone(order.BillingPhone),
-		CityCode: strings.TrimSpace(order.BillingCity),
-	}
+	shippingAddr := strings.TrimSpace(order.ShippingAddressLine1)
+	shippingAddr2 := strings.TrimSpace(order.ShippingAddressLine2)
+	shippingPhone := normalizePhone(order.ShippingPhone)
+	shippingCity := strings.TrimSpace(order.ShippingCityCode)
 
-	if shipping.Address == "" && shipping.Address2 == "" && shipping.Phone == "" && shipping.CityCode == "" {
-		if billing.Address == "" && billing.Address2 == "" && billing.Phone == "" && billing.CityCode == "" {
+	billingAddr := strings.TrimSpace(order.BillingAddress1)
+	billingAddr2 := strings.TrimSpace(order.BillingAddress2)
+	billingPhone := normalizePhone(order.BillingPhone)
+	billingCity := strings.TrimSpace(order.BillingCity)
+
+	shippingEmpty := shippingAddr == "" && shippingAddr2 == "" && shippingPhone == "" && shippingCity == ""
+	billingEmpty := billingAddr == "" && billingAddr2 == "" && billingPhone == "" && billingCity == ""
+
+	if shippingEmpty {
+		if billingEmpty {
 			return nil
 		}
-		return &billing
+		return &port.OrderSyncShippingAddress{
+			Address:  billingAddr,
+			Address2: billingAddr2,
+			Phone:    billingPhone,
+			CityCode: citycode.Resolve(billingCity),
+		}
 	}
+
+	shipping := port.OrderSyncShippingAddress{
+		Address:  shippingAddr,
+		Address2: shippingAddr2,
+		Phone:    shippingPhone,
+		CityCode: citycode.Resolve(shippingCity),
+	}
+	billing := port.OrderSyncShippingAddress{
+		Address:  billingAddr,
+		Address2: billingAddr2,
+		Phone:    billingPhone,
+		CityCode: citycode.Resolve(billingCity),
+	}
+
 	if shipping == billing {
 		return &billing
 	}

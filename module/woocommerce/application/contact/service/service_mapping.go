@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"mannaiah/module/woocommerce/internal/citycode"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -63,7 +64,7 @@ func mapOrderToCommand(order port.WooOrder) (port.ContactSyncCommand, bool) {
 		Phone:          normalizePhone(order.BillingPhone),
 		Address:        strings.TrimSpace(order.BillingAddress1),
 		AddressExtra:   strings.TrimSpace(order.BillingAddress2),
-		CityCode:       strings.TrimSpace(order.BillingCity),
+		CityCode:       citycode.Resolve(order.BillingCity),
 		DocumentType:   documentType,
 		DocumentNumber: documentNumber,
 		CreatedAt:      createdAt,

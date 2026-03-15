@@ -52,6 +52,21 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.9] - 2026-03-15
+- Add WooCommerce billing/shipping city name → Colombian municipality code resolution:
+  - New `internal/citycode` package embeds 1119-entry `cities.json` at compile time via `go:embed`.
+  - `Resolve(name string) string` pipeline: pass-through if already numeric → exact map lookup (O(1)) → unique-prefix fallback (handles "Bogota" → "Bogota D.C.") → Levenshtein fuzzy at 80 % similarity → `"-1"` sentinel.
+  - Accent/diacritic stripping via NFD decomposition (`golang.org/x/text/unicode/norm`) before lookup.
+  - `IsNumericCode(value string) bool` guards the update path so contacts with an already-resolved numeric code are never overwritten.
+  - Wired into `application/contact/service/service_mapping.go`, both contact and shipping paths in `application/order/service/service_mapping.go`, and `adapter/contacts/upserter.go` `updateExisting`.
+  - Shipping address empty-check uses raw string values before resolution to avoid `-1` sentinel triggering non-empty detection.
+- Bump release references and badges to `v2.0.9`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - `README.md` and `module/woocommerce/README.md`
+
 ### [v2.0.8] - 2026-03-15
 - Add segment preview-count endpoint (`POST /segments/preview/count`):
   - Accepts the same `filters` array as segment create without persisting anything.

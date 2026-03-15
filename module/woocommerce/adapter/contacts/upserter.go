@@ -10,6 +10,7 @@ import (
 	contactapplication "mannaiah/module/contacts/application"
 	contactdomain "mannaiah/module/contacts/domain"
 	contactport "mannaiah/module/contacts/port"
+	"mannaiah/module/woocommerce/internal/citycode"
 	"mannaiah/module/woocommerce/port"
 )
 
@@ -167,7 +168,7 @@ func (u *Upserter) updateExisting(ctx context.Context, existing contactdomain.Co
 		Phone:          pointer(strings.TrimSpace(command.Phone)),
 		Address:        pointer(strings.TrimSpace(command.Address)),
 		AddressExtra:   pointer(strings.TrimSpace(command.AddressExtra)),
-		CityCode:       pointer(strings.TrimSpace(command.CityCode)),
+		CityCode:       cityCodeUpdatePointer(existing.CityCode, command.CityCode),
 		DocumentType:   documentTypePointer(command.DocumentType),
 		DocumentNumber: pointer(strings.TrimSpace(command.DocumentNumber)),
 	}
@@ -259,6 +260,16 @@ func documentTypePointer(value string) *contactdomain.DocumentType {
 // pointer returns a pointer for value.
 func pointer(value string) *string {
 	return &value
+}
+
+// cityCodeUpdatePointer returns a pointer to the incoming city code for update commands,
+// or nil when the existing value is already a resolved numeric municipality code.
+func cityCodeUpdatePointer(existing, incoming string) *string {
+	if citycode.IsNumericCode(existing) {
+		return nil
+	}
+	v := strings.TrimSpace(incoming)
+	return &v
 }
 
 // normalizeSyncMetadata normalizes sync metadata maps.
