@@ -52,6 +52,20 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.0.8] - 2026-03-15
+- Add segment preview-count endpoint (`POST /segments/preview/count`):
+  - Accepts the same `filters` array as segment create without persisting anything.
+  - Validates filters and runs the count query against the analytics backend.
+  - Returns `{ "count": <int> }` — no segment ID needed.
+  - Registered before parameterised routes to avoid `preview` being matched as `:id`.
+  - OpenAPI spec updated with `SegmentPreviewCount` schema and `previewCountOperation`.
+- Bump release references and badges to `v2.0.8`:
+  - `.env.example`
+  - `module/core/telemetry/config.go`
+  - `module/core/cmd/api/main.go`
+  - `module/core/startup/runtime.go`
+  - `README.md` and `module/woocommerce/README.md`
+
 ### [v2.0.7] - 2026-03-15
 - Add `order_status` segment filter to scope all order-related subqueries by `current_status`:
   - `domain.SegmentFilter.OrderStatuses []string` field added.

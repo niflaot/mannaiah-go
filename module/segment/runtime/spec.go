@@ -16,17 +16,19 @@ func OpenAPISpec() *openapi3.T {
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
 	}
 	components.Schemas = openapi3.Schemas{
-		"Segment":           {Value: segmentSchema()},
-		"SegmentListResult": {Value: segmentListSchema()},
-		"SegmentResolve":    {Value: resolveSchema()},
-		"SegmentCount":      {Value: countSchema()},
-		"SegmentDelete":     {Value: deleteSchema()},
+		"Segment":             {Value: segmentSchema()},
+		"SegmentListResult":   {Value: segmentListSchema()},
+		"SegmentResolve":      {Value: resolveSchema()},
+		"SegmentCount":        {Value: countSchema()},
+		"SegmentPreviewCount": {Value: previewCountSchema()},
+		"SegmentDelete":       {Value: deleteSchema()},
 	}
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Segment API", Version: "2.0.5"},
+		Info:    &openapi3.Info{Title: "Segment API", Version: "2.0.7"},
 		Paths: openapi3.NewPaths(
+			openapi3.WithPath("/segments/preview/count", &openapi3.PathItem{Post: previewCountOperation()}),
 			openapi3.WithPath("/segments", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
 			openapi3.WithPath("/segments/{id}", &openapi3.PathItem{Get: getOperation(), Patch: updateOperation(), Delete: deleteOperation()}),
 			openapi3.WithPath("/segments/{id}/resolve", &openapi3.PathItem{Post: resolveOperation()}),
@@ -179,6 +181,26 @@ func countSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("segmentId", openapi3.NewStringSchema()).
 		WithProperty("count", openapi3.NewInt64Schema())
+}
+
+// previewCountSchema defines segment preview-count response schema values.
+func previewCountSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("count", openapi3.NewInt64Schema())
+}
+
+// previewCountOperation builds preview-count OpenAPI operations.
+func previewCountOperation() *openapi3.Operation {
+	operation := baseOperation("SegmentController_previewCount", "Preview segment contact count without saving")
+	operation.Responses = openapi3.NewResponses(
+		openapi3.WithStatus(200, jsonResponse("Preview count.", "#/components/schemas/SegmentPreviewCount")),
+		openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
+		openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+		openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		openapi3.WithStatus(503, responseWithDescription("Segment backend unavailable.")),
+	)
+
+	return operation
 }
 
 // deleteSchema defines delete response schema values.

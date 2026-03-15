@@ -85,6 +85,8 @@ type Service interface {
 	Resolve(ctx context.Context, id string, page int, limit int) (*ResolveResult, error)
 	// Count resolves contact count for one segment.
 	Count(ctx context.Context, id string) (int64, error)
+	// PreviewCount resolves contact count for an unsaved filter set.
+	PreviewCount(ctx context.Context, filters []domain.Filter) (int64, error)
 }
 
 // SegmentService implements segment use-cases.
@@ -246,6 +248,21 @@ func (s *SegmentService) Count(ctx context.Context, id string) (int64, error) {
 	count, resolveErr := s.resolveCountWithAnalytics(ctx, filter)
 	if resolveErr != nil {
 		return 0, resolveErr
+	}
+
+	return count, nil
+}
+
+// PreviewCount resolves contact count for an unsaved filter set without persisting a segment.
+func (s *SegmentService) PreviewCount(ctx context.Context, filters []domain.Filter) (int64, error) {
+	if err := validateFilters(filters); err != nil {
+		return 0, err
+	}
+
+	filter := toAnalyticsFilter(filters)
+	count, err := s.resolveCountWithAnalytics(ctx, filter)
+	if err != nil {
+		return 0, err
 	}
 
 	return count, nil

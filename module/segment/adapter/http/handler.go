@@ -42,6 +42,8 @@ type Service interface {
 	Resolve(ctx context.Context, id string, page int, limit int) (*application.ResolveResult, error)
 	// Count resolves contact count for one segment.
 	Count(ctx context.Context, id string) (int64, error)
+	// PreviewCount resolves contact count for an unsaved filter set.
+	PreviewCount(ctx context.Context, filters []domain.Filter) (int64, error)
 }
 
 // Handler defines HTTP route handlers for segment endpoints.
@@ -61,6 +63,12 @@ type createRequest struct {
 	// Channel defines target channel values.
 	Channel string `json:"channel"`
 	// Filters defines filter DSL values.
+	Filters []domain.Filter `json:"filters"`
+}
+
+// previewCountRequest defines preview-count request payload values.
+type previewCountRequest struct {
+	// Filters defines filter DSL values to evaluate without persisting a segment.
 	Filters []domain.Filter `json:"filters"`
 }
 
@@ -101,6 +109,7 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers segment routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
+	router.Post("/segments/preview/count", h.protect("marketing:manage", h.previewCount))
 	router.Post("/segments", h.protect("marketing:manage", h.create))
 	router.Get("/segments", h.protect("marketing:manage", h.list))
 	router.Get("/segments/:id", h.protect("marketing:manage", h.get))
@@ -108,6 +117,21 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Delete("/segments/:id", h.protect("marketing:manage", h.remove))
 	router.Post("/segments/:id/resolve", h.protect("marketing:manage", h.resolve))
 	router.Get("/segments/:id/count", h.protect("marketing:manage", h.count))
+}
+
+// previewCount handles unsaved segment count preview requests.
+func (h *Handler) previewCount(ctx corehttp.Context) error {
+	request := previewCountRequest{}
+	if err := ctx.BodyParser(&request); err != nil {
+		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+
+	count, err := h.service.PreviewCount(ctx.Context(), request.Filters)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(map[string]any{"count": count})
 }
 
 // create handles segment create requests.
