@@ -13,7 +13,7 @@ func TestNew(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 
-	module, newErr := New(Config{Enabled: true, SendWorkers: 2}, db, nil, nil)
+	module, newErr := New(Config{Enabled: true, SendWorkers: 2}, db, nil, nil, nil)
 	if newErr != nil {
 		t.Fatalf("New() error = %v", newErr)
 	}
