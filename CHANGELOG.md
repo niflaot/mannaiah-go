@@ -52,6 +52,14 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.2.1] - 2026-03-16
+- Homogenize all product permission scopes to `products:` prefix:
+  - Products handler: `products:create`, `products:read`, `products:update`, `products:delete`.
+  - Variations handler: migrated from `variations:*` to `products:create/read/update/delete`.
+  - Categories handler: migrated from `product:view/manage` to `products:read/manage`.
+  - All e2e tests updated to match.
+- Bump release references and badges to `v2.2.1`.
+
 ### [v2.2.0] - 2026-03-16
 - Ship product taxonomy with categories, tags, and price filters:
   - **Tags on Products**: `Tags []string` and `Price *float64` added to `module/products/domain/product/product.go`.
