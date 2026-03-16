@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -172,6 +173,45 @@ func (r *Repository) GetByProviderMessageID(ctx context.Context, providerMessage
 	}
 
 	return mapDelivery(row), nil
+}
+
+// ListByCampaignID retrieves paginated delivery rows for a campaign by idempotency key prefix.
+func (r *Repository) ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]*domain.Delivery, int64, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	prefix := strings.TrimSpace(campaignID) + ":%"
+
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&deliveryModel{}).
+		Where("idempotency_key LIKE ?", prefix).
+		Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count campaign deliveries: %w", err)
+	}
+	if total == 0 {
+		return []*domain.Delivery{}, 0, nil
+	}
+
+	rows := make([]deliveryModel, 0, limit)
+	if err := r.db.WithContext(ctx).
+		Where("idempotency_key LIKE ?", prefix).
+		Order("created_at ASC").
+		Limit(limit).
+		Offset((page - 1) * limit).
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("list campaign deliveries: %w", err)
+	}
+
+	result := make([]*domain.Delivery, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, mapDelivery(row))
+	}
+
+	return result, total, nil
 }
 
 // mapDelivery maps persistence rows into domain values.

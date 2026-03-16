@@ -30,6 +30,8 @@ type Module struct {
 	service *application.EmailService
 	// handler defines HTTP route adapter dependencies.
 	handler *emailhttp.Handler
+	// repository defines email persistence dependencies.
+	repository port.Repository
 }
 
 // New creates email modules with adapter wiring.
@@ -68,7 +70,7 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 		return nil, err
 	}
 
-	return &Module{cfg: cfg, service: service, handler: handler}, nil
+	return &Module{cfg: cfg, service: service, handler: handler, repository: repository}, nil
 }
 
 // RegisterRoutes registers email routes on the provided router.
@@ -96,6 +98,15 @@ func (m *Module) SetMembershipStamper(stamper port.MembershipStamper) {
 	}
 
 	m.service.SetMembershipStamper(stamper)
+}
+
+// Repository returns email repository dependencies.
+func (m *Module) Repository() port.Repository {
+	if m == nil {
+		return nil
+	}
+
+	return m.repository
 }
 
 // Service returns email application service dependencies.

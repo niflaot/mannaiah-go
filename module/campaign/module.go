@@ -13,8 +13,8 @@ type Module = campaignruntime.Module
 type Loader = campaignruntime.Loader
 
 // New creates campaign modules with adapter wiring.
-func New(cfg Config, db *gorm.DB, resolver SegmentResolver, sender EmailSender, publishers ...IntegrationEventPublisher) (*Module, error) {
-	return campaignruntime.New(cfg, db, resolver, sender, publishers...)
+func New(cfg Config, db *gorm.DB, resolver SegmentResolver, sender EmailSender, deliveryReader DeliveryReader, publishers ...IntegrationEventPublisher) (*Module, error) {
+	return campaignruntime.New(cfg, db, resolver, sender, deliveryReader, publishers...)
 }
 
 // OpenAPISpec returns campaign OpenAPI documentation.

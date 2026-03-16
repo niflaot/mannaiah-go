@@ -17,4 +17,6 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*domain.Delivery, error)
 	// GetByProviderMessageID retrieves delivery rows by provider message id.
 	GetByProviderMessageID(ctx context.Context, providerMessageID string) (*domain.Delivery, error)
+	// ListByCampaignID retrieves paginated delivery rows for a campaign by idempotency key prefix.
+	ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]*domain.Delivery, int64, error)
 }

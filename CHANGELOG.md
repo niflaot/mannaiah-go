@@ -52,6 +52,18 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.1.0] - 2026-03-15
+- Add `GET /campaigns/:id/deliveries` endpoint returning paginated email delivery rows for a campaign:
+  - New `DeliveryRow` struct and `DeliveryReader` port interface in `module/campaign/port/integration.go`.
+  - `ListByCampaignID` added to `module/email/port/repository.go` and implemented in `module/email/adapter/store/repository.go` (queries by `idempotency_key LIKE '{campaignID}:%'`).
+  - `Repository()` accessor exposed from `module/email/runtime/module.go`.
+  - `ListDeliveries` use-case added to campaign application service; `DeliveryListResult` / `DeliveryEntry` types added.
+  - HTTP handler `listDeliveries` registered at `GET /campaigns/:id/deliveries` (protected by `marketing:manage`).
+  - `campaignDeliveryReaderAdapter` wired in `module/core/cmd/api/main.go`.
+  - OpenAPI schema `CampaignDeliveryRow` and `CampaignDeliveryList` + `listDeliveriesOperation` added to spec.
+- Bump release references and badges to `v2.1.0`:
+  - `.env.example`, `module/core/telemetry/config.go`, `module/core/cmd/api/main.go`, `module/core/startup/runtime.go`, `README.md`, `module/woocommerce/README.md`.
+
 ### [v2.0.11] - 2026-03-15
 - Fix ClickHouse `FINAL alias` ordering in all segment subqueries:
   - In ClickHouse the table alias must precede `FINAL` — `FROM table alias FINAL`, not `FROM table FINAL alias`.

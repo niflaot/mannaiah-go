@@ -1,6 +1,29 @@
 package port
 
-import "context"
+import (
+	"context"
+	"time"
+)
+
+// DeliveryRow defines a campaign delivery projection for query results.
+type DeliveryRow struct {
+	// ContactID defines recipient contact identifier values.
+	ContactID string
+	// Email defines recipient email values.
+	Email string
+	// Status defines current delivery status values.
+	Status string
+	// CreatedAt defines delivery creation timestamps.
+	CreatedAt time.Time
+	// UpdatedAt defines delivery last-update timestamps.
+	UpdatedAt time.Time
+}
+
+// DeliveryReader defines campaign delivery read behavior.
+type DeliveryReader interface {
+	// ListByCampaignID retrieves paginated delivery rows for a campaign.
+	ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]DeliveryRow, int64, error)
+}
 
 // SegmentResolver defines campaign audience resolution behavior.
 type SegmentResolver interface {

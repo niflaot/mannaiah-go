@@ -16,3 +16,6 @@ type EmailSender = campaignport.EmailSender
 
 // IntegrationEventPublisher defines campaign event publication behavior.
 type IntegrationEventPublisher = campaignport.IntegrationEventPublisher
+
+// DeliveryReader defines campaign delivery read behavior.
+type DeliveryReader = campaignport.DeliveryReader

@@ -40,6 +40,8 @@ type Service interface {
 	Delete(ctx context.Context, id string) error
 	// Send starts asynchronous campaign fan-out and returns accepted campaign states.
 	Send(ctx context.Context, id string) (*domain.Campaign, error)
+	// ListDeliveries retrieves paged delivery rows for one campaign.
+	ListDeliveries(ctx context.Context, id string, page int, limit int) (*application.DeliveryListResult, error)
 }
 
 // Handler defines HTTP route handlers for campaign endpoints.
@@ -117,6 +119,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Patch("/campaigns/:id", h.protect("marketing:manage", h.update))
 	router.Delete("/campaigns/:id", h.protect("marketing:manage", h.remove))
 	router.Post("/campaigns/:id/send", h.protect("marketing:manage", h.send))
+	router.Get("/campaigns/:id/deliveries", h.protect("marketing:manage", h.listDeliveries))
 }
 
 // create handles campaign create requests.

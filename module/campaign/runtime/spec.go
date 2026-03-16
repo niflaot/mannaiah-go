@@ -16,9 +16,11 @@ func OpenAPISpec() *openapi3.T {
 		campaignBearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
 	}
 	components.Schemas = openapi3.Schemas{
-		"Campaign":           {Value: campaignSchema()},
-		"CampaignListResult": {Value: campaignListSchema()},
-		"CampaignDelete":     {Value: deleteStatusSchema()},
+		"Campaign":             {Value: campaignSchema()},
+		"CampaignListResult":   {Value: campaignListSchema()},
+		"CampaignDelete":       {Value: deleteStatusSchema()},
+		"CampaignDeliveryRow":  {Value: campaignDeliveryRowSchema()},
+		"CampaignDeliveryList": {Value: campaignDeliveryListSchema()},
 	}
 
 	return &openapi3.T{
@@ -28,6 +30,7 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/campaigns", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
 			openapi3.WithPath("/campaigns/{id}", &openapi3.PathItem{Get: getOperation(), Patch: updateOperation(), Delete: deleteOperation()}),
 			openapi3.WithPath("/campaigns/{id}/send", &openapi3.PathItem{Post: sendOperation()}),
+			openapi3.WithPath("/campaigns/{id}/deliveries", &openapi3.PathItem{Get: listDeliveriesOperation()}),
 		),
 		Components: &components,
 		Tags:       openapi3.Tags{&openapi3.Tag{Name: campaignTag}},
@@ -111,6 +114,43 @@ func sendOperation() *openapi3.Operation {
 	)
 
 	return operation
+}
+
+// listDeliveriesOperation builds list campaign deliveries OpenAPI operations.
+func listDeliveriesOperation() *openapi3.Operation {
+	operation := baseOperation("CampaignController_listDeliveries", "List campaign deliveries")
+	operation.Parameters = openapi3.Parameters{
+		{Value: &openapi3.Parameter{Name: "page", In: "query", Schema: &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()}}},
+		{Value: &openapi3.Parameter{Name: "limit", In: "query", Schema: &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()}}},
+	}
+	operation.Responses = openapi3.NewResponses(
+		openapi3.WithStatus(200, jsonResponse("Campaign delivery list.", "#/components/schemas/CampaignDeliveryList")),
+		openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+		openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		openapi3.WithStatus(404, responseWithDescription("Campaign not found.")),
+	)
+
+	return operation
+}
+
+// campaignDeliveryRowSchema defines a single delivery row schema.
+func campaignDeliveryRowSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("contactId", openapi3.NewStringSchema()).
+		WithProperty("email", openapi3.NewStringSchema()).
+		WithProperty("status", openapi3.NewStringSchema()).
+		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
+		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
+}
+
+// campaignDeliveryListSchema defines delivery list response schema values.
+func campaignDeliveryListSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("data", openapi3.NewArraySchema().WithItems(campaignDeliveryRowSchema())).
+		WithProperty("page", openapi3.NewInt64Schema()).
+		WithProperty("limit", openapi3.NewInt64Schema()).
+		WithProperty("total", openapi3.NewInt64Schema()).
+		WithProperty("totalPages", openapi3.NewInt64Schema())
 }
 
 // baseOperation builds one standard campaign operation.

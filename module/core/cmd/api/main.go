@@ -40,6 +40,7 @@ import (
 	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/email"
 	emailapplication "mannaiah/module/email/application"
+	emailport "mannaiah/module/email/port"
 	"mannaiah/module/falabella"
 	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	falabellaport "mannaiah/module/falabella/port"
@@ -184,7 +185,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.0.11",
+		Version:     "2.1.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -322,6 +323,7 @@ func run(ctx context.Context, envFile string) error {
 		db,
 		campaignSegmentResolverAdapter{segments: segmentModule.Service(), contacts: contactsModule.Service()},
 		campaignEmailSenderAdapter{service: emailModule.Service()},
+		campaignDeliveryReaderAdapter{repository: emailModule.Repository()},
 		campaignPublisher,
 	)
 	if err != nil {
@@ -891,6 +893,40 @@ func (a campaignSegmentResolverAdapter) ResolveEmails(ctx context.Context, conta
 	}
 
 	return result, nil
+}
+
+// campaignDeliveryReaderAdapter adapts email repository behavior for campaign delivery reads.
+type campaignDeliveryReaderAdapter struct {
+	// repository defines email delivery read dependencies.
+	repository emailport.Repository
+}
+
+// ListByCampaignID returns paginated delivery rows for one campaign.
+func (a campaignDeliveryReaderAdapter) ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]campaignport.DeliveryRow, int64, error) {
+	if a.repository == nil {
+		return nil, 0, nil
+	}
+
+	rows, total, err := a.repository.ListByCampaignID(ctx, campaignID, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]campaignport.DeliveryRow, 0, len(rows))
+	for _, d := range rows {
+		if d == nil {
+			continue
+		}
+		result = append(result, campaignport.DeliveryRow{
+			ContactID: d.ContactID,
+			Email:     d.Email,
+			Status:    string(d.Status),
+			CreatedAt: d.CreatedAt,
+			UpdatedAt: d.UpdatedAt,
+		})
+	}
+
+	return result, total, nil
 }
 
 // campaignEmailSenderAdapter adapts email service behavior for campaign send flows.
