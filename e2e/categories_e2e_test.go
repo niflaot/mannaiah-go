@@ -11,8 +11,8 @@ func TestCategoriesLifecycleE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
 
-	viewToken := harness.SignToken(t, "product:view")
-	manageToken := harness.SignToken(t, "product:manage")
+	viewToken := harness.SignToken(t, "products:read")
+	manageToken := harness.SignToken(t, "products:manage")
 
 	harness.tracer.Step("create category without auth")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/categories", "", []byte(`{"slug":"electronics","name":"Electronics"}`))

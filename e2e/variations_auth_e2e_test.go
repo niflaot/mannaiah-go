@@ -19,10 +19,10 @@ func TestVariationsAuthE2E(t *testing.T) {
 		t.Fatalf("payload.message = %v, want %q", payload["message"], "unauthorized")
 	}
 
-	readToken := harness.SignToken(t, "variations:read")
-	createToken := harness.SignToken(t, "variations:create")
-	updateToken := harness.SignToken(t, "variations:update")
-	deleteToken := harness.SignToken(t, "variations:delete")
+	readToken := harness.SignToken(t, "products:read")
+	createToken := harness.SignToken(t, "products:create")
+	updateToken := harness.SignToken(t, "products:update")
+	deleteToken := harness.SignToken(t, "products:delete")
 
 	harness.tracer.Step("request variation create with insufficient permissions")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/variations", readToken, []byte(`{"name":"Red","definition":"COLOR","value":"#FF0000"}`))
