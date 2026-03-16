@@ -2,10 +2,13 @@ package runtime
 
 import (
 	corehttp "mannaiah/module/core/http"
+	categoryhttp "mannaiah/module/products/adapter/http/category"
 	producthttp "mannaiah/module/products/adapter/http/product"
 	variationhttp "mannaiah/module/products/adapter/http/variation"
+	categorystore "mannaiah/module/products/adapter/store/category"
 	productstore "mannaiah/module/products/adapter/store/product"
 	variationstore "mannaiah/module/products/adapter/store/variation"
+	categoryapplication "mannaiah/module/products/application/category"
 	productapplication "mannaiah/module/products/application/product"
 	variationapplication "mannaiah/module/products/application/variation"
 
@@ -23,6 +26,10 @@ type Module struct {
 	variationHandler *variationhttp.Handler
 	// variationService defines variation application service dependencies.
 	variationService variationapplication.Service
+	// categoryHandler defines HTTP adapter used for category route registration.
+	categoryHandler *categoryhttp.Handler
+	// categoryService defines category application service dependencies.
+	categoryService categoryapplication.Service
 }
 
 // Loader defines bootstrap hooks required by products modules.
@@ -65,11 +72,28 @@ func New(db *gorm.DB, assetLookup productapplication.AssetLookup) (*Module, erro
 		return nil, err
 	}
 
+	categoryRepository, err := categorystore.NewRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
+	categoryService, err := categoryapplication.NewService(categoryRepository)
+	if err != nil {
+		return nil, err
+	}
+
+	categoryHandler, err := categoryhttp.NewHandler(categoryService)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Module{
 		productHandler:   productHandler,
 		productService:   productService,
 		variationHandler: variationHandler,
 		variationService: variationService,
+		categoryHandler:  categoryHandler,
+		categoryService:  categoryService,
 	}, nil
 }
 
@@ -84,6 +108,9 @@ func (m *Module) RegisterRoutes(router corehttp.Router) {
 	}
 	if m.variationHandler != nil {
 		m.variationHandler.RegisterRoutes(router)
+	}
+	if m.categoryHandler != nil {
+		m.categoryHandler.RegisterRoutes(router)
 	}
 }
 
@@ -117,6 +144,18 @@ func (m *Module) SetAuthorizer(authorizer producthttp.Authorizer) {
 	if m.variationHandler != nil {
 		m.variationHandler.SetAuthorizer(authorizer)
 	}
+	if m.categoryHandler != nil {
+		m.categoryHandler.SetAuthorizer(authorizer)
+	}
+}
+
+// CategoryService returns category application service dependencies for module integrations.
+func (m *Module) CategoryService() categoryapplication.Service {
+	if m == nil {
+		return nil
+	}
+
+	return m.categoryService
 }
 
 // OpenAPISpec returns product-module OpenAPI documentation.

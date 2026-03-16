@@ -52,6 +52,24 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.2.0] - 2026-03-16
+- Ship product taxonomy with categories, tags, and price filters:
+  - **Tags on Products**: `Tags []string` and `Price *float64` added to `module/products/domain/product/product.go`.
+  - **product_tags table**: new `productTagRecord` and `replaceProductTags` in `module/products/adapter/store/product/repository_tags.go`; write/read paths updated.
+  - **Port extensions**: `GetByIDs` and `ListByTagsAndPrice` added to `module/products/port/product/repository.go` and implemented in store adapter.
+  - **Category domain**: `module/products/domain/category/category.go` — `Category`, `Filter`, `PriceRange` aggregate with `Normalize()` / `Validate()`.
+  - **Category port**: `module/products/port/category/repository.go` — `Repository` interface, `ListProductsQuery`, `ListProductsResult`, sentinel errors.
+  - **Category service**: `module/products/application/category/service.go` — `CategoryService` with `Create`, `Get`, `GetBySlug`, `Tree`, `Children`, `Update`, `Delete`, `ListProducts`; comprehensive mock-based tests.
+  - **Category store adapter**: `module/products/adapter/store/category/repository.go` (CRUD + relations) and `repository_products.go` (union-based product resolution with tag/price/ref/pinned/children support); SQLite in-memory tests.
+  - **Category HTTP handler**: `module/products/adapter/http/category/handler.go` — 7 routes (`POST /categories`, `GET /categories`, `GET /categories/:id`, `GET /categories/:id/children`, `GET /categories/:id/products`, `PATCH /categories/:id`, `DELETE /categories/:id`) with `product:view` / `product:manage` permissions; handler tests.
+  - **OpenAPI spec**: `module/products/runtime/spec_categories.go` — full OpenAPI 3.0 spec for all 7 category endpoints with schemas `CreateCategoryDto`, `UpdateCategoryDto`, `Category`.
+  - **Runtime wiring**: `module/products/runtime/module.go` updated to wire `categoryRepository`, `categoryService`, `categoryHandler`; `CategoryService()` accessor added; spec updated with category paths, schemas, and tag.
+  - **Database migrations**: `000016_product_taxonomy_schema` for MySQL and SQLite — `product_tags`, `categories`, `category_filter_tags`, `category_filter_price_ranges`, `category_filter_category_refs`, `category_products`, and `ALTER TABLE products ADD COLUMN price`.
+  - **E2E tests**: `e2e/categories_e2e_test.go` (full lifecycle) and `e2e/categories_tags_e2e_test.go` (tag/price/children filtering).
+  - **CATEGORY-GUIDE.md**: frontend integration guide with data model, filter types, all endpoints, permissions, hierarchy rules, and error codes.
+- Bump release references and badges to `v2.2.0`:
+  - `.env.example`, `module/core/telemetry/config.go`, `README.md`.
+
 ### [v2.1.0] - 2026-03-15
 - Add `GET /campaigns/:id/deliveries` endpoint returning paginated email delivery rows for a campaign:
   - New `DeliveryRow` struct and `DeliveryReader` port interface in `module/campaign/port/integration.go`.

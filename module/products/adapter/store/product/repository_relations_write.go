@@ -26,6 +26,9 @@ func replaceProductRelations(tx *gorm.DB, productID string, entity productdomain
 	if err := createVariantRelations(tx, productID, entity.Variants); err != nil {
 		return err
 	}
+	if err := replaceProductTags(tx, productID, entity.Tags); err != nil {
+		return err
+	}
 
 	return nil
 }

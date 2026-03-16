@@ -12,6 +12,7 @@ func (r *Repository) loadProductAggregate(ctx context.Context, record productRec
 	entity := productdomain.Product{
 		ID:        record.ID,
 		SKU:       record.SKU,
+		Price:     record.Price,
 		CreatedAt: record.CreatedAt,
 		UpdatedAt: record.UpdatedAt,
 		IsDeleted: record.DeletedAt.Valid,

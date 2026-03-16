@@ -24,6 +24,9 @@ func OpenAPISpec() *openapi3.T {
 		"CreateVariationDto": &openapi3.SchemaRef{Value: createVariationSchema()},
 		"UpdateVariationDto": &openapi3.SchemaRef{Value: updateVariationSchema()},
 		"Variation":          &openapi3.SchemaRef{Value: variationSchema()},
+		"CreateCategoryDto":  &openapi3.SchemaRef{Value: createCategorySchema()},
+		"UpdateCategoryDto":  &openapi3.SchemaRef{Value: updateCategorySchema()},
+		"Category":           &openapi3.SchemaRef{Value: categorySchema()},
 	}
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
@@ -40,11 +43,16 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/products/{id}", productByIDPathItem()),
 			openapi3.WithPath("/variations", variationsPathItem()),
 			openapi3.WithPath("/variations/{id}", variationByIDPathItem()),
+			openapi3.WithPath("/categories", categoriesPathItem()),
+			openapi3.WithPath("/categories/{id}", categoryByIDPathItem()),
+			openapi3.WithPath("/categories/{id}/children", categoryChildrenPathItem()),
+			openapi3.WithPath("/categories/{id}/products", categoryProductsPathItem()),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: productsTag},
 			&openapi3.Tag{Name: variationsTag},
+			&openapi3.Tag{Name: categoriesTag},
 		},
 	}
 }

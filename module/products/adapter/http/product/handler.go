@@ -37,6 +37,10 @@ type Handler struct {
 type createRequest struct {
 	// SKU defines product stock-keeping values.
 	SKU string `json:"sku"`
+	// Price defines optional product price values.
+	Price *float64 `json:"price"`
+	// Tags defines product taxonomy tag values.
+	Tags []string `json:"tags"`
 	// Gallery defines product gallery entries.
 	Gallery []productdomain.GalleryItem `json:"gallery"`
 	// Datasheets defines datasheet entries.
@@ -51,6 +55,10 @@ type createRequest struct {
 type updateRequest struct {
 	// SKU defines optional SKU updates.
 	SKU *string `json:"sku"`
+	// Price defines optional price updates.
+	Price *float64 `json:"price"`
+	// Tags defines optional tag replacement values.
+	Tags *[]string `json:"tags"`
 	// Gallery defines optional gallery replacement values.
 	Gallery *[]productdomain.GalleryItem `json:"gallery"`
 	// Datasheets defines optional datasheet upsert values.
@@ -114,6 +122,8 @@ func (h *Handler) create(ctx corehttp.Context) error {
 
 	product, err := h.service.Create(ctx.Context(), productapplication.CreateCommand{
 		SKU:        request.SKU,
+		Price:      request.Price,
+		Tags:       request.Tags,
 		Gallery:    request.Gallery,
 		Datasheets: request.Datasheets,
 		Variations: request.Variations,
@@ -154,6 +164,14 @@ func (h *Handler) update(ctx corehttp.Context) error {
 	}
 
 	command := productapplication.UpdateCommand{SKU: request.SKU}
+	if request.Price != nil {
+		command.Price = request.Price
+		command.HasPrice = true
+	}
+	if request.Tags != nil {
+		command.Tags = *request.Tags
+		command.HasTags = true
+	}
 	if request.Gallery != nil {
 		command.Gallery = *request.Gallery
 		command.HasGallery = true

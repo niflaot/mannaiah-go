@@ -31,6 +31,10 @@ type AssetLookup interface {
 type CreateCommand struct {
 	// SKU defines product stock-keeping values.
 	SKU string
+	// Price defines optional product price values.
+	Price *float64
+	// Tags defines product taxonomy tag values.
+	Tags []string
 	// Gallery defines product gallery entries.
 	Gallery []productdomain.GalleryItem
 	// Datasheets defines product datasheet entries.
@@ -45,6 +49,10 @@ type CreateCommand struct {
 type UpdateCommand struct {
 	// SKU defines optional SKU updates.
 	SKU *string
+	// Price defines optional price updates.
+	Price *float64
+	// Tags defines optional tag replacement values.
+	Tags []string
 	// Gallery defines optional gallery replacement values.
 	Gallery []productdomain.GalleryItem
 	// Datasheets defines optional datasheet upsert values.
@@ -53,6 +61,10 @@ type UpdateCommand struct {
 	Variations []string
 	// Variants defines optional variant replacement values.
 	Variants []productdomain.Variant
+	// HasPrice reports whether Price was provided in the payload.
+	HasPrice bool
+	// HasTags reports whether Tags values were provided in payload.
+	HasTags bool
 	// HasGallery reports whether Gallery values were provided in payload.
 	HasGallery bool
 	// HasDatasheets reports whether Datasheets values were provided in payload.
@@ -106,6 +118,8 @@ func NewService(repository productport.Repository, assetLookup AssetLookup) (*Pr
 func (s *ProductService) Create(ctx context.Context, command CreateCommand) (*productdomain.Product, error) {
 	entity := &productdomain.Product{
 		SKU:        strings.TrimSpace(command.SKU),
+		Price:      command.Price,
+		Tags:       command.Tags,
 		Gallery:    command.Gallery,
 		Datasheets: command.Datasheets,
 		Variations: command.Variations,
@@ -165,6 +179,12 @@ func (s *ProductService) Update(ctx context.Context, id string, command UpdateCo
 
 	if command.SKU != nil {
 		entity.SKU = strings.TrimSpace(*command.SKU)
+	}
+	if command.HasPrice {
+		entity.Price = command.Price
+	}
+	if command.HasTags {
+		entity.Tags = command.Tags
 	}
 	if command.HasGallery {
 		entity.Gallery = command.Gallery

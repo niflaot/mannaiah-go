@@ -22,8 +22,12 @@ type Repository interface {
 	Create(ctx context.Context, product *productdomain.Product) error
 	// GetByID retrieves products by ID.
 	GetByID(ctx context.Context, id string) (*productdomain.Product, error)
+	// GetByIDs retrieves multiple products by their IDs.
+	GetByIDs(ctx context.Context, ids []string) ([]*productdomain.Product, error)
 	// List retrieves non-deleted products.
 	List(ctx context.Context) ([]productdomain.Product, error)
+	// ListByTagsAndPrice retrieves products matching tag and price criteria with pagination.
+	ListByTagsAndPrice(ctx context.Context, tags []string, minPrice, maxPrice *float64, page, pageSize int) ([]*productdomain.Product, int64, error)
 	// Update persists product updates.
 	Update(ctx context.Context, product *productdomain.Product) error
 	// Delete soft-deletes products by ID.

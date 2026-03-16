@@ -52,6 +52,16 @@ func (m repositoryMock) Delete(ctx context.Context, id string) error {
 	return m.deleteFn(ctx, id)
 }
 
+// GetByIDs executes stub get-by-ids behavior.
+func (m repositoryMock) GetByIDs(_ context.Context, _ []string) ([]*productdomain.Product, error) {
+	return nil, nil
+}
+
+// ListByTagsAndPrice executes stub list-by-tags-and-price behavior.
+func (m repositoryMock) ListByTagsAndPrice(_ context.Context, _ []string, _, _ *float64, _, _ int) ([]*productdomain.Product, int64, error) {
+	return nil, 0, nil
+}
+
 // assetLookupMock defines asset lookup behavior for service tests.
 type assetLookupMock struct {
 	// existsFn defines exists behavior.

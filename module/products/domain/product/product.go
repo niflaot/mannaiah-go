@@ -57,6 +57,10 @@ type Product struct {
 	ID string `json:"_id"`
 	// SKU defines unique stock-keeping values.
 	SKU string `json:"sku"`
+	// Price defines optional product price values.
+	Price *float64 `json:"price,omitempty"`
+	// Tags defines product taxonomy tag values.
+	Tags []string `json:"tags,omitempty"`
 	// Gallery defines media gallery entries.
 	Gallery []GalleryItem `json:"gallery,omitempty"`
 	// Datasheets defines localized/realm-specific display values.
@@ -97,6 +101,9 @@ func (p *Product) Normalize() {
 		p.Datasheets[index].Realm = strings.TrimSpace(p.Datasheets[index].Realm)
 		p.Datasheets[index].Name = strings.TrimSpace(p.Datasheets[index].Name)
 		p.Datasheets[index].Description = strings.TrimSpace(p.Datasheets[index].Description)
+	}
+	for index := range p.Tags {
+		p.Tags[index] = strings.TrimSpace(p.Tags[index])
 	}
 	for index := range p.Variations {
 		p.Variations[index] = strings.TrimSpace(p.Variations[index])

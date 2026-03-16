@@ -32,6 +32,8 @@ type productRecord struct {
 	ID string `gorm:"primaryKey;size:64"`
 	// SKU defines unique stock-keeping values.
 	SKU string `gorm:"size:255;not null;uniqueIndex"`
+	// Price defines optional product price values.
+	Price *float64 `gorm:"column:price"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
@@ -194,7 +196,7 @@ func (r *Repository) EnsureSchema(ctx context.Context) error {
 
 // Create persists product entities.
 func (r *Repository) Create(ctx context.Context, entity *productdomain.Product) error {
-	record := productRecord{ID: strings.TrimSpace(entity.ID), SKU: strings.TrimSpace(entity.SKU)}
+	record := productRecord{ID: strings.TrimSpace(entity.ID), SKU: strings.TrimSpace(entity.SKU), Price: entity.Price}
 	if record.ID == "" {
 		record.ID = generateID()
 	}
@@ -269,7 +271,8 @@ func (r *Repository) Update(ctx context.Context, entity *productdomain.Product) 
 	}
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		updateTx := tx.Model(&productRecord{}).Where("id = ?", productID).Update("sku", strings.TrimSpace(entity.SKU))
+		updates := map[string]any{"sku": strings.TrimSpace(entity.SKU), "price": entity.Price}
+		updateTx := tx.Model(&productRecord{}).Where("id = ?", productID).Updates(updates)
 		if updateTx.Error != nil {
 			if isDuplicateSKUErr(updateTx.Error) {
 				return productport.ErrDuplicateSKU
@@ -317,6 +320,77 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 
 		return nil
 	})
+}
+
+// GetByIDs retrieves multiple products by their IDs.
+func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*productdomain.Product, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	records := make([]productRecord, 0)
+	if err := r.db.WithContext(ctx).Where("id IN ? AND deleted_at IS NULL", ids).Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("get products by ids: %w", err)
+	}
+
+	result := make([]*productdomain.Product, 0, len(records))
+	for _, record := range records {
+		entity, err := r.loadProductAggregate(ctx, record)
+		if err != nil {
+			return nil, err
+		}
+		e := entity
+		result = append(result, &e)
+	}
+
+	return result, nil
+}
+
+// ListByTagsAndPrice retrieves products matching tag and price criteria with pagination.
+func (r *Repository) ListByTagsAndPrice(ctx context.Context, tags []string, minPrice, maxPrice *float64, page, pageSize int) ([]*productdomain.Product, int64, error) {
+	query := r.db.WithContext(ctx).Model(&productRecord{}).Where("deleted_at IS NULL")
+
+	if len(tags) > 0 {
+		query = query.Where("id IN (?)",
+			r.db.Model(&productTagRecord{}).Select("product_id").Where("tag IN ?", tags),
+		)
+	}
+	if minPrice != nil {
+		query = query.Where("price >= ?", *minPrice)
+	}
+	if maxPrice != nil {
+		query = query.Where("price <= ?", *maxPrice)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count products by tags and price: %w", err)
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	records := make([]productRecord, 0)
+	if err := query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&records).Error; err != nil {
+		return nil, 0, fmt.Errorf("list products by tags and price: %w", err)
+	}
+
+	result := make([]*productdomain.Product, 0, len(records))
+	for _, record := range records {
+		entity, err := r.loadProductAggregate(ctx, record)
+		if err != nil {
+			return nil, 0, err
+		}
+		e := entity
+		result = append(result, &e)
+	}
+
+	return result, total, nil
 }
 
 // isDuplicateSKUErr reports SKU-unique-constraint violations.
