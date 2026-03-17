@@ -40,6 +40,7 @@ func OpenAPISpec() *openapi3.T {
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/products", productsPathItem()),
+			openapi3.WithPath("/products/sku/{sku}", productBySKUPathItem()),
 			openapi3.WithPath("/products/{id}", productByIDPathItem()),
 			openapi3.WithPath("/variations", variationsPathItem()),
 			openapi3.WithPath("/variations/{id}", variationByIDPathItem()),
@@ -54,6 +55,13 @@ func OpenAPISpec() *openapi3.T {
 			&openapi3.Tag{Name: variationsTag},
 			&openapi3.Tag{Name: categoriesTag},
 		},
+	}
+}
+
+// productBySKUPathItem returns OpenAPI path operations for SKU-scoped endpoints.
+func productBySKUPathItem() *openapi3.PathItem {
+	return &openapi3.PathItem{
+		Get: getProductBySKUOperation(),
 	}
 }
 
@@ -103,6 +111,26 @@ func listProductsOperation() *openapi3.Operation {
 			openapi3.WithStatus(200, responseWithDescription("Return all products.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		),
+	}
+}
+
+// getProductBySKUOperation defines the OpenAPI operation for product retrieval by SKU.
+func getProductBySKUOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ProductsController_findOneBySKU",
+		Summary:     "Get a product by SKU (product-level or variant-level)",
+		Tags:        []string{productsTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathParameter("sku", "Product SKU or variant SKU", openapi3.NewStringSchema()),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Return the product.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request - SKU is required.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(404, responseWithDescription("Product not found.")),
 		),
 	}
 }
