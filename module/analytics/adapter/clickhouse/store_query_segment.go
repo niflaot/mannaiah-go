@@ -101,9 +101,9 @@ func appendMinSpendCondition(conditions *[]string, args *[]any, filter domain.Se
 	*args = append(*args, *filter.MinTotalSpend)
 }
 
-// appendPurchasedSKUCondition appends a purchased SKU EXISTS filter.
+// appendPurchasedSKUCondition appends a purchased SKU IN (...) EXISTS filter.
 func appendPurchasedSKUCondition(conditions *[]string, args *[]any, filter domain.SegmentFilter) {
-	if strings.TrimSpace(filter.PurchasedSKU) == "" {
+	if len(filter.PurchasedSKUs) == 0 {
 		return
 	}
 	orderStatusNested := ""
@@ -116,9 +116,11 @@ func appendPurchasedSKUCondition(conditions *[]string, args *[]any, filter domai
 	}
 	*conditions = append(*conditions, `EXISTS (
 		SELECT 1 FROM order_items_fact oi FINAL
-		WHERE oi.contact_id = cs.contact_id AND oi.sku = ?`+orderStatusNested+`
+		WHERE oi.contact_id = cs.contact_id AND oi.sku IN (`+makePlaceholders(len(filter.PurchasedSKUs))+`)`+orderStatusNested+`
 	)`)
-	*args = append(*args, strings.TrimSpace(filter.PurchasedSKU))
+	for _, sku := range filter.PurchasedSKUs {
+		*args = append(*args, strings.TrimSpace(sku))
+	}
 	*args = appendOrderStatusArgs(*args, filter.OrderStatuses)
 }
 

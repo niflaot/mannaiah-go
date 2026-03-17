@@ -54,6 +54,27 @@ func TestToAnalyticsFilterMapsExtendedFilters(t *testing.T) {
 	}
 }
 
+// TestToAnalyticsFilterMapsPurchasedSKUs verifies purchased_sku multi-value and legacy mapping behavior.
+func TestToAnalyticsFilterMapsPurchasedSKUs(t *testing.T) {
+	multiMapped := toAnalyticsFilter([]domain.Filter{
+		{Type: "purchased_sku", Parameters: map[string]any{"skus": []any{"SKU-A", "SKU-B"}}},
+	})
+	if len(multiMapped.PurchasedSKUs) != 2 {
+		t.Fatalf("len(PurchasedSKUs) = %d, want 2", len(multiMapped.PurchasedSKUs))
+	}
+
+	legacyMapped := toAnalyticsFilter([]domain.Filter{
+		{Type: "purchased_sku", Value: "SKU-LEGACY"},
+	})
+	if len(legacyMapped.PurchasedSKUs) != 1 || legacyMapped.PurchasedSKUs[0] != "SKU-LEGACY" {
+		t.Fatalf("PurchasedSKUs = %v, want [SKU-LEGACY]", legacyMapped.PurchasedSKUs)
+	}
+
+	if err := validateFilters([]domain.Filter{{Type: "purchased_sku"}}); err == nil {
+		t.Fatalf("validateFilters(purchased_sku with no skus) expected error")
+	}
+}
+
 // TestValidateFiltersRejectsUnknown verifies unknown filter rejection behavior.
 func TestValidateFiltersRejectsUnknown(t *testing.T) {
 	err := validateFilters([]domain.Filter{{Type: "does_not_exist"}})

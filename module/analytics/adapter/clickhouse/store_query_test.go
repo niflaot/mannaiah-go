@@ -18,7 +18,7 @@ func TestBuildSegmentWhereIncludesExtendedFilters(t *testing.T) {
 		CityCodes:             []string{"BOG", "MDE"},
 		RequireEmailOptIn:     &requireOptIn,
 		MinTotalSpend:         &minSpend,
-		PurchasedSKU:          "SKU-1",
+		PurchasedSKUs:         []string{"SKU-1", "SKU-2"},
 		CategoryPattern:       "snack",
 		OrderRecencyDays:      &recency,
 		NoOrderRecencyDays:    &noRecency,
@@ -37,6 +37,7 @@ func TestBuildSegmentWhereIncludesExtendedFilters(t *testing.T) {
 		"membership_events",
 		"orders_fact of FINAL",
 		"order_items_fact oi FINAL",
+		"oi.sku IN (?,?)",
 		"JSONExtractString",
 		"cs.contact_id IN (?,?)",
 	} {

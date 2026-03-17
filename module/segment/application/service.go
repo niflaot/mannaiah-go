@@ -333,8 +333,10 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 				result.RequireEmailOptIn = &value
 			}
 		case "purchased_sku":
-			if value, ok := filter.Value.(string); ok {
-				result.PurchasedSKU = strings.TrimSpace(value)
+			if skus, ok := asStringSlice(filterParameter(filter, "skus")); ok && len(skus) > 0 {
+				result.PurchasedSKUs = skus
+			} else if value, ok := filter.Value.(string); ok && strings.TrimSpace(value) != "" {
+				result.PurchasedSKUs = []string{strings.TrimSpace(value)}
 			}
 		case "order_recency":
 			if value, ok := asInt(filterParameter(filter, "days")); ok && value > 0 {
@@ -508,7 +510,13 @@ func validateFilters(filters []domain.Filter) error {
 	for _, filter := range filters {
 		filterType := strings.TrimSpace(strings.ToLower(filter.Type))
 		switch filterType {
-		case "city_code_in", "min_total_spend", "email_opt_in", "purchased_sku":
+		case "city_code_in", "min_total_spend", "email_opt_in":
+		case "purchased_sku":
+			skus, hasSkus := asStringSlice(filterParameter(filter, "skus"))
+			_, hasLegacyValue := filter.Value.(string)
+			if (!hasSkus || len(skus) == 0) && !hasLegacyValue {
+				return domain.ErrInvalidFilter
+			}
 		case "city":
 			if _, ok := asStringSlice(filterParameter(filter, "codes")); !ok {
 				return domain.ErrInvalidFilter

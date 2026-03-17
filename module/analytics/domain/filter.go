@@ -34,8 +34,8 @@ type SegmentFilter struct {
 	MinTotalSpend *float64
 	// RequireEmailOptIn defines optional email opt-in requirements.
 	RequireEmailOptIn *bool
-	// PurchasedSKU defines optional purchased SKU filters.
-	PurchasedSKU string
+	// PurchasedSKUs defines optional purchased SKU filters (matched with IN — any one match is sufficient).
+	PurchasedSKUs []string
 	// OrderRecencyDays defines optional "ordered in last N days" filters.
 	OrderRecencyDays *int
 	// NoOrderRecencyDays defines optional "no orders in last N days" filters.
