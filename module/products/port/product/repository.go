@@ -22,6 +22,8 @@ type Repository interface {
 	Create(ctx context.Context, product *productdomain.Product) error
 	// GetByID retrieves products by ID.
 	GetByID(ctx context.Context, id string) (*productdomain.Product, error)
+	// GetBySKU retrieves products by product-level SKU or variant-level SKU.
+	GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error)
 	// GetByIDs retrieves multiple products by their IDs.
 	GetByIDs(ctx context.Context, ids []string) ([]*productdomain.Product, error)
 	// List retrieves non-deleted products.

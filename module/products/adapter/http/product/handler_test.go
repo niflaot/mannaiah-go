@@ -19,6 +19,8 @@ type serviceMock struct {
 	createFn func(ctx context.Context, command productapplication.CreateCommand) (*productdomain.Product, error)
 	// getFn defines get behavior.
 	getFn func(ctx context.Context, id string) (*productdomain.Product, error)
+	// getBySKUFn defines get-by-sku behavior.
+	getBySKUFn func(ctx context.Context, sku string) (*productdomain.Product, error)
 	// listFn defines list behavior.
 	listFn func(ctx context.Context) ([]productdomain.Product, error)
 	// updateFn defines update behavior.
@@ -35,6 +37,11 @@ func (m serviceMock) Create(ctx context.Context, command productapplication.Crea
 // Get executes configured get behavior.
 func (m serviceMock) Get(ctx context.Context, id string) (*productdomain.Product, error) {
 	return m.getFn(ctx, id)
+}
+
+// GetBySKU executes configured get-by-sku behavior.
+func (m serviceMock) GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error) {
+	return m.getBySKUFn(ctx, sku)
 }
 
 // List executes configured list behavior.
@@ -93,6 +100,9 @@ func TestProductEndpoints(t *testing.T) {
 		getFn: func(ctx context.Context, id string) (*productdomain.Product, error) {
 			return &productdomain.Product{ID: id, SKU: "SKU-1"}, nil
 		},
+		getBySKUFn: func(ctx context.Context, sku string) (*productdomain.Product, error) {
+			return &productdomain.Product{ID: "p-1", SKU: sku}, nil
+		},
 		listFn: func(ctx context.Context) ([]productdomain.Product, error) {
 			return []productdomain.Product{{ID: "p-1", SKU: "SKU-1"}}, nil
 		},
@@ -122,6 +132,12 @@ func TestProductEndpoints(t *testing.T) {
 		t.Fatalf("GET /products/:id status = %d, want %d", getResp.StatusCode, stdhttp.StatusOK)
 	}
 
+	skuReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/products/sku/SKU-1", nil)
+	skuResp := runRequest(t, server, skuReq)
+	if skuResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("GET /products/sku/:sku status = %d, want %d", skuResp.StatusCode, stdhttp.StatusOK)
+	}
+
 	updateReq, _ := stdhttp.NewRequest(stdhttp.MethodPatch, "/products/p-1", bytes.NewBufferString(`{"sku":"SKU-2"}`))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateResp := runRequest(t, server, updateReq)
@@ -143,6 +159,9 @@ func TestHandlerInvalidPayload(t *testing.T) {
 			return &productdomain.Product{}, nil
 		},
 		getFn: func(ctx context.Context, id string) (*productdomain.Product, error) {
+			return &productdomain.Product{}, nil
+		},
+		getBySKUFn: func(ctx context.Context, sku string) (*productdomain.Product, error) {
 			return &productdomain.Product{}, nil
 		},
 		listFn: func(ctx context.Context) ([]productdomain.Product, error) { return []productdomain.Product{}, nil },
@@ -167,6 +186,7 @@ func TestHandlerMapErrorVariants(t *testing.T) {
 	cases := []error{
 		productport.ErrNotFound,
 		productapplication.ErrInvalidID,
+		productapplication.ErrInvalidSKU,
 		productapplication.ErrAssetNotFound,
 		productdomain.ErrSKURequired,
 		productport.ErrDuplicateSKU,
@@ -189,6 +209,9 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 			return &productdomain.Product{}, nil
 		},
 		getFn: func(ctx context.Context, id string) (*productdomain.Product, error) {
+			return &productdomain.Product{}, nil
+		},
+		getBySKUFn: func(ctx context.Context, sku string) (*productdomain.Product, error) {
 			return &productdomain.Product{}, nil
 		},
 		listFn: func(ctx context.Context) ([]productdomain.Product, error) { return []productdomain.Product{}, nil },

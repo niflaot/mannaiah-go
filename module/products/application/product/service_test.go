@@ -16,6 +16,8 @@ type repositoryMock struct {
 	createFn func(ctx context.Context, product *productdomain.Product) error
 	// getFn defines get behavior.
 	getFn func(ctx context.Context, id string) (*productdomain.Product, error)
+	// getBySKUFn defines get-by-sku behavior.
+	getBySKUFn func(ctx context.Context, sku string) (*productdomain.Product, error)
 	// listFn defines list behavior.
 	listFn func(ctx context.Context) ([]productdomain.Product, error)
 	// updateFn defines update behavior.
@@ -50,6 +52,14 @@ func (m repositoryMock) Update(ctx context.Context, product *productdomain.Produ
 // Delete executes configured delete behavior.
 func (m repositoryMock) Delete(ctx context.Context, id string) error {
 	return m.deleteFn(ctx, id)
+}
+
+// GetBySKU executes configured get-by-sku behavior.
+func (m repositoryMock) GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error) {
+	if m.getBySKUFn != nil {
+		return m.getBySKUFn(ctx, sku)
+	}
+	return nil, productport.ErrNotFound
 }
 
 // GetByIDs executes stub get-by-ids behavior.
@@ -148,6 +158,29 @@ func TestGetListDelete(t *testing.T) {
 	}
 	if deleteErr := service.Delete(context.Background(), ""); !errorspkg.Is(deleteErr, ErrInvalidID) {
 		t.Fatalf("Delete(empty) error = %v, want ErrInvalidID", deleteErr)
+	}
+}
+
+// TestGetBySKU verifies get-by-sku behavior.
+func TestGetBySKU(t *testing.T) {
+	service, err := NewService(repositoryMock{
+		getBySKUFn: func(ctx context.Context, sku string) (*productdomain.Product, error) {
+			return &productdomain.Product{ID: "p-1", SKU: sku}, nil
+		},
+	}, assetLookupMock{existsFn: func(ctx context.Context, id string) (bool, error) { return true, nil }})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if _, skuErr := service.GetBySKU(context.Background(), ""); !errorspkg.Is(skuErr, ErrInvalidSKU) {
+		t.Fatalf("GetBySKU(empty) error = %v, want ErrInvalidSKU", skuErr)
+	}
+	product, skuErr := service.GetBySKU(context.Background(), "SKU-1")
+	if skuErr != nil {
+		t.Fatalf("GetBySKU() error = %v", skuErr)
+	}
+	if product.SKU != "SKU-1" {
+		t.Fatalf("GetBySKU() SKU = %q, want %q", product.SKU, "SKU-1")
 	}
 }
 

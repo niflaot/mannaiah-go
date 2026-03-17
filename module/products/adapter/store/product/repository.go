@@ -244,6 +244,42 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*productdomain.Pro
 	return &entity, nil
 }
 
+// GetBySKU retrieves products by product-level or variant-level SKU.
+func (r *Repository) GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error) {
+	trimmed := strings.TrimSpace(sku)
+
+	var record productRecord
+	err := r.db.WithContext(ctx).First(&record, "sku = ?", trimmed).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("get product by sku: %w", err)
+	}
+
+	if err == nil {
+		entity, loadErr := r.loadProductAggregate(ctx, record)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return &entity, nil
+	}
+
+	var productID string
+	variantErr := r.db.WithContext(ctx).
+		Model(&productVariantRecord{}).
+		Select("product_id").
+		Where("sku = ?", trimmed).
+		Order("id ASC").
+		Limit(1).
+		Pluck("product_id", &productID).Error
+	if variantErr != nil {
+		return nil, fmt.Errorf("get product by variant sku: %w", variantErr)
+	}
+	if productID == "" {
+		return nil, productport.ErrNotFound
+	}
+
+	return r.GetByID(ctx, productID)
+}
+
 // List retrieves all non-deleted products.
 func (r *Repository) List(ctx context.Context) ([]productdomain.Product, error) {
 	records := make([]productRecord, 0)

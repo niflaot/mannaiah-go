@@ -17,6 +17,8 @@ var (
 	ErrNilAssetLookup = errors.New("products asset lookup must not be nil")
 	// ErrInvalidID is returned when ids are empty.
 	ErrInvalidID = errors.New("product id is required")
+	// ErrInvalidSKU is returned when sku values are empty.
+	ErrInvalidSKU = errors.New("product sku is required")
 	// ErrAssetNotFound is returned when referenced gallery assets do not exist.
 	ErrAssetNotFound = errors.New("product gallery asset not found")
 )
@@ -81,6 +83,8 @@ type Service interface {
 	Create(ctx context.Context, command CreateCommand) (*productdomain.Product, error)
 	// Get retrieves a product by ID.
 	Get(ctx context.Context, id string) (*productdomain.Product, error)
+	// GetBySKU retrieves a product by product-level or variant-level SKU.
+	GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error)
 	// List lists all products.
 	List(ctx context.Context) ([]productdomain.Product, error)
 	// Update updates products by ID.
@@ -150,6 +154,21 @@ func (s *ProductService) Get(ctx context.Context, id string) (*productdomain.Pro
 	entity, err := s.repository.GetByID(ctx, trimmedID)
 	if err != nil {
 		return nil, fmt.Errorf("get product: %w", err)
+	}
+
+	return entity, nil
+}
+
+// GetBySKU retrieves products by product-level or variant-level SKU.
+func (s *ProductService) GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error) {
+	trimmed := strings.TrimSpace(sku)
+	if trimmed == "" {
+		return nil, ErrInvalidSKU
+	}
+
+	entity, err := s.repository.GetBySKU(ctx, trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("get product by sku: %w", err)
 	}
 
 	return entity, nil

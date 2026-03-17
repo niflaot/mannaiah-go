@@ -108,6 +108,7 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/products", h.protect("products:create", h.create))
 	router.Get("/products", h.protect("products:read", h.findAll))
+	router.Get("/products/sku/:sku", h.protect("products:read", h.findOneBySKU))
 	router.Get("/products/:id", h.protect("products:read", h.findOne))
 	router.Patch("/products/:id", h.protect("products:update", h.update))
 	router.Delete("/products/:id", h.protect("products:delete", h.remove))
@@ -144,6 +145,16 @@ func (h *Handler) findAll(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(listResponse{Data: products})
+}
+
+// findOneBySKU handles product-by-sku retrieval endpoints.
+func (h *Handler) findOneBySKU(ctx corehttp.Context) error {
+	product, err := h.service.GetBySKU(ctx.Context(), ctx.Params("sku"))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(product)
 }
 
 // findOne handles product-by-id retrieval endpoints.
@@ -237,6 +248,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, productapplication.ErrInvalidID) {
 		return corehttp.NewAppError(400, "invalid_product_id", err)
+	}
+	if errors.Is(err, productapplication.ErrInvalidSKU) {
+		return corehttp.NewAppError(400, "invalid_product_sku", err)
 	}
 	if errors.Is(err, productapplication.ErrAssetNotFound) {
 		return corehttp.NewAppError(400, "invalid_product_asset_reference", err)
