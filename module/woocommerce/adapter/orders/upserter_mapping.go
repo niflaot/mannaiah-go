@@ -105,7 +105,7 @@ func toShippingCharges(values []port.OrderSyncShippingCharge) []ordersapplicatio
 // mapOrderStatus maps WooCommerce source status values to order-domain status values.
 func mapOrderStatus(value string) ordersdomain.Status {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "cancelled", "canceled":
+	case "cancelled", "canceled", "failed":
 		return ordersdomain.StatusCancelled
 	case "processing", "created":
 		return ordersdomain.StatusCreated

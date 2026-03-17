@@ -60,6 +60,7 @@ func TestMapOrderStatus(t *testing.T) {
 	cases := map[string]ordersdomain.Status{
 		"cancelled":       ordersdomain.StatusCancelled,
 		"canceled":        ordersdomain.StatusCancelled,
+		"failed":          ordersdomain.StatusCancelled,
 		"processing":      ordersdomain.StatusCreated,
 		"on-hold":         ordersdomain.StatusHold,
 		"pending-payment": ordersdomain.StatusPending,
