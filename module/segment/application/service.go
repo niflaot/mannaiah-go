@@ -385,10 +385,122 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 			if values, ok := asStringSlice(filterParameter(filter, "statuses")); ok {
 				result.OrderStatuses = values
 			}
+		case "rfm_group":
+			if value, ok := asString(filterParameter(filter, "slug")); ok {
+				result.RFMGroup = value
+			}
+		case "rfm_score":
+			if value, ok := asInt(filterParameter(filter, "min")); ok {
+				result.RFMScoreMin = &value
+			}
+			if value, ok := asInt(filterParameter(filter, "max")); ok {
+				result.RFMScoreMax = &value
+			}
+		case "rfm_range":
+			if v, ok := asInt(filterParameter(filter, "rMin")); ok {
+				result.RFMRMin = &v
+			}
+			if v, ok := asInt(filterParameter(filter, "rMax")); ok {
+				result.RFMRMax = &v
+			}
+			if v, ok := asInt(filterParameter(filter, "fMin")); ok {
+				result.RFMFMin = &v
+			}
+			if v, ok := asInt(filterParameter(filter, "fMax")); ok {
+				result.RFMFMax = &v
+			}
+			if v, ok := asInt(filterParameter(filter, "mMin")); ok {
+				result.RFMMMin = &v
+			}
+			if v, ok := asInt(filterParameter(filter, "mMax")); ok {
+				result.RFMMMax = &v
+			}
+		case "tag_affinity":
+			if tags, ok := asAffinityTagFilters(filterParameter(filter, "tags")); ok {
+				result.AffinityTags = tags
+			}
+		case "category_affinity":
+			if cats, ok := asAffinityCategoryFilters(filterParameter(filter, "categories")); ok {
+				result.AffinityCategories = cats
+			}
+		case "variation_affinity":
+			if vars, ok := asAffinityVariationFilters(filterParameter(filter, "variations")); ok {
+				result.AffinityVariations = vars
+			}
 		}
 	}
 
 	return result
+}
+
+// asAffinityTagFilters parses tag affinity filter slice values.
+func asAffinityTagFilters(value any) ([]analyticsdomain.AffinityTagFilter, bool) {
+	raw, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	result := make([]analyticsdomain.AffinityTagFilter, 0, len(raw))
+	for _, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		tag, _ := asString(m["tag"])
+		if tag == "" {
+			continue
+		}
+		minScore, _ := asFloat64(m["minScore"])
+		result = append(result, analyticsdomain.AffinityTagFilter{Tag: tag, MinScore: minScore})
+	}
+
+	return result, true
+}
+
+// asAffinityCategoryFilters parses category affinity filter slice values.
+func asAffinityCategoryFilters(value any) ([]analyticsdomain.AffinityCategoryFilter, bool) {
+	raw, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	result := make([]analyticsdomain.AffinityCategoryFilter, 0, len(raw))
+	for _, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		catID, _ := asString(m["categoryId"])
+		if catID == "" {
+			continue
+		}
+		minScore, _ := asFloat64(m["minScore"])
+		result = append(result, analyticsdomain.AffinityCategoryFilter{CategoryID: catID, MinScore: minScore})
+	}
+
+	return result, true
+}
+
+// asAffinityVariationFilters parses variation affinity filter slice values.
+func asAffinityVariationFilters(value any) ([]analyticsdomain.AffinityVariationFilter, bool) {
+	raw, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	result := make([]analyticsdomain.AffinityVariationFilter, 0, len(raw))
+	for _, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := asString(m["name"])
+		val, _ := asString(m["value"])
+		if name == "" || val == "" {
+			continue
+		}
+		minScore, _ := asFloat64(m["minScore"])
+		result = append(result, analyticsdomain.AffinityVariationFilter{Name: name, Value: val, MinScore: minScore})
+	}
+
+	return result, true
 }
 
 // validateFilters validates filter types and parameters.
@@ -431,6 +543,29 @@ func validateFilters(filters []domain.Filter) error {
 		case "order_status":
 			values, ok := asStringSlice(filterParameter(filter, "statuses"))
 			if !ok || len(values) == 0 {
+				return domain.ErrInvalidFilter
+			}
+		case "rfm_group":
+			if _, ok := asString(filterParameter(filter, "slug")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "rfm_score":
+			_, hasMin := asInt(filterParameter(filter, "min"))
+			_, hasMax := asInt(filterParameter(filter, "max"))
+			if !hasMin && !hasMax {
+				return domain.ErrInvalidFilter
+			}
+		case "rfm_range":
+		case "tag_affinity":
+			if _, ok := asAffinityTagFilters(filterParameter(filter, "tags")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "category_affinity":
+			if _, ok := asAffinityCategoryFilters(filterParameter(filter, "categories")); !ok {
+				return domain.ErrInvalidFilter
+			}
+		case "variation_affinity":
+			if _, ok := asAffinityVariationFilters(filterParameter(filter, "variations")); !ok {
 				return domain.ErrInvalidFilter
 			}
 		default:

@@ -52,6 +52,23 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.3.0] - 2026-03-16
+- Ship RFM scoring + tag/category/variation affinity engine:
+  - ClickHouse migrations 000006–000011: `product_taxonomy`, `rfm_scores_mv`, `tag_affinity_mv`, `category_affinity_mv`, `product_variation_taxonomy`, `variation_affinity_mv`.
+  - MySQL/SQLite migration 000017: `rfm_groups`, `rfm_band_configs`, `rfm_group_conditions`.
+  - Domain layer: `RFMScore`, `RFMBandConfig`, `RFMGroup`, `RFMGroupConditions`, `TagAffinity`, `CategoryAffinity`, `VariationAffinity`, `AffinityProfile`.
+  - Port layer: `RFMStore`, `RFMGroupRepository`, `AffinityStore`, `TaxonomyStore`.
+  - Application services: `rfm.RFMService` (with 5-minute band cache), `affinity.AffinityService`.
+  - ClickHouse adapters: `store_rfm.go`, `store_affinity.go`, `store_taxonomy.go`.
+  - GORM adapter: `rfm_group_repository.go` with `SeedDefaultBands`.
+  - Segment query extensions: RFM score/range and tag/category/variation affinity EXISTS filters.
+  - Segment filter DSL: new types `rfm_group`, `rfm_score`, `rfm_range`, `tag_affinity`, `category_affinity`, `variation_affinity`.
+  - HTTP endpoints: `/analytics/rfm/*` and `/analytics/affinity/*` (including `variations`).
+  - Taxonomy seed: `seedProductTaxonomy` and `seedVariationTaxonomy` run as part of `POST /analytics/seed`.
+  - Noop stores for ClickHouse-absent environments.
+  - E2E tests for RFM group CRUD and affinity profile endpoints.
+- Bump release references to `v2.3.0`.
+
 ### [v2.2.2] - 2026-03-16
 - Fix variant-SKU order item resolution in analytics seed:
   - `orders/adapter/products/resolver.go`: added `findByVariantSKU` step between parent-SKU and alternate-name lookups; queries `product_variants.sku` directly.

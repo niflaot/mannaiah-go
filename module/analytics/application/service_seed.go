@@ -76,6 +76,15 @@ func (s *AnalyticsService) Seed(ctx context.Context) (*SeedSummary, error) {
 		return nil, err
 	}
 
+	if s.taxonomyStore != nil {
+		if err := s.seedProductTaxonomy(ctx, s.taxonomyStore); err != nil {
+			appendSyncError("seed", "product_taxonomy_failed", err.Error())
+		}
+		if err := s.seedVariationTaxonomy(ctx, s.taxonomyStore); err != nil {
+			appendSyncError("seed", "variation_taxonomy_failed", err.Error())
+		}
+	}
+
 	finalizeSyncRecord(false)
 	return summary, nil
 }

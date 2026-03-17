@@ -75,6 +75,8 @@ type AnalyticsService struct {
 	db *gorm.DB
 	// store defines analytics backend dependencies.
 	store port.Store
+	// taxonomyStore defines optional taxonomy upsert dependencies used during seed.
+	taxonomyStore port.TaxonomyStore
 	// syncRecorder defines optional sync run recording dependencies.
 	syncRecorder port.SyncRecorder
 }
@@ -93,6 +95,15 @@ func NewService(enabled bool, db *gorm.DB, store port.Store) (*AnalyticsService,
 	}
 
 	return &AnalyticsService{enabled: enabled, db: db, store: store, syncRecorder: port.NoopSyncRecorder{}}, nil
+}
+
+// SetTaxonomyStore configures optional taxonomy store dependencies used during seed.
+func (s *AnalyticsService) SetTaxonomyStore(taxonomyStore port.TaxonomyStore) {
+	if s == nil {
+		return
+	}
+
+	s.taxonomyStore = taxonomyStore
 }
 
 // SetSyncRecorder configures optional sync run recording dependencies.

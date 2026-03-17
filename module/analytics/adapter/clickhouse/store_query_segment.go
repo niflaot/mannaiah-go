@@ -23,6 +23,11 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 	appendSubscribedNoBuyCondition(&conditions, &args, filter)
 	appendTopSpenderCondition(&conditions, &args, topSpenderIDs)
 	appendMetadataCondition(&conditions, &args, filter)
+	appendRFMScoreRangeCondition(&conditions, &args, filter)
+	appendRFMRangeCondition(&conditions, &args, filter)
+	appendTagAffinityCondition(&conditions, &args, filter)
+	appendCategoryAffinityCondition(&conditions, &args, filter)
+	appendVariationAffinityCondition(&conditions, &args, filter)
 
 	return strings.Join(conditions, " AND "), args
 }
