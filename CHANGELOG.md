@@ -52,6 +52,13 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.2.2] - 2026-03-16
+- Fix variant-SKU order item resolution in analytics seed:
+  - `orders/adapter/products/resolver.go`: added `findByVariantSKU` step between parent-SKU and alternate-name lookups; queries `product_variants.sku` directly.
+  - `resolution_source` is set to `"variant_sku"` for rows matched via variant SKU.
+  - To recover existing unresolved rows: `TRUNCATE TABLE order_items_fact` then `POST /analytics/seed`.
+- Bump release references and badges to `v2.2.2`.
+
 ### [v2.2.1] - 2026-03-16
 - Homogenize all product permission scopes to `products:` prefix:
   - Products handler: `products:create`, `products:read`, `products:update`, `products:delete`.
