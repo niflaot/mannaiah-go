@@ -38,7 +38,7 @@ func NewResolver(db *gorm.DB) (*Resolver, error) {
 	return &Resolver{db: db}, nil
 }
 
-// Resolve resolves products by SKU first and alternate-name fallback second.
+// Resolve resolves products by SKU first, variant SKU second, and alternate-name fallback third.
 func (r *Resolver) Resolve(ctx context.Context, sku string, alternateName string) (*ordersport.ProductResolution, error) {
 	sku = strings.TrimSpace(sku)
 	alternateName = strings.TrimSpace(alternateName)
@@ -50,6 +50,14 @@ func (r *Resolver) Resolve(ctx context.Context, sku string, alternateName string
 		}
 		if product != nil {
 			return &ordersport.ProductResolution{ProductID: product.ID, MatchedBy: "sku"}, nil
+		}
+
+		product, err = r.findByVariantSKU(ctx, sku)
+		if err != nil {
+			return nil, err
+		}
+		if product != nil {
+			return &ordersport.ProductResolution{ProductID: product.ID, MatchedBy: "variant_sku"}, nil
 		}
 	}
 
@@ -70,6 +78,26 @@ func (r *Resolver) Resolve(ctx context.Context, sku string, alternateName string
 func (r *Resolver) findBySKU(ctx context.Context, sku string) (*productRow, error) {
 	var row productRow
 	err := r.db.WithContext(ctx).Table("products").Select("id").Where("sku = ?", strings.TrimSpace(sku)).Limit(1).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &row, nil
+}
+
+// findByVariantSKU resolves parent products by variant-level SKU values.
+func (r *Resolver) findByVariantSKU(ctx context.Context, sku string) (*productRow, error) {
+	var row productRow
+	err := r.db.WithContext(ctx).
+		Table("product_variants").
+		Select("product_variants.product_id as id").
+		Where("product_variants.sku = ?", strings.TrimSpace(sku)).
+		Order("product_variants.id asc").
+		Limit(1).
+		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

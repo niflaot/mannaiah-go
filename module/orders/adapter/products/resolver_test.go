@@ -47,12 +47,24 @@ func TestResolve(t *testing.T) {
 	`).Error; execErr != nil {
 		t.Fatalf("create product_datasheets table error = %v", execErr)
 	}
+	if execErr := db.Exec(`
+		CREATE TABLE product_variants (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id TEXT NOT NULL,
+			sku TEXT
+		);
+	`).Error; execErr != nil {
+		t.Fatalf("create product_variants table error = %v", execErr)
+	}
 
-	if execErr := db.Exec(`INSERT INTO products (id, sku) VALUES ('p-1', 'SKU-1'), ('p-2', 'SKU-2')`).Error; execErr != nil {
+	if execErr := db.Exec(`INSERT INTO products (id, sku) VALUES ('p-1', 'SKU-1'), ('p-2', 'SKU-2'), ('p-3', 'SKU-3')`).Error; execErr != nil {
 		t.Fatalf("seed products error = %v", execErr)
 	}
 	if execErr := db.Exec(`INSERT INTO product_datasheets (product_id, name) VALUES ('p-2', 'Fallback Name')`).Error; execErr != nil {
 		t.Fatalf("seed product_datasheets error = %v", execErr)
+	}
+	if execErr := db.Exec(`INSERT INTO product_variants (product_id, sku) VALUES ('p-3', 'SKU-3-RED-L')`).Error; execErr != nil {
+		t.Fatalf("seed product_variants error = %v", execErr)
 	}
 
 	resolver, err := NewResolver(db)
@@ -74,6 +86,14 @@ func TestResolve(t *testing.T) {
 	}
 	if altMatch == nil || altMatch.ProductID != "p-2" || altMatch.MatchedBy != "alternate_name" {
 		t.Fatalf("Resolve(alt) = %#v, want p-2/alternate_name", altMatch)
+	}
+
+	variantMatch, err := resolver.Resolve(context.Background(), "SKU-3-RED-L", "")
+	if err != nil {
+		t.Fatalf("Resolve(variant_sku) error = %v", err)
+	}
+	if variantMatch == nil || variantMatch.ProductID != "p-3" || variantMatch.MatchedBy != "variant_sku" {
+		t.Fatalf("Resolve(variant_sku) = %#v, want p-3/variant_sku", variantMatch)
 	}
 
 	none, err := resolver.Resolve(context.Background(), "MISSING", "UNKNOWN")
