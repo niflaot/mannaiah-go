@@ -12,6 +12,7 @@ use (
 	./module/membership
 	./module/orders
 	./module/products
+	./module/shipping
 	./module/segment
 	./module/syncrecord
 	./module/woocommerce
