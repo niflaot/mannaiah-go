@@ -52,15 +52,6 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v2.4.0] - 2026-03-18
-- Ship new `shipping` module with DDD + hexagonal boundaries and carrier-agnostic quote API:
-  - New endpoint `POST /shipping/quotes` documented in module OpenAPI and aggregated in core docs.
-  - Domain/application flow validates quote payloads (including unit numbering and dimensions) and keeps public API independent from carrier-specific payload contracts.
-  - TCC integration adapter added as first carrier with env-driven credentials/account settings, city-code mapping (`XXXXX` -> `XXXXX000`), volumetric weight calculation, business-unit mapping (`courier`/`locals`), and normalized success/error mapping.
-  - Runtime wiring includes fail-open telemetry instrumentation for outbound integration calls and controlled `503` responses when integration config is invalid/unavailable.
-  - Added shipping module tests across domain, service, HTTP adapter, TCC adapter, runtime wiring/spec merge, and benchmark coverage for quote hot path.
-- Bump release references and badges to `v2.4.0`.
-
 ### [v2.3.9] - 2026-03-17
 - Swap gallery realm logic from `excludedRealms` (opt-out) to `includedRealms` (opt-in):
   - Domain: `GalleryItem.ExcludedRealms` renamed to `IncludedRealms`; empty list means visible in all realms.

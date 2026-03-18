@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v2.4.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.3.9-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -17,7 +17,6 @@ Frontend integration for the 2.0+ marketing/BI stack is documented through the a
 - `module/assets`: asset/storage domain.
 - `module/falabella`: Falabella integration module.
 - `module/woocommerce`: WooCommerce integration module.
-- `module/shipping`: shipping quote integration module (carrier-agnostic API with TCC adapter).
 - `module/syncrecord`: centralized sync execution registry and query API.
 - `module/membership`: auditable consent/membership stamping module.
 - `module/analytics`: ClickHouse analytics module with schema bootstrap, event ingestion, and seed endpoint.
@@ -71,7 +70,7 @@ Use these env vars to convert tagged assets to `.jpg` through scheduled jobs:
 ### Module Unit Tests
 
 ```bash
-for module in module/core module/auth module/contacts module/orders module/assets module/products module/falabella module/woocommerce module/shipping; do
+for module in module/core module/auth module/contacts module/orders module/assets module/products module/falabella module/woocommerce; do
   (cd "$module" && go test ./...)
 done
 ```

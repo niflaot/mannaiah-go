@@ -55,7 +55,6 @@ import (
 	"mannaiah/module/products"
 	"mannaiah/module/segment"
 	segmentapplication "mannaiah/module/segment/application"
-	"mannaiah/module/shipping"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -96,7 +95,6 @@ func run(ctx context.Context, envFile string) error {
 	var campaignCfg campaign.Config
 	var membershipCfg membership.Config
 	var syncRecordCfg syncrecord.Config
-	var shippingCfg shipping.Config
 	var telemetryCfg coretelemetry.Config
 
 	if err := coreconfig.Load(
@@ -118,7 +116,6 @@ func run(ctx context.Context, envFile string) error {
 		&campaignCfg,
 		&membershipCfg,
 		&syncRecordCfg,
-		&shippingCfg,
 		&telemetryCfg,
 	); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
@@ -188,7 +185,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.4.0",
+		Version:     "2.3.9",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -460,15 +457,6 @@ func run(ctx context.Context, envFile string) error {
 		defer cancel()
 		_ = wooModule.Stop(stopCtx)
 	}()
-
-	shippingModule, err := shipping.New(shippingCfg, logger)
-	if err != nil {
-		return fmt.Errorf("initialize shipping module: %w", err)
-	}
-	shippingModule.SetAuthorizer(authModule)
-	if err := shippingModule.Load(runtime); err != nil {
-		return fmt.Errorf("load shipping module: %w", err)
-	}
 
 	runtime.ExposeOpenAPI("/openapi.json")
 	runtime.ExposeOpenAPIUI("/docs", "/openapi.json", "Mannaiah API Docs")
