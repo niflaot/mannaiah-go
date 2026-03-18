@@ -44,8 +44,8 @@ type CatalogImage struct {
 	Position *int
 	// VariationPosition defines optional variation-scoped ordering values.
 	VariationPosition *int
-	// ExcludedRealms defines realm identifiers where this image must be excluded.
-	ExcludedRealms []string
+	// IncludedRealms defines realm identifiers where this image is visible (empty means all realms).
+	IncludedRealms []string
 	// VariationIDs defines optional linked variation identifier values.
 	VariationIDs []string
 }

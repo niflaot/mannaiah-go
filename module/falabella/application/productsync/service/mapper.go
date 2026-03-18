@@ -231,7 +231,7 @@ func resolveImageURLs(images []port.CatalogImage, realm string, variantVariation
 	result := make([]string, 0, len(images))
 	seen := make(map[string]struct{}, len(images))
 	for _, item := range orderedImages {
-		if isRealmExcluded(item.ExcludedRealms, realm) {
+		if !isRealmIncluded(item.IncludedRealms, realm) {
 			continue
 		}
 		if isVariantSelection {
@@ -405,15 +405,16 @@ func isSubsetOfNormalized(candidate []string, normalizedSuperset map[string]stru
 	return true
 }
 
-// isRealmExcluded reports whether provided realm values are excluded from image sync.
-func isRealmExcluded(excludedRealms []string, realm string) bool {
-	trimmedRealm := strings.TrimSpace(realm)
-	if trimmedRealm == "" || len(excludedRealms) == 0 {
-		return false
+// isRealmIncluded reports whether the provided realm is allowed for image sync.
+// An empty includedRealms list means the image is visible in all realms.
+func isRealmIncluded(includedRealms []string, realm string) bool {
+	if len(includedRealms) == 0 {
+		return true
 	}
 
-	for _, excludedRealm := range excludedRealms {
-		if strings.EqualFold(strings.TrimSpace(excludedRealm), trimmedRealm) {
+	trimmedRealm := strings.TrimSpace(realm)
+	for _, includedRealm := range includedRealms {
+		if strings.EqualFold(strings.TrimSpace(includedRealm), trimmedRealm) {
 			return true
 		}
 	}

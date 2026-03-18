@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.3.9] - 2026-03-17
+- Swap gallery realm logic from `excludedRealms` (opt-out) to `includedRealms` (opt-in):
+  - Domain: `GalleryItem.ExcludedRealms` renamed to `IncludedRealms`; empty list means visible in all realms.
+  - MySQL/SQLite migration 000018: creates `product_gallery_included_realms`, drops `product_gallery_excluded_realms`.
+  - Repository: `productGalleryExcludedRealmRecord` → `productGalleryIncludedRealmRecord`; read/write paths updated.
+  - Falabella port: `CatalogImage.ExcludedRealms` → `IncludedRealms`.
+  - Falabella catalog adapter: propagates `IncludedRealms` to port layer.
+  - Falabella mapper: `isRealmExcluded` replaced with `isRealmIncluded` (flipped logic — image is skipped when realm is not in `IncludedRealms` and list is non-empty).
+  - OpenAPI spec: `excludedRealms` → `includedRealms` in gallery-item schema.
+  - Seed script: `scripts/seed_falabella_included_realms.sql` — adds all existing gallery items to the `falabella` included realm.
+
 ### [v2.3.0] - 2026-03-16
 - Ship RFM scoring + tag/category/variation affinity engine:
   - ClickHouse migrations 000006–000011: `product_taxonomy`, `rfm_scores_mv`, `tag_affinity_mv`, `category_affinity_mv`, `product_variation_taxonomy`, `variation_affinity_mv`.

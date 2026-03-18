@@ -346,7 +346,7 @@ func TestResolveImageURLs(t *testing.T) {
 		{URL: "https://cdn.example.com/variant.jpg", Position: intPtr(4), VariationPosition: intPtr(1), VariationIDs: []string{"v-color"}},
 		{URL: "https://cdn.example.com/variant-priority.jpg", Position: intPtr(3), VariationPosition: intPtr(0), VariationIDs: []string{"v-color"}},
 		{URL: "https://cdn.example.com/parent-priority.jpg", Position: intPtr(0)},
-		{URL: "https://cdn.example.com/excluded.jpg", ExcludedRealms: []string{"falabella"}},
+		{URL: "https://cdn.example.com/excluded.jpg", IncludedRealms: []string{"woo"}},
 	}
 
 	parentURLs := resolveImageURLs(images, "falabella", nil)

@@ -25,8 +25,8 @@ type GalleryItem struct {
 	VariationPosition *int `json:"variationPosition,omitempty"`
 	// IsMain reports whether this asset is the primary image.
 	IsMain bool `json:"isMain"`
-	// ExcludedRealms defines realms where this asset is hidden.
-	ExcludedRealms []string `json:"excludedRealms,omitempty"`
+	// IncludedRealms defines realms where this asset is visible (empty means all realms).
+	IncludedRealms []string `json:"includedRealms,omitempty"`
 	// VariationIDs defines linked variation IDs.
 	VariationIDs []string `json:"variationIds,omitempty"`
 }
@@ -90,8 +90,8 @@ func (p *Product) Normalize() {
 		p.Gallery[index].AssetID = strings.TrimSpace(p.Gallery[index].AssetID)
 		p.Gallery[index].Position = normalizeOptionalPosition(p.Gallery[index].Position)
 		p.Gallery[index].VariationPosition = normalizeOptionalPosition(p.Gallery[index].VariationPosition)
-		for excludedIndex := range p.Gallery[index].ExcludedRealms {
-			p.Gallery[index].ExcludedRealms[excludedIndex] = strings.TrimSpace(p.Gallery[index].ExcludedRealms[excludedIndex])
+		for includedIndex := range p.Gallery[index].IncludedRealms {
+			p.Gallery[index].IncludedRealms[includedIndex] = strings.TrimSpace(p.Gallery[index].IncludedRealms[includedIndex])
 		}
 		for variationIndex := range p.Gallery[index].VariationIDs {
 			p.Gallery[index].VariationIDs[variationIndex] = strings.TrimSpace(p.Gallery[index].VariationIDs[variationIndex])

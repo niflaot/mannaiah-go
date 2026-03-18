@@ -31,12 +31,12 @@ func (r *Repository) loadProductAggregate(ctx context.Context, record productRec
 			IsMain:            galleryRow.IsMain,
 		}
 
-		excludedRows := make([]productGalleryExcludedRealmRecord, 0)
-		if err := r.db.WithContext(ctx).Where("gallery_item_id = ?", galleryRow.ID).Order("position ASC").Find(&excludedRows).Error; err != nil {
-			return productdomain.Product{}, fmt.Errorf("load gallery excluded realm relations: %w", err)
+		includedRows := make([]productGalleryIncludedRealmRecord, 0)
+		if err := r.db.WithContext(ctx).Where("gallery_item_id = ?", galleryRow.ID).Order("position ASC").Find(&includedRows).Error; err != nil {
+			return productdomain.Product{}, fmt.Errorf("load gallery included realm relations: %w", err)
 		}
-		for _, excludedRow := range excludedRows {
-			item.ExcludedRealms = append(item.ExcludedRealms, excludedRow.Realm)
+		for _, includedRow := range includedRows {
+			item.IncludedRealms = append(item.IncludedRealms, includedRow.Realm)
 		}
 
 		variationRows := make([]productGalleryVariationRecord, 0)

@@ -28,7 +28,7 @@ func TestRepositoryCRUD(t *testing.T) {
 		Tags: []string{"bebida", "proteina"},
 		Gallery: []productdomain.GalleryItem{
 			{AssetID: "asset-2", Position: productIntPointer(3), IsMain: false},
-			{AssetID: "asset-1", Position: productIntPointer(1), VariationPosition: productIntPointer(0), IsMain: true, ExcludedRealms: []string{"b2b"}, VariationIDs: []string{"v1"}},
+			{AssetID: "asset-1", Position: productIntPointer(1), VariationPosition: productIntPointer(0), IsMain: true, IncludedRealms: []string{"b2b"}, VariationIDs: []string{"v1"}},
 		},
 		Datasheets: []productdomain.Datasheet{
 			{Realm: "default", Name: "Name", Description: "Desc", Attributes: map[string]any{"weight": 12}},

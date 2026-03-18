@@ -220,7 +220,7 @@ func TestCatalogGetProductWithImages(t *testing.T) {
 				SKU: "SKU-1",
 				Gallery: []productdomain.GalleryItem{
 					{AssetID: "asset-1", Position: catalogIntPointer(0)},
-					{AssetID: "asset-2", Position: catalogIntPointer(2), VariationPosition: catalogIntPointer(1), VariationIDs: []string{"v-color"}, ExcludedRealms: []string{"woo"}},
+					{AssetID: "asset-2", Position: catalogIntPointer(2), VariationPosition: catalogIntPointer(1), VariationIDs: []string{"v-color"}, IncludedRealms: []string{"falabella"}},
 				},
 			},
 		},

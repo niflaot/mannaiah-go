@@ -58,15 +58,15 @@ type productGalleryRecord struct {
 	IsMain bool `gorm:"not null"`
 }
 
-// productGalleryExcludedRealmRecord defines excluded realm rows for gallery items.
-type productGalleryExcludedRealmRecord struct {
+// productGalleryIncludedRealmRecord defines included realm rows for gallery items.
+type productGalleryIncludedRealmRecord struct {
 	// ID defines surrogate identifiers.
 	ID uint `gorm:"primaryKey"`
 	// GalleryItemID defines owning gallery item identifiers.
 	GalleryItemID uint `gorm:"not null;index"`
 	// Position defines stable realm ordering.
 	Position int `gorm:"not null;index"`
-	// Realm defines excluded realm identifiers.
+	// Realm defines included realm identifiers.
 	Realm string `gorm:"size:128;not null"`
 }
 
@@ -153,7 +153,7 @@ func (productRecord) TableName() string { return "products" }
 func (productGalleryRecord) TableName() string { return "product_gallery_items" }
 
 // TableName defines storage table name.
-func (productGalleryExcludedRealmRecord) TableName() string { return "product_gallery_excluded_realms" }
+func (productGalleryIncludedRealmRecord) TableName() string { return "product_gallery_included_realms" }
 
 // TableName defines storage table name.
 func (productGalleryVariationRecord) TableName() string { return "product_gallery_variations" }

@@ -225,7 +225,7 @@ func (c *Catalog) resolveCatalogImages(ctx context.Context, gallery []productdom
 			URL:               url,
 			Position:          cloneIntPointer(item.Position),
 			VariationPosition: cloneIntPointer(item.VariationPosition),
-			ExcludedRealms:    append([]string(nil), item.ExcludedRealms...),
+			IncludedRealms:    append([]string(nil), item.IncludedRealms...),
 			VariationIDs:      append([]string(nil), item.VariationIDs...),
 		})
 	}

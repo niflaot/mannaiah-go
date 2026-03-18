@@ -42,8 +42,8 @@ func clearProductRelations(tx *gorm.DB, productID string) error {
 		return fmt.Errorf("list gallery relation ids: %w", err)
 	}
 	if len(galleryIDs) > 0 {
-		if err := tx.Where("gallery_item_id IN ?", galleryIDs).Delete(&productGalleryExcludedRealmRecord{}).Error; err != nil {
-			return fmt.Errorf("delete gallery excluded realm relations: %w", err)
+		if err := tx.Where("gallery_item_id IN ?", galleryIDs).Delete(&productGalleryIncludedRealmRecord{}).Error; err != nil {
+			return fmt.Errorf("delete gallery included realm relations: %w", err)
 		}
 		if err := tx.Where("gallery_item_id IN ?", galleryIDs).Delete(&productGalleryVariationRecord{}).Error; err != nil {
 			return fmt.Errorf("delete gallery variation relations: %w", err)
@@ -102,14 +102,14 @@ func createGalleryRelations(tx *gorm.DB, productID string, values []productdomai
 			return fmt.Errorf("create gallery relation: %w", err)
 		}
 
-		for excludedIndex, excludedRealm := range item.ExcludedRealms {
-			excludedRecord := productGalleryExcludedRealmRecord{
+		for includedIndex, includedRealm := range item.IncludedRealms {
+			includedRecord := productGalleryIncludedRealmRecord{
 				GalleryItemID: galleryRecord.ID,
-				Position:      excludedIndex,
-				Realm:         strings.TrimSpace(excludedRealm),
+				Position:      includedIndex,
+				Realm:         strings.TrimSpace(includedRealm),
 			}
-			if err := tx.Create(&excludedRecord).Error; err != nil {
-				return fmt.Errorf("create gallery excluded realm relation: %w", err)
+			if err := tx.Create(&includedRecord).Error; err != nil {
+				return fmt.Errorf("create gallery included realm relation: %w", err)
 			}
 		}
 		for variationIndex, variationID := range item.VariationIDs {

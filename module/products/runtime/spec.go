@@ -266,7 +266,7 @@ func galleryItemSchema() *openapi3.Schema {
 		WithProperty("position", openapi3.NewInt32Schema()).
 		WithProperty("variationPosition", openapi3.NewInt32Schema()).
 		WithProperty("isMain", openapi3.NewBoolSchema()).
-		WithProperty("excludedRealms", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("includedRealms", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("variationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithRequired([]string{"assetId"})
 }
