@@ -52,6 +52,31 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.1] - 2026-03-18
+- Fix OpenAPI spec for all `/tags` and `/tags/correlations/*` endpoints:
+  - All success responses now carry full JSON body schemas instead of description-only stubs.
+  - Added `TagListResponse`, `TagCorrelationListResponse`, `DeleteResponse` component schemas.
+  - Added `jsonResponseBodyRef` helper shared across all tag spec operations.
+  - `GET /tags` → `TagListResponse` (`{ "data": Tag[] }`).
+  - `DELETE /tags/{name}` → `DeleteResponse` (`{ "status": string }`).
+  - `GET /tags/correlations` → `TagCorrelationListResponse` (`{ "data": TagCorrelation[] }`).
+  - `GET /tags/correlations/source/{tag}` → `TagCorrelationListResponse`.
+  - `POST /tags/correlations` → `TagCorrelation`.
+  - `PATCH /tags/correlations/{id}` → `TagCorrelation`.
+  - `DELETE /tags/correlations/{id}` → `DeleteResponse`.
+
+### [v2.4.0] - 2026-03-18
+- Ship canonical tag registry, tag correlations, and `min_order_count` segment filter:
+  - MySQL/SQLite migration 000019: `tags` canonical registry (soft-delete, name unique index) + `tag_correlations` (source/target/probability/notes, unique pair constraint).
+  - Domain: `domain/tag.Tag` (soft-deletable) and `domain/tag.TagCorrelation` structs in products module.
+  - Port: `port/tag.Repository` interface with `EnsureAll`, `SoftDelete`, and full correlation CRUD contracts.
+  - GORM adapter: `adapter/store/tag.Repository` — `EnsureAll` creates new tags and reintegrates soft-deleted ones; `SoftDelete` cascades to `product_tags`; hard-delete for correlations.
+  - Application service: `application/tag.TagService` implements `Service` + `TagRegistrar` interface.
+  - `TagRegistrar` integrated into `ProductService`: `Create` and `Update` now call `tagRegistrar.EnsureAll` before persistence so the canonical registry stays in sync.
+  - HTTP endpoints: `GET /tags` (`products:read`), `DELETE /tags/:name` (`marketing:manage`), `GET /tags/correlations`, `GET /tags/correlations/source/:tag`, `POST /tags/correlations`, `PATCH /tags/correlations/:id`, `DELETE /tags/correlations/:id` (all correlation routes require `marketing:manage`).
+  - OpenAPI spec: new `tags` tag group, `Tag`, `TagCorrelation`, `CreateTagCorrelationDto`, `UpdateTagCorrelationDto` schemas; all `/tags/*` path items documented.
+  - Segment filter `min_order_count`: `SegmentFilter.MinOrderCount`, `toAnalyticsFilter` case in segment service, `appendMinOrderCountCondition` ClickHouse `EXISTS/HAVING countDistinct` subquery.
+
 ### [v2.3.9] - 2026-03-17
 - Swap gallery realm logic from `excludedRealms` (opt-out) to `includedRealms` (opt-in):
   - Domain: `GalleryItem.ExcludedRealms` renamed to `IncludedRealms`; empty list means visible in all realms.

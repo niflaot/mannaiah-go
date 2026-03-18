@@ -4,12 +4,15 @@ import (
 	corehttp "mannaiah/module/core/http"
 	categoryhttp "mannaiah/module/products/adapter/http/category"
 	producthttp "mannaiah/module/products/adapter/http/product"
+	taghttp "mannaiah/module/products/adapter/http/tag"
 	variationhttp "mannaiah/module/products/adapter/http/variation"
 	categorystore "mannaiah/module/products/adapter/store/category"
 	productstore "mannaiah/module/products/adapter/store/product"
+	tagstore "mannaiah/module/products/adapter/store/tag"
 	variationstore "mannaiah/module/products/adapter/store/variation"
 	categoryapplication "mannaiah/module/products/application/category"
 	productapplication "mannaiah/module/products/application/product"
+	tagapplication "mannaiah/module/products/application/tag"
 	variationapplication "mannaiah/module/products/application/variation"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -30,6 +33,10 @@ type Module struct {
 	categoryHandler *categoryhttp.Handler
 	// categoryService defines category application service dependencies.
 	categoryService categoryapplication.Service
+	// tagHandler defines HTTP adapter used for tag route registration.
+	tagHandler *taghttp.Handler
+	// tagService defines tag application service dependencies.
+	tagService tagapplication.Service
 }
 
 // Loader defines bootstrap hooks required by products modules.
@@ -42,12 +49,27 @@ type Loader interface {
 
 // New creates a products module with adapter wiring.
 func New(db *gorm.DB, assetLookup productapplication.AssetLookup) (*Module, error) {
+	tagRepository, err := tagstore.NewRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
+	tagService, err := tagapplication.NewService(tagRepository)
+	if err != nil {
+		return nil, err
+	}
+
+	tagHandler, err := taghttp.NewHandler(tagService)
+	if err != nil {
+		return nil, err
+	}
+
 	productRepository, err := productstore.NewRepository(db)
 	if err != nil {
 		return nil, err
 	}
 
-	productService, err := productapplication.NewService(productRepository, assetLookup)
+	productService, err := productapplication.NewService(productRepository, assetLookup, tagService)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +116,8 @@ func New(db *gorm.DB, assetLookup productapplication.AssetLookup) (*Module, erro
 		variationService: variationService,
 		categoryHandler:  categoryHandler,
 		categoryService:  categoryService,
+		tagHandler:       tagHandler,
+		tagService:       tagService,
 	}, nil
 }
 
@@ -111,6 +135,9 @@ func (m *Module) RegisterRoutes(router corehttp.Router) {
 	}
 	if m.categoryHandler != nil {
 		m.categoryHandler.RegisterRoutes(router)
+	}
+	if m.tagHandler != nil {
+		m.tagHandler.RegisterRoutes(router)
 	}
 }
 
@@ -147,6 +174,9 @@ func (m *Module) SetAuthorizer(authorizer producthttp.Authorizer) {
 	if m.categoryHandler != nil {
 		m.categoryHandler.SetAuthorizer(authorizer)
 	}
+	if m.tagHandler != nil {
+		m.tagHandler.SetAuthorizer(authorizer)
+	}
 }
 
 // CategoryService returns category application service dependencies for module integrations.
@@ -156,6 +186,15 @@ func (m *Module) CategoryService() categoryapplication.Service {
 	}
 
 	return m.categoryService
+}
+
+// TagService returns tag application service dependencies for module integrations.
+func (m *Module) TagService() tagapplication.Service {
+	if m == nil {
+		return nil
+	}
+
+	return m.tagService
 }
 
 // OpenAPISpec returns product-module OpenAPI documentation.

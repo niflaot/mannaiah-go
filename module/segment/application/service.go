@@ -417,6 +417,12 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 			if v, ok := asInt(filterParameter(filter, "mMax")); ok {
 				result.RFMMMax = &v
 			}
+		case "min_order_count":
+			if value, ok := asInt(filterParameter(filter, "count")); ok && value > 0 {
+				result.MinOrderCount = &value
+			} else if value, ok := asInt(filter.Value); ok && value > 0 {
+				result.MinOrderCount = &value
+			}
 		case "tag_affinity":
 			if tags, ok := asAffinityTagFilters(filterParameter(filter, "tags")); ok {
 				result.AffinityTags = tags
@@ -564,6 +570,17 @@ func validateFilters(filters []domain.Filter) error {
 				return domain.ErrInvalidFilter
 			}
 		case "rfm_range":
+		case "min_order_count":
+			hasCount := false
+			if v, ok := asInt(filterParameter(filter, "count")); ok && v > 0 {
+				hasCount = true
+			} else if v, ok := asInt(filter.Value); ok && v > 0 {
+				hasCount = true
+				_ = v
+			}
+			if !hasCount {
+				return domain.ErrInvalidFilter
+			}
 		case "tag_affinity":
 			if _, ok := asAffinityTagFilters(filterParameter(filter, "tags")); !ok {
 				return domain.ErrInvalidFilter

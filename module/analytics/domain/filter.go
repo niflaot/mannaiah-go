@@ -85,4 +85,7 @@ type SegmentFilter struct {
 	AffinityCategories []AffinityCategoryFilter
 	// AffinityVariations defines optional variation-affinity segment filter constraints.
 	AffinityVariations []AffinityVariationFilter
+	// MinOrderCount defines an optional minimum distinct order count filter.
+	// When set, only contacts with at least this many orders are included.
+	MinOrderCount *int
 }

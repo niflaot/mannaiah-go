@@ -24,10 +24,10 @@ func OpenAPISpec() *openapi3.T {
 		"RFMGroupRequest":     {Value: rfmGroupRequestSchema()},
 		"RFMScore":            {Value: rfmScoreSchema()},
 		"RFMScoreBatchRequest": {Value: rfmScoreBatchRequestSchema()},
-		"TagAffinity":         {Value: tagAffinitySchema()},
-		"CategoryAffinity":    {Value: categoryAffinitySchema()},
-		"VariationAffinity":   {Value: variationAffinitySchema()},
-		"AffinityProfile":     {Value: affinityProfileSchema()},
+		"TagAffinity":      {Value: tagAffinitySchema()},
+		"CategoryAffinity": {Value: categoryAffinitySchema()},
+		"VariationAffinity": {Value: variationAffinitySchema()},
+		"AffinityProfile":  {Value: affinityProfileSchema()},
 	}
 
 	return &openapi3.T{

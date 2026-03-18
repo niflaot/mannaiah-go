@@ -15,18 +15,25 @@ const (
 func OpenAPISpec() *openapi3.T {
 	components := openapi3.NewComponents()
 	components.Schemas = openapi3.Schemas{
-		"CreateProductDto":   &openapi3.SchemaRef{Value: createProductSchema()},
-		"UpdateProductDto":   &openapi3.SchemaRef{Value: updateProductSchema()},
-		"Product":            &openapi3.SchemaRef{Value: productSchema()},
-		"GalleryItemDto":     &openapi3.SchemaRef{Value: galleryItemSchema()},
-		"DatasheetDto":       &openapi3.SchemaRef{Value: datasheetSchema()},
-		"ProductVariantDto":  &openapi3.SchemaRef{Value: productVariantSchema()},
-		"CreateVariationDto": &openapi3.SchemaRef{Value: createVariationSchema()},
-		"UpdateVariationDto": &openapi3.SchemaRef{Value: updateVariationSchema()},
-		"Variation":          &openapi3.SchemaRef{Value: variationSchema()},
-		"CreateCategoryDto":  &openapi3.SchemaRef{Value: createCategorySchema()},
-		"UpdateCategoryDto":  &openapi3.SchemaRef{Value: updateCategorySchema()},
-		"Category":           &openapi3.SchemaRef{Value: categorySchema()},
+		"CreateProductDto":        &openapi3.SchemaRef{Value: createProductSchema()},
+		"UpdateProductDto":        &openapi3.SchemaRef{Value: updateProductSchema()},
+		"Product":                 &openapi3.SchemaRef{Value: productSchema()},
+		"GalleryItemDto":          &openapi3.SchemaRef{Value: galleryItemSchema()},
+		"DatasheetDto":            &openapi3.SchemaRef{Value: datasheetSchema()},
+		"ProductVariantDto":       &openapi3.SchemaRef{Value: productVariantSchema()},
+		"CreateVariationDto":      &openapi3.SchemaRef{Value: createVariationSchema()},
+		"UpdateVariationDto":      &openapi3.SchemaRef{Value: updateVariationSchema()},
+		"Variation":               &openapi3.SchemaRef{Value: variationSchema()},
+		"CreateCategoryDto":       &openapi3.SchemaRef{Value: createCategorySchema()},
+		"UpdateCategoryDto":       &openapi3.SchemaRef{Value: updateCategorySchema()},
+		"Category":                &openapi3.SchemaRef{Value: categorySchema()},
+		"Tag":                         &openapi3.SchemaRef{Value: tagSchema()},
+		"TagCorrelation":              &openapi3.SchemaRef{Value: tagCorrelationSchema()},
+		"TagListResponse":             &openapi3.SchemaRef{Value: tagListResponseSchema()},
+		"TagCorrelationListResponse":  &openapi3.SchemaRef{Value: tagCorrelationListResponseSchema()},
+		"CreateTagCorrelationDto":     &openapi3.SchemaRef{Value: createTagCorrelationSchema()},
+		"UpdateTagCorrelationDto":     &openapi3.SchemaRef{Value: updateTagCorrelationSchema()},
+		"DeleteResponse":              &openapi3.SchemaRef{Value: deleteResponseSchema()},
 	}
 	components.SecuritySchemes = openapi3.SecuritySchemes{
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
@@ -48,12 +55,18 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/categories/{id}", categoryByIDPathItem()),
 			openapi3.WithPath("/categories/{id}/children", categoryChildrenPathItem()),
 			openapi3.WithPath("/categories/{id}/products", categoryProductsPathItem()),
+			openapi3.WithPath("/tags", tagsPathItem()),
+			openapi3.WithPath("/tags/{name}", tagByNamePathItem()),
+			openapi3.WithPath("/tags/correlations", tagCorrelationsPathItem()),
+			openapi3.WithPath("/tags/correlations/source/{tag}", tagCorrelationsBySourcePathItem()),
+			openapi3.WithPath("/tags/correlations/{id}", tagCorrelationByIDPathItem()),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: productsTag},
 			&openapi3.Tag{Name: variationsTag},
 			&openapi3.Tag{Name: categoriesTag},
+			&openapi3.Tag{Name: tagsTag},
 		},
 	}
 }
@@ -105,8 +118,20 @@ func listProductsOperation() *openapi3.Operation {
 	return &openapi3.Operation{
 		OperationID: "ProductsController_findAll",
 		Summary:     "Get all products",
+		Description: "Returns all products. When ?tags= is provided the response is paginated and filtered by tags.",
 		Tags:        []string{productsTag},
 		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			{Value: openapi3.NewQueryParameter("tags").
+				WithDescription("Comma-separated tag values to filter by (e.g. electronics,clothing). Enables pagination.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("page").
+				WithDescription("Page number (default 1, only applies when tags filter is active).").
+				WithSchema(openapi3.NewInt32Schema())},
+			{Value: openapi3.NewQueryParameter("pageSize").
+				WithDescription("Page size (default 20, only applies when tags filter is active).").
+				WithSchema(openapi3.NewInt32Schema())},
+		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Return all products.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
@@ -203,6 +228,17 @@ func bearerSecurityRequirements() *openapi3.SecurityRequirements {
 // responseWithDescription builds an OpenAPI response from a plain description.
 func responseWithDescription(description string) *openapi3.ResponseRef {
 	return &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription(description)}
+}
+
+// jsonResponseBodyRef builds a JSON response with a description and a component schema reference.
+func jsonResponseBodyRef(description, schemaRef string) *openapi3.ResponseRef {
+	return &openapi3.ResponseRef{
+		Value: openapi3.NewResponse().
+			WithDescription(description).
+			WithContent(openapi3.Content{
+				"application/json": &openapi3.MediaType{Schema: &openapi3.SchemaRef{Ref: schemaRef}},
+			}),
+	}
 }
 
 // jsonRequestBodyRef builds a required JSON request body referencing a component schema.

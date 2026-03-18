@@ -28,8 +28,24 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 	appendTagAffinityCondition(&conditions, &args, filter)
 	appendCategoryAffinityCondition(&conditions, &args, filter)
 	appendVariationAffinityCondition(&conditions, &args, filter)
+	appendMinOrderCountCondition(&conditions, &args, filter)
 
 	return strings.Join(conditions, " AND "), args
+}
+
+// appendMinOrderCountCondition appends a HAVING countDistinct >= N filter for minimum order count.
+func appendMinOrderCountCondition(conditions *[]string, args *[]any, filter domain.SegmentFilter) {
+	if filter.MinOrderCount == nil || *filter.MinOrderCount <= 0 {
+		return
+	}
+	*conditions = append(*conditions, `EXISTS (
+		SELECT 1 FROM orders_fact of FINAL
+		WHERE of.contact_id = cs.contact_id`+orderStatusFragment(filter.OrderStatuses, "of")+`
+		GROUP BY of.contact_id
+		HAVING countDistinct(of.order_id) >= ?
+	)`)
+	*args = appendOrderStatusArgs(*args, filter.OrderStatuses)
+	*args = append(*args, *filter.MinOrderCount)
 }
 
 // appendCityCodeCondition appends a city code IN filter when city codes are set.

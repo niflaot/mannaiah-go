@@ -29,6 +29,13 @@ type AssetLookup interface {
 	Exists(ctx context.Context, id string) (bool, error)
 }
 
+// TagRegistrar defines tag registry behavior required by products.
+// It ensures product tags exist in the canonical registry before persistence.
+type TagRegistrar interface {
+	// EnsureAll creates missing tags and reintegrates soft-deleted ones.
+	EnsureAll(ctx context.Context, names []string) error
+}
+
 // CreateCommand defines create-product command payloads.
 type CreateCommand struct {
 	// SKU defines product stock-keeping values.
@@ -87,6 +94,9 @@ type Service interface {
 	GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error)
 	// List lists all products.
 	List(ctx context.Context) ([]productdomain.Product, error)
+	// ListByTags lists products filtered by one or more tags with optional pagination.
+	// When tags is empty it returns all products. page/pageSize default to 1/20.
+	ListByTags(ctx context.Context, tags []string, page, pageSize int) ([]*productdomain.Product, int64, error)
 	// Update updates products by ID.
 	Update(ctx context.Context, id string, command UpdateCommand) (*productdomain.Product, error)
 	// Delete deletes products by ID.
@@ -99,6 +109,8 @@ type ProductService struct {
 	repository productport.Repository
 	// assetLookup defines gallery-asset lookup dependencies.
 	assetLookup AssetLookup
+	// tagRegistrar defines optional tag registry dependencies.
+	tagRegistrar TagRegistrar
 }
 
 var (
@@ -107,7 +119,7 @@ var (
 )
 
 // NewService creates product services.
-func NewService(repository productport.Repository, assetLookup AssetLookup) (*ProductService, error) {
+func NewService(repository productport.Repository, assetLookup AssetLookup, tagRegistrar ...TagRegistrar) (*ProductService, error) {
 	if repository == nil {
 		return nil, ErrNilRepository
 	}
@@ -115,7 +127,21 @@ func NewService(repository productport.Repository, assetLookup AssetLookup) (*Pr
 		return nil, ErrNilAssetLookup
 	}
 
-	return &ProductService{repository: repository, assetLookup: assetLookup}, nil
+	svc := &ProductService{repository: repository, assetLookup: assetLookup}
+	if len(tagRegistrar) > 0 {
+		svc.tagRegistrar = tagRegistrar[0]
+	}
+
+	return svc, nil
+}
+
+// SetTagRegistrar configures tag registry dependencies.
+func (s *ProductService) SetTagRegistrar(tagRegistrar TagRegistrar) {
+	if s == nil {
+		return
+	}
+
+	s.tagRegistrar = tagRegistrar
 }
 
 // Create creates products.
@@ -135,6 +161,11 @@ func (s *ProductService) Create(ctx context.Context, command CreateCommand) (*pr
 	}
 	if err := validateGalleryAssets(ctx, s.assetLookup, entity.Gallery); err != nil {
 		return nil, err
+	}
+	if s.tagRegistrar != nil && len(entity.Tags) > 0 {
+		if err := s.tagRegistrar.EnsureAll(ctx, entity.Tags); err != nil {
+			return nil, fmt.Errorf("ensure product tags: %w", err)
+		}
 	}
 
 	if err := s.repository.Create(ctx, entity); err != nil {
@@ -184,6 +215,17 @@ func (s *ProductService) List(ctx context.Context) ([]productdomain.Product, err
 	return entities, nil
 }
 
+// ListByTags lists products filtered by tags with optional pagination.
+func (s *ProductService) ListByTags(ctx context.Context, tags []string, page, pageSize int) ([]*productdomain.Product, int64, error) {
+	entities, total, err := s.repository.ListByTagsAndPrice(ctx, tags, nil, nil, page, pageSize)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list products by tags: %w", err)
+	}
+
+	return entities, total, nil
+}
+
+
 // Update updates products by ID.
 func (s *ProductService) Update(ctx context.Context, id string, command UpdateCommand) (*productdomain.Product, error) {
 	trimmedID := strings.TrimSpace(id)
@@ -224,6 +266,11 @@ func (s *ProductService) Update(ctx context.Context, id string, command UpdateCo
 	}
 	if err := validateGalleryAssets(ctx, s.assetLookup, entity.Gallery); err != nil {
 		return nil, err
+	}
+	if s.tagRegistrar != nil && len(entity.Tags) > 0 {
+		if err := s.tagRegistrar.EnsureAll(ctx, entity.Tags); err != nil {
+			return nil, fmt.Errorf("ensure product tags: %w", err)
+		}
 	}
 
 	if err := s.repository.Update(ctx, entity); err != nil {

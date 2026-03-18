@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"errors"
+	"strings"
 
 	corehttp "mannaiah/module/core/http"
 	productapplication "mannaiah/module/products/application/product"
@@ -35,50 +36,42 @@ type Handler struct {
 
 // createRequest defines request payload for product creation.
 type createRequest struct {
-	// SKU defines product stock-keeping values.
-	SKU string `json:"sku"`
-	// Price defines optional product price values.
-	Price *float64 `json:"price"`
-	// Tags defines product taxonomy tag values.
-	Tags []string `json:"tags"`
-	// Gallery defines product gallery entries.
-	Gallery []productdomain.GalleryItem `json:"gallery"`
-	// Datasheets defines datasheet entries.
-	Datasheets []productdomain.Datasheet `json:"datasheets"`
-	// Variations defines linked variation IDs.
-	Variations []string `json:"variations"`
-	// Variants defines product variant entries.
-	Variants []productdomain.Variant `json:"variants"`
+	SKU        string                     `json:"sku"`
+	Price      *float64                   `json:"price"`
+	Tags       []string                   `json:"tags"`
+	Gallery    []productdomain.GalleryItem `json:"gallery"`
+	Datasheets []productdomain.Datasheet  `json:"datasheets"`
+	Variations []string                   `json:"variations"`
+	Variants   []productdomain.Variant    `json:"variants"`
 }
 
 // updateRequest defines request payload for product updates.
 type updateRequest struct {
-	// SKU defines optional SKU updates.
-	SKU *string `json:"sku"`
-	// Price defines optional price updates.
-	Price *float64 `json:"price"`
-	// Tags defines optional tag replacement values.
-	Tags *[]string `json:"tags"`
-	// Gallery defines optional gallery replacement values.
-	Gallery *[]productdomain.GalleryItem `json:"gallery"`
-	// Datasheets defines optional datasheet upsert values.
-	Datasheets *[]productdomain.Datasheet `json:"datasheets"`
-	// Variations defines optional variation replacement values.
-	Variations *[]string `json:"variations"`
-	// Variants defines optional variant replacement values.
-	Variants *[]productdomain.Variant `json:"variants"`
+	SKU        *string                     `json:"sku"`
+	Price      *float64                    `json:"price"`
+	Tags       *[]string                   `json:"tags"`
+	Gallery    *[]productdomain.GalleryItem `json:"gallery"`
+	Datasheets *[]productdomain.Datasheet  `json:"datasheets"`
+	Variations *[]string                   `json:"variations"`
+	Variants   *[]productdomain.Variant    `json:"variants"`
 }
 
 // deleteResponse defines delete response payload.
 type deleteResponse struct {
-	// Status defines delete status values.
 	Status string `json:"status"`
 }
 
 // listResponse defines list response payload.
 type listResponse struct {
-	// Data defines listed products.
 	Data []productdomain.Product `json:"data"`
+}
+
+// listByTagsResponse defines paginated tag-filtered list response payload.
+type listByTagsResponse struct {
+	Data     []*productdomain.Product `json:"data"`
+	Total    int64                    `json:"total"`
+	Page     int                      `json:"page"`
+	PageSize int                      `json:"pageSize"`
 }
 
 // NewHandler creates product HTTP handlers.
@@ -137,14 +130,37 @@ func (h *Handler) create(ctx corehttp.Context) error {
 	return ctx.Status(201).JSON(product)
 }
 
-// findAll handles product listing endpoints.
+// findAll handles product listing endpoints. Accepts optional ?tags=a,b,c for filtering.
 func (h *Handler) findAll(ctx corehttp.Context) error {
+	rawTags := strings.TrimSpace(ctx.Query("tags"))
+	if rawTags != "" {
+		return h.findAllByTags(ctx, splitTags(rawTags))
+	}
+
 	products, err := h.service.List(ctx.Context())
 	if err != nil {
 		return h.mapError(err)
 	}
 
 	return ctx.Status(200).JSON(listResponse{Data: products})
+}
+
+// findAllByTags handles tag-filtered product listing with pagination.
+func (h *Handler) findAllByTags(ctx corehttp.Context, tags []string) error {
+	page := queryIntParam(ctx, "page", 1)
+	pageSize := queryIntParam(ctx, "pageSize", 20)
+
+	products, total, err := h.service.ListByTags(ctx.Context(), tags, page, pageSize)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(listByTagsResponse{
+		Data:     products,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }
 
 // findOneBySKU handles product-by-sku retrieval endpoints.
@@ -265,4 +281,37 @@ func (h *Handler) mapError(err error) error {
 	}
 
 	return corehttp.NewAppError(500, "internal_server_error", err)
+}
+
+// splitTags splits a comma-separated tag string into trimmed, non-empty values.
+func splitTags(raw string) []string {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			result = append(result, t)
+		}
+	}
+
+	return result
+}
+
+// queryIntParam parses an integer query parameter with a default fallback.
+func queryIntParam(ctx corehttp.Context, key string, defaultVal int) int {
+	raw := strings.TrimSpace(ctx.Query(key))
+	if raw == "" {
+		return defaultVal
+	}
+	n := 0
+	for _, ch := range raw {
+		if ch < '0' || ch > '9' {
+			return defaultVal
+		}
+		n = n*10 + int(ch-'0')
+	}
+	if n < 1 {
+		return defaultVal
+	}
+
+	return n
 }
