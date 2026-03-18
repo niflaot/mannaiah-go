@@ -24,7 +24,8 @@ func TestRepositoryCRUD(t *testing.T) {
 	ctx := context.Background()
 
 	entity := &productdomain.Product{
-		SKU: "SKU-1",
+		SKU:  "SKU-1",
+		Tags: []string{"bebida", "proteina"},
 		Gallery: []productdomain.GalleryItem{
 			{AssetID: "asset-2", Position: productIntPointer(3), IsMain: false},
 			{AssetID: "asset-1", Position: productIntPointer(1), VariationPosition: productIntPointer(0), IsMain: true, ExcludedRealms: []string{"b2b"}, VariationIDs: []string{"v1"}},
@@ -76,6 +77,9 @@ func TestRepositoryCRUD(t *testing.T) {
 	}
 	if len(stored.Variants) != 1 || stored.Variants[0].SKU != "SKU-1-V1" {
 		t.Fatalf("stored.Variants = %#v, want one SKU-1-V1 variant", stored.Variants)
+	}
+	if len(stored.Tags) != 2 || stored.Tags[0] != "bebida" || stored.Tags[1] != "proteina" {
+		t.Fatalf("stored.Tags = %#v, want [bebida proteina]", stored.Tags)
 	}
 
 	items, err := repository.List(ctx)

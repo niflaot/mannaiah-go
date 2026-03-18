@@ -225,6 +225,7 @@ func pathParameter(name, description string, schema *openapi3.Schema) *openapi3.
 func createProductSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("sku", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("gallery", openapi3.NewArraySchema().WithItems(galleryItemSchema())).
 		WithProperty("datasheets", openapi3.NewArraySchema().WithItems(datasheetSchema())).
 		WithProperty("variations", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
@@ -235,6 +236,7 @@ func createProductSchema() *openapi3.Schema {
 // updateProductSchema returns the request schema for product update payloads.
 func updateProductSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("gallery", openapi3.NewArraySchema().WithItems(galleryItemSchema())).
 		WithProperty("datasheets", openapi3.NewArraySchema().WithItems(datasheetSchema())).
 		WithProperty("variations", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
@@ -246,6 +248,7 @@ func productSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("_id", openapi3.NewStringSchema()).
 		WithProperty("sku", openapi3.NewStringSchema()).
+		WithProperty("tags", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("gallery", openapi3.NewArraySchema().WithItems(galleryItemSchema())).
 		WithProperty("datasheets", openapi3.NewArraySchema().WithItems(datasheetSchema())).
 		WithProperty("variations", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
