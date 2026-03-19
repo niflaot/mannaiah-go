@@ -20,8 +20,9 @@ func (s *StoreAdapter) GetTagAffinity(ctx context.Context, contactID string, lim
 
 	query := `SELECT contact_id, tag, sum(affinity_score) AS affinity_score, sum(total_spent) AS total_spent, sum(purchase_count) AS purchase_count
 		FROM tag_affinity_mv FINAL
-		WHERE contact_id = ? AND affinity_score >= ?
+		WHERE contact_id = ?
 		GROUP BY contact_id, tag
+		HAVING affinity_score >= ?
 		ORDER BY affinity_score DESC
 		LIMIT ?`
 
@@ -59,8 +60,9 @@ func (s *StoreAdapter) GetCategoryAffinity(ctx context.Context, contactID string
 
 	query := `SELECT contact_id, category_id, any(category_name), sum(affinity_score) AS affinity_score, sum(total_spent) AS total_spent, sum(purchase_count) AS purchase_count
 		FROM category_affinity_mv FINAL
-		WHERE contact_id = ? AND affinity_score >= ?
+		WHERE contact_id = ?
 		GROUP BY contact_id, category_id
+		HAVING affinity_score >= ?
 		ORDER BY affinity_score DESC
 		LIMIT ?`
 
@@ -98,8 +100,9 @@ func (s *StoreAdapter) GetVariationAffinity(ctx context.Context, contactID strin
 
 	query := `SELECT contact_id, variation_name, variation_value, sum(affinity_score) AS affinity_score, sum(total_spent) AS total_spent, sum(purchase_count) AS purchase_count
 		FROM variation_affinity_mv FINAL
-		WHERE contact_id = ? AND affinity_score >= ?
+		WHERE contact_id = ?
 		GROUP BY contact_id, variation_name, variation_value
+		HAVING affinity_score >= ?
 		ORDER BY affinity_score DESC
 		LIMIT ?`
 

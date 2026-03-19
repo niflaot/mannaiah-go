@@ -52,6 +52,11 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.8] - 2026-03-19
+- Fix ClickHouse affinity queries failing with "Aggregate function found in WHERE":
+  - All three affinity store queries (`GetTagAffinity`, `GetCategoryAffinity`, `GetVariationAffinity`) used `WHERE affinity_score >= ?` but `affinity_score` is also an aggregate alias — ClickHouse resolves the alias in WHERE, not the raw column.
+  - Moved the `minScore` filter from `WHERE` to `HAVING` in all three queries.
+
 ### [v2.4.7] - 2026-03-18
 - Track affinity refresh runs in the sync registry:
   - Added `syncRecorder port.SyncRecorder` to `AffinityService` (defaults to `NoopSyncRecorder`).
