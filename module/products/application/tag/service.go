@@ -165,6 +165,12 @@ func (s *TagService) CreateCorrelation(ctx context.Context, cmd CreateCorrelatio
 		return nil, ErrProbabilityRange
 	}
 
+	// Normalize pair: always store the lexicographically smaller tag as source so that
+	// (A, B) and (B, A) are treated as the same correlation.
+	if source > target {
+		source, target = target, source
+	}
+
 	correlation := &tagdomain.TagCorrelation{
 		SourceTag:   source,
 		TargetTag:   target,

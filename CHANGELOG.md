@@ -52,6 +52,11 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.4] - 2026-03-18
+- Enforce unordered uniqueness for tag correlation pairs:
+  - `CreateCorrelation` normalizes the pair lexicographically before storing so `(A, B)` and `(B, A)` are always persisted as the same row; the existing DB unique constraint on `(source_tag, target_tag)` then rejects the duplicate naturally.
+  - `ListCorrelationsBySource` now queries `WHERE source_tag = ? OR target_tag = ?` so all correlations involving a tag are returned regardless of which side it was stored on.
+
 ### [v2.4.3] - 2026-03-18
 - Unify `product_tags` with the canonical `tags` registry via FK migration:
   - MySQL/SQLite migration 000020: backfill `tags` with any pre-existing product tag names, add `tag_id BIGINT NOT NULL FK → tags(id)` to `product_tags`, drop the `tag` string column; down migration reverses this.

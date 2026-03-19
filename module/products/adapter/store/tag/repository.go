@@ -169,12 +169,16 @@ func (r *Repository) ListCorrelations(ctx context.Context) ([]tagdomain.TagCorre
 	return toCorrelationDomains(records), nil
 }
 
-// ListCorrelationsBySource returns correlations for a specific source tag.
+// ListCorrelationsBySource returns all correlations that involve the given tag as either source or target.
+// Because pairs are stored in normalized (lexicographic) order, a tag may appear in either position.
 func (r *Repository) ListCorrelationsBySource(ctx context.Context, sourceTag string) ([]tagdomain.TagCorrelation, error) {
 	trimmed := strings.TrimSpace(sourceTag)
 
 	var records []tagCorrelationRecord
-	if err := r.db.WithContext(ctx).Where("source_tag = ?", trimmed).Order("target_tag ASC").Find(&records).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("source_tag = ? OR target_tag = ?", trimmed, trimmed).
+		Order("source_tag ASC, target_tag ASC").
+		Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("list correlations by source: %w", err)
 	}
 
