@@ -52,6 +52,11 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.6] - 2026-03-18
+- Fix analytics seed silently producing empty tag affinity results after v2.4.3 FK migration:
+  - `seedProductTaxonomy` was reading `SELECT product_id, tag FROM product_tags` but the `tag` column was dropped in v2.4.3 — the error was swallowed and `product_taxonomy` in ClickHouse was left empty.
+  - Updated query to JOIN through the canonical `tags` registry: `JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL`.
+
 ### [v2.4.5] - 2026-03-18
 - Version bump — no functional changes; promotes the tag correlation unordered uniqueness fix (v2.4.4) as the current stable release.
 

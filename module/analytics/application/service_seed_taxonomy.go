@@ -49,8 +49,9 @@ func (s *AnalyticsService) seedProductTaxonomy(ctx context.Context, taxonomyStor
 	tagRows := make([]productTagSeedRow, 0, seedBatchSize)
 	if err := s.db.WithContext(ctx).
 		Table("product_tags").
-		Select("product_id", "tag").
-		Order("product_id ASC").
+		Select("product_tags.product_id", "tags.name AS tag").
+		Joins("JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL").
+		Order("product_tags.product_id ASC").
 		Scan(&tagRows).Error; err != nil {
 		return fmt.Errorf("seed product tags: %w", err)
 	}
