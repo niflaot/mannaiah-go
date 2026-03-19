@@ -9,20 +9,25 @@ import (
 // appendTagAffinityCondition appends one EXISTS filter per tag affinity constraint (ANDed).
 func appendTagAffinityCondition(conditions *[]string, args *[]any, filter domain.SegmentFilter) {
 	for _, af := range filter.AffinityTags {
-		tag := strings.TrimSpace(af.Tag)
-		if tag == "" {
+		tags := affinityTagScope(af)
+		if len(tags) == 0 {
 			continue
 		}
 		*conditions = append(*conditions, `EXISTS (
 			SELECT 1 FROM (
-				SELECT contact_id, tag, sum(affinity_score) AS score
-				FROM tag_affinity_mv FINAL
-				WHERE tag = ?
-				GROUP BY contact_id, tag
+				SELECT contact_id, tag, score, max(score) OVER (PARTITION BY contact_id) AS max_score
+				FROM (
+					SELECT contact_id, tag, sum(affinity_score) AS score
+					FROM tag_affinity_mv FINAL
+					GROUP BY contact_id, tag
+				)
 			) ta
-			WHERE ta.contact_id = cs.contact_id AND ta.score >= ?
+			WHERE ta.contact_id = cs.contact_id AND ta.tag IN (`+makePlaceholders(len(tags))+`) AND if(ta.max_score = 0, 0, (ta.score * 100.0 / ta.max_score)) >= ?
 		)`)
-		*args = append(*args, tag, af.MinScore)
+		for _, tag := range tags {
+			*args = append(*args, strings.TrimSpace(tag))
+		}
+		*args = append(*args, af.MinScorePct)
 	}
 }
 
@@ -35,14 +40,16 @@ func appendCategoryAffinityCondition(conditions *[]string, args *[]any, filter d
 		}
 		*conditions = append(*conditions, `EXISTS (
 			SELECT 1 FROM (
-				SELECT contact_id, category_id, sum(affinity_score) AS score
-				FROM category_affinity_mv FINAL
-				WHERE category_id = ?
-				GROUP BY contact_id, category_id
+				SELECT contact_id, category_id, score, max(score) OVER (PARTITION BY contact_id) AS max_score
+				FROM (
+					SELECT contact_id, category_id, sum(affinity_score) AS score
+					FROM category_affinity_mv FINAL
+					GROUP BY contact_id, category_id
+				)
 			) ca
-			WHERE ca.contact_id = cs.contact_id AND ca.score >= ?
+			WHERE ca.contact_id = cs.contact_id AND ca.category_id = ? AND if(ca.max_score = 0, 0, (ca.score * 100.0 / ca.max_score)) >= ?
 		)`)
-		*args = append(*args, catID, af.MinScore)
+		*args = append(*args, catID, af.MinScorePct)
 	}
 }
 
@@ -56,13 +63,15 @@ func appendVariationAffinityCondition(conditions *[]string, args *[]any, filter 
 		}
 		*conditions = append(*conditions, `EXISTS (
 			SELECT 1 FROM (
-				SELECT contact_id, variation_name, variation_value, sum(affinity_score) AS score
-				FROM variation_affinity_mv FINAL
-				WHERE variation_name = ? AND variation_value = ?
-				GROUP BY contact_id, variation_name, variation_value
+				SELECT contact_id, variation_name, variation_value, score, max(score) OVER (PARTITION BY contact_id) AS max_score
+				FROM (
+					SELECT contact_id, variation_name, variation_value, sum(affinity_score) AS score
+					FROM variation_affinity_mv FINAL
+					GROUP BY contact_id, variation_name, variation_value
+				)
 			) va
-			WHERE va.contact_id = cs.contact_id AND va.score >= ?
+			WHERE va.contact_id = cs.contact_id AND va.variation_name = ? AND va.variation_value = ? AND if(va.max_score = 0, 0, (va.score * 100.0 / va.max_score)) >= ?
 		)`)
-		*args = append(*args, name, value, af.MinScore)
+		*args = append(*args, name, value, af.MinScorePct)
 	}
 }

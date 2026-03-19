@@ -8,8 +8,8 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec == nil || spec.Paths == nil {
 		t.Fatalf("OpenAPISpec() returned nil")
 	}
-	if spec.Info == nil || spec.Info.Version != "2.0.8" {
-		t.Fatalf("OpenAPISpec() version = %v, want 2.0.8", spec.Info)
+	if spec.Info == nil || spec.Info.Version != "2.1.0" {
+		t.Fatalf("OpenAPISpec() version = %v, want 2.1.0", spec.Info)
 	}
 	if spec.Paths.Find("/segments") == nil {
 		t.Fatalf("missing /segments path")

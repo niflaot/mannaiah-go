@@ -88,6 +88,8 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 	clauseType := strings.TrimSpace(strings.ToLower(clause.Type))
 
 	switch clauseType {
+	case "__always_true__":
+		return "1 = 1", nil
 	case "city_code_in":
 		codes, ok := clauseAsStringSlice(clause.Value)
 		if !ok || len(codes) == 0 {
@@ -397,18 +399,30 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 		}
 
 		parts := make([]string, 0, len(rows))
-		args := make([]any, 0, len(rows)*2)
+		args := make([]any, 0, len(rows)*4)
 		for _, row := range rows {
+			tags := affinityTagScope(row)
+			if len(tags) == 0 {
+				continue
+			}
 			parts = append(parts, `EXISTS (
 			SELECT 1 FROM (
-				SELECT contact_id, tag, sum(affinity_score) AS score
-				FROM tag_affinity_mv FINAL
-				WHERE tag = ?
-				GROUP BY contact_id, tag
+				SELECT contact_id, tag, score, max(score) OVER (PARTITION BY contact_id) AS max_score
+				FROM (
+					SELECT contact_id, tag, sum(affinity_score) AS score
+					FROM tag_affinity_mv FINAL
+					GROUP BY contact_id, tag
+				)
 			) ta
-			WHERE ta.contact_id = cs.contact_id AND ta.score >= ?
+			WHERE ta.contact_id = cs.contact_id AND ta.tag IN (`+makePlaceholders(len(tags))+`) AND if(ta.max_score = 0, 0, (ta.score * 100.0 / ta.max_score)) >= ?
 		)`)
-			args = append(args, row.Tag, row.MinScore)
+			for _, tag := range tags {
+				args = append(args, tag)
+			}
+			args = append(args, row.MinScorePct)
+		}
+		if len(parts) == 0 {
+			return "", nil
 		}
 
 		return "(" + strings.Join(parts, " AND ") + ")", args
@@ -423,14 +437,16 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 		for _, row := range rows {
 			parts = append(parts, `EXISTS (
 			SELECT 1 FROM (
-				SELECT contact_id, category_id, sum(affinity_score) AS score
-				FROM category_affinity_mv FINAL
-				WHERE category_id = ?
-				GROUP BY contact_id, category_id
+				SELECT contact_id, category_id, score, max(score) OVER (PARTITION BY contact_id) AS max_score
+				FROM (
+					SELECT contact_id, category_id, sum(affinity_score) AS score
+					FROM category_affinity_mv FINAL
+					GROUP BY contact_id, category_id
+				)
 			) ca
-			WHERE ca.contact_id = cs.contact_id AND ca.score >= ?
+			WHERE ca.contact_id = cs.contact_id AND ca.category_id = ? AND if(ca.max_score = 0, 0, (ca.score * 100.0 / ca.max_score)) >= ?
 		)`)
-			args = append(args, row.CategoryID, row.MinScore)
+			args = append(args, row.CategoryID, row.MinScorePct)
 		}
 
 		return "(" + strings.Join(parts, " AND ") + ")", args
@@ -445,14 +461,16 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 		for _, row := range rows {
 			parts = append(parts, `EXISTS (
 			SELECT 1 FROM (
-				SELECT contact_id, variation_name, variation_value, sum(affinity_score) AS score
-				FROM variation_affinity_mv FINAL
-				WHERE variation_name = ? AND variation_value = ?
-				GROUP BY contact_id, variation_name, variation_value
+				SELECT contact_id, variation_name, variation_value, score, max(score) OVER (PARTITION BY contact_id) AS max_score
+				FROM (
+					SELECT contact_id, variation_name, variation_value, sum(affinity_score) AS score
+					FROM variation_affinity_mv FINAL
+					GROUP BY contact_id, variation_name, variation_value
+				)
 			) va
-			WHERE va.contact_id = cs.contact_id AND va.score >= ?
+			WHERE va.contact_id = cs.contact_id AND va.variation_name = ? AND va.variation_value = ? AND if(va.max_score = 0, 0, (va.score * 100.0 / va.max_score)) >= ?
 		)`)
-			args = append(args, row.Name, row.Value, row.MinScore)
+			args = append(args, row.Name, row.Value, row.MinScorePct)
 		}
 
 		return "(" + strings.Join(parts, " AND ") + ")", args
@@ -651,8 +669,19 @@ func clauseAffinityTagFilters(value any) []domain.AffinityTagFilter {
 		if !ok {
 			continue
 		}
-		minScore, _ := clauseAsFloat64(row["minScore"])
-		result = append(result, domain.AffinityTagFilter{Tag: tag, MinScore: minScore})
+		minScorePct, ok := clauseAsFloat64(row["minScorePct"])
+		if !ok || minScorePct < 0 || minScorePct > 100 {
+			continue
+		}
+		relatedTags := []string{}
+		if rawRelated, exists := row["relatedTags"]; exists {
+			values, ok := clauseAsStringSlice(rawRelated)
+			if !ok {
+				continue
+			}
+			relatedTags = normalizeRelatedTags(tag, values)
+		}
+		result = append(result, domain.AffinityTagFilter{Tag: tag, RelatedTags: relatedTags, MinScorePct: minScorePct})
 	}
 
 	return result
@@ -675,8 +704,11 @@ func clauseAffinityCategoryFilters(value any) []domain.AffinityCategoryFilter {
 		if !ok {
 			continue
 		}
-		minScore, _ := clauseAsFloat64(row["minScore"])
-		result = append(result, domain.AffinityCategoryFilter{CategoryID: categoryID, MinScore: minScore})
+		minScorePct, ok := clauseAsFloat64(row["minScorePct"])
+		if !ok || minScorePct < 0 || minScorePct > 100 {
+			continue
+		}
+		result = append(result, domain.AffinityCategoryFilter{CategoryID: categoryID, MinScorePct: minScorePct})
 	}
 
 	return result
@@ -703,8 +735,47 @@ func clauseAffinityVariationFilters(value any) []domain.AffinityVariationFilter 
 		if !ok {
 			continue
 		}
-		minScore, _ := clauseAsFloat64(row["minScore"])
-		result = append(result, domain.AffinityVariationFilter{Name: name, Value: val, MinScore: minScore})
+		minScorePct, ok := clauseAsFloat64(row["minScorePct"])
+		if !ok || minScorePct < 0 || minScorePct > 100 {
+			continue
+		}
+		result = append(result, domain.AffinityVariationFilter{Name: name, Value: val, MinScorePct: minScorePct})
+	}
+
+	return result
+}
+
+// affinityTagScope returns one deduplicated tag scope including primary and related tags.
+func affinityTagScope(filter domain.AffinityTagFilter) []string {
+	scope := make([]string, 0, len(filter.RelatedTags)+1)
+	primary := strings.TrimSpace(filter.Tag)
+	if primary != "" {
+		scope = append(scope, primary)
+	}
+	scope = append(scope, filter.RelatedTags...)
+
+	return normalizeRelatedTags("", scope)
+}
+
+// normalizeRelatedTags deduplicates tag values and removes blank entries.
+func normalizeRelatedTags(primary string, related []string) []string {
+	normalizedPrimary := strings.ToLower(strings.TrimSpace(primary))
+	seen := make(map[string]struct{}, len(related)+1)
+	if normalizedPrimary != "" {
+		seen[normalizedPrimary] = struct{}{}
+	}
+	result := make([]string, 0, len(related))
+	for _, row := range related {
+		trimmed := strings.TrimSpace(row)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, trimmed)
 	}
 
 	return result

@@ -127,3 +127,68 @@ func TestValidateFiltersRequiresParameters(t *testing.T) {
 		t.Fatalf("validateFilters(rfm_range with rMin) error = %v, want nil", err)
 	}
 }
+
+// TestAffinityFiltersRequirePercentage verifies affinity filters accept percentage thresholds only.
+func TestAffinityFiltersRequirePercentage(t *testing.T) {
+	valid := []domain.Filter{
+		{
+			Type: "tag_affinity",
+			Parameters: map[string]any{"tags": []any{
+				map[string]any{"tag": "gimnasio", "minScorePct": float64(70), "relatedTags": []any{"deportivo", "urbano"}},
+			}},
+		},
+		{
+			Type: "category_affinity",
+			Parameters: map[string]any{"categories": []any{
+				map[string]any{"categoryId": "c-1", "minScorePct": float64(65)},
+			}},
+		},
+		{
+			Type: "variation_affinity",
+			Parameters: map[string]any{"variations": []any{
+				map[string]any{"name": "size", "value": "grande", "minScorePct": float64(55)},
+			}},
+		},
+	}
+	if err := validateFilters(valid); err != nil {
+		t.Fatalf("validateFilters(valid affinity pct filters) error = %v, want nil", err)
+	}
+
+	legacy := []domain.Filter{
+		{
+			Type: "tag_affinity",
+			Parameters: map[string]any{"tags": []any{
+				map[string]any{"tag": "gimnasio", "minScore": float64(126056.94)},
+			}},
+		},
+	}
+	if err := validateFilters(legacy); err == nil {
+		t.Fatalf("validateFilters(legacy minScore affinity filter) expected error")
+	}
+}
+
+// TestToAnalyticsFilterMapsAffinityPercentage verifies affinity percentage and related-tag mapping.
+func TestToAnalyticsFilterMapsAffinityPercentage(t *testing.T) {
+	mapped := toAnalyticsFilter([]domain.Filter{
+		{
+			Type: "tag_affinity",
+			Parameters: map[string]any{"tags": []any{
+				map[string]any{"tag": "gimnasio", "relatedTags": []any{"deportivo", "urbano"}, "minScorePct": float64(70)},
+			}},
+		},
+	})
+
+	if len(mapped.AffinityTags) != 1 {
+		t.Fatalf("len(mapped.AffinityTags) = %d, want 1", len(mapped.AffinityTags))
+	}
+	row := mapped.AffinityTags[0]
+	if row.Tag != "gimnasio" {
+		t.Fatalf("mapped.AffinityTags[0].Tag = %q, want gimnasio", row.Tag)
+	}
+	if row.MinScorePct != 70 {
+		t.Fatalf("mapped.AffinityTags[0].MinScorePct = %v, want 70", row.MinScorePct)
+	}
+	if len(row.RelatedTags) != 2 {
+		t.Fatalf("len(mapped.AffinityTags[0].RelatedTags) = %d, want 2", len(row.RelatedTags))
+	}
+}

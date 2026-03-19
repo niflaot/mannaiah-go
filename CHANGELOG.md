@@ -52,6 +52,26 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.5.0] - 2026-03-19
+- Breaking DSL update for affinity segment filters:
+  - Removed absolute affinity threshold semantics (`minScore`) for segment create/update payloads.
+  - Added percentage-only thresholds (`minScorePct`, range `0..100`) for:
+    - `tag_affinity`
+    - `category_affinity`
+    - `variation_affinity`
+  - Added `relatedTags` support for `tag_affinity` rows to evaluate one rule over `tag + relatedTags`.
+  - Percentage evaluation is relative per contact: matched item score is compared against that contact's maximum affinity score for the same domain.
+- Segment service validation/mapping updates:
+  - Affinity rows now require `minScorePct`.
+  - Invalid/legacy affinity payloads are rejected during segment resolution/count/preview (fail-closed behavior).
+- Query builder updates:
+  - Clause-based and legacy affinity SQL builders now use percentage-relative threshold checks.
+  - Tag affinity SQL now supports rule expansion over `relatedTags`.
+- Segment OpenAPI updates:
+  - Segment module API version bumped to `2.1.0`.
+  - Filter parameter documentation clarifies `minScorePct` + `relatedTags` usage.
+- Release version references bumped to `v2.5.0`.
+
 ### [v2.4.9] - 2026-03-19
 - Add include/exclude segment DSL execution support across analytics resolution:
   - Segment `filters[]` now supports `exclude: true` to negate any supported filter clause.

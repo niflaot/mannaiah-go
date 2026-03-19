@@ -112,3 +112,52 @@ func TestBuildSegmentWhereFromClausesExcludedOrderStatus(t *testing.T) {
 		t.Fatalf("whereSQL missing excluded status fragment")
 	}
 }
+
+// TestBuildSegmentWhereFromClausesAlwaysTrueExclude verifies internal always-true exclude clauses produce NOT(true).
+func TestBuildSegmentWhereFromClausesAlwaysTrueExclude(t *testing.T) {
+	filter := domain.SegmentFilter{
+		Clauses: []domain.SegmentClause{
+			{Type: "__always_true__", Exclude: true},
+		},
+	}
+
+	whereSQL, _ := buildSegmentWhere(filter, nil)
+	if !strings.Contains(whereSQL, "NOT (1 = 1)") {
+		t.Fatalf("whereSQL = %q, want NOT (1 = 1)", whereSQL)
+	}
+}
+
+// TestBuildSegmentWhereFromClausesAffinityPct verifies percentage-based affinity and related-tag SQL generation.
+func TestBuildSegmentWhereFromClausesAffinityPct(t *testing.T) {
+	filter := domain.SegmentFilter{
+		Clauses: []domain.SegmentClause{
+			{
+				Type: "tag_affinity",
+				Parameters: map[string]any{"tags": []any{
+					map[string]any{"tag": "gimnasio", "relatedTags": []any{"deportivo", "urbano"}, "minScorePct": float64(70)},
+				}},
+			},
+			{
+				Type: "category_affinity",
+				Parameters: map[string]any{"categories": []any{
+					map[string]any{"categoryId": "cat-1", "minScorePct": float64(65)},
+				}},
+			},
+		},
+	}
+
+	whereSQL, args := buildSegmentWhere(filter, nil)
+	for _, fragment := range []string{
+		"ta.tag IN (?,?,?)",
+		"ta.score * 100.0 / ta.max_score",
+		"ca.category_id = ?",
+		"ca.score * 100.0 / ca.max_score",
+	} {
+		if !strings.Contains(whereSQL, fragment) {
+			t.Fatalf("whereSQL missing fragment %q", fragment)
+		}
+	}
+	if len(args) < 6 {
+		t.Fatalf("len(args) = %d, want >= 6", len(args))
+	}
+}

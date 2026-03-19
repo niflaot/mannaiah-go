@@ -16,16 +16,18 @@ type SegmentClause struct {
 type AffinityTagFilter struct {
 	// Tag is the product tag to match.
 	Tag string
-	// MinScore is the minimum affinity score threshold (inclusive).
-	MinScore float64
+	// RelatedTags defines optional extra tags considered equivalent for this rule.
+	RelatedTags []string
+	// MinScorePct is the minimum relative affinity threshold in [0,100].
+	MinScorePct float64
 }
 
 // AffinityCategoryFilter defines a category affinity segment filter constraint.
 type AffinityCategoryFilter struct {
 	// CategoryID is the product category identifier to match.
 	CategoryID string
-	// MinScore is the minimum affinity score threshold (inclusive).
-	MinScore float64
+	// MinScorePct is the minimum relative affinity threshold in [0,100].
+	MinScorePct float64
 }
 
 // AffinityVariationFilter defines a product variation affinity segment filter constraint.
@@ -34,8 +36,8 @@ type AffinityVariationFilter struct {
 	Name string
 	// Value is the variation attribute value (e.g. "black").
 	Value string
-	// MinScore is the minimum affinity score threshold (inclusive).
-	MinScore float64
+	// MinScorePct is the minimum relative affinity threshold in [0,100].
+	MinScorePct float64
 }
 
 // SegmentFilter defines analytical segment filter values.

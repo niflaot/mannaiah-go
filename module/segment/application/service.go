@@ -19,6 +19,8 @@ var (
 	ErrNilRepository = errors.New("segment repository must not be nil")
 	// ErrResolverUnavailable is returned when analytics resolver dependencies are unavailable.
 	ErrResolverUnavailable = errors.New("segment resolver is not configured")
+	// ErrRFMGroupRepositoryUnavailable is returned when rfm-group lookup dependencies are unavailable.
+	ErrRFMGroupRepositoryUnavailable = errors.New("rfm group repository is not configured")
 )
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
@@ -95,14 +97,28 @@ type SegmentService struct {
 	repository port.Repository
 	// resolver defines optional analytics resolver dependencies.
 	resolver analyticsport.Resolver
+	// rfmGroupRepository defines optional RFM group lookup dependencies.
+	rfmGroupRepository analyticsport.RFMGroupRepository
 }
 
 // NewService creates segment services.
-func NewService(repository port.Repository, resolver analyticsport.Resolver) (*SegmentService, error) {
+func NewService(
+	repository port.Repository,
+	resolver analyticsport.Resolver,
+	rfmGroupRepositories ...analyticsport.RFMGroupRepository,
+) (*SegmentService, error) {
 	if repository == nil {
 		return nil, ErrNilRepository
 	}
-	return &SegmentService{repository: repository, resolver: resolver}, nil
+	var rfmGroupRepository analyticsport.RFMGroupRepository
+	if len(rfmGroupRepositories) > 0 {
+		rfmGroupRepository = rfmGroupRepositories[0]
+	}
+	return &SegmentService{
+		repository:         repository,
+		resolver:           resolver,
+		rfmGroupRepository: rfmGroupRepository,
+	}, nil
 }
 
 // Create persists segment rows.
@@ -228,7 +244,10 @@ func (s *SegmentService) Resolve(ctx context.Context, id string, page int, limit
 		limit = 1000
 	}
 
-	filter := toAnalyticsFilter(segment.Filters)
+	filter, err := s.buildAnalyticsFilter(ctx, segment.Filters)
+	if err != nil {
+		return nil, err
+	}
 	contactIDs, resolveErr := s.resolveWithAnalytics(ctx, filter, page, limit)
 	if resolveErr != nil {
 		return nil, resolveErr
@@ -244,7 +263,10 @@ func (s *SegmentService) Count(ctx context.Context, id string) (int64, error) {
 		return 0, err
 	}
 
-	filter := toAnalyticsFilter(segment.Filters)
+	filter, err := s.buildAnalyticsFilter(ctx, segment.Filters)
+	if err != nil {
+		return 0, err
+	}
 	count, resolveErr := s.resolveCountWithAnalytics(ctx, filter)
 	if resolveErr != nil {
 		return 0, resolveErr
@@ -259,7 +281,10 @@ func (s *SegmentService) PreviewCount(ctx context.Context, filters []domain.Filt
 		return 0, err
 	}
 
-	filter := toAnalyticsFilter(filters)
+	filter, err := s.buildAnalyticsFilter(ctx, filters)
+	if err != nil {
+		return 0, err
+	}
 	count, err := s.resolveCountWithAnalytics(ctx, filter)
 	if err != nil {
 		return 0, err
@@ -294,6 +319,140 @@ func (s *SegmentService) resolveCountWithAnalytics(ctx context.Context, filter a
 	}
 
 	return count, nil
+}
+
+// buildAnalyticsFilter maps DSL filters and expands rfm_group clauses into concrete RFM ranges.
+func (s *SegmentService) buildAnalyticsFilter(ctx context.Context, filters []domain.Filter) (analyticsdomain.SegmentFilter, error) {
+	if err := validateFilters(filters); err != nil {
+		return analyticsdomain.SegmentFilter{}, err
+	}
+	mapped := toAnalyticsFilter(filters)
+	expanded, err := s.expandRFMGroupClauses(ctx, mapped)
+	if err != nil {
+		return analyticsdomain.SegmentFilter{}, err
+	}
+
+	return expanded, nil
+}
+
+// expandRFMGroupClauses resolves rfm_group slugs and rewrites them into rfm_range clauses.
+func (s *SegmentService) expandRFMGroupClauses(ctx context.Context, filter analyticsdomain.SegmentFilter) (analyticsdomain.SegmentFilter, error) {
+	if len(filter.Clauses) == 0 {
+		return filter, nil
+	}
+	hasRFMGroupClause := false
+	for _, clause := range filter.Clauses {
+		if strings.TrimSpace(strings.ToLower(clause.Type)) == "rfm_group" {
+			hasRFMGroupClause = true
+			break
+		}
+	}
+	if !hasRFMGroupClause {
+		return filter, nil
+	}
+	if s.rfmGroupRepository == nil {
+		return analyticsdomain.SegmentFilter{}, ErrRFMGroupRepositoryUnavailable
+	}
+
+	groupsBySlug, err := s.fetchRFMGroupsBySlug(ctx)
+	if err != nil {
+		return analyticsdomain.SegmentFilter{}, err
+	}
+
+	expandedClauses := make([]analyticsdomain.SegmentClause, 0, len(filter.Clauses))
+	for _, clause := range filter.Clauses {
+		if strings.TrimSpace(strings.ToLower(clause.Type)) != "rfm_group" {
+			expandedClauses = append(expandedClauses, clause)
+			continue
+		}
+
+		slug, ok := asString(segmentClauseParameter(clause, "slug"))
+		if !ok {
+			return analyticsdomain.SegmentFilter{}, domain.ErrInvalidFilter
+		}
+		group, exists := groupsBySlug[strings.ToLower(slug)]
+		if !exists {
+			return analyticsdomain.SegmentFilter{}, domain.ErrInvalidFilter
+		}
+
+		rangeParameters := rfmGroupConditionsToRangeParameters(group.Conditions)
+		if len(rangeParameters) == 0 {
+			if clause.Exclude {
+				expandedClauses = append(expandedClauses, analyticsdomain.SegmentClause{
+					Type:    "__always_true__",
+					Exclude: true,
+				})
+			}
+			continue
+		}
+
+		expandedClauses = append(expandedClauses, analyticsdomain.SegmentClause{
+			Type:       "rfm_range",
+			Exclude:    clause.Exclude,
+			Parameters: rangeParameters,
+		})
+	}
+
+	filter.Clauses = expandedClauses
+	filter.RFMGroup = ""
+
+	return filter, nil
+}
+
+// fetchRFMGroupsBySlug loads all RFM groups and indexes them by normalized slug.
+func (s *SegmentService) fetchRFMGroupsBySlug(ctx context.Context) (map[string]analyticsdomain.RFMGroup, error) {
+	rows, err := s.rfmGroupRepository.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list rfm groups: %w", err)
+	}
+
+	result := make(map[string]analyticsdomain.RFMGroup, len(rows))
+	for _, row := range rows {
+		slug := strings.TrimSpace(strings.ToLower(row.Slug))
+		if slug == "" {
+			continue
+		}
+		result[slug] = row
+	}
+
+	return result, nil
+}
+
+// segmentClauseParameter resolves normalized clause parameter values.
+func segmentClauseParameter(clause analyticsdomain.SegmentClause, key string) any {
+	if len(clause.Parameters) == 0 {
+		return nil
+	}
+
+	return clause.Parameters[strings.TrimSpace(key)]
+}
+
+// rfmGroupConditionsToRangeParameters maps group conditions into rfm_range clause parameters.
+func rfmGroupConditionsToRangeParameters(conditions analyticsdomain.RFMGroupConditions) map[string]any {
+	result := map[string]any{}
+	if conditions.RMin != nil {
+		result["rMin"] = *conditions.RMin
+	}
+	if conditions.RMax != nil {
+		result["rMax"] = *conditions.RMax
+	}
+	if conditions.FMin != nil {
+		result["fMin"] = *conditions.FMin
+	}
+	if conditions.FMax != nil {
+		result["fMax"] = *conditions.FMax
+	}
+	if conditions.MMin != nil {
+		result["mMin"] = *conditions.MMin
+	}
+	if conditions.MMax != nil {
+		result["mMax"] = *conditions.MMax
+	}
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
 }
 
 // normalizeFilters normalizes filters and removes empty types.
@@ -459,21 +618,35 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 // asAffinityTagFilters parses tag affinity filter slice values.
 func asAffinityTagFilters(value any) ([]analyticsdomain.AffinityTagFilter, bool) {
 	raw, ok := value.([]any)
-	if !ok {
+	if !ok || len(raw) == 0 {
 		return nil, false
 	}
 	result := make([]analyticsdomain.AffinityTagFilter, 0, len(raw))
 	for _, item := range raw {
 		m, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, false
 		}
 		tag, _ := asString(m["tag"])
 		if tag == "" {
-			continue
+			return nil, false
 		}
-		minScore, _ := asFloat64(m["minScore"])
-		result = append(result, analyticsdomain.AffinityTagFilter{Tag: tag, MinScore: minScore})
+		minScorePct, ok := asPercentage(m["minScorePct"])
+		if !ok {
+			return nil, false
+		}
+		relatedTags := []string{}
+		if _, exists := m["relatedTags"]; exists {
+			values, ok := asStringSlice(m["relatedTags"])
+			if !ok {
+				return nil, false
+			}
+			relatedTags = normalizeRelatedTags(tag, values)
+		}
+		result = append(result, analyticsdomain.AffinityTagFilter{Tag: tag, RelatedTags: relatedTags, MinScorePct: minScorePct})
+	}
+	if len(result) == 0 {
+		return nil, false
 	}
 
 	return result, true
@@ -482,21 +655,27 @@ func asAffinityTagFilters(value any) ([]analyticsdomain.AffinityTagFilter, bool)
 // asAffinityCategoryFilters parses category affinity filter slice values.
 func asAffinityCategoryFilters(value any) ([]analyticsdomain.AffinityCategoryFilter, bool) {
 	raw, ok := value.([]any)
-	if !ok {
+	if !ok || len(raw) == 0 {
 		return nil, false
 	}
 	result := make([]analyticsdomain.AffinityCategoryFilter, 0, len(raw))
 	for _, item := range raw {
 		m, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, false
 		}
 		catID, _ := asString(m["categoryId"])
 		if catID == "" {
-			continue
+			return nil, false
 		}
-		minScore, _ := asFloat64(m["minScore"])
-		result = append(result, analyticsdomain.AffinityCategoryFilter{CategoryID: catID, MinScore: minScore})
+		minScorePct, ok := asPercentage(m["minScorePct"])
+		if !ok {
+			return nil, false
+		}
+		result = append(result, analyticsdomain.AffinityCategoryFilter{CategoryID: catID, MinScorePct: minScorePct})
+	}
+	if len(result) == 0 {
+		return nil, false
 	}
 
 	return result, true
@@ -505,22 +684,28 @@ func asAffinityCategoryFilters(value any) ([]analyticsdomain.AffinityCategoryFil
 // asAffinityVariationFilters parses variation affinity filter slice values.
 func asAffinityVariationFilters(value any) ([]analyticsdomain.AffinityVariationFilter, bool) {
 	raw, ok := value.([]any)
-	if !ok {
+	if !ok || len(raw) == 0 {
 		return nil, false
 	}
 	result := make([]analyticsdomain.AffinityVariationFilter, 0, len(raw))
 	for _, item := range raw {
 		m, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, false
 		}
 		name, _ := asString(m["name"])
 		val, _ := asString(m["value"])
 		if name == "" || val == "" {
-			continue
+			return nil, false
 		}
-		minScore, _ := asFloat64(m["minScore"])
-		result = append(result, analyticsdomain.AffinityVariationFilter{Name: name, Value: val, MinScore: minScore})
+		minScorePct, ok := asPercentage(m["minScorePct"])
+		if !ok {
+			return nil, false
+		}
+		result = append(result, analyticsdomain.AffinityVariationFilter{Name: name, Value: val, MinScorePct: minScorePct})
+	}
+	if len(result) == 0 {
+		return nil, false
 	}
 
 	return result, true
@@ -620,15 +805,18 @@ func validateFilters(filters []domain.Filter) error {
 				return domain.ErrInvalidFilter
 			}
 		case "tag_affinity":
-			if _, ok := asAffinityTagFilters(filterParameter(filter, "tags")); !ok {
+			rows, ok := asAffinityTagFilters(filterParameter(filter, "tags"))
+			if !ok || len(rows) == 0 {
 				return domain.ErrInvalidFilter
 			}
 		case "category_affinity":
-			if _, ok := asAffinityCategoryFilters(filterParameter(filter, "categories")); !ok {
+			rows, ok := asAffinityCategoryFilters(filterParameter(filter, "categories"))
+			if !ok || len(rows) == 0 {
 				return domain.ErrInvalidFilter
 			}
 		case "variation_affinity":
-			if _, ok := asAffinityVariationFilters(filterParameter(filter, "variations")); !ok {
+			rows, ok := asAffinityVariationFilters(filterParameter(filter, "variations"))
+			if !ok || len(rows) == 0 {
 				return domain.ErrInvalidFilter
 			}
 		default:
@@ -705,6 +893,16 @@ func asFloat64(value any) (float64, bool) {
 	}
 }
 
+// asPercentage converts filter values into [0,100] percentage values.
+func asPercentage(value any) (float64, bool) {
+	parsed, ok := asFloat64(value)
+	if !ok || parsed < 0 || parsed > 100 {
+		return 0, false
+	}
+
+	return parsed, true
+}
+
 // asBool converts filter values into boolean values.
 func asBool(value any) (bool, bool) {
 	switch typed := value.(type) {
@@ -752,4 +950,28 @@ func asString(value any) (string, bool) {
 	}
 
 	return trimmed, true
+}
+
+// normalizeRelatedTags deduplicates related tags and removes the primary tag.
+func normalizeRelatedTags(primary string, related []string) []string {
+	normalizedPrimary := strings.ToLower(strings.TrimSpace(primary))
+	seen := make(map[string]struct{}, len(related)+1)
+	if normalizedPrimary != "" {
+		seen[normalizedPrimary] = struct{}{}
+	}
+	result := make([]string, 0, len(related))
+	for _, row := range related {
+		trimmed := strings.TrimSpace(row)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, trimmed)
+	}
+
+	return result
 }

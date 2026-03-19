@@ -3,6 +3,7 @@ package runtime
 import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"gorm.io/gorm"
+	analyticsstore "mannaiah/module/analytics/adapter/store"
 	analyticsport "mannaiah/module/analytics/port"
 	corehttp "mannaiah/module/core/http"
 	segmenthttp "mannaiah/module/segment/adapter/http"
@@ -39,7 +40,12 @@ func New(cfg Config, db *gorm.DB, resolver analyticsport.Resolver) (*Module, err
 		return nil, err
 	}
 
-	service, err := application.NewService(repository, resolver)
+	rfmGroupRepository, err := analyticsstore.NewRFMGroupRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
+	service, err := application.NewService(repository, resolver, rfmGroupRepository)
 	if err != nil {
 		return nil, err
 	}

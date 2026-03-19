@@ -261,7 +261,7 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrInvalidFilter) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
-	if errors.Is(err, application.ErrResolverUnavailable) {
+	if errors.Is(err, application.ErrResolverUnavailable) || errors.Is(err, application.ErrRFMGroupRepositoryUnavailable) {
 		return corehttp.NewAppError(503, "segment_backend_unavailable", err)
 	}
 	if errors.Is(err, domain.ErrNotFound) {

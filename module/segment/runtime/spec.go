@@ -26,7 +26,7 @@ func OpenAPISpec() *openapi3.T {
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Segment API", Version: "2.0.8"},
+		Info:    &openapi3.Info{Title: "Segment API", Version: "2.1.0"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/segments/preview/count", &openapi3.PathItem{Post: previewCountOperation()}),
 			openapi3.WithPath("/segments", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
@@ -144,11 +144,13 @@ func baseOperation(id string, summary string) *openapi3.Operation {
 
 // segmentSchema defines segment response schema values.
 func segmentSchema() *openapi3.Schema {
+	parametersSchema := openapi3.NewObjectSchema()
+	parametersSchema.Description = "Filter parameters. Affinity filters use percentage thresholds in [0,100] via minScorePct. tag_affinity rows may include relatedTags."
 	filterSchema := openapi3.NewObjectSchema().
 		WithProperty("type", openapi3.NewStringSchema()).
 		WithProperty("exclude", openapi3.NewBoolSchema()).
 		WithProperty("value", openapi3.NewObjectSchema()).
-		WithProperty("parameters", openapi3.NewObjectSchema())
+		WithProperty("parameters", parametersSchema)
 
 	return openapi3.NewObjectSchema().
 		WithProperty("id", openapi3.NewStringSchema()).
