@@ -185,11 +185,15 @@ func (m *Module) SetAuthorizer(authorizer analyticshttp.Authorizer) {
 
 // SetSyncRecorder configures optional sync run recording dependencies.
 func (m *Module) SetSyncRecorder(recorder port.SyncRecorder) {
-	if m == nil || m.service == nil {
+	if m == nil {
 		return
 	}
-
-	m.service.SetSyncRecorder(recorder)
+	if m.service != nil {
+		m.service.SetSyncRecorder(recorder)
+	}
+	if m.affinityService != nil {
+		m.affinityService.SetSyncRecorder(recorder)
+	}
 }
 
 // QueryService returns analytics query resolver dependencies.

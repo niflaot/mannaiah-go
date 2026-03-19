@@ -32,6 +32,8 @@ type Service interface {
 type AffinityService struct {
 	// store defines ClickHouse affinity store dependencies.
 	store port.AffinityStore
+	// syncRecorder defines optional sync run recording dependencies.
+	syncRecorder port.SyncRecorder
 }
 
 var _ Service = (*AffinityService)(nil)
@@ -42,7 +44,20 @@ func NewService(store port.AffinityStore) (*AffinityService, error) {
 		return nil, ErrNilAffinityStore
 	}
 
-	return &AffinityService{store: store}, nil
+	return &AffinityService{store: store, syncRecorder: port.NoopSyncRecorder{}}, nil
+}
+
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (s *AffinityService) SetSyncRecorder(recorder port.SyncRecorder) {
+	if s == nil {
+		return
+	}
+	if recorder == nil {
+		s.syncRecorder = port.NoopSyncRecorder{}
+		return
+	}
+
+	s.syncRecorder = recorder
 }
 
 // GetTagAffinity retrieves ranked tag affinity scores for one contact.
@@ -87,15 +102,27 @@ func (s *AffinityService) GetProfile(ctx context.Context, contactID string, limi
 
 // RefreshAll truncates and repopulates all affinity materialized views.
 func (s *AffinityService) RefreshAll(ctx context.Context) error {
+	runID, _ := s.syncRecorder.StartRun(ctx, "analytics.affinity.refresh", "manual")
+
 	if err := s.store.RefreshTagMV(ctx); err != nil {
+		_ = s.syncRecorder.FailRun(ctx, runID, 0, 0, 1, 0, []port.SyncError{
+			{Type: "refresh", Code: "tag_mv_failed", Message: err.Error()},
+		})
 		return fmt.Errorf("refresh tag affinity mv: %w", err)
 	}
 	if err := s.store.RefreshCategoryMV(ctx); err != nil {
+		_ = s.syncRecorder.FailRun(ctx, runID, 0, 0, 1, 0, []port.SyncError{
+			{Type: "refresh", Code: "category_mv_failed", Message: err.Error()},
+		})
 		return fmt.Errorf("refresh category affinity mv: %w", err)
 	}
 	if err := s.store.RefreshVariationMV(ctx); err != nil {
+		_ = s.syncRecorder.FailRun(ctx, runID, 0, 0, 1, 0, []port.SyncError{
+			{Type: "refresh", Code: "variation_mv_failed", Message: err.Error()},
+		})
 		return fmt.Errorf("refresh variation affinity mv: %w", err)
 	}
 
+	_ = s.syncRecorder.CompleteRun(ctx, runID, 3, 3, 0, 0)
 	return nil
 }

@@ -52,6 +52,13 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.7] - 2026-03-18
+- Track affinity refresh runs in the sync registry:
+  - Added `syncRecorder port.SyncRecorder` to `AffinityService` (defaults to `NoopSyncRecorder`).
+  - Added `SetSyncRecorder` method to `AffinityService`.
+  - `RefreshAll` now records `StartRun("analytics.affinity.refresh", "manual")`, `CompleteRun` on success, and `FailRun` with the failing MV name on error.
+  - `Module.SetSyncRecorder` now forwards the recorder to both `AnalyticsService` and `AffinityService`.
+
 ### [v2.4.6] - 2026-03-18
 - Fix analytics seed silently producing empty tag affinity results after v2.4.3 FK migration:
   - `seedProductTaxonomy` was reading `SELECT product_id, tag FROM product_tags` but the `tag` column was dropped in v2.4.3 — the error was swallowed and `product_taxonomy` in ClickHouse was left empty.
