@@ -52,6 +52,9 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.5] - 2026-03-18
+- Version bump — no functional changes; promotes the tag correlation unordered uniqueness fix (v2.4.4) as the current stable release.
+
 ### [v2.4.4] - 2026-03-18
 - Enforce unordered uniqueness for tag correlation pairs:
   - `CreateCorrelation` normalizes the pair lexicographically before storing so `(A, B)` and `(B, A)` are always persisted as the same row; the existing DB unique constraint on `(source_tag, target_tag)` then rejects the duplicate naturally.
