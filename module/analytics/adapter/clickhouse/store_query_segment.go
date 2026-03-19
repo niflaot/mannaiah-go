@@ -8,6 +8,10 @@ import (
 
 // buildSegmentWhere constructs a parameterised WHERE clause from segment filter values.
 func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (string, []any) {
+	if len(filter.Clauses) > 0 {
+		return buildSegmentWhereFromClauses(filter, topSpenderIDs)
+	}
+
 	conditions := []string{"1 = 1"}
 	args := make([]any, 0, 16)
 

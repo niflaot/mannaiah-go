@@ -18,10 +18,11 @@ func (s *StoreAdapter) resolveTopSpenderIDs(ctx context.Context, filter domain.S
 		return nil, nil
 	}
 
-	statusArgs := appendOrderStatusArgs(make([]any, 0, len(filter.OrderStatuses)), filter.OrderStatuses)
+	includedStatuses, excludedStatuses := collectOrderStatusScopes(filter)
+	statusArgs := appendOrderStatusArgsWithExclusions(make([]any, 0, len(includedStatuses)+len(excludedStatuses)), includedStatuses, excludedStatuses)
 	statusWhere := ""
-	if len(filter.OrderStatuses) > 0 {
-		statusWhere = " WHERE current_status IN (" + makePlaceholders(len(filter.OrderStatuses)) + ")"
+	if len(includedStatuses) > 0 || len(excludedStatuses) > 0 {
+		statusWhere = " WHERE 1 = 1" + orderStatusFragmentWithExclusions(includedStatuses, excludedStatuses, "")
 	}
 
 	var distinctContacts int64

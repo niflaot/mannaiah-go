@@ -304,7 +304,12 @@ func normalizeFilters(filters []domain.Filter) []domain.Filter {
 		if trimmedType == "" {
 			continue
 		}
-		normalized = append(normalized, domain.Filter{Type: trimmedType, Value: filter.Value, Parameters: cloneParameters(filter.Parameters)})
+		normalized = append(normalized, domain.Filter{
+			Type:       trimmedType,
+			Exclude:    filter.Exclude,
+			Value:      filter.Value,
+			Parameters: cloneParameters(filter.Parameters),
+		})
 	}
 
 	return normalized
@@ -312,9 +317,19 @@ func normalizeFilters(filters []domain.Filter) []domain.Filter {
 
 // toAnalyticsFilter maps segment filters into analytics filter payload values.
 func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
-	result := analyticsdomain.SegmentFilter{}
+	result := analyticsdomain.SegmentFilter{
+		Clauses: make([]analyticsdomain.SegmentClause, 0, len(filters)),
+	}
 	for _, filter := range filters {
 		filterType := strings.TrimSpace(strings.ToLower(filter.Type))
+		if filterType != "" {
+			result.Clauses = append(result.Clauses, analyticsdomain.SegmentClause{
+				Type:       filterType,
+				Exclude:    filter.Exclude,
+				Value:      filter.Value,
+				Parameters: cloneParameters(filter.Parameters),
+			})
+		}
 		switch filterType {
 		case "city_code_in":
 			if values, ok := asStringSlice(filter.Value); ok {
@@ -384,7 +399,7 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 				result.MetadataValue = value
 			}
 		case "order_status":
-			if values, ok := asStringSlice(filterParameter(filter, "statuses")); ok {
+			if values, ok := asStringSlice(filterParameter(filter, "statuses")); ok && !filter.Exclude {
 				result.OrderStatuses = values
 			}
 		case "rfm_group":
@@ -543,6 +558,7 @@ func validateFilters(filters []domain.Filter) error {
 				return domain.ErrInvalidFilter
 			}
 		case "first_purchase_only", "subscribed_no_buy":
+			continue
 		case "opt_in_status":
 			if _, ok := asString(filterParameter(filter, "channel")); !ok {
 				return domain.ErrInvalidFilter
@@ -570,6 +586,28 @@ func validateFilters(filters []domain.Filter) error {
 				return domain.ErrInvalidFilter
 			}
 		case "rfm_range":
+			hasAnyRange := false
+			if _, ok := asInt(filterParameter(filter, "rMin")); ok {
+				hasAnyRange = true
+			}
+			if _, ok := asInt(filterParameter(filter, "rMax")); ok {
+				hasAnyRange = true
+			}
+			if _, ok := asInt(filterParameter(filter, "fMin")); ok {
+				hasAnyRange = true
+			}
+			if _, ok := asInt(filterParameter(filter, "fMax")); ok {
+				hasAnyRange = true
+			}
+			if _, ok := asInt(filterParameter(filter, "mMin")); ok {
+				hasAnyRange = true
+			}
+			if _, ok := asInt(filterParameter(filter, "mMax")); ok {
+				hasAnyRange = true
+			}
+			if !hasAnyRange {
+				return domain.ErrInvalidFilter
+			}
 		case "min_order_count":
 			hasCount := false
 			if v, ok := asInt(filterParameter(filter, "count")); ok && v > 0 {

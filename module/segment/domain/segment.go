@@ -6,6 +6,8 @@ import "time"
 type Filter struct {
 	// Type defines filter type values.
 	Type string `json:"type"`
+	// Exclude negates this filter when true.
+	Exclude bool `json:"exclude,omitempty"`
 	// Value defines scalar filter value payloads.
 	Value any `json:"value,omitempty"`
 	// Parameters defines structured filter parameter payloads.

@@ -52,6 +52,23 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.9] - 2026-03-19
+- Add include/exclude segment DSL execution support across analytics resolution:
+  - Segment `filters[]` now supports `exclude: true` to negate any supported filter clause.
+  - Added clause-preserving mapping from segment service to analytics resolver, enabling mixed include/exclude filtering without dropping filter intent.
+  - Added clause-based ClickHouse segment query builder handling include/exclude behavior for:
+    - purchase windows (for example include last 90 days + exclude last 30 days),
+    - product/category/tag/variation, city/country, affinity and propensity filters,
+    - legacy and explicit order-status scoping with excluded status support.
+  - Top-spender helper paths now honor included and excluded order-status scopes consistently.
+- Fix segment filter validation regressions:
+  - `first_purchase_only` and `subscribed_no_buy` no longer fail opt-in status validation.
+  - `rfm_range` now validates `rMin/rMax/fMin/fMax/mMin/mMax` correctly.
+- OpenAPI updates:
+  - Segment module OpenAPI version bumped to `2.0.8`.
+  - Segment filter schema now documents `filters[].exclude` as an optional boolean.
+- Release version references bumped to `v2.4.9`.
+
 ### [v2.4.8] - 2026-03-19
 - Fix ClickHouse affinity queries failing with "Aggregate function found in WHERE":
   - All three affinity store queries (`GetTagAffinity`, `GetCategoryAffinity`, `GetVariationAffinity`) used `WHERE affinity_score >= ?` but `affinity_score` is also an aggregate alias — ClickHouse resolves the alias in WHERE, not the raw column.

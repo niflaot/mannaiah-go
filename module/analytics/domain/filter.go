@@ -1,5 +1,17 @@
 package domain
 
+// SegmentClause defines one raw segment DSL clause with optional negation.
+type SegmentClause struct {
+	// Type is the normalized DSL filter type.
+	Type string
+	// Exclude negates clause semantics when true.
+	Exclude bool
+	// Value carries scalar clause payload values.
+	Value any
+	// Parameters carries structured clause payload values.
+	Parameters map[string]any
+}
+
 // AffinityTagFilter defines a tag affinity segment filter constraint.
 type AffinityTagFilter struct {
 	// Tag is the product tag to match.
@@ -28,6 +40,8 @@ type AffinityVariationFilter struct {
 
 // SegmentFilter defines analytical segment filter values.
 type SegmentFilter struct {
+	// Clauses defines optional raw DSL clauses resolved in order.
+	Clauses []SegmentClause
 	// CityCodes defines optional city-code filters.
 	CityCodes []string
 	// MinTotalSpend defines optional minimum order total filters.

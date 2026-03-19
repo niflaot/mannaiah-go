@@ -65,3 +65,50 @@ func TestResolveTopSpenderLimit(t *testing.T) {
 		t.Fatalf("resolveTopSpenderLimit(percentage) = %d, want 13", resolved)
 	}
 }
+
+// TestBuildSegmentWhereFromClausesSupportsExclude verifies include/exclude clause SQL generation.
+func TestBuildSegmentWhereFromClausesSupportsExclude(t *testing.T) {
+	filter := domain.SegmentFilter{
+		Clauses: []domain.SegmentClause{
+			{Type: "order_recency", Parameters: map[string]any{"days": float64(90)}},
+			{Type: "order_recency", Exclude: true, Parameters: map[string]any{"days": float64(30)}},
+			{Type: "city", Exclude: true, Parameters: map[string]any{"codes": []any{"BOG"}}},
+			{Type: "purchased_sku", Exclude: true, Parameters: map[string]any{"skus": []any{"SKU-1", "SKU-2"}}},
+			{Type: "order_status", Parameters: map[string]any{"statuses": []any{"completed"}}},
+		},
+	}
+
+	whereSQL, args := buildSegmentWhere(filter, nil)
+	for _, fragment := range []string{
+		"NOT (EXISTS (",
+		"NOT (cs.city_code IN (?))",
+		"order_items_fact oi FINAL",
+		"of.current_status IN (?)",
+	} {
+		if !strings.Contains(whereSQL, fragment) {
+			t.Fatalf("whereSQL missing fragment %q", fragment)
+		}
+	}
+	if len(args) == 0 {
+		t.Fatalf("args should not be empty")
+	}
+}
+
+// TestBuildSegmentWhereFromClausesExcludedOrderStatus verifies excluded status scope generation.
+func TestBuildSegmentWhereFromClausesExcludedOrderStatus(t *testing.T) {
+	filter := domain.SegmentFilter{
+		Clauses: []domain.SegmentClause{
+			{Type: "order_status", Parameters: map[string]any{"statuses": []any{"completed"}}},
+			{Type: "order_status", Exclude: true, Parameters: map[string]any{"statuses": []any{"cancelled"}}},
+			{Type: "order_recency", Parameters: map[string]any{"days": float64(15)}},
+		},
+	}
+
+	whereSQL, _ := buildSegmentWhere(filter, nil)
+	if !strings.Contains(whereSQL, "of.current_status IN (?)") {
+		t.Fatalf("whereSQL missing included status fragment")
+	}
+	if !strings.Contains(whereSQL, "of.current_status NOT IN (?)") {
+		t.Fatalf("whereSQL missing excluded status fragment")
+	}
+}

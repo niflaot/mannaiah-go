@@ -22,6 +22,9 @@ func TestToAnalyticsFilterMapsExtendedFilters(t *testing.T) {
 	}
 
 	mapped := toAnalyticsFilter(filters)
+	if len(mapped.Clauses) != len(filters) {
+		t.Fatalf("len(mapped.Clauses) = %d, want %d", len(mapped.Clauses), len(filters))
+	}
 	if len(mapped.CityCodes) != 2 {
 		t.Fatalf("len(mapped.CityCodes) = %d, want 2", len(mapped.CityCodes))
 	}
@@ -51,6 +54,25 @@ func TestToAnalyticsFilterMapsExtendedFilters(t *testing.T) {
 	}
 	if mapped.RequireEmailOptIn == nil || !*mapped.RequireEmailOptIn {
 		t.Fatalf("mapped.RequireEmailOptIn = %#v, want true", mapped.RequireEmailOptIn)
+	}
+}
+
+// TestToAnalyticsFilterMapsExcludeClauses verifies exclude clauses are preserved in analytics mapping.
+func TestToAnalyticsFilterMapsExcludeClauses(t *testing.T) {
+	mapped := toAnalyticsFilter([]domain.Filter{
+		{Type: "order_recency", Parameters: map[string]any{"days": float64(90)}},
+		{Type: "order_recency", Exclude: true, Parameters: map[string]any{"days": float64(30)}},
+		{Type: "city", Exclude: true, Parameters: map[string]any{"codes": []any{"BOG"}}},
+	})
+
+	if len(mapped.Clauses) != 3 {
+		t.Fatalf("len(mapped.Clauses) = %d, want 3", len(mapped.Clauses))
+	}
+	if mapped.Clauses[1].Type != "order_recency" || !mapped.Clauses[1].Exclude {
+		t.Fatalf("mapped.Clauses[1] = %#v, want excluded order_recency clause", mapped.Clauses[1])
+	}
+	if mapped.Clauses[2].Type != "city" || !mapped.Clauses[2].Exclude {
+		t.Fatalf("mapped.Clauses[2] = %#v, want excluded city clause", mapped.Clauses[2])
 	}
 }
 
@@ -93,5 +115,15 @@ func TestValidateFiltersRequiresParameters(t *testing.T) {
 	err = validateFilters([]domain.Filter{{Type: "opt_in_status", Parameters: map[string]any{"channel": "email"}}})
 	if err == nil {
 		t.Fatalf("validateFilters(opt_in_status without status) expected error")
+	}
+
+	err = validateFilters([]domain.Filter{{Type: "subscribed_no_buy"}})
+	if err != nil {
+		t.Fatalf("validateFilters(subscribed_no_buy) error = %v, want nil", err)
+	}
+
+	err = validateFilters([]domain.Filter{{Type: "rfm_range", Parameters: map[string]any{"rMin": float64(3)}}})
+	if err != nil {
+		t.Fatalf("validateFilters(rfm_range with rMin) error = %v, want nil", err)
 	}
 }
