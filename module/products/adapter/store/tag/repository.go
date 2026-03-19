@@ -100,8 +100,8 @@ func (r *Repository) EnsureAll(ctx context.Context, names []string) error {
 
 		if existing.DeletedAt != nil {
 			if execErr := r.db.WithContext(ctx).Exec(
-				"UPDATE tags SET deleted_at = NULL, updated_at = NOW(3) WHERE id = ?",
-				existing.ID,
+				"UPDATE tags SET deleted_at = NULL, updated_at = ? WHERE id = ?",
+				time.Now(), existing.ID,
 			).Error; execErr != nil {
 				return fmt.Errorf("reintegrate tag %q: %w", trimmed, execErr)
 			}
@@ -131,9 +131,10 @@ func (r *Repository) SoftDelete(ctx context.Context, name string) error {
 	trimmed := strings.TrimSpace(name)
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
 		result := tx.Exec(
-			"UPDATE tags SET deleted_at = NOW(3), updated_at = NOW(3) WHERE name = ? AND deleted_at IS NULL",
-			trimmed,
+			"UPDATE tags SET deleted_at = ?, updated_at = ? WHERE name = ? AND deleted_at IS NULL",
+			now, now, trimmed,
 		)
 		if result.Error != nil {
 			return fmt.Errorf("soft-delete tag: %w", result.Error)

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS tag_correlations;
+DROP TABLE IF EXISTS tags;
