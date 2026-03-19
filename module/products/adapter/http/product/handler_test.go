@@ -27,6 +27,8 @@ type serviceMock struct {
 	updateFn func(ctx context.Context, id string, command productapplication.UpdateCommand) (*productdomain.Product, error)
 	// deleteFn defines delete behavior.
 	deleteFn func(ctx context.Context, id string) error
+	// listByTagsFn defines list-by-tags behavior.
+	listByTagsFn func(ctx context.Context, tags []string, page, pageSize int) ([]*productdomain.Product, int64, error)
 }
 
 // Create executes configured create behavior.
@@ -57,6 +59,14 @@ func (m serviceMock) Update(ctx context.Context, id string, command productappli
 // Delete executes configured delete behavior.
 func (m serviceMock) Delete(ctx context.Context, id string) error {
 	return m.deleteFn(ctx, id)
+}
+
+// ListByTags executes configured list-by-tags behavior.
+func (m serviceMock) ListByTags(ctx context.Context, tags []string, page, pageSize int) ([]*productdomain.Product, int64, error) {
+	if m.listByTagsFn == nil {
+		return nil, 0, nil
+	}
+	return m.listByTagsFn(ctx, tags, page, pageSize)
 }
 
 // authorizerMock defines auth behavior for handler tests.

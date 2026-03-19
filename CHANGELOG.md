@@ -52,6 +52,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.2] - 2026-03-18
+- Fix two CI test failures introduced in v2.4.0/v2.4.1:
+  - `handler_test.go`: `serviceMock` was missing `ListByTags` — added `listByTagsFn` field and nil-safe `ListByTags` implementation to satisfy the updated `Service` interface.
+  - `module_test.go`: `TestNewRejectsNilDB` was asserting `productstore.ErrNilDB` but `New()` now creates the tag repository first, so the first nil-DB error is `tagstore.ErrNilDB` — updated import and assertion accordingly.
+- Bump all release version references to `v2.4.2`.
+
 ### [v2.4.1] - 2026-03-18
 - Fix OpenAPI spec for all `/tags` and `/tags/correlations/*` endpoints:
   - All success responses now carry full JSON body schemas instead of description-only stubs.

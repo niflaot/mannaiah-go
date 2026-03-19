@@ -9,7 +9,7 @@ import (
 	coredb "mannaiah/module/core/database"
 	coredbmigration "mannaiah/module/core/database/migration"
 	corehttp "mannaiah/module/core/http"
-	productstore "mannaiah/module/products/adapter/store/product"
+	tagstore "mannaiah/module/products/adapter/store/tag"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"gorm.io/gorm"
@@ -69,7 +69,7 @@ func TestRegisterRoutesNilModule(t *testing.T) {
 
 // TestNewRejectsNilDB verifies module constructor validation for nil DB dependencies.
 func TestNewRejectsNilDB(t *testing.T) {
-	if _, err := New(nil, runtimeAssetLookupMock{}); !errors.Is(err, productstore.ErrNilDB) {
+	if _, err := New(nil, runtimeAssetLookupMock{}); !errors.Is(err, tagstore.ErrNilDB) {
 		t.Fatalf("New() error = %v, want ErrNilDB", err)
 	}
 }
