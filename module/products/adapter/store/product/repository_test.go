@@ -23,6 +23,8 @@ func TestRepositoryCRUD(t *testing.T) {
 	repository := newRepositoryForTest(t)
 	ctx := context.Background()
 
+	seedTagsForTest(t, repository, "bebida", "proteina")
+
 	entity := &productdomain.Product{
 		SKU:  "SKU-1",
 		Tags: []string{"bebida", "proteina"},
@@ -219,4 +221,17 @@ func newRepositoryForTest(t *testing.T) *Repository {
 func productIntPointer(value int) *int {
 	resolved := value
 	return &resolved
+}
+
+// seedTagsForTest inserts tags into the canonical registry for tests that bypass the application layer.
+func seedTagsForTest(t *testing.T, repository *Repository, tags ...string) {
+	t.Helper()
+	for _, tag := range tags {
+		if err := repository.db.Exec(
+			"INSERT INTO tags (name, created_at, updated_at) VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+			tag,
+		).Error; err != nil {
+			t.Fatalf("seedTagsForTest(%q): %v", tag, err)
+		}
+	}
 }

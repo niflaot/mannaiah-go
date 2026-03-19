@@ -126,15 +126,23 @@ func (r *Repository) List(ctx context.Context) ([]tagdomain.Tag, error) {
 	return tags, nil
 }
 
-// SoftDelete soft-deletes a tag by name and cascades removal to product_tags.
+// SoftDelete soft-deletes a tag by name and cascades removal to product_tags by tag_id.
 func (r *Repository) SoftDelete(ctx context.Context, name string) error {
 	trimmed := strings.TrimSpace(name)
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing tagRecord
+		if err := tx.Where("name = ? AND deleted_at IS NULL", trimmed).First(&existing).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return tagport.ErrNotFound
+			}
+			return fmt.Errorf("find tag for soft-delete: %w", err)
+		}
+
 		now := time.Now()
 		result := tx.Exec(
-			"UPDATE tags SET deleted_at = ?, updated_at = ? WHERE name = ? AND deleted_at IS NULL",
-			now, now, trimmed,
+			"UPDATE tags SET deleted_at = ?, updated_at = ? WHERE id = ?",
+			now, now, existing.ID,
 		)
 		if result.Error != nil {
 			return fmt.Errorf("soft-delete tag: %w", result.Error)
@@ -143,7 +151,7 @@ func (r *Repository) SoftDelete(ctx context.Context, name string) error {
 			return tagport.ErrNotFound
 		}
 
-		if err := tx.Exec("DELETE FROM product_tags WHERE tag = ?", trimmed).Error; err != nil {
+		if err := tx.Exec("DELETE FROM product_tags WHERE tag_id = ?", existing.ID).Error; err != nil {
 			return fmt.Errorf("cascade delete product tags: %w", err)
 		}
 

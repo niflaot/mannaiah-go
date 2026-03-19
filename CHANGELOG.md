@@ -52,6 +52,16 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.4.3] - 2026-03-18
+- Unify `product_tags` with the canonical `tags` registry via FK migration:
+  - MySQL/SQLite migration 000020: backfill `tags` with any pre-existing product tag names, add `tag_id BIGINT NOT NULL FK → tags(id)` to `product_tags`, drop the `tag` string column; down migration reverses this.
+  - Product store write path (`replaceProductTags`): resolves each tag name to its canonical `tag_id` before inserting; returns a descriptive error if a name is not present in the registry (guarded upstream by `EnsureAll`).
+  - Product store read path (`loadProductAggregate`): JOINs `product_tags` with `tags WHERE deleted_at IS NULL` to resolve tag names; soft-deleted tags are automatically excluded from product reads.
+  - `ListByTagsAndPrice`: subquery now JOINs `tags` on `tag_id` and filters by `tags.name IN ?` instead of `product_tags.tag IN ?`.
+  - Category store (`repository_products.go`): tag filter subquery updated to JOIN through `tags` on `tag_id`.
+  - Tag store `SoftDelete`: cascade deletes `product_tags WHERE tag_id = ?` using the tag's ID instead of matching by name string.
+  - `repository_test.go`: added `seedTagsForTest` helper to pre-populate the canonical registry in unit tests that bypass the application layer.
+
 ### [v2.4.2] - 2026-03-18
 - Fix two CI test failures introduced in v2.4.0/v2.4.1:
   - `handler_test.go`: `serviceMock` was missing `ListByTags` — added `listByTagsFn` field and nil-safe `ListByTags` implementation to satisfy the updated `Service` interface.

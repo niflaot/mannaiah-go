@@ -55,9 +55,10 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 		var tagProductIDs []string
 		err := r.db.WithContext(ctx).
 			Table("product_tags").
-			Select("product_id").
-			Where("tag IN ?", cat.Filter.Tags).
-			Group("product_id").
+			Select("product_tags.product_id").
+			Joins("JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL").
+			Where("tags.name IN ?", cat.Filter.Tags).
+			Group("product_tags.product_id").
 			Pluck("product_id", &tagProductIDs).Error
 		if err != nil {
 			return nil, fmt.Errorf("filter products by tags: %w", err)

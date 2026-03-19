@@ -388,7 +388,10 @@ func (r *Repository) ListByTagsAndPrice(ctx context.Context, tags []string, minP
 
 	if len(tags) > 0 {
 		query = query.Where("id IN (?)",
-			r.db.Model(&productTagRecord{}).Select("product_id").Where("tag IN ?", tags),
+			r.db.Table("product_tags").
+				Select("product_tags.product_id").
+				Joins("JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL").
+				Where("tags.name IN ?", tags),
 		)
 	}
 	if minPrice != nil {

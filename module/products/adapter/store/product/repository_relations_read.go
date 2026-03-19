@@ -77,12 +77,18 @@ func (r *Repository) loadProductAggregate(ctx context.Context, record productRec
 		entity.Datasheets = append(entity.Datasheets, item)
 	}
 
-	tagRows := make([]productTagRecord, 0)
-	if err := r.db.WithContext(ctx).Where("product_id = ?", record.ID).Order("position ASC").Find(&tagRows).Error; err != nil {
+	tagJoinRows := make([]productTagLoadRow, 0)
+	if err := r.db.WithContext(ctx).
+		Table("product_tags").
+		Select("product_tags.position, tags.name").
+		Joins("JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL").
+		Where("product_tags.product_id = ?", record.ID).
+		Order("product_tags.position ASC").
+		Scan(&tagJoinRows).Error; err != nil {
 		return productdomain.Product{}, fmt.Errorf("load product tag relations: %w", err)
 	}
-	for _, tagRow := range tagRows {
-		entity.Tags = append(entity.Tags, tagRow.Tag)
+	for _, tagRow := range tagJoinRows {
+		entity.Tags = append(entity.Tags, tagRow.Name)
 	}
 
 	variationLinkRows := make([]productVariationLinkRecord, 0)
