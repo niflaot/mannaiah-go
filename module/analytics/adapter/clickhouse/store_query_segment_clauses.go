@@ -405,24 +405,14 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 			if len(tags) == 0 {
 				continue
 			}
-			parts = append(parts, `EXISTS (
-			SELECT 1 FROM (
-				SELECT ta.tag, ta.score, tm.max_score
+			parts = append(parts, `cs.contact_id IN (
+			SELECT contact_id FROM (
+				SELECT contact_id, tag, score, max(score) OVER (PARTITION BY contact_id) AS max_score
 				FROM (
-					SELECT tag, sum(affinity_score) AS score
+					SELECT contact_id, tag, sum(affinity_score) AS score
 					FROM tag_affinity_mv FINAL
-					WHERE contact_id = cs.contact_id
-					GROUP BY tag
-				) ta
-				CROSS JOIN (
-					SELECT max(score) AS max_score
-					FROM (
-						SELECT sum(affinity_score) AS score
-						FROM tag_affinity_mv FINAL
-						WHERE contact_id = cs.contact_id
-						GROUP BY tag
-					)
-				) tm
+					GROUP BY contact_id, tag
+				)
 			) ta
 			WHERE ta.tag IN (`+makePlaceholders(len(tags))+`) AND if(ta.max_score = 0, 0, (ta.score * 100.0 / ta.max_score)) >= ?
 		)`)
@@ -445,24 +435,14 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 		parts := make([]string, 0, len(rows))
 		args := make([]any, 0, len(rows)*2)
 		for _, row := range rows {
-			parts = append(parts, `EXISTS (
-			SELECT 1 FROM (
-				SELECT ca.category_id, ca.score, cm.max_score
+			parts = append(parts, `cs.contact_id IN (
+			SELECT contact_id FROM (
+				SELECT contact_id, category_id, score, max(score) OVER (PARTITION BY contact_id) AS max_score
 				FROM (
-					SELECT category_id, sum(affinity_score) AS score
+					SELECT contact_id, category_id, sum(affinity_score) AS score
 					FROM category_affinity_mv FINAL
-					WHERE contact_id = cs.contact_id
-					GROUP BY category_id
-				) ca
-				CROSS JOIN (
-					SELECT max(score) AS max_score
-					FROM (
-						SELECT sum(affinity_score) AS score
-						FROM category_affinity_mv FINAL
-						WHERE contact_id = cs.contact_id
-						GROUP BY category_id
-					)
-				) cm
+					GROUP BY contact_id, category_id
+				)
 			) ca
 			WHERE ca.category_id = ? AND if(ca.max_score = 0, 0, (ca.score * 100.0 / ca.max_score)) >= ?
 		)`)
@@ -479,24 +459,14 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 		parts := make([]string, 0, len(rows))
 		args := make([]any, 0, len(rows)*3)
 		for _, row := range rows {
-			parts = append(parts, `EXISTS (
-			SELECT 1 FROM (
-				SELECT va.variation_name, va.variation_value, va.score, vm.max_score
+			parts = append(parts, `cs.contact_id IN (
+			SELECT contact_id FROM (
+				SELECT contact_id, variation_name, variation_value, score, max(score) OVER (PARTITION BY contact_id) AS max_score
 				FROM (
-					SELECT variation_name, variation_value, sum(affinity_score) AS score
+					SELECT contact_id, variation_name, variation_value, sum(affinity_score) AS score
 					FROM variation_affinity_mv FINAL
-					WHERE contact_id = cs.contact_id
-					GROUP BY variation_name, variation_value
-				) va
-				CROSS JOIN (
-					SELECT max(score) AS max_score
-					FROM (
-						SELECT sum(affinity_score) AS score
-						FROM variation_affinity_mv FINAL
-						WHERE contact_id = cs.contact_id
-						GROUP BY variation_name, variation_value
-					)
-				) vm
+					GROUP BY contact_id, variation_name, variation_value
+				)
 			) va
 			WHERE va.variation_name = ? AND va.variation_value = ? AND if(va.max_score = 0, 0, (va.score * 100.0 / va.max_score)) >= ?
 		)`)

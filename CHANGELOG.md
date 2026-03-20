@@ -52,6 +52,15 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.5.2] - 2026-03-19
+- Fix ClickHouse error 48 ("Cannot decorrelate query, because 'JoinLogical' step is not supported") in affinity segment preview/count:
+  - The v2.5.1 fix replaced window functions with CROSS JOIN inside correlated EXISTS subqueries, but ClickHouse's decorrelator also does not support JoinLogical steps inside EXISTS.
+  - Replaced all six affinity EXISTS correlated subqueries with `cs.contact_id IN (SELECT contact_id FROM (...) WHERE ...)` — a non-correlated IN subquery.
+  - The IN subquery is executed independently, so window functions (`max(score) OVER (PARTITION BY contact_id)`) work correctly without any decorrelation.
+  - Semantics are identical: for each contact, the normalized affinity score for the matched tag/category/variation must meet the minimum percentage threshold.
+  - Fix applied to both the DSL filter path (`store_query_segment_affinity.go`) and the clause path (`store_query_segment_clauses.go`).
+- Release version references bumped to `v2.5.2`.
+
 ### [v2.5.1] - 2026-03-19
 - Fix ClickHouse error 48 ("Cannot check Sorting plan step for correlated expressions") in affinity segment preview/count:
   - All three affinity EXISTS subqueries (`tag_affinity`, `category_affinity`, `variation_affinity`) used `max(score) OVER (PARTITION BY contact_id)` — a window function — inside correlated subqueries. ClickHouse cannot apply the sort step required by window functions when decorrelating EXISTS predicates.
