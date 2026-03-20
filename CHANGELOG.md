@@ -52,6 +52,14 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.5.1] - 2026-03-19
+- Fix ClickHouse error 48 ("Cannot check Sorting plan step for correlated expressions") in affinity segment preview/count:
+  - All three affinity EXISTS subqueries (`tag_affinity`, `category_affinity`, `variation_affinity`) used `max(score) OVER (PARTITION BY contact_id)` — a window function — inside correlated subqueries. ClickHouse cannot apply the sort step required by window functions when decorrelating EXISTS predicates.
+  - Replaced the window function with a `CROSS JOIN` against a scalar `max()` aggregate subquery.
+  - Pushed `contact_id = cs.contact_id` into the leaf-level `WHERE` clauses of both sides of the join, eliminating the outer correlation while preserving identical semantics.
+  - Fix applied to both the DSL filter path (`store_query_segment_affinity.go`) and the clause path (`store_query_segment_clauses.go`).
+- Release version references bumped to `v2.5.1`.
+
 ### [v2.5.0] - 2026-03-19
 - Breaking DSL update for affinity segment filters:
   - Removed absolute affinity threshold semantics (`minScore`) for segment create/update payloads.
