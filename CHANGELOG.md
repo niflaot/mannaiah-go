@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.5.3] - 2026-03-19
+- Fix ClickHouse error 48 in affinity segment preview/count (third attempt):
+  - ClickHouse converts `IN (SELECT ...)` with a window function inside into a JoinLogical step, which it also cannot handle when the outer query references `cs.contact_id` in other conditions.
+  - Eliminated window functions entirely. Replaced with `GROUP BY contact_id HAVING maxIf(score, <tag_condition>) * 100.0 / nullIf(max(score), 0) >= ?`:
+    - `maxIf(score, tag IN (?))` — max score among matching tags per contact (zero if no match)
+    - `max(score)` — max score across all tags per contact (the normalization denominator)
+    - `nullIf(..., 0)` — prevents division by zero; contacts with all-zero scores are excluded
+  - The IN subquery is now a simple two-level GROUP BY with no window functions and no JOINs, which ClickHouse executes as a plain hash-based semi-join without any decorrelation.
+  - Fix applied to all six affinity conditions: tag/category/variation in both `store_query_segment_affinity.go` and `store_query_segment_clauses.go`.
+- Release version references bumped to `v2.5.3`.
+
 ### [v2.5.2] - 2026-03-19
 - Fix ClickHouse error 48 ("Cannot decorrelate query, because 'JoinLogical' step is not supported") in affinity segment preview/count:
   - The v2.5.1 fix replaced window functions with CROSS JOIN inside correlated EXISTS subqueries, but ClickHouse's decorrelator also does not support JoinLogical steps inside EXISTS.
