@@ -148,10 +148,11 @@ func TestBuildSegmentWhereFromClausesAffinityPct(t *testing.T) {
 
 	whereSQL, args := buildSegmentWhere(filter, nil)
 	for _, fragment := range []string{
-		"ta.tag IN (?,?,?)",
-		"ta.score * 100.0 / ta.max_score",
-		"ca.category_id = ?",
-		"ca.score * 100.0 / ca.max_score",
+		"maxIf(score, tag IN (?,?,?))",
+		"nullIf(max(score), 0)",
+		"maxIf(score, category_id = ?)",
+		"tag_affinity_mv FINAL",
+		"category_affinity_mv FINAL",
 	} {
 		if !strings.Contains(whereSQL, fragment) {
 			t.Fatalf("whereSQL missing fragment %q", fragment)
