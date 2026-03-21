@@ -33,6 +33,8 @@ type Service interface {
 	HandleWebhook(ctx context.Context, command application.WebhookCommand) error
 	// Get retrieves one delivery by id.
 	Get(ctx context.Context, deliveryID string) (*domain.Delivery, error)
+	// TrackOpen records an open event for a delivery identified by deliveryID.
+	TrackOpen(ctx context.Context, deliveryID string) error
 }
 
 // Handler defines HTTP route handlers for email endpoints.
@@ -94,11 +96,20 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	h.authorizer = authorizer
 }
 
+// transparentGIF is a 1×1 transparent GIF served by the open-tracking endpoint.
+var transparentGIF = []byte{
+	0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+	0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00,
+	0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02,
+	0x44, 0x01, 0x00, 0x3B,
+}
+
 // RegisterRoutes registers email routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/email/send", h.protect("marketing:manage", h.send))
 	router.Get("/email/deliveries/:id", h.protect("marketing:manage", h.delivery))
 	router.Post("/email/webhooks/ses", h.webhook)
+	router.Get("/email/track/open/:id", h.trackOpen)
 }
 
 // send handles email send requests.
@@ -150,6 +161,19 @@ func (h *Handler) delivery(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(delivery)
+}
+
+// trackOpen handles open-tracking pixel requests. No authentication is required.
+// It records an open event for the delivery and responds with a 1×1 transparent GIF.
+func (h *Handler) trackOpen(ctx corehttp.Context) error {
+	deliveryID := strings.TrimSpace(ctx.Params("id"))
+	if deliveryID != "" {
+		_ = h.service.TrackOpen(ctx.Context(), deliveryID)
+	}
+	ctx.SetHeader("Content-Type", "image/gif")
+	ctx.SetHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	return ctx.Status(200).SendBytes(transparentGIF)
 }
 
 // protect wraps endpoint handlers with optional authentication and permission checks.

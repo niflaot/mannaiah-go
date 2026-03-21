@@ -64,6 +64,7 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
+	service.SetTrackingBaseURL(cfg.TrackingBaseURL)
 
 	handler, err := emailhttp.NewHandler(service)
 	if err != nil {

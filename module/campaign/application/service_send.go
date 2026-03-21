@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	campaigntemplate "mannaiah/module/campaign/application/template"
 	"mannaiah/module/campaign/domain"
 	"mannaiah/module/campaign/port"
 )
@@ -241,6 +242,8 @@ func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain
 	tplCtx := domain.TemplateContext{
 		Contact: domain.ContactTemplateData{
 			Name:         contactData.Name,
+			FullName:     contactData.Name,
+			FirstName:    campaigntemplate.ExtractFirstName(contactData.Name),
 			Email:        contactData.Email,
 			LastSaleDate: contactData.LastSaleDate,
 		},
@@ -249,7 +252,7 @@ func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain
 	}
 
 	if rendered, err := s.templateRenderer.Render("html:"+campaign.ID, campaign.HTMLBody, tplCtx); err == nil {
-		htmlBody = rendered
+		htmlBody = campaigntemplate.RewriteLinks(rendered, campaign.ID, campaign.Slug)
 	}
 	if rendered, err := s.templateRenderer.Render("text:"+campaign.ID, campaign.TextBody, tplCtx); err == nil {
 		textBody = rendered

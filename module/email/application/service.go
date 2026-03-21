@@ -53,6 +53,8 @@ type Service interface {
 	HandleWebhook(ctx context.Context, command WebhookCommand) error
 	// Get retrieves one delivery by id.
 	Get(ctx context.Context, deliveryID string) (*domain.Delivery, error)
+	// TrackOpen records an open event for a delivery identified by deliveryID.
+	TrackOpen(ctx context.Context, deliveryID string) error
 }
 
 // EmailService implements email use-cases.
@@ -65,6 +67,9 @@ type EmailService struct {
 	membershipStamper port.MembershipStamper
 	// providerName defines provider label values.
 	providerName string
+	// trackingBaseURL defines the public base URL for open-tracking pixel injection.
+	// Empty string disables pixel injection.
+	trackingBaseURL string
 }
 
 // noopProvider defines no-op provider fallback behavior.
@@ -91,6 +96,16 @@ func NewService(repository port.Repository, provider port.Provider, membershipSt
 	}
 
 	return &EmailService{repository: repository, provider: resolvedProvider, membershipStamper: membershipStamper, providerName: "ses"}, nil
+}
+
+// SetTrackingBaseURL configures the public base URL used for open-tracking pixel injection.
+// An empty value disables pixel injection.
+func (s *EmailService) SetTrackingBaseURL(baseURL string) {
+	if s == nil {
+		return
+	}
+
+	s.trackingBaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 }
 
 // SetMembershipStamper configures optional membership stamp dependencies.
@@ -136,10 +151,16 @@ func (s *EmailService) Send(ctx context.Context, command SendCommand) (*domain.D
 	}
 	_ = s.repository.AddStatusEntry(ctx, &domain.StatusEntry{ID: uuid.NewString(), DeliveryID: delivery.ID, Status: domain.StatusPending, OccurredAt: time.Now().UTC(), CreatedAt: time.Now().UTC()})
 
+	htmlBodyToSend := command.HTMLBody
+	if s.trackingBaseURL != "" && htmlBodyToSend != "" {
+		pixelURL := s.trackingBaseURL + "/email/track/open/" + delivery.ID
+		htmlBodyToSend = injectOpenTrackingPixel(htmlBodyToSend, pixelURL)
+	}
+
 	providerMessageID, sendErr := s.provider.Send(ctx, port.SendRequest{
 		To:             email,
 		Subject:        subject,
-		HTMLBody:       command.HTMLBody,
+		HTMLBody:       htmlBodyToSend,
 		TextBody:       command.TextBody,
 		IdempotencyKey: delivery.IdempotencyKey,
 	})
@@ -218,6 +239,34 @@ func (s *EmailService) Get(ctx context.Context, deliveryID string) (*domain.Deli
 	}
 
 	return delivery, nil
+}
+
+// TrackOpen records an open event for a delivery identified by deliveryID.
+// It is fail-open: if the delivery does not exist the error is silently dropped by callers.
+func (s *EmailService) TrackOpen(ctx context.Context, deliveryID string) error {
+	trimmedID := strings.TrimSpace(deliveryID)
+	if trimmedID == "" {
+		return domain.ErrNotFound
+	}
+
+	return s.repository.AddStatusEntry(ctx, &domain.StatusEntry{
+		ID:         uuid.NewString(),
+		DeliveryID: trimmedID,
+		Status:     domain.StatusOpened,
+		OccurredAt: time.Now().UTC(),
+		CreatedAt:  time.Now().UTC(),
+	})
+}
+
+// injectOpenTrackingPixel appends a 1×1 transparent tracking pixel before </body>.
+// Falls back to appending at the end of html when no </body> tag is found.
+func injectOpenTrackingPixel(html string, pixelURL string) string {
+	pixel := `<img src="` + pixelURL + `" width="1" height="1" style="display:none;border:0;" alt="" />`
+	if idx := strings.Index(strings.ToLower(html), "</body>"); idx >= 0 {
+		return html[:idx] + pixel + html[idx:]
+	}
+
+	return html + pixel
 }
 
 // mapWebhookStatus maps webhook status labels into domain statuses.

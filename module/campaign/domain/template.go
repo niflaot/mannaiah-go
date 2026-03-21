@@ -53,8 +53,12 @@ type TemplateProduct struct {
 
 // ContactTemplateData defines the per-contact data available inside the campaign template context.
 type ContactTemplateData struct {
-	// Name is the contact display name.
+	// Name is the contact display name (backward-compatible alias for FullName).
 	Name string
+	// FullName is the complete contact display name.
+	FullName string
+	// FirstName is the first word of the contact name before the first space.
+	FirstName string
 	// Email is the contact email address.
 	Email string
 	// LastSaleDate is the date of the contact's most recent purchase, or nil if unknown.

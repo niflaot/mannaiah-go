@@ -52,6 +52,25 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.0] - 2026-03-21
+- Add contact name interpolation modes for campaign templates:
+  - **`{{.Contact.FirstName}}`** — first word of the contact name before the first space (e.g. `"Juan"` from `"Juan Pérez"`).
+  - **`{{.Contact.FullName}}`** — complete contact display name (e.g. `"Juan Pérez"`).
+  - **`{{.Contact.Name}}`** — retained as-is for backward compatibility (identical to `FullName`).
+  - Computed in `renderForContact` via `campaigntemplate.ExtractFirstName`; no fallback change: email is still the fallback when no name is available.
+- Add email open tracking via invisible pixel:
+  - **`GET /email/track/open/:id`** — public (no auth) endpoint that serves a 1×1 transparent GIF and records an `opened` status history entry for the delivery. Fail-open: unknown IDs produce no error response.
+  - **`domain.StatusOpened`** — new `"opened"` status value added to the email delivery status set; recorded in `email_delivery_status_history` only (root delivery status is not mutated on open, per history-authoritative design).
+  - **`EMAIL_TRACKING_BASE_URL`** — new env var on the email module. When set (e.g. `https://api.example.com`), the pixel `<img>` is injected just before `</body>` in every outbound HTML email. Empty by default (pixel disabled).
+  - Pixel is injected into the HTML sent to the provider; the stored `html_body` in `email_deliveries` retains the original template output.
+- Add UTM tracking parameters to all campaign email links:
+  - All `http://` and `https://` `href` attributes in rendered campaign HTML bodies are rewritten to append `utm_source=email&utm_medium=campaign&utm_campaign={slug}&utm_id={campaignID}`.
+  - Non-HTTP links (`mailto:`, `tel:`, anchor `#`) are left unchanged.
+  - Applied after template rendering in `renderForContact`; raw text body is not modified.
+  - Logic lives in `module/campaign/application/template/link_rewriter.go` (`RewriteLinks`).
+- Email OpenAPI bumped to `2.1.0`; Campaign OpenAPI bumped to `2.4.0`.
+- Release version bumped to `v2.9.0`.
+
 ### [v2.8.0] - 2026-03-21
 - Add multi-tag union and intersection filtering for product recommendations:
   - **`baseTags`** (comma-separated HTTP param) / **`BaseTags []string`** (domain/campaign) replaces single `baseTag` as the primary tag selector. `baseTag` is retained for backward compatibility and merged into `BaseTags` during `Normalize()`.

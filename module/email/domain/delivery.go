@@ -20,6 +20,8 @@ const (
 	StatusBounced DeliveryStatus = "bounced"
 	// StatusComplained defines complaint statuses.
 	StatusComplained DeliveryStatus = "complained"
+	// StatusOpened defines email-open pixel-tracked statuses.
+	StatusOpened DeliveryStatus = "opened"
 )
 
 // Delivery defines email delivery record values.

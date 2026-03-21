@@ -22,4 +22,7 @@ type Config struct {
 	AWSRegion string `mapstructure:"EMAIL_AWS_REGION" default:""`
 	// SenderAddress defines legacy sender address values.
 	SenderAddress string `mapstructure:"EMAIL_SENDER_ADDRESS" default:""`
+	// TrackingBaseURL defines the public base URL used to build open-tracking pixel URLs.
+	// When empty, open tracking pixel injection is disabled.
+	TrackingBaseURL string `mapstructure:"EMAIL_TRACKING_BASE_URL" default:""`
 }

@@ -20,12 +20,13 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Email API",
-			Version: "2.0.5",
+			Version: "2.1.0",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/email/send", &openapi3.PathItem{Post: sendOperation()}),
 			openapi3.WithPath("/email/deliveries/{id}", &openapi3.PathItem{Get: deliveryOperation()}),
 			openapi3.WithPath("/email/webhooks/ses", &openapi3.PathItem{Post: webhookOperation()}),
+			openapi3.WithPath("/email/track/open/{id}", &openapi3.PathItem{Get: trackOpenOperation()}),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
@@ -68,6 +69,22 @@ func webhookOperation() *openapi3.Operation {
 		Tags:        []string{emailTag},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Webhook accepted.")),
+		),
+	}
+}
+
+// trackOpenOperation defines the OpenAPI operation for open-tracking pixel requests.
+func trackOpenOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "EmailController_trackOpen",
+		Summary:     "Open-tracking pixel",
+		Description: "Records an email open event and returns a 1×1 transparent GIF. No authentication required.",
+		Tags:        []string{emailTag},
+		Parameters: openapi3.Parameters{
+			{Value: &openapi3.Parameter{Name: "id", In: "path", Required: true, Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()}}},
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription("1×1 transparent GIF.")}),
 		),
 	}
 }
