@@ -172,7 +172,7 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 	// Load gallery items + included realms.
 	galleryRows := make([]productGalleryFlatRecord, 0)
 	if err := r.db.WithContext(ctx).
-		Table("product_gallery AS g").
+		Table("product_gallery_items AS g").
 		Select("g.product_id, g.id AS gallery_item_id, g.asset_id, g.is_main, COALESCE(r.realm, '') AS realm").
 		Joins("LEFT JOIN product_gallery_included_realms r ON r.gallery_item_id = g.id").
 		Where("g.product_id IN ?", ids).
