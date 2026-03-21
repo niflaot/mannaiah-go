@@ -52,6 +52,17 @@ type Handler struct {
 	authorizer Authorizer
 }
 
+// productBlockRequest defines a product recommendation block in create/update requests.
+type productBlockRequest struct {
+	ID                  string  `json:"id"`
+	BaseTag             string  `json:"baseTag"`
+	UseAffinity         bool    `json:"useAffinity"`
+	AffinityMinScorePct float64 `json:"affinityMinScorePct"`
+	CategoryID          string  `json:"categoryId"`
+	Realm               string  `json:"realm"`
+	Limit               int     `json:"limit"`
+}
+
 // createRequest defines create request payload values.
 type createRequest struct {
 	// Name defines campaign names.
@@ -68,6 +79,10 @@ type createRequest struct {
 	HTMLBody string `json:"htmlBody"`
 	// TextBody defines text content values.
 	TextBody string `json:"textBody"`
+	// TemplateVars defines campaign-level custom variable values.
+	TemplateVars map[string]string `json:"templateVars"`
+	// ProductBlocks defines product recommendation block configurations.
+	ProductBlocks []productBlockRequest `json:"productBlocks"`
 }
 
 // updateRequest defines update request payload values.
@@ -86,6 +101,10 @@ type updateRequest struct {
 	HTMLBody *string `json:"htmlBody"`
 	// TextBody defines optional text content values.
 	TextBody *string `json:"textBody"`
+	// TemplateVars defines optional campaign-level custom variable values.
+	TemplateVars map[string]string `json:"templateVars"`
+	// ProductBlocks defines optional product recommendation block configurations.
+	ProductBlocks []productBlockRequest `json:"productBlocks"`
 }
 
 // NewHandler creates campaign HTTP handlers.
@@ -130,13 +149,15 @@ func (h *Handler) create(ctx corehttp.Context) error {
 	}
 
 	campaign, err := h.service.Create(ctx.Context(), application.CreateCommand{
-		Name:      request.Name,
-		Slug:      request.Slug,
-		Channel:   request.Channel,
-		SegmentID: request.SegmentID,
-		Subject:   request.Subject,
-		HTMLBody:  request.HTMLBody,
-		TextBody:  request.TextBody,
+		Name:          request.Name,
+		Slug:          request.Slug,
+		Channel:       request.Channel,
+		SegmentID:     request.SegmentID,
+		Subject:       request.Subject,
+		HTMLBody:      request.HTMLBody,
+		TextBody:      request.TextBody,
+		TemplateVars:  request.TemplateVars,
+		ProductBlocks: mapProductBlockRequests(request.ProductBlocks),
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -176,13 +197,15 @@ func (h *Handler) update(ctx corehttp.Context) error {
 	}
 
 	campaign, err := h.service.Update(ctx.Context(), strings.TrimSpace(ctx.Params("id")), application.UpdateCommand{
-		Name:      request.Name,
-		Slug:      request.Slug,
-		Channel:   request.Channel,
-		SegmentID: request.SegmentID,
-		Subject:   request.Subject,
-		HTMLBody:  request.HTMLBody,
-		TextBody:  request.TextBody,
+		Name:          request.Name,
+		Slug:          request.Slug,
+		Channel:       request.Channel,
+		SegmentID:     request.SegmentID,
+		Subject:       request.Subject,
+		HTMLBody:      request.HTMLBody,
+		TextBody:      request.TextBody,
+		TemplateVars:  request.TemplateVars,
+		ProductBlocks: mapProductBlockRequests(request.ProductBlocks),
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -224,6 +247,26 @@ func (h *Handler) protect(permission string, next corehttp.Handler) corehttp.Han
 
 		return next(ctx)
 	}
+}
+
+// mapProductBlockRequests maps HTTP product block requests to domain product blocks.
+func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
+	if len(reqs) == 0 {
+		return nil
+	}
+	blocks := make([]domain.ProductBlock, 0, len(reqs))
+	for _, r := range reqs {
+		blocks = append(blocks, domain.ProductBlock{
+			ID:                  r.ID,
+			BaseTag:             r.BaseTag,
+			UseAffinity:         r.UseAffinity,
+			AffinityMinScorePct: r.AffinityMinScorePct,
+			CategoryID:          r.CategoryID,
+			Realm:               r.Realm,
+			Limit:               r.Limit,
+		})
+	}
+	return blocks
 }
 
 // mapError maps app/auth errors to HTTP-layer app errors.

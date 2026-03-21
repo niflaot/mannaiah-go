@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -43,6 +44,10 @@ type model struct {
 	SentCount int `gorm:"column:sent_count"`
 	// FailedCount defines failed send count values.
 	FailedCount int `gorm:"column:failed_count"`
+	// TemplateVars stores campaign-level custom variable values as a JSON object.
+	TemplateVars string `gorm:"column:template_vars"`
+	// ProductBlocks stores product recommendation block configurations as a JSON array.
+	ProductBlocks string `gorm:"column:product_blocks"`
 	// CreatedAt defines row creation timestamp values.
 	CreatedAt time.Time `gorm:"column:created_at"`
 	// UpdatedAt defines row update timestamp values.
@@ -79,19 +84,24 @@ func (r *Repository) Create(ctx context.Context, campaign *domain.Campaign) erro
 	if campaign.ID == "" {
 		campaign.ID = uuid.NewString()
 	}
+
+	templateVars, productBlocks := marshalTemplateFields(campaign)
+
 	row := model{
-		ID:             campaign.ID,
-		Name:           campaign.Name,
-		Slug:           campaign.Slug,
-		Channel:        campaign.Channel,
-		SegmentID:      campaign.SegmentID,
-		Subject:        campaign.Subject,
-		HTMLBody:       campaign.HTMLBody,
-		TextBody:       campaign.TextBody,
-		Status:         string(campaign.Status),
+		ID:              campaign.ID,
+		Name:            campaign.Name,
+		Slug:            campaign.Slug,
+		Channel:         campaign.Channel,
+		SegmentID:       campaign.SegmentID,
+		Subject:         campaign.Subject,
+		HTMLBody:        campaign.HTMLBody,
+		TextBody:        campaign.TextBody,
+		Status:          string(campaign.Status),
 		TotalRecipients: campaign.TotalRecipients,
-		SentCount:      campaign.SentCount,
-		FailedCount:    campaign.FailedCount,
+		SentCount:       campaign.SentCount,
+		FailedCount:     campaign.FailedCount,
+		TemplateVars:    templateVars,
+		ProductBlocks:   productBlocks,
 	}
 	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return fmt.Errorf("create campaign: %w", err)
@@ -145,6 +155,8 @@ func (r *Repository) List(ctx context.Context, page int, limit int) ([]domain.Ca
 
 // Update persists campaign row updates.
 func (r *Repository) Update(ctx context.Context, campaign *domain.Campaign) error {
+	templateVars, productBlocks := marshalTemplateFields(campaign)
+
 	updates := map[string]any{
 		"name":             campaign.Name,
 		"slug":             campaign.Slug,
@@ -157,6 +169,8 @@ func (r *Repository) Update(ctx context.Context, campaign *domain.Campaign) erro
 		"total_recipients": campaign.TotalRecipients,
 		"sent_count":       campaign.SentCount,
 		"failed_count":     campaign.FailedCount,
+		"template_vars":    templateVars,
+		"product_blocks":   productBlocks,
 	}
 	result := r.db.WithContext(ctx).Model(&model{}).Where("id = ?", campaign.ID).Updates(updates)
 	if result.Error != nil {
@@ -190,6 +204,7 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 
 // mapModel maps persistence rows into domain values.
 func mapModel(row model) *domain.Campaign {
+	templateVars, productBlocks := unmarshalTemplateFields(row)
 	return &domain.Campaign{
 		ID:              row.ID,
 		Name:            row.Name,
@@ -203,7 +218,35 @@ func mapModel(row model) *domain.Campaign {
 		TotalRecipients: row.TotalRecipients,
 		SentCount:       row.SentCount,
 		FailedCount:     row.FailedCount,
+		TemplateVars:    templateVars,
+		ProductBlocks:   productBlocks,
 		CreatedAt:       row.CreatedAt.UTC(),
 		UpdatedAt:       row.UpdatedAt.UTC(),
 	}
+}
+
+// marshalTemplateFields encodes TemplateVars and ProductBlocks as JSON strings for storage.
+func marshalTemplateFields(campaign *domain.Campaign) (templateVars string, productBlocks string) {
+	if len(campaign.TemplateVars) > 0 {
+		if b, err := json.Marshal(campaign.TemplateVars); err == nil {
+			templateVars = string(b)
+		}
+	}
+	if len(campaign.ProductBlocks) > 0 {
+		if b, err := json.Marshal(campaign.ProductBlocks); err == nil {
+			productBlocks = string(b)
+		}
+	}
+	return templateVars, productBlocks
+}
+
+// unmarshalTemplateFields decodes TemplateVars and ProductBlocks from JSON strings.
+func unmarshalTemplateFields(row model) (templateVars map[string]string, productBlocks []domain.ProductBlock) {
+	if row.TemplateVars != "" {
+		_ = json.Unmarshal([]byte(row.TemplateVars), &templateVars)
+	}
+	if row.ProductBlocks != "" {
+		_ = json.Unmarshal([]byte(row.ProductBlocks), &productBlocks)
+	}
+	return templateVars, productBlocks
 }

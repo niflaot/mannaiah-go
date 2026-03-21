@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"mannaiah/module/campaign/application/template"
 	"mannaiah/module/campaign/domain"
 	"mannaiah/module/campaign/port"
 )
@@ -31,6 +32,10 @@ type CreateCommand struct {
 	HTMLBody string
 	// TextBody defines text content values.
 	TextBody string
+	// TemplateVars defines campaign-level custom variable values.
+	TemplateVars map[string]string
+	// ProductBlocks defines product recommendation block configurations.
+	ProductBlocks []domain.ProductBlock
 }
 
 // UpdateCommand defines campaign update payload values.
@@ -49,6 +54,10 @@ type UpdateCommand struct {
 	HTMLBody *string
 	// TextBody defines optional text content values.
 	TextBody *string
+	// TemplateVars defines optional replacement campaign-level custom variable values.
+	TemplateVars map[string]string
+	// ProductBlocks defines optional replacement product recommendation block configurations.
+	ProductBlocks []domain.ProductBlock
 }
 
 // ListResult defines paged campaign query output values.
@@ -127,6 +136,12 @@ type CampaignService struct {
 	syncRecorder port.SyncRecorder
 	// publisher defines integration event publication dependencies.
 	publisher port.IntegrationEventPublisher
+	// contactDataProvider defines optional per-contact personalization data dependencies.
+	contactDataProvider port.ContactDataProvider
+	// affinityProductProvider defines optional affinity product fetch dependencies.
+	affinityProductProvider port.AffinityProductProvider
+	// templateRenderer renders campaign HTML/text bodies with per-contact context.
+	templateRenderer *template.Renderer
 	// mutex guards active send guards.
 	mutex sync.Mutex
 	// activeSends prevents duplicate in-memory sends per campaign.
@@ -148,15 +163,42 @@ func NewService(repository port.Repository, resolver port.SegmentResolver, sende
 	}
 
 	return &CampaignService{
-		repository:     repository,
-		resolver:       resolver,
-		sender:         sender,
-		deliveryReader: reader,
-		workers:        workers,
-		syncRecorder:   port.NoopSyncRecorder{},
-		publisher:      resolvePublisher(publisher),
-		activeSends:    map[string]struct{}{},
+		repository:              repository,
+		resolver:                resolver,
+		sender:                  sender,
+		deliveryReader:          reader,
+		workers:                 workers,
+		syncRecorder:            port.NoopSyncRecorder{},
+		publisher:               resolvePublisher(publisher),
+		contactDataProvider:     port.NoopContactDataProvider{},
+		affinityProductProvider: port.NoopAffinityProductProvider{},
+		templateRenderer:        template.NewRenderer(),
+		activeSends:             map[string]struct{}{},
 	}, nil
+}
+
+// SetContactDataProvider configures optional per-contact personalization data dependencies.
+func (s *CampaignService) SetContactDataProvider(provider port.ContactDataProvider) {
+	if s == nil {
+		return
+	}
+	if provider == nil {
+		s.contactDataProvider = port.NoopContactDataProvider{}
+		return
+	}
+	s.contactDataProvider = provider
+}
+
+// SetAffinityProductProvider configures optional affinity product fetch dependencies.
+func (s *CampaignService) SetAffinityProductProvider(provider port.AffinityProductProvider) {
+	if s == nil {
+		return
+	}
+	if provider == nil {
+		s.affinityProductProvider = port.NoopAffinityProductProvider{}
+		return
+	}
+	s.affinityProductProvider = provider
 }
 
 // SetSyncRecorder configures optional sync run recording dependencies.

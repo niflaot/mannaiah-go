@@ -42,6 +42,10 @@ type Campaign struct {
 	SentCount int `json:"sentCount"`
 	// FailedCount defines failed send count values.
 	FailedCount int `json:"failedCount"`
+	// TemplateVars defines campaign-level custom variable values available in the template context.
+	TemplateVars map[string]string `json:"templateVars,omitempty"`
+	// ProductBlocks defines product recommendation blocks rendered into the template context.
+	ProductBlocks []ProductBlock `json:"productBlocks,omitempty"`
 	// CreatedAt defines row creation timestamp values.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines row update timestamp values.

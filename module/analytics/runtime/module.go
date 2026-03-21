@@ -12,6 +12,7 @@ import (
 	analyticsstore "mannaiah/module/analytics/adapter/store"
 	"mannaiah/module/analytics/application"
 	affinityapp "mannaiah/module/analytics/application/affinity"
+	recommendationapp "mannaiah/module/analytics/application/recommendation"
 	rfmapp "mannaiah/module/analytics/application/rfm"
 	"mannaiah/module/analytics/port"
 	corehttp "mannaiah/module/core/http"
@@ -42,6 +43,10 @@ type Module struct {
 	rfmHandler *analyticshttp.RFMHandler
 	// affinityHandler defines affinity HTTP route adapter dependencies.
 	affinityHandler *analyticshttp.AffinityHandler
+	// recommendationService defines recommendation use-case dependencies.
+	recommendationService *recommendationapp.RecommendationService
+	// recommendationHandler defines recommendation HTTP route adapter dependencies.
+	recommendationHandler *analyticshttp.RecommendationHandler
 	// clickhouseClient defines optional clickhouse dependencies.
 	clickhouseClient *clickhouse.Client
 }
@@ -92,6 +97,9 @@ func New(cfg Config, db *gorm.DB, registrar bus.Registrar) (*Module, error) {
 		return nil, err
 	}
 	if err := module.wireAffinity(store); err != nil {
+		return nil, err
+	}
+	if err := module.wireRecommendation(db); err != nil {
 		return nil, err
 	}
 
@@ -151,6 +159,43 @@ func (m *Module) wireAffinity(store port.Store) error {
 	return nil
 }
 
+// wireRecommendation wires recommendation use-cases and HTTP handler.
+func (m *Module) wireRecommendation(db *gorm.DB) error {
+	var affinityStore port.AffinityStore
+	if m.clickhouseClient != nil {
+		affinityStore = clickhouse.NewStoreAdapter(m.clickhouseClient)
+	} else {
+		affinityStore = &noopAffinityStore{}
+	}
+
+	var correlationStore port.TagCorrelationStore
+	var catalogStore port.ProductCatalogStore
+	if db != nil {
+		corrRepo, err := analyticsstore.NewTagCorrelationRepository(db)
+		if err != nil {
+			return err
+		}
+		catalogRepo, err := analyticsstore.NewProductCatalogRepository(db)
+		if err != nil {
+			return err
+		}
+		correlationStore = corrRepo
+		catalogStore = catalogRepo
+	} else {
+		correlationStore = &noopTagCorrelationStore{}
+		catalogStore = &noopProductCatalogStore{}
+	}
+
+	svc, err := recommendationapp.NewService(affinityStore, correlationStore, catalogStore)
+	if err != nil {
+		return err
+	}
+	m.recommendationService = svc
+	m.recommendationHandler = analyticshttp.NewRecommendationHandler(svc)
+
+	return nil
+}
+
 // RegisterRoutes registers analytics routes on the provided router.
 func (m *Module) RegisterRoutes(router corehttp.Router) {
 	if m == nil {
@@ -164,6 +209,9 @@ func (m *Module) RegisterRoutes(router corehttp.Router) {
 	}
 	if m.affinityHandler != nil {
 		m.affinityHandler.RegisterRoutes(router)
+	}
+	if m.recommendationHandler != nil {
+		m.recommendationHandler.RegisterRoutes(router)
 	}
 }
 
@@ -181,6 +229,9 @@ func (m *Module) SetAuthorizer(authorizer analyticshttp.Authorizer) {
 	if m.affinityHandler != nil {
 		m.affinityHandler.SetAuthorizer(authorizer)
 	}
+	if m.recommendationHandler != nil {
+		m.recommendationHandler.SetAuthorizer(authorizer)
+	}
 }
 
 // SetSyncRecorder configures optional sync run recording dependencies.
@@ -194,6 +245,15 @@ func (m *Module) SetSyncRecorder(recorder port.SyncRecorder) {
 	if m.affinityService != nil {
 		m.affinityService.SetSyncRecorder(recorder)
 	}
+}
+
+// RecommendationService returns the recommendation service for use by other modules.
+func (m *Module) RecommendationService() *recommendationapp.RecommendationService {
+	if m == nil {
+		return nil
+	}
+
+	return m.recommendationService
 }
 
 // QueryService returns analytics query resolver dependencies.

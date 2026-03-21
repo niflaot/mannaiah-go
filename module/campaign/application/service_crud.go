@@ -23,14 +23,16 @@ func (s *CampaignService) Create(ctx context.Context, command CreateCommand) (*d
 	}
 
 	campaign := &domain.Campaign{
-		Name:      name,
-		Slug:      slug,
-		Channel:   strings.TrimSpace(command.Channel),
-		SegmentID: strings.TrimSpace(command.SegmentID),
-		Subject:   strings.TrimSpace(command.Subject),
-		HTMLBody:  command.HTMLBody,
-		TextBody:  command.TextBody,
-		Status:    domain.StatusPlanned,
+		Name:          name,
+		Slug:          slug,
+		Channel:       strings.TrimSpace(command.Channel),
+		SegmentID:     strings.TrimSpace(command.SegmentID),
+		Subject:       strings.TrimSpace(command.Subject),
+		HTMLBody:      command.HTMLBody,
+		TextBody:      command.TextBody,
+		Status:        domain.StatusPlanned,
+		TemplateVars:  command.TemplateVars,
+		ProductBlocks: command.ProductBlocks,
 	}
 	if campaign.Channel == "" {
 		campaign.Channel = "email"
@@ -113,6 +115,12 @@ func (s *CampaignService) Update(ctx context.Context, id string, command UpdateC
 	}
 	if command.TextBody != nil {
 		campaign.TextBody = *command.TextBody
+	}
+	if command.TemplateVars != nil {
+		campaign.TemplateVars = command.TemplateVars
+	}
+	if command.ProductBlocks != nil {
+		campaign.ProductBlocks = command.ProductBlocks
 	}
 
 	if err := s.repository.Update(ctx, campaign); err != nil {

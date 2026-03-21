@@ -49,6 +49,24 @@ func (n *noopAffinityStore) GetProfile(_ context.Context, contactID string, _ in
 	return &domain.AffinityProfile{ContactID: contactID}, nil
 }
 
-func (n *noopAffinityStore) RefreshTagMV(_ context.Context) error      { return nil }
-func (n *noopAffinityStore) RefreshCategoryMV(_ context.Context) error { return nil }
+func (n *noopAffinityStore) RefreshTagMV(_ context.Context) error       { return nil }
+func (n *noopAffinityStore) RefreshCategoryMV(_ context.Context) error  { return nil }
 func (n *noopAffinityStore) RefreshVariationMV(_ context.Context) error { return nil }
+
+// noopTagCorrelationStore is a no-op tag correlation store used when no MySQL store is configured.
+type noopTagCorrelationStore struct{}
+
+var _ port.TagCorrelationStore = (*noopTagCorrelationStore)(nil)
+
+func (n *noopTagCorrelationStore) GetCorrelations(_ context.Context, _ []string) ([]port.TagCorrelation, error) {
+	return nil, nil
+}
+
+// noopProductCatalogStore is a no-op product catalog store used when no MySQL store is configured.
+type noopProductCatalogStore struct{}
+
+var _ port.ProductCatalogStore = (*noopProductCatalogStore)(nil)
+
+func (n *noopProductCatalogStore) GetProductsByBaseTag(_ context.Context, _ string, _ []string, _ string, _ int) ([]port.ProductCatalogEntry, error) {
+	return nil, nil
+}

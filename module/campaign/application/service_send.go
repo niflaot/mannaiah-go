@@ -161,8 +161,9 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 		go func() {
 			defer waitGroup.Done()
 			for item := range jobs {
+				htmlBody, textBody := s.renderForContact(ctx, campaign, item.contactID, item.email)
 				idempotencyKey := campaign.ID + ":" + item.contactID
-				sendErr := s.sender.SendCampaignEmail(ctx, item.contactID, item.email, campaign.Subject, campaign.HTMLBody, campaign.TextBody, idempotencyKey)
+				sendErr := s.sender.SendCampaignEmail(ctx, item.contactID, item.email, campaign.Subject, htmlBody, textBody, idempotencyKey)
 				results <- sendResult{contactID: item.contactID, email: item.email, err: sendErr}
 			}
 		}()
@@ -203,6 +204,58 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 	}
 	_ = s.repository.Update(ctx, campaign)
 	finalizeSyncRecord(campaign)
+}
+
+// renderForContact builds a per-contact template context and renders HTML and text bodies.
+// Falls back to the raw campaign bodies on any enrichment or render failure (fail-open).
+func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain.Campaign, contactID string, email string) (htmlBody string, textBody string) {
+	htmlBody = campaign.HTMLBody
+	textBody = campaign.TextBody
+
+	if s.templateRenderer == nil {
+		return
+	}
+
+	// Build contact data (fail-open: use defaults on error).
+	contactData, _ := s.contactDataProvider.GetContactData(ctx, contactID)
+	if contactData.Name == "" {
+		contactData.Name = email
+	}
+
+	// Build product blocks (fail-open: skip failed blocks).
+	products := make(map[string][]domain.TemplateProduct, len(campaign.ProductBlocks))
+	for _, block := range campaign.ProductBlocks {
+		if block.ID == "" || block.BaseTag == "" {
+			continue
+		}
+		items, err := s.affinityProductProvider.GetProducts(ctx, contactID, block)
+		if err != nil {
+			continue
+		}
+		if items == nil {
+			items = []domain.TemplateProduct{}
+		}
+		products[block.ID] = items
+	}
+
+	tplCtx := domain.TemplateContext{
+		Contact: domain.ContactTemplateData{
+			Name:         contactData.Name,
+			Email:        contactData.Email,
+			LastSaleDate: contactData.LastSaleDate,
+		},
+		Custom:   campaign.TemplateVars,
+		Products: products,
+	}
+
+	if rendered, err := s.templateRenderer.Render("html:"+campaign.ID, campaign.HTMLBody, tplCtx); err == nil {
+		htmlBody = rendered
+	}
+	if rendered, err := s.templateRenderer.Render("text:"+campaign.ID, campaign.TextBody, tplCtx); err == nil {
+		textBody = rendered
+	}
+
+	return htmlBody, textBody
 }
 
 // publishDeliveryEvent publishes campaign delivery integration events.

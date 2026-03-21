@@ -52,6 +52,39 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.6.0] - 2026-03-20
+- Ship campaign personalization engine and channel-agnostic recommendation API:
+  - **Analytics: RecommendationService** (`module/analytics/application/recommendation`):
+    - 5-step resolution algorithm: contact tag affinity fetch → tag correlation expansion → product catalog filter → affinity-weighted ranking → realm-aware display data resolution.
+    - `port.TagCorrelationStore` interface + GORM adapter (`tag_correlation_repository.go`) querying `tag_correlations WHERE source_tag IN ? AND probability > 0`.
+    - `port.ProductCatalogStore` interface + GORM adapter (`product_catalog_repository.go`) resolving base tag → expanded affinity tags → category filter → datasheets + gallery with realm data.
+    - `port.AssetURLResolver` interface + `NoopAssetURLResolver` default; consumers inject a concrete resolver.
+    - `domain.RecommendationQuery` (normalized, Limit clamped to [1,10], Realm defaults to "default") and `domain.RecommendedProduct`.
+  - **Analytics HTTP endpoint** `GET /analytics/recommendations/contacts/:contactId`:
+    - Required query param `baseTag`; optional `categoryId`, `realm`, `limit`, `affinity` (enable contact-affinity expansion), `minScore` (affinity percentile threshold).
+    - Returns `[]RecommendedProduct` (empty array when no candidates found).
+    - Registered in `spec_recommendation.go` with `RecommendedProduct` OpenAPI component schema.
+    - Analytics module OpenAPI version bumped to `2.4.0`.
+  - **Campaign template personalization** (`module/campaign`):
+    - `domain.ProductBlock` — stored with campaign as JSON; drives per-send product resolution per named block.
+    - `domain.TemplateProduct`, `domain.ContactTemplateData`, `domain.TemplateContext` — template rendering data model.
+    - `domain.Campaign.TemplateVars` (`map[string]string`) and `domain.Campaign.ProductBlocks` (`[]ProductBlock`) fields added.
+    - `port.ContactDataProvider` interface + `NoopContactDataProvider`; provides `Name`, `Email`, `LastSaleDate` per contact.
+    - `port.AffinityProductProvider` interface + `NoopAffinityProductProvider`; provides `[]TemplateProduct` per contact + block.
+    - `application/template.Renderer` — Go `text/template` with fixed function allowlist (`formatDate`, `formatPrice`, `default`, `upper`, `lower`) and 2 MiB output cap (`ErrOutputTooLarge`).
+    - `CampaignService.renderForContact` — per-contact enrichment: fetches contact data + resolves all product blocks, builds `TemplateContext`, renders `HTMLBody`/`TextBody`; fail-open on any enrichment error.
+    - `CampaignService.SetContactDataProvider` and `SetAffinityProductProvider` setter methods; noops wired by default.
+    - `adapter/affinity.ProductProvider` — thin adapter mapping `ProductBlock` → `domain.RecommendationQuery` → `RecommendationService.Recommend` → `[]TemplateProduct`.
+    - Campaign store: `template_vars` and `product_blocks` columns persisted as JSON; marshal/unmarshal helpers added.
+    - Campaign HTTP handler: `productBlockRequest` struct, `templateVars` and `productBlocks` accepted in create and update request bodies.
+    - Campaign module OpenAPI version bumped to `2.1.0`.
+  - **Database migrations** (`000021_campaign_template_fields`):
+    - SQLite: `ALTER TABLE campaigns ADD COLUMN template_vars TEXT NOT NULL DEFAULT ''` + `ADD COLUMN product_blocks TEXT NOT NULL DEFAULT ''`.
+    - MySQL: `ALTER TABLE campaigns ADD COLUMN template_vars JSON NOT NULL DEFAULT (JSON_OBJECT())` + `ADD COLUMN product_blocks JSON NOT NULL DEFAULT (JSON_ARRAY())`.
+    - Down migrations provided for both dialects.
+  - **Noop stores extended**: `noopTagCorrelationStore` and `noopProductCatalogStore` added to analytics runtime for ClickHouse/DB-absent environments.
+- Release version references bumped to `v2.6.0`.
+
 ### [v2.5.3] - 2026-03-19
 - Fix ClickHouse error 48 in affinity segment preview/count (third attempt):
   - ClickHouse converts `IN (SELECT ...)` with a window function inside into a JoinLogical step, which it also cannot handle when the outer query references `cs.contact_id` in other conditions.

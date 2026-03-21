@@ -1,0 +1,2 @@
+ALTER TABLE campaigns ADD COLUMN template_vars TEXT NOT NULL DEFAULT '';
+ALTER TABLE campaigns ADD COLUMN product_blocks TEXT NOT NULL DEFAULT '';

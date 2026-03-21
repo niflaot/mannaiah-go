@@ -1,0 +1,3 @@
+ALTER TABLE campaigns
+    ADD COLUMN template_vars JSON NOT NULL DEFAULT (JSON_OBJECT()),
+    ADD COLUMN product_blocks JSON NOT NULL DEFAULT (JSON_ARRAY());
