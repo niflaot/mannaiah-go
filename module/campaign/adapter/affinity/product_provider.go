@@ -35,6 +35,8 @@ func NewProductProvider(service *recommendation.RecommendationService) (*Product
 func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, block campaigndomain.ProductBlock) ([]campaigndomain.TemplateProduct, error) {
 	query := domain.RecommendationQuery{
 		BaseTag:             block.BaseTag,
+		BaseTags:            block.BaseTags,
+		BaseTagMode:         block.BaseTagMode,
 		UseContactAffinity:  block.UseAffinity,
 		AffinityMinScorePct: block.AffinityMinScorePct,
 		CategoryID:          block.CategoryID,

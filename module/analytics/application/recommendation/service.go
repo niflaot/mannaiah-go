@@ -90,7 +90,7 @@ func (s *RecommendationService) SetAssetResolver(resolver port.AssetURLResolver)
 func (s *RecommendationService) Recommend(ctx context.Context, contactID string, query domain.RecommendationQuery) ([]domain.RecommendedProduct, error) {
 	query.Normalize()
 
-	if query.BaseTag == "" && len(query.PinnedProductIDs) == 0 {
+	if len(query.BaseTags) == 0 && len(query.PinnedProductIDs) == 0 {
 		return nil, ErrEmptyBaseTag
 	}
 
@@ -122,7 +122,7 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 
 	var dynamicEntries []port.ProductCatalogEntry
 
-	if dynamicLimit > 0 && query.BaseTag != "" {
+	if dynamicLimit > 0 && len(query.BaseTags) > 0 {
 		// Step 3: resolve contact tag affinity scores and expand via correlations.
 		var affinityScores map[string]float64
 		var expandedTags []string
@@ -157,7 +157,7 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		}
 
 		// Step 4: fetch and rank dynamic candidates.
-		candidates, err := s.catalogStore.GetProductsByBaseTag(ctx, query.BaseTag, expandedTags, query.CategoryID, excludeIDs, query.FilterVariationIDs, dynamicLimit*3)
+		candidates, err := s.catalogStore.GetProductsByBaseTags(ctx, query.BaseTags, query.BaseTagMode, expandedTags, query.CategoryID, excludeIDs, query.FilterVariationIDs, dynamicLimit*3)
 		if err != nil {
 			return nil, err
 		}

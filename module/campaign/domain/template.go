@@ -7,9 +7,14 @@ import "time"
 type ProductBlock struct {
 	// ID is the block identifier used as the key in the template Products map.
 	ID string `json:"id"`
-	// BaseTag is the product base tag; only products with this tag are dynamic candidates.
-	// May be empty when PinnedProductIDs is non-empty (pinned-only block).
+	// BaseTag is a single base tag shorthand (backward compatible). Merged into BaseTags.
 	BaseTag string `json:"baseTag"`
+	// BaseTags lists product base tags. BaseTagMode controls union vs intersection matching.
+	BaseTags []string `json:"baseTags,omitempty"`
+	// BaseTagMode controls how BaseTags are matched:
+	// "any" (default) — products with at least one tag (union).
+	// "all"            — products that carry every tag (intersection).
+	BaseTagMode string `json:"baseTagMode,omitempty"`
 	// UseAffinity enables contact-affinity-driven filtering when true.
 	UseAffinity bool `json:"useAffinity"`
 	// AffinityMinScorePct is the minimum relative affinity score threshold in [0, 100].

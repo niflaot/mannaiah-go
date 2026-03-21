@@ -1,10 +1,26 @@
 package domain
 
+const (
+	// BaseTagModeAny returns products that carry at least one of the specified base tags (union).
+	// This is the default when BaseTagMode is empty.
+	BaseTagModeAny = "any"
+	// BaseTagModeAll returns only products that carry every specified base tag (intersection).
+	BaseTagModeAll = "all"
+)
+
 // RecommendationQuery defines parameters for per-contact product recommendation resolution.
 type RecommendationQuery struct {
-	// BaseTag is the product base tag; only products with this tag are dynamic candidates.
-	// May be empty when PinnedProductIDs is non-empty (pinned-only mode).
+	// BaseTag is a single product base tag for backward compatibility.
+	// It is merged into BaseTags during Normalize — prefer BaseTags for new callers.
 	BaseTag string
+	// BaseTags is a list of product base tags. BaseTagMode controls whether candidates
+	// must match any tag (union) or all tags (intersection).
+	// At least one of BaseTag or BaseTags must be non-empty unless PinnedProductIDs is set.
+	BaseTags []string
+	// BaseTagMode controls multi-tag matching semantics.
+	// "any" (default) — union: products with at least one matching tag.
+	// "all"            — intersection: products that carry every tag in BaseTags.
+	BaseTagMode string
 	// UseContactAffinity enables affinity-driven filtering when true.
 	UseContactAffinity bool
 	// AffinityMinScorePct is the minimum relative affinity score threshold in [0, 100].
@@ -37,6 +53,38 @@ func (q *RecommendationQuery) Normalize() {
 	if q == nil {
 		return
 	}
+
+	// Merge BaseTag into BaseTags for unified processing.
+	if q.BaseTag != "" {
+		found := false
+		for _, t := range q.BaseTags {
+			if t == q.BaseTag {
+				found = true
+				break
+			}
+		}
+		if !found {
+			q.BaseTags = append([]string{q.BaseTag}, q.BaseTags...)
+		}
+	}
+
+	// Deduplicate BaseTags preserving order.
+	if len(q.BaseTags) > 1 {
+		seen := make(map[string]struct{}, len(q.BaseTags))
+		deduped := make([]string, 0, len(q.BaseTags))
+		for _, t := range q.BaseTags {
+			if _, ok := seen[t]; !ok {
+				seen[t] = struct{}{}
+				deduped = append(deduped, t)
+			}
+		}
+		q.BaseTags = deduped
+	}
+
+	if q.BaseTagMode != BaseTagModeAll {
+		q.BaseTagMode = BaseTagModeAny
+	}
+
 	if q.Realm == "" {
 		q.Realm = "default"
 	}

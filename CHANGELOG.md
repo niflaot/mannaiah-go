@@ -52,6 +52,21 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.8.0] - 2026-03-21
+- Add multi-tag union and intersection filtering for product recommendations:
+  - **`baseTags`** (comma-separated HTTP param) / **`BaseTags []string`** (domain/campaign) replaces single `baseTag` as the primary tag selector. `baseTag` is retained for backward compatibility and merged into `BaseTags` during `Normalize()`.
+  - **`baseTagMode`** controls matching semantics:
+    - `"any"` (default) — union: products with **at least one** of the specified tags (e.g. `baseTags=offer-tier-1,offer-tier-2` returns products tagged with either).
+    - `"all"` — intersection: products that carry **every** tag in `baseTags` (e.g. `baseTags=classic,offer-tier-1` returns only products tagged with both).
+  - SQL: union uses `DISTINCT product_id WHERE tag_id IN ?`; intersection uses `GROUP BY product_id HAVING COUNT(DISTINCT tag_id) = N`.
+  - If any tag in an `"all"` query does not exist, zero results are returned (no product can satisfy a missing tag).
+  - `BaseTags` deduplicated in `Normalize()` to prevent HAVING count mismatch on duplicate input.
+  - Port interface: `GetProductsByBaseTag` renamed to `GetProductsByBaseTags` with new `baseTags []string` and `baseTagMode string` parameters.
+  - Analytics OpenAPI bumped to `2.6.0`; Campaign OpenAPI bumped to `2.3.0`.
+  - Campaign `ProductBlock`: gains `baseTags` and `baseTagMode` JSON fields.
+  - `plan/RECOMMENDATION-GUIDE.md` updated with multi-tag documentation and examples.
+- Release version bumped to `v2.8.0`.
+
 ### [v2.7.0] - 2026-03-21
 - Enforce realm-mandatory price and image on product recommendations, add variation filtering and preference:
   - **Mandatory realm price**: price is now resolved from `product_datasheet_attributes` where `key='price'` for the requested realm. Products with no realm price attribute are excluded from results. Base `products.price` is retained as a raw field but not used for display.

@@ -92,14 +92,14 @@ func NewProductCatalogRepository(db *gorm.DB) (*ProductCatalogRepository, error)
 	return &ProductCatalogRepository{db: db}, nil
 }
 
-// GetProductsByBaseTag returns active products filtered by base tag, optional expanded tags,
-// optional category, excluded product IDs, and optional variation filter.
-func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]port.ProductCatalogEntry, error) {
+// GetProductsByBaseTags returns active products filtered by one or more base tags.
+// baseTagMode "any" = union (product has at least one tag); "all" = intersection (product has every tag).
+func (r *ProductCatalogRepository) GetProductsByBaseTags(ctx context.Context, baseTags []string, baseTagMode string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]port.ProductCatalogEntry, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 
-	candidateIDs, err := r.resolveProductIDs(ctx, baseTag, expandedTags, categoryID, excludeIDs, filterVariationIDs, limit*5)
+	candidateIDs, err := r.resolveProductIDs(ctx, baseTags, baseTagMode, expandedTags, categoryID, excludeIDs, filterVariationIDs, limit*5)
 	if err != nil {
 		return nil, err
 	}
@@ -372,30 +372,50 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 
 // resolveProductIDs returns product IDs matching the base tag filter, optional expanded tags,
 // optional category, excluded IDs, and optional variation filter.
-func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]string, error) {
-	// Resolve tag ID for baseTag.
-	var baseTagID int64
+// baseTagMode "any" = union (product has at least one tag); "all" = intersection (product has every tag).
+func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTags []string, baseTagMode string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]string, error) {
+	// Resolve tag IDs for all requested base tags.
+	var baseTagIDs []int64
 	if err := r.db.WithContext(ctx).
 		Table("tags").
 		Select("id").
-		Where("name = ? AND deleted_at IS NULL", baseTag).
-		Limit(1).
-		Scan(&baseTagID).Error; err != nil {
-		return nil, fmt.Errorf("resolve base tag id: %w", err)
+		Where("name IN ? AND deleted_at IS NULL", baseTags).
+		Pluck("id", &baseTagIDs).Error; err != nil {
+		return nil, fmt.Errorf("resolve base tag ids: %w", err)
 	}
-	if baseTagID == 0 {
+	if len(baseTagIDs) == 0 {
 		return nil, nil
 	}
 
-	// Get IDs of products with baseTag.
+	// Get candidate product IDs based on tag mode.
 	var baseTagProductIDs []string
-	if err := r.db.WithContext(ctx).
-		Table("product_tags").
-		Select("product_id").
-		Where("tag_id = ?", baseTagID).
-		Pluck("product_id", &baseTagProductIDs).Error; err != nil {
-		return nil, fmt.Errorf("resolve products with base tag: %w", err)
+	if baseTagMode == "all" {
+		// Intersection: products must carry every requested tag.
+		// If fewer tag IDs were found than tags requested, some tags don't exist —
+		// no product can satisfy the full intersection.
+		if len(baseTagIDs) < len(baseTags) {
+			return nil, nil
+		}
+		if err := r.db.WithContext(ctx).
+			Table("product_tags").
+			Select("product_id").
+			Where("tag_id IN ?", baseTagIDs).
+			Group("product_id").
+			Having("COUNT(DISTINCT tag_id) = ?", len(baseTagIDs)).
+			Pluck("product_id", &baseTagProductIDs).Error; err != nil {
+			return nil, fmt.Errorf("resolve products with all base tags: %w", err)
+		}
+	} else {
+		// Union: products with at least one of the requested tags.
+		if err := r.db.WithContext(ctx).
+			Table("product_tags").
+			Select("DISTINCT product_id").
+			Where("tag_id IN ?", baseTagIDs).
+			Pluck("product_id", &baseTagProductIDs).Error; err != nil {
+			return nil, fmt.Errorf("resolve products with any base tag: %w", err)
+		}
 	}
+
 	if len(baseTagProductIDs) == 0 {
 		return nil, nil
 	}

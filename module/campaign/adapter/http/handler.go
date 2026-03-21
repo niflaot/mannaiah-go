@@ -56,6 +56,8 @@ type Handler struct {
 type productBlockRequest struct {
 	ID                  string   `json:"id"`
 	BaseTag             string   `json:"baseTag"`
+	BaseTags            []string `json:"baseTags"`
+	BaseTagMode         string   `json:"baseTagMode"`
 	UseAffinity         bool     `json:"useAffinity"`
 	AffinityMinScorePct float64  `json:"affinityMinScorePct"`
 	CategoryID          string   `json:"categoryId"`
@@ -263,6 +265,8 @@ func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
 		blocks = append(blocks, domain.ProductBlock{
 			ID:                  r.ID,
 			BaseTag:             r.BaseTag,
+			BaseTags:            r.BaseTags,
+			BaseTagMode:         r.BaseTagMode,
 			UseAffinity:         r.UseAffinity,
 			AffinityMinScorePct: r.AffinityMinScorePct,
 			CategoryID:          r.CategoryID,

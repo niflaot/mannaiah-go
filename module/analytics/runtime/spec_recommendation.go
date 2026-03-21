@@ -26,7 +26,13 @@ func getRecommendationsOperation() *openapi3.Operation {
 		Parameters: openapi3.Parameters{
 			rfmPathParameter("contactId", "Contact ID"),
 			{Value: openapi3.NewQueryParameter("baseTag").
-				WithDescription("Required product base tag; only products with this tag are candidates. Required unless pinnedIds is set.").
+				WithDescription("Single base tag shorthand (backward compatible). Merged into baseTags. Required unless baseTags or pinnedIds is set.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("baseTags").
+				WithDescription("Comma-separated base tags. Use baseTagMode to control union vs intersection matching. Required unless baseTag or pinnedIds is set.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("baseTagMode").
+				WithDescription("Controls how baseTags are matched: \"any\" (default) — products with at least one tag (union); \"all\" — products that carry every tag (intersection).").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("categoryId").
 				WithDescription("Restrict candidates to one product category identifier.").
@@ -44,13 +50,13 @@ func getRecommendationsOperation() *openapi3.Operation {
 				WithDescription("Minimum affinity score percentile [0, 100] when affinity filtering is enabled (default: 0).").
 				WithSchema(openapi3.NewFloat64Schema())},
 			{Value: openapi3.NewQueryParameter("pinnedIds").
-				WithDescription("Comma-separated product IDs that are always returned first, bypassing base tag and affinity filters. BaseTag is optional when this is set.").
+				WithDescription("Comma-separated product IDs that are always returned first, bypassing base tag and affinity filters. baseTag/baseTags are optional when this is set.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("excludeIds").
 				WithDescription("Comma-separated product IDs that must never appear in results.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("filterVariationIds").
-				WithDescription("Comma-separated variation IDs; only products linked to at least one of these variations are returned (e.g. only show products available in black).").
+				WithDescription("Comma-separated variation IDs; only products linked to at least one of these variations are returned.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("preferVariationIds").
 				WithDescription("Comma-separated variation IDs; prefer the gallery image linked to a matching variation over the default first realm image.").
@@ -58,7 +64,7 @@ func getRecommendationsOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Ranked product recommendations.", "#/components/schemas/RecommendedProduct")),
-			openapi3.WithStatus(400, responseWithDescription("Bad Request - baseTag or pinnedIds is required.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request - baseTag, baseTags, or pinnedIds is required.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		),

@@ -48,7 +48,9 @@ func (h *RecommendationHandler) RegisterRoutes(router corehttp.Router) {
 // getRecommendations handles GET /analytics/recommendations/contacts/:contactId.
 //
 // Query parameters:
-//   - baseTag              (required unless pinnedIds set) product base tag to filter by
+//   - baseTag              (backward compat) single base tag; merged into baseTags
+//   - baseTags             comma-separated base tags (required unless pinnedIds is set)
+//   - baseTagMode          "any" (union, default) or "all" (intersection) for baseTags matching
 //   - categoryId           (optional) restrict to one category
 //   - realm                (optional) display realm, default "default"
 //   - limit                (optional) max results [1,10], default 3
@@ -62,17 +64,20 @@ func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 	contactID := strings.TrimSpace(ctx.Params("contactId"))
 
 	baseTag := strings.TrimSpace(ctx.Query("baseTag"))
+	baseTags := splitCommaSeparated(ctx.Query("baseTags"))
 	pinnedIDs := splitCommaSeparated(ctx.Query("pinnedIds"))
 	excludeIDs := splitCommaSeparated(ctx.Query("excludeIds"))
 
-	if baseTag == "" && len(pinnedIDs) == 0 {
-		return corehttp.NewAppError(400, "baseTag query parameter is required when pinnedIds is not set", nil)
+	if baseTag == "" && len(baseTags) == 0 && len(pinnedIDs) == 0 {
+		return corehttp.NewAppError(400, "baseTag or baseTags query parameter is required when pinnedIds is not set", nil)
 	}
 
 	useAffinity := strings.EqualFold(strings.TrimSpace(ctx.Query("affinity")), "true")
 
 	query := domain.RecommendationQuery{
 		BaseTag:             baseTag,
+		BaseTags:            baseTags,
+		BaseTagMode:         strings.TrimSpace(ctx.Query("baseTagMode")),
 		UseContactAffinity:  useAffinity,
 		AffinityMinScorePct: queryFloat64(ctx, "minScore", 0),
 		CategoryID:          strings.TrimSpace(ctx.Query("categoryId")),

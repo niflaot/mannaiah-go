@@ -44,13 +44,15 @@ type ProductGalleryEntry struct {
 
 // ProductCatalogStore defines read behavior over the product catalog for recommendation resolution.
 type ProductCatalogStore interface {
-	// GetProductsByBaseTag returns active products that have baseTag.
+	// GetProductsByBaseTags returns active products filtered by one or more base tags.
+	// baseTagMode "any" returns products with at least one matching tag (union).
+	// baseTagMode "all" returns only products that carry every tag (intersection).
 	// When expandedTags is non-empty, only products sharing at least one expanded tag are returned.
 	// When categoryID is non-empty, results are restricted to that category.
 	// When excludeIDs is non-empty, those product IDs are excluded.
 	// When filterVariationIDs is non-empty, only products with at least one matching variation are returned.
 	// Limit constrains the maximum number of returned entries.
-	GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]ProductCatalogEntry, error)
+	GetProductsByBaseTags(ctx context.Context, baseTags []string, baseTagMode string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]ProductCatalogEntry, error)
 	// GetProductsByIDs returns active products for the given product IDs, preserving input order.
 	// When filterVariationIDs is non-empty, only products with at least one matching variation are returned.
 	GetProductsByIDs(ctx context.Context, ids []string, filterVariationIDs []string) ([]ProductCatalogEntry, error)
