@@ -26,6 +26,12 @@ type ProductBlock struct {
 	PinnedProductIDs []string `json:"pinnedProductIds,omitempty"`
 	// ExcludeProductIDs lists product IDs that must never appear in results.
 	ExcludeProductIDs []string `json:"excludeProductIds,omitempty"`
+	// FilterVariationIDs restricts candidates to products that carry at least one of
+	// these variation IDs. Optional — when empty, no variation filtering is applied.
+	FilterVariationIDs []string `json:"filterVariationIds,omitempty"`
+	// PreferVariationIDs biases gallery image selection toward images linked to these
+	// variation IDs. Optional — when empty, the first realm-visible image is used.
+	PreferVariationIDs []string `json:"preferVariationIds,omitempty"`
 }
 
 // TemplateProduct defines one product entry available inside the campaign template context.

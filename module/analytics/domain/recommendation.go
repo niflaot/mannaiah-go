@@ -6,11 +6,8 @@ type RecommendationQuery struct {
 	// May be empty when PinnedProductIDs is non-empty (pinned-only mode).
 	BaseTag string
 	// UseContactAffinity enables affinity-driven filtering when true.
-	// When true, the resolver expands the contact's top affinity tags via tag_correlations
-	// and further filters to candidates that share at least one correlated tag.
 	UseContactAffinity bool
 	// AffinityMinScorePct is the minimum relative affinity score threshold in [0, 100].
-	// Only affinity tags at or above this percentile contribute to the expanded tag set.
 	AffinityMinScorePct float64
 	// CategoryID optionally restricts candidates to one product category identifier.
 	CategoryID string
@@ -20,12 +17,19 @@ type RecommendationQuery struct {
 	// Limit is the maximum number of products to return (clamped to [1, 10]).
 	Limit int
 	// PinnedProductIDs lists product IDs that are always included first in the result,
-	// regardless of base tag or affinity. Pinned products are loaded by ID and
-	// prepended before any dynamically ranked candidates.
+	// regardless of base tag or affinity.
 	PinnedProductIDs []string
-	// ExcludeProductIDs lists product IDs that must never appear in results,
-	// applied after pinned resolution and before dynamic candidate ranking.
+	// ExcludeProductIDs lists product IDs that must never appear in results.
 	ExcludeProductIDs []string
+	// FilterVariationIDs restricts candidates to products that carry at least one of
+	// these variation IDs (e.g. only show products available in black).
+	// Optional — when empty, no variation filtering is applied.
+	FilterVariationIDs []string
+	// PreferVariationIDs biases gallery image selection toward images linked to these
+	// variation IDs (e.g. prefer the black-variant photo). Falls back to the first
+	// realm-visible image when no variation-specific image is found.
+	// Optional — when empty, the first realm-visible image is used.
+	PreferVariationIDs []string
 }
 
 // Normalize canonicalizes query values before resolution.
@@ -50,7 +54,7 @@ type RecommendedProduct struct {
 	ID string `json:"id"`
 	// Name is the realm-resolved display name.
 	Name string `json:"name"`
-	// Price is the product price (zero if unset).
+	// Price is the realm-resolved price from the product datasheet attributes.
 	Price float64 `json:"price"`
 	// ImageURL is the public URL of the first realm-matched gallery image.
 	ImageURL string `json:"imageUrl"`

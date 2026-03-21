@@ -42,6 +42,8 @@ func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, blo
 		Limit:               block.Limit,
 		PinnedProductIDs:    block.PinnedProductIDs,
 		ExcludeProductIDs:   block.ExcludeProductIDs,
+		FilterVariationIDs:  block.FilterVariationIDs,
+		PreferVariationIDs:  block.PreferVariationIDs,
 	}
 
 	recommended, err := p.service.Recommend(ctx, contactID, query)

@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 	"mannaiah/module/analytics/port"
@@ -18,7 +21,7 @@ type ProductCatalogRepository struct {
 type productBaseRecord struct {
 	// ID is the product identifier.
 	ID string `gorm:"column:id"`
-	// Price is the optional product price.
+	// Price is the optional product base price.
 	Price *float64 `gorm:"column:price"`
 }
 
@@ -32,12 +35,22 @@ type productTagNameRecord struct {
 
 // productDatasheetRecord holds a product_id → realm/name join result.
 type productDatasheetRecord struct {
+	// ID is the datasheet row identifier, used to load price attributes.
+	ID uint `gorm:"column:id"`
 	// ProductID is the owning product identifier.
 	ProductID string `gorm:"column:product_id"`
 	// Realm is the datasheet realm identifier.
 	Realm string `gorm:"column:realm"`
 	// Name is the realm-specific product display name.
 	Name string `gorm:"column:name"`
+}
+
+// productDatasheetPriceRecord holds a datasheet_id → price value_json join result.
+type productDatasheetPriceRecord struct {
+	// DatasheetID is the owning datasheet row identifier.
+	DatasheetID uint `gorm:"column:datasheet_id"`
+	// ValueJSON is the raw JSON-encoded attribute value for key='price'.
+	ValueJSON string `gorm:"column:value_json"`
 }
 
 // productGalleryFlatRecord holds a gallery item row with included realms joined.
@@ -54,6 +67,22 @@ type productGalleryFlatRecord struct {
 	Realm string `gorm:"column:realm"`
 }
 
+// productGalleryVariationRow holds a gallery_item_id → variation_id join result.
+type productGalleryVariationRow struct {
+	// GalleryItemID is the owning gallery item identifier.
+	GalleryItemID uint `gorm:"column:gallery_item_id"`
+	// VariationID is the linked variation identifier.
+	VariationID string `gorm:"column:variation_id"`
+}
+
+// productVariationLinkRow holds a product_id → variation_id join result.
+type productVariationLinkRow struct {
+	// ProductID is the owning product identifier.
+	ProductID string `gorm:"column:product_id"`
+	// VariationID is the linked variation identifier.
+	VariationID string `gorm:"column:variation_id"`
+}
+
 // NewProductCatalogRepository creates GORM-backed product catalog repositories.
 func NewProductCatalogRepository(db *gorm.DB) (*ProductCatalogRepository, error) {
 	if db == nil {
@@ -64,14 +93,13 @@ func NewProductCatalogRepository(db *gorm.DB) (*ProductCatalogRepository, error)
 }
 
 // GetProductsByBaseTag returns active products filtered by base tag, optional expanded tags,
-// optional category, and optional excluded product IDs.
-func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, limit int) ([]port.ProductCatalogEntry, error) {
+// optional category, excluded product IDs, and optional variation filter.
+func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]port.ProductCatalogEntry, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 
-	// Step 1: resolve candidate product IDs (excluding pinned + excluded).
-	candidateIDs, err := r.resolveProductIDs(ctx, baseTag, expandedTags, categoryID, excludeIDs, limit*5)
+	candidateIDs, err := r.resolveProductIDs(ctx, baseTag, expandedTags, categoryID, excludeIDs, filterVariationIDs, limit*5)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +120,7 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 }
 
 // GetProductsByIDs returns active products for the given product IDs, preserving input order.
-func (r *ProductCatalogRepository) GetProductsByIDs(ctx context.Context, ids []string) ([]port.ProductCatalogEntry, error) {
+func (r *ProductCatalogRepository) GetProductsByIDs(ctx context.Context, ids []string, filterVariationIDs []string) ([]port.ProductCatalogEntry, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -106,6 +134,33 @@ func (r *ProductCatalogRepository) GetProductsByIDs(ctx context.Context, ids []s
 		Pluck("id", &activeIDs).Error; err != nil {
 		return nil, fmt.Errorf("filter active pinned products: %w", err)
 	}
+	if len(activeIDs) == 0 {
+		return nil, nil
+	}
+
+	// Filter by variation if provided.
+	if len(filterVariationIDs) > 0 {
+		var varMatching []string
+		if err := r.db.WithContext(ctx).
+			Table("product_variation_links").
+			Select("DISTINCT product_id").
+			Where("product_id IN ? AND variation_id IN ?", activeIDs, filterVariationIDs).
+			Pluck("product_id", &varMatching).Error; err != nil {
+			return nil, fmt.Errorf("filter pinned products by variation: %w", err)
+		}
+		varSet := make(map[string]struct{}, len(varMatching))
+		for _, id := range varMatching {
+			varSet[id] = struct{}{}
+		}
+		filtered := make([]string, 0, len(varMatching))
+		for _, id := range activeIDs {
+			if _, ok := varSet[id]; ok {
+				filtered = append(filtered, id)
+			}
+		}
+		activeIDs = filtered
+	}
+
 	if len(activeIDs) == 0 {
 		return nil, nil
 	}
@@ -125,8 +180,9 @@ func (r *ProductCatalogRepository) GetProductsByIDs(ctx context.Context, ids []s
 	return r.loadProductEntries(ctx, ordered)
 }
 
-// loadProductEntries loads tags, datasheets, and gallery for the given product IDs
-// and assembles ProductCatalogEntry values preserving the input id order.
+// loadProductEntries loads tags, datasheets (with realm price), gallery (with realm + variation links),
+// and product variation links for the given product IDs, assembling ProductCatalogEntry values
+// preserving the input id order.
 func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids []string) ([]port.ProductCatalogEntry, error) {
 	// Load base records.
 	baseRecords := make([]productBaseRecord, 0, len(ids))
@@ -141,7 +197,6 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		return nil, nil
 	}
 
-	// Index base records by ID for fast lookup.
 	baseByID := make(map[string]productBaseRecord, len(baseRecords))
 	for _, rec := range baseRecords {
 		baseByID[rec.ID] = rec
@@ -158,15 +213,37 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		return nil, fmt.Errorf("load product tags for catalog: %w", err)
 	}
 
-	// Load datasheets.
+	// Load datasheets (include id for price attribute lookup).
 	datasheetRows := make([]productDatasheetRecord, 0)
 	if err := r.db.WithContext(ctx).
 		Table("product_datasheets").
-		Select("product_id, realm, name").
+		Select("id, product_id, realm, name").
 		Where("product_id IN ?", ids).
 		Order("product_id ASC, position ASC").
 		Scan(&datasheetRows).Error; err != nil {
 		return nil, fmt.Errorf("load product datasheets for catalog: %w", err)
+	}
+
+	// Load datasheet price attributes (key='price') for all loaded datasheets.
+	datasheetPrices := make(map[uint]*float64)
+	if len(datasheetRows) > 0 {
+		datasheetIDs := make([]uint, 0, len(datasheetRows))
+		for _, ds := range datasheetRows {
+			datasheetIDs = append(datasheetIDs, ds.ID)
+		}
+		priceRows := make([]productDatasheetPriceRecord, 0)
+		if err := r.db.WithContext(ctx).
+			Table("product_datasheet_attributes").
+			Select("datasheet_id, value_json").
+			Where("datasheet_id IN ? AND `key` = 'price'", datasheetIDs).
+			Scan(&priceRows).Error; err != nil {
+			return nil, fmt.Errorf("load product datasheet prices for catalog: %w", err)
+		}
+		for _, pr := range priceRows {
+			if p := parsePrice(pr.ValueJSON); p != nil {
+				datasheetPrices[pr.DatasheetID] = p
+			}
+		}
 	}
 
 	// Load gallery items + included realms.
@@ -181,20 +258,60 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		return nil, fmt.Errorf("load product gallery for catalog: %w", err)
 	}
 
-	// Assemble lookup maps.
+	// Collect distinct gallery item IDs for variation lookup.
+	galleryItemIDs := make([]uint, 0)
+	seenGalleryItems := make(map[uint]struct{})
+	for _, row := range galleryRows {
+		if _, ok := seenGalleryItems[row.GalleryItemID]; !ok {
+			seenGalleryItems[row.GalleryItemID] = struct{}{}
+			galleryItemIDs = append(galleryItemIDs, row.GalleryItemID)
+		}
+	}
+
+	// Load gallery variation links.
+	galleryVariationsByItem := make(map[uint][]string)
+	if len(galleryItemIDs) > 0 {
+		galleryVarRows := make([]productGalleryVariationRow, 0)
+		if err := r.db.WithContext(ctx).
+			Table("product_gallery_variations").
+			Select("gallery_item_id, variation_id").
+			Where("gallery_item_id IN ?", galleryItemIDs).
+			Scan(&galleryVarRows).Error; err != nil {
+			return nil, fmt.Errorf("load product gallery variations for catalog: %w", err)
+		}
+		for _, row := range galleryVarRows {
+			galleryVariationsByItem[row.GalleryItemID] = append(galleryVariationsByItem[row.GalleryItemID], row.VariationID)
+		}
+	}
+
+	// Load product-level variation links.
+	variationLinkRows := make([]productVariationLinkRow, 0)
+	if err := r.db.WithContext(ctx).
+		Table("product_variation_links").
+		Select("product_id, variation_id").
+		Where("product_id IN ?", ids).
+		Scan(&variationLinkRows).Error; err != nil {
+		return nil, fmt.Errorf("load product variation links for catalog: %w", err)
+	}
+
+	// Assemble per-product tag map.
 	tagsByProduct := make(map[string][]string, len(ids))
 	for _, row := range tagRows {
 		tagsByProduct[row.ProductID] = append(tagsByProduct[row.ProductID], row.TagName)
 	}
 
+	// Assemble per-product datasheet map (with parsed price).
 	datasheetsByProduct := make(map[string][]port.ProductDatasheetEntry, len(ids))
 	for _, row := range datasheetRows {
+		price := datasheetPrices[row.ID]
 		datasheetsByProduct[row.ProductID] = append(datasheetsByProduct[row.ProductID], port.ProductDatasheetEntry{
 			Realm: row.Realm,
 			Name:  row.Name,
+			Price: price,
 		})
 	}
 
+	// Assemble per-product gallery map, deduplicating gallery items and merging included realms.
 	type galleryKey struct {
 		productID     string
 		galleryItemID uint
@@ -211,8 +328,9 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 			}
 		} else {
 			entry := port.ProductGalleryEntry{
-				AssetID: row.AssetID,
-				IsMain:  row.IsMain,
+				AssetID:      row.AssetID,
+				IsMain:       row.IsMain,
+				VariationIDs: galleryVariationsByItem[row.GalleryItemID],
 			}
 			if row.Realm != "" {
 				entry.IncludedRealms = []string{row.Realm}
@@ -220,6 +338,12 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 			itemSeen[key] = len(galleryByProduct[row.ProductID])
 			galleryByProduct[row.ProductID] = append(galleryByProduct[row.ProductID], entry)
 		}
+	}
+
+	// Assemble per-product variation map.
+	variationsByProduct := make(map[string][]string)
+	for _, row := range variationLinkRows {
+		variationsByProduct[row.ProductID] = append(variationsByProduct[row.ProductID], row.VariationID)
 	}
 
 	// Build result preserving input order.
@@ -234,11 +358,12 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 			price = *rec.Price
 		}
 		entries = append(entries, port.ProductCatalogEntry{
-			ID:         rec.ID,
-			Price:      price,
-			Tags:       tagsByProduct[rec.ID],
-			Datasheets: datasheetsByProduct[rec.ID],
-			Gallery:    galleryByProduct[rec.ID],
+			ID:           rec.ID,
+			Price:        price,
+			Tags:         tagsByProduct[rec.ID],
+			VariationIDs: variationsByProduct[rec.ID],
+			Datasheets:   datasheetsByProduct[rec.ID],
+			Gallery:      galleryByProduct[rec.ID],
 		})
 	}
 
@@ -246,8 +371,8 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 }
 
 // resolveProductIDs returns product IDs matching the base tag filter, optional expanded tags,
-// optional category, and excluding the given product IDs.
-func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, limit int) ([]string, error) {
+// optional category, excluded IDs, and optional variation filter.
+func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]string, error) {
 	// Resolve tag ID for baseTag.
 	var baseTagID int64
 	if err := r.db.WithContext(ctx).
@@ -321,6 +446,23 @@ func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTa
 		return nil, nil
 	}
 
+	// Filter by variation if provided.
+	if len(filterVariationIDs) > 0 {
+		var varFilteredIDs []string
+		if err := r.db.WithContext(ctx).
+			Table("product_variation_links").
+			Select("DISTINCT product_id").
+			Where("product_id IN ? AND variation_id IN ?", candidateIDs, filterVariationIDs).
+			Pluck("product_id", &varFilteredIDs).Error; err != nil {
+			return nil, fmt.Errorf("filter products by variation: %w", err)
+		}
+		candidateIDs = varFilteredIDs
+	}
+
+	if len(candidateIDs) == 0 {
+		return nil, nil
+	}
+
 	// Apply soft-delete filter, exclusion list, and limit.
 	q := r.db.WithContext(ctx).
 		Table("products").
@@ -336,4 +478,27 @@ func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTa
 	}
 
 	return result, nil
+}
+
+// parsePrice attempts to parse a JSON-encoded attribute value as float64.
+// Supports both JSON number (42.90) and JSON string ("42.90") representations.
+func parsePrice(valueJSON string) *float64 {
+	valueJSON = strings.TrimSpace(valueJSON)
+	if valueJSON == "" {
+		return nil
+	}
+
+	var f float64
+	if err := json.Unmarshal([]byte(valueJSON), &f); err == nil {
+		return &f
+	}
+
+	var s string
+	if err := json.Unmarshal([]byte(valueJSON), &s); err == nil {
+		if parsed, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return &parsed
+		}
+	}
+
+	return nil
 }

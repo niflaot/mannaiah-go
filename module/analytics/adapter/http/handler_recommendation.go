@@ -48,14 +48,16 @@ func (h *RecommendationHandler) RegisterRoutes(router corehttp.Router) {
 // getRecommendations handles GET /analytics/recommendations/contacts/:contactId.
 //
 // Query parameters:
-//   - baseTag     (required unless pinnedIds set) product base tag to filter by
-//   - categoryId  (optional) restrict to one category
-//   - realm       (optional) display realm, default "default"
-//   - limit       (optional) max results [1,10], default 3
-//   - affinity    (optional) "true" to enable contact-affinity filtering
-//   - minScore    (optional) minimum affinity score percentile [0,100], default 0
-//   - pinnedIds   (optional) comma-separated product IDs always shown first
-//   - excludeIds  (optional) comma-separated product IDs never shown
+//   - baseTag              (required unless pinnedIds set) product base tag to filter by
+//   - categoryId           (optional) restrict to one category
+//   - realm                (optional) display realm, default "default"
+//   - limit                (optional) max results [1,10], default 3
+//   - affinity             (optional) "true" to enable contact-affinity filtering
+//   - minScore             (optional) minimum affinity score percentile [0,100], default 0
+//   - pinnedIds            (optional) comma-separated product IDs always shown first
+//   - excludeIds           (optional) comma-separated product IDs never shown
+//   - filterVariationIds   (optional) comma-separated variation IDs; only products with ≥1 match returned
+//   - preferVariationIds   (optional) comma-separated variation IDs; prefer gallery images for these variations
 func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 	contactID := strings.TrimSpace(ctx.Params("contactId"))
 
@@ -78,6 +80,8 @@ func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 		Limit:               queryInt(ctx, "limit", 3),
 		PinnedProductIDs:    pinnedIDs,
 		ExcludeProductIDs:   excludeIDs,
+		FilterVariationIDs:  splitCommaSeparated(ctx.Query("filterVariationIds")),
+		PreferVariationIDs:  splitCommaSeparated(ctx.Query("preferVariationIds")),
 	}
 
 	products, err := h.service.Recommend(ctx.Context(), contactID, query)

@@ -26,8 +26,7 @@ func getRecommendationsOperation() *openapi3.Operation {
 		Parameters: openapi3.Parameters{
 			rfmPathParameter("contactId", "Contact ID"),
 			{Value: openapi3.NewQueryParameter("baseTag").
-				WithRequired(true).
-				WithDescription("Required product base tag; only products with this tag are candidates.").
+				WithDescription("Required product base tag; only products with this tag are candidates. Required unless pinnedIds is set.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("categoryId").
 				WithDescription("Restrict candidates to one product category identifier.").
@@ -50,10 +49,16 @@ func getRecommendationsOperation() *openapi3.Operation {
 			{Value: openapi3.NewQueryParameter("excludeIds").
 				WithDescription("Comma-separated product IDs that must never appear in results.").
 				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("filterVariationIds").
+				WithDescription("Comma-separated variation IDs; only products linked to at least one of these variations are returned (e.g. only show products available in black).").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("preferVariationIds").
+				WithDescription("Comma-separated variation IDs; prefer the gallery image linked to a matching variation over the default first realm image.").
+				WithSchema(openapi3.NewStringSchema())},
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Ranked product recommendations.", "#/components/schemas/RecommendedProduct")),
-			openapi3.WithStatus(400, responseWithDescription("Bad Request - baseTag is required.")),
+			openapi3.WithStatus(400, responseWithDescription("Bad Request - baseTag or pinnedIds is required.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		),

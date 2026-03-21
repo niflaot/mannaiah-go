@@ -52,6 +52,30 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.7.0] - 2026-03-21
+- Enforce realm-mandatory price and image on product recommendations, add variation filtering and preference:
+  - **Mandatory realm price**: price is now resolved from `product_datasheet_attributes` where `key='price'` for the requested realm. Products with no realm price attribute are excluded from results. Base `products.price` is retained as a raw field but not used for display.
+  - **Mandatory realm image**: the first gallery image visible in the requested realm is required. Products with no realm-visible gallery item (checked via `product_gallery_included_realms`) are excluded from results.
+  - **Gallery realm visibility**: a gallery item is visible in realm R when `product_gallery_included_realms` has no rows for it (all-realms) or has a row with `realm = R`.
+  - **`ProductGalleryEntry.VariationIDs`**: gallery item variation links loaded from `product_gallery_variations`; allow per-variation image selection.
+  - **`ProductCatalogEntry.VariationIDs`**: product-level variation links loaded from `product_variation_links`.
+  - **`ProductDatasheetEntry.Price *float64`**: realm-specific price parsed from `product_datasheet_attributes` (supports JSON number and JSON string representations).
+  - **`RecommendationQuery.FilterVariationIDs`**: when non-empty, only products carrying at least one matching variation ID are candidates (SQL filter via `product_variation_links`). Applied to both `GetProductsByBaseTag` and `GetProductsByIDs`.
+  - **`RecommendationQuery.PreferVariationIDs`**: when non-empty, image selection prefers gallery items linked to a matching variation before falling back to the first realm-visible item.
+  - **`ProductCatalogStore` interface extended**: `GetProductsByBaseTag` gains `filterVariationIDs []string` parameter; `GetProductsByIDs` gains `filterVariationIDs []string` parameter.
+  - **HTTP endpoint** `GET /analytics/recommendations/contacts/:contactId`: new `filterVariationIds` and `preferVariationIds` query params (comma-separated).
+  - Analytics OpenAPI version bumped to `2.5.0`.
+  - **Campaign `ProductBlock`**: gains `filterVariationIds` and `preferVariationIds` fields; passed through HTTP handler and affinity adapter.
+  - Campaign OpenAPI version bumped to `2.2.0`.
+  - Noop store updated for new interface signatures.
+  - **`plan/RECOMMENDATION-GUIDE.md`** created with full recommendation system reference.
+- Release version references bumped to `v2.7.0`.
+
+### [v2.6.2] - 2026-03-21
+- Fix product gallery query in recommendation catalog repository:
+  - Table name was `product_gallery` (non-existent); corrected to `product_gallery_items`.
+- Release version references bumped to `v2.6.2`.
+
 ### [v2.6.1] - 2026-03-20
 - Extend campaign product blocks with pinned and excluded product controls:
   - **`pinnedProductIDs`** on `ProductBlock` and `RecommendationQuery`: specific product IDs always included first in the block result, loaded via a new `ProductCatalogStore.GetProductsByIDs` method, bypassing baseTag/affinity filtering. `BaseTag` is now optional when `pinnedProductIDs` is non-empty (enables editorial "exactly these products" blocks).

@@ -86,7 +86,7 @@ func (s *RecommendationService) SetAssetResolver(resolver port.AssetURLResolver)
 //  3. If BaseTag is set, fetch contact tag affinity and expand via tag_correlations.
 //  4. Query dynamic candidates (excluded IDs removed), rank by affinity score.
 //  5. Combine: pinned first, then dynamic up to Limit total.
-//  6. Resolve realm-aware display data (name, image URL).
+//  6. For each product: resolve realm price and realm image — skip if either is missing.
 func (s *RecommendationService) Recommend(ctx context.Context, contactID string, query domain.RecommendationQuery) ([]domain.RecommendedProduct, error) {
 	query.Normalize()
 
@@ -98,7 +98,7 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 	var pinnedEntries []port.ProductCatalogEntry
 	if len(query.PinnedProductIDs) > 0 {
 		var err error
-		pinnedEntries, err = s.catalogStore.GetProductsByIDs(ctx, query.PinnedProductIDs)
+		pinnedEntries, err = s.catalogStore.GetProductsByIDs(ctx, query.PinnedProductIDs, query.FilterVariationIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +157,7 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		}
 
 		// Step 4: fetch and rank dynamic candidates.
-		candidates, err := s.catalogStore.GetProductsByBaseTag(ctx, query.BaseTag, expandedTags, query.CategoryID, excludeIDs, dynamicLimit*3)
+		candidates, err := s.catalogStore.GetProductsByBaseTag(ctx, query.BaseTag, expandedTags, query.CategoryID, excludeIDs, query.FilterVariationIDs, dynamicLimit*3)
 		if err != nil {
 			return nil, err
 		}
@@ -184,14 +184,19 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		return nil, nil
 	}
 
-	// Step 6: resolve display data.
+	// Step 6: resolve realm price and realm image; skip products missing either.
 	results := make([]domain.RecommendedProduct, 0, len(all))
 	for _, c := range all {
+		price, hasPrice := resolveRealmPrice(c.Datasheets, query.Realm)
+		imageURL, hasImage := resolveRealmImage(ctx, c.Gallery, query.Realm, query.PreferVariationIDs, s.assetResolver)
+		if !hasPrice || !hasImage {
+			continue
+		}
 		results = append(results, domain.RecommendedProduct{
 			ID:       c.ID,
 			Name:     resolveDatasheetName(c.Datasheets, query.Realm),
-			Price:    c.Price,
-			ImageURL: resolveGalleryImage(ctx, c.Gallery, query.Realm, s.assetResolver),
+			Price:    price,
+			ImageURL: imageURL,
 		})
 	}
 
@@ -224,41 +229,66 @@ func resolveDatasheetName(datasheets []port.ProductDatasheetEntry, realm string)
 	return fallback
 }
 
-// resolveGalleryImage returns the resolved URL for the first gallery image
-// that is visible in the requested realm. Falls back to the main image,
-// then the first image, if no realm match is found.
-func resolveGalleryImage(ctx context.Context, gallery []port.ProductGalleryEntry, realm string, resolver port.AssetURLResolver) string {
-	var mainAsset, firstAsset string
+// resolveRealmPrice returns the price from the first datasheet matching the realm.
+// Returns (0, false) when no realm datasheet has a price attribute — the product must be excluded.
+func resolveRealmPrice(datasheets []port.ProductDatasheetEntry, realm string) (float64, bool) {
+	for _, d := range datasheets {
+		if strings.EqualFold(d.Realm, realm) && d.Price != nil {
+			return *d.Price, true
+		}
+	}
 
+	return 0, false
+}
+
+// resolveRealmImage returns the URL of the best gallery image visible in the requested realm.
+//
+// Selection order:
+//  1. First realm-visible image linked to a preferred variation (if PreferVariationIDs is set).
+//  2. First realm-visible image regardless of variation.
+//
+// An image is "visible in realm R" when its IncludedRealms is empty (all realms) or contains R.
+// Returns ("", false) when no realm-visible image exists — the product must be excluded.
+func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, realm string, preferVariationIDs []string, resolver port.AssetURLResolver) (string, bool) {
+	// Pass 1: prefer variation-specific image visible in the realm.
+	if len(preferVariationIDs) > 0 {
+		preferSet := make(map[string]struct{}, len(preferVariationIDs))
+		for _, v := range preferVariationIDs {
+			preferSet[v] = struct{}{}
+		}
+		for _, g := range gallery {
+			if !isVisibleInRealm(g, realm) {
+				continue
+			}
+			for _, vid := range g.VariationIDs {
+				if _, ok := preferSet[vid]; ok {
+					return resolver.ResolveURL(ctx, g.AssetID), true
+				}
+			}
+		}
+	}
+
+	// Pass 2: first realm-visible image regardless of variation.
 	for _, g := range gallery {
-		if firstAsset == "" {
-			firstAsset = g.AssetID
-		}
-		if g.IsMain && mainAsset == "" {
-			mainAsset = g.AssetID
-		}
-
-		// An empty IncludedRealms slice means the image is visible in all realms.
-		if len(g.IncludedRealms) == 0 {
-			if g.IsMain {
-				return resolver.ResolveURL(ctx, g.AssetID)
-			}
-			continue
-		}
-
-		for _, r := range g.IncludedRealms {
-			if strings.EqualFold(r, realm) {
-				return resolver.ResolveURL(ctx, g.AssetID)
-			}
+		if isVisibleInRealm(g, realm) {
+			return resolver.ResolveURL(ctx, g.AssetID), true
 		}
 	}
 
-	if mainAsset != "" {
-		return resolver.ResolveURL(ctx, mainAsset)
+	return "", false
+}
+
+// isVisibleInRealm reports whether a gallery entry is visible in the given realm.
+// A gallery item with no IncludedRealms rows is visible everywhere.
+func isVisibleInRealm(g port.ProductGalleryEntry, realm string) bool {
+	if len(g.IncludedRealms) == 0 {
+		return true
 	}
-	if firstAsset != "" {
-		return resolver.ResolveURL(ctx, firstAsset)
+	for _, r := range g.IncludedRealms {
+		if strings.EqualFold(r, realm) {
+			return true
+		}
 	}
 
-	return ""
+	return false
 }

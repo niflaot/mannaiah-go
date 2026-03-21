@@ -63,6 +63,8 @@ type productBlockRequest struct {
 	Limit               int      `json:"limit"`
 	PinnedProductIDs    []string `json:"pinnedProductIds"`
 	ExcludeProductIDs   []string `json:"excludeProductIds"`
+	FilterVariationIDs  []string `json:"filterVariationIds"`
+	PreferVariationIDs  []string `json:"preferVariationIds"`
 }
 
 // createRequest defines create request payload values.
@@ -268,6 +270,8 @@ func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
 			Limit:               r.Limit,
 			PinnedProductIDs:    r.PinnedProductIDs,
 			ExcludeProductIDs:   r.ExcludeProductIDs,
+			FilterVariationIDs:  r.FilterVariationIDs,
+			PreferVariationIDs:  r.PreferVariationIDs,
 		})
 	}
 	return blocks
