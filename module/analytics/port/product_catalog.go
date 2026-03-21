@@ -39,6 +39,10 @@ type ProductCatalogStore interface {
 	// GetProductsByBaseTag returns active products that have baseTag.
 	// When expandedTags is non-empty, only products that also have at least one expanded tag are returned.
 	// When categoryID is non-empty, results are restricted to that category.
+	// When excludeIDs is non-empty, those product IDs are excluded from results.
 	// Limit constrains the maximum number of returned entries.
-	GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, limit int) ([]ProductCatalogEntry, error)
+	GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, limit int) ([]ProductCatalogEntry, error)
+	// GetProductsByIDs returns active products for the given product IDs, preserving input order.
+	// Used to load pinned products. Returns only IDs that exist and are not soft-deleted.
+	GetProductsByIDs(ctx context.Context, ids []string) ([]ProductCatalogEntry, error)
 }

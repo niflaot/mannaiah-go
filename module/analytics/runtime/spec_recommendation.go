@@ -44,6 +44,12 @@ func getRecommendationsOperation() *openapi3.Operation {
 			{Value: openapi3.NewQueryParameter("minScore").
 				WithDescription("Minimum affinity score percentile [0, 100] when affinity filtering is enabled (default: 0).").
 				WithSchema(openapi3.NewFloat64Schema())},
+			{Value: openapi3.NewQueryParameter("pinnedIds").
+				WithDescription("Comma-separated product IDs that are always returned first, bypassing base tag and affinity filters. BaseTag is optional when this is set.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("excludeIds").
+				WithDescription("Comma-separated product IDs that must never appear in results.").
+				WithSchema(openapi3.NewStringSchema())},
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Ranked product recommendations.", "#/components/schemas/RecommendedProduct")),

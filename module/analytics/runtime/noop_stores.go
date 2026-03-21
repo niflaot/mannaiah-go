@@ -67,6 +67,10 @@ type noopProductCatalogStore struct{}
 
 var _ port.ProductCatalogStore = (*noopProductCatalogStore)(nil)
 
-func (n *noopProductCatalogStore) GetProductsByBaseTag(_ context.Context, _ string, _ []string, _ string, _ int) ([]port.ProductCatalogEntry, error) {
+func (n *noopProductCatalogStore) GetProductsByBaseTag(_ context.Context, _ string, _ []string, _ string, _ []string, _ int) ([]port.ProductCatalogEntry, error) {
+	return nil, nil
+}
+
+func (n *noopProductCatalogStore) GetProductsByIDs(_ context.Context, _ []string) ([]port.ProductCatalogEntry, error) {
 	return nil, nil
 }

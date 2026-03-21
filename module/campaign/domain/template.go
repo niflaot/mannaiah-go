@@ -7,18 +7,25 @@ import "time"
 type ProductBlock struct {
 	// ID is the block identifier used as the key in the template Products map.
 	ID string `json:"id"`
-	// BaseTag is the required product base tag; only products with this tag are candidates.
+	// BaseTag is the product base tag; only products with this tag are dynamic candidates.
+	// May be empty when PinnedProductIDs is non-empty (pinned-only block).
 	BaseTag string `json:"baseTag"`
 	// UseAffinity enables contact-affinity-driven filtering when true.
 	UseAffinity bool `json:"useAffinity"`
 	// AffinityMinScorePct is the minimum relative affinity score threshold in [0, 100].
 	AffinityMinScorePct float64 `json:"affinityMinScorePct"`
-	// CategoryID optionally restricts candidates to one product category identifier.
+	// CategoryID optionally restricts dynamic candidates to one product category identifier.
 	CategoryID string `json:"categoryId"`
 	// Realm identifies which product datasheet and gallery to use for name and image resolution.
 	Realm string `json:"realm"`
 	// Limit is the maximum number of products to return (clamped to [1, 10]).
 	Limit int `json:"limit"`
+	// PinnedProductIDs lists product IDs that are always included first in results,
+	// regardless of base tag or affinity. Pinned products are loaded by ID and
+	// prepended before any dynamically ranked candidates.
+	PinnedProductIDs []string `json:"pinnedProductIds,omitempty"`
+	// ExcludeProductIDs lists product IDs that must never appear in results.
+	ExcludeProductIDs []string `json:"excludeProductIds,omitempty"`
 }
 
 // TemplateProduct defines one product entry available inside the campaign template context.

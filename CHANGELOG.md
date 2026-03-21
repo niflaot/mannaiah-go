@@ -52,6 +52,19 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.6.1] - 2026-03-20
+- Extend campaign product blocks with pinned and excluded product controls:
+  - **`pinnedProductIDs`** on `ProductBlock` and `RecommendationQuery`: specific product IDs always included first in the block result, loaded via a new `ProductCatalogStore.GetProductsByIDs` method, bypassing baseTag/affinity filtering. `BaseTag` is now optional when `pinnedProductIDs` is non-empty (enables editorial "exactly these products" blocks).
+  - **`excludeProductIDs`** on `ProductBlock` and `RecommendationQuery`: product IDs that must never appear in results; applied at SQL level (`WHERE id NOT IN ?`) in `resolveProductIDs` and merged with loaded pinned IDs to prevent duplication between pinned and dynamic slots.
+  - **`ProductCatalogStore.GetProductsByIDs`** (`port/product_catalog.go`): new interface method loading products by explicit ID list; confirms active records, restores input order, reuses shared `loadProductEntries` GORM helper.
+  - **`RecommendationService.Recommend` rewritten**: (1) load pinned products; (2) build unified `excludeSet` = `ExcludeProductIDs` ∪ pinned IDs; (3) compute `dynamicLimit = Limit - len(pinned)`; (4) if `dynamicLimit > 0 && BaseTag != ""` run affinity → correlation → catalog with `excludeIDs`; (5) combine and cap at `Limit`.
+  - **HTTP endpoint** `GET /analytics/recommendations/contacts/:contactId`: new `pinnedIds` and `excludeIds` query params (comma-separated); validation now returns 400 only when both `baseTag` and `pinnedIds` are empty.
+  - **Noop store** updated: `noopProductCatalogStore.GetProductsByIDs` added.
+  - Analytics OpenAPI version bumped to `2.4.1`.
+  - Campaign HTTP handler: `productBlockRequest` extended with `pinnedProductIds` and `excludeProductIds`; `mapProductBlockRequests` propagates both fields.
+  - Campaign OpenAPI version bumped to `2.1.1`.
+- Release version references bumped to `v2.6.1`.
+
 ### [v2.6.0] - 2026-03-20
 - Ship campaign personalization engine and channel-agnostic recommendation API:
   - **Analytics: RecommendationService** (`module/analytics/application/recommendation`):

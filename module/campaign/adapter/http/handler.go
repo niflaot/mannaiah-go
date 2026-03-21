@@ -54,13 +54,15 @@ type Handler struct {
 
 // productBlockRequest defines a product recommendation block in create/update requests.
 type productBlockRequest struct {
-	ID                  string  `json:"id"`
-	BaseTag             string  `json:"baseTag"`
-	UseAffinity         bool    `json:"useAffinity"`
-	AffinityMinScorePct float64 `json:"affinityMinScorePct"`
-	CategoryID          string  `json:"categoryId"`
-	Realm               string  `json:"realm"`
-	Limit               int     `json:"limit"`
+	ID                  string   `json:"id"`
+	BaseTag             string   `json:"baseTag"`
+	UseAffinity         bool     `json:"useAffinity"`
+	AffinityMinScorePct float64  `json:"affinityMinScorePct"`
+	CategoryID          string   `json:"categoryId"`
+	Realm               string   `json:"realm"`
+	Limit               int      `json:"limit"`
+	PinnedProductIDs    []string `json:"pinnedProductIds"`
+	ExcludeProductIDs   []string `json:"excludeProductIds"`
 }
 
 // createRequest defines create request payload values.
@@ -264,6 +266,8 @@ func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
 			CategoryID:          r.CategoryID,
 			Realm:               r.Realm,
 			Limit:               r.Limit,
+			PinnedProductIDs:    r.PinnedProductIDs,
+			ExcludeProductIDs:   r.ExcludeProductIDs,
 		})
 	}
 	return blocks

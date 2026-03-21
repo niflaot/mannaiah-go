@@ -17,8 +17,8 @@ var (
 	ErrNilCorrelationStore = errors.New("tag correlation store must not be nil")
 	// ErrNilCatalogStore is returned when a nil product catalog store dependency is provided.
 	ErrNilCatalogStore = errors.New("product catalog store must not be nil")
-	// ErrEmptyBaseTag is returned when a recommendation query has no base tag.
-	ErrEmptyBaseTag = errors.New("base tag must not be empty")
+	// ErrEmptyBaseTag is returned when a recommendation query has no base tag and no pinned products.
+	ErrEmptyBaseTag = errors.New("base tag must not be empty unless pinned product IDs are provided")
 )
 
 // Service defines recommendation use-case behavior.
@@ -81,85 +81,117 @@ func (s *RecommendationService) SetAssetResolver(resolver port.AssetURLResolver)
 // Recommend returns ranked product recommendations for one contact.
 //
 // Resolution steps:
-//  1. If UseContactAffinity is set, fetch top tag affinities for the contact.
-//  2. Expand affinity tags via tag_correlations (cross-sell expansion).
-//  3. Query product catalog for candidates with BaseTag and expanded tags.
-//  4. Rank candidates by summed affinity score of their tags.
-//  5. Resolve realm-aware display data (name, image URL) for top Limit results.
+//  1. Load pinned products by ID (always first, bypass affinity/base-tag filter).
+//  2. Build the exclusion set: ExcludeProductIDs ∪ PinnedProductIDs.
+//  3. If BaseTag is set, fetch contact tag affinity and expand via tag_correlations.
+//  4. Query dynamic candidates (excluded IDs removed), rank by affinity score.
+//  5. Combine: pinned first, then dynamic up to Limit total.
+//  6. Resolve realm-aware display data (name, image URL).
 func (s *RecommendationService) Recommend(ctx context.Context, contactID string, query domain.RecommendationQuery) ([]domain.RecommendedProduct, error) {
 	query.Normalize()
 
-	if query.BaseTag == "" {
+	if query.BaseTag == "" && len(query.PinnedProductIDs) == 0 {
 		return nil, ErrEmptyBaseTag
 	}
 
-	// Step 1: resolve contact tag affinity scores.
-	var affinityScores map[string]float64
-	var expandedTags []string
+	// Step 1: load pinned products.
+	var pinnedEntries []port.ProductCatalogEntry
+	if len(query.PinnedProductIDs) > 0 {
+		var err error
+		pinnedEntries, err = s.catalogStore.GetProductsByIDs(ctx, query.PinnedProductIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	if query.UseContactAffinity && contactID != "" {
-		tagAffinities, err := s.affinityStore.GetTagAffinity(ctx, contactID, 20, query.AffinityMinScorePct)
+	// Step 2: build unified exclusion set (pinned IDs + explicit exclude IDs).
+	excludeSet := make(map[string]struct{}, len(query.ExcludeProductIDs)+len(pinnedEntries))
+	for _, id := range query.ExcludeProductIDs {
+		excludeSet[id] = struct{}{}
+	}
+	for _, e := range pinnedEntries {
+		excludeSet[e.ID] = struct{}{}
+	}
+	excludeIDs := make([]string, 0, len(excludeSet))
+	for id := range excludeSet {
+		excludeIDs = append(excludeIDs, id)
+	}
+
+	// How many dynamic slots remain after pinned products.
+	dynamicLimit := query.Limit - len(pinnedEntries)
+
+	var dynamicEntries []port.ProductCatalogEntry
+
+	if dynamicLimit > 0 && query.BaseTag != "" {
+		// Step 3: resolve contact tag affinity scores and expand via correlations.
+		var affinityScores map[string]float64
+		var expandedTags []string
+
+		if query.UseContactAffinity && contactID != "" {
+			tagAffinities, err := s.affinityStore.GetTagAffinity(ctx, contactID, 20, query.AffinityMinScorePct)
+			if err != nil {
+				return nil, err
+			}
+			if len(tagAffinities) > 0 {
+				affinityScores = make(map[string]float64, len(tagAffinities))
+				sourceTags := make([]string, 0, len(tagAffinities))
+				for _, ta := range tagAffinities {
+					affinityScores[ta.Tag] = ta.AffinityScore
+					sourceTags = append(sourceTags, ta.Tag)
+				}
+
+				correlations, err := s.correlationStore.GetCorrelations(ctx, sourceTags)
+				if err != nil {
+					return nil, err
+				}
+
+				seen := make(map[string]struct{}, len(correlations))
+				expandedTags = make([]string, 0, len(correlations))
+				for _, c := range correlations {
+					if _, ok := seen[c.TargetTag]; !ok {
+						seen[c.TargetTag] = struct{}{}
+						expandedTags = append(expandedTags, c.TargetTag)
+					}
+				}
+			}
+		}
+
+		// Step 4: fetch and rank dynamic candidates.
+		candidates, err := s.catalogStore.GetProductsByBaseTag(ctx, query.BaseTag, expandedTags, query.CategoryID, excludeIDs, dynamicLimit*3)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(tagAffinities) > 0 {
-			affinityScores = make(map[string]float64, len(tagAffinities))
-			sourceTags := make([]string, 0, len(tagAffinities))
-			for _, ta := range tagAffinities {
-				affinityScores[ta.Tag] = ta.AffinityScore
-				sourceTags = append(sourceTags, ta.Tag)
-			}
-
-			// Step 2: expand via tag correlations.
-			correlations, err := s.correlationStore.GetCorrelations(ctx, sourceTags)
-			if err != nil {
-				return nil, err
-			}
-
-			seen := make(map[string]struct{}, len(correlations))
-			expandedTags = make([]string, 0, len(correlations))
-			for _, c := range correlations {
-				if _, ok := seen[c.TargetTag]; !ok {
-					seen[c.TargetTag] = struct{}{}
-					expandedTags = append(expandedTags, c.TargetTag)
-				}
-			}
+		if affinityScores != nil {
+			sort.Slice(candidates, func(i, j int) bool {
+				return productAffinityScore(candidates[i].Tags, affinityScores) >
+					productAffinityScore(candidates[j].Tags, affinityScores)
+			})
 		}
+
+		if len(candidates) > dynamicLimit {
+			candidates = candidates[:dynamicLimit]
+		}
+		dynamicEntries = candidates
 	}
 
-	// Step 3: fetch product candidates.
-	candidates, err := s.catalogStore.GetProductsByBaseTag(ctx, query.BaseTag, expandedTags, query.CategoryID, query.Limit*3)
-	if err != nil {
-		return nil, err
-	}
-	if len(candidates) == 0 {
+	// Step 5: combine pinned + dynamic.
+	all := make([]port.ProductCatalogEntry, 0, len(pinnedEntries)+len(dynamicEntries))
+	all = append(all, pinnedEntries...)
+	all = append(all, dynamicEntries...)
+
+	if len(all) == 0 {
 		return nil, nil
 	}
 
-	// Step 4: rank by summed affinity score of product tags.
-	if affinityScores != nil {
-		sort.Slice(candidates, func(i, j int) bool {
-			return productAffinityScore(candidates[i].Tags, affinityScores) >
-				productAffinityScore(candidates[j].Tags, affinityScores)
-		})
-	}
-
-	if len(candidates) > query.Limit {
-		candidates = candidates[:query.Limit]
-	}
-
-	// Step 5: resolve display data.
-	results := make([]domain.RecommendedProduct, 0, len(candidates))
-	for _, c := range candidates {
-		name := resolveDatasheetName(c.Datasheets, query.Realm)
-		imageURL := resolveGalleryImage(ctx, c.Gallery, query.Realm, s.assetResolver)
-
+	// Step 6: resolve display data.
+	results := make([]domain.RecommendedProduct, 0, len(all))
+	for _, c := range all {
 		results = append(results, domain.RecommendedProduct{
 			ID:       c.ID,
-			Name:     name,
+			Name:     resolveDatasheetName(c.Datasheets, query.Realm),
 			Price:    c.Price,
-			ImageURL: imageURL,
+			ImageURL: resolveGalleryImage(ctx, c.Gallery, query.Realm, s.assetResolver),
 		})
 	}
 

@@ -63,14 +63,15 @@ func NewProductCatalogRepository(db *gorm.DB) (*ProductCatalogRepository, error)
 	return &ProductCatalogRepository{db: db}, nil
 }
 
-// GetProductsByBaseTag returns active products filtered by base tag, optional expanded tags, and optional category.
-func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, limit int) ([]port.ProductCatalogEntry, error) {
+// GetProductsByBaseTag returns active products filtered by base tag, optional expanded tags,
+// optional category, and optional excluded product IDs.
+func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, limit int) ([]port.ProductCatalogEntry, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 
-	// Step 1: resolve candidate product IDs.
-	candidateIDs, err := r.resolveProductIDs(ctx, baseTag, expandedTags, categoryID, limit*5)
+	// Step 1: resolve candidate product IDs (excluding pinned + excluded).
+	candidateIDs, err := r.resolveProductIDs(ctx, baseTag, expandedTags, categoryID, excludeIDs, limit*5)
 	if err != nil {
 		return nil, err
 	}
@@ -78,26 +79,75 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		return nil, nil
 	}
 
-	// Step 2: load base records.
-	baseRecords := make([]productBaseRecord, 0, len(candidateIDs))
+	entries, err := r.loadProductEntries(ctx, candidateIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entries) > limit {
+		entries = entries[:limit]
+	}
+
+	return entries, nil
+}
+
+// GetProductsByIDs returns active products for the given product IDs, preserving input order.
+func (r *ProductCatalogRepository) GetProductsByIDs(ctx context.Context, ids []string) ([]port.ProductCatalogEntry, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	// Confirm existence and soft-delete status.
+	var activeIDs []string
+	if err := r.db.WithContext(ctx).
+		Table("products").
+		Select("id").
+		Where("id IN ? AND deleted_at IS NULL", ids).
+		Pluck("id", &activeIDs).Error; err != nil {
+		return nil, fmt.Errorf("filter active pinned products: %w", err)
+	}
+	if len(activeIDs) == 0 {
+		return nil, nil
+	}
+
+	// Build a set of confirmed IDs for fast lookup, then restore input order.
+	activeSet := make(map[string]struct{}, len(activeIDs))
+	for _, id := range activeIDs {
+		activeSet[id] = struct{}{}
+	}
+	ordered := make([]string, 0, len(activeIDs))
+	for _, id := range ids {
+		if _, ok := activeSet[id]; ok {
+			ordered = append(ordered, id)
+		}
+	}
+
+	return r.loadProductEntries(ctx, ordered)
+}
+
+// loadProductEntries loads tags, datasheets, and gallery for the given product IDs
+// and assembles ProductCatalogEntry values preserving the input id order.
+func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids []string) ([]port.ProductCatalogEntry, error) {
+	// Load base records.
+	baseRecords := make([]productBaseRecord, 0, len(ids))
 	if err := r.db.WithContext(ctx).
 		Table("products").
 		Select("id, price").
-		Where("id IN ? AND deleted_at IS NULL", candidateIDs).
+		Where("id IN ? AND deleted_at IS NULL", ids).
 		Find(&baseRecords).Error; err != nil {
 		return nil, fmt.Errorf("load product base records: %w", err)
 	}
-
 	if len(baseRecords) == 0 {
 		return nil, nil
 	}
 
-	ids := make([]string, 0, len(baseRecords))
+	// Index base records by ID for fast lookup.
+	baseByID := make(map[string]productBaseRecord, len(baseRecords))
 	for _, rec := range baseRecords {
-		ids = append(ids, rec.ID)
+		baseByID[rec.ID] = rec
 	}
 
-	// Step 3: load tags for all candidate products.
+	// Load tags.
 	tagRows := make([]productTagNameRecord, 0)
 	if err := r.db.WithContext(ctx).
 		Table("product_tags").
@@ -108,7 +158,7 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		return nil, fmt.Errorf("load product tags for catalog: %w", err)
 	}
 
-	// Step 4: load datasheets.
+	// Load datasheets.
 	datasheetRows := make([]productDatasheetRecord, 0)
 	if err := r.db.WithContext(ctx).
 		Table("product_datasheets").
@@ -119,7 +169,7 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		return nil, fmt.Errorf("load product datasheets for catalog: %w", err)
 	}
 
-	// Step 5: load gallery items + included realms.
+	// Load gallery items + included realms.
 	galleryRows := make([]productGalleryFlatRecord, 0)
 	if err := r.db.WithContext(ctx).
 		Table("product_gallery AS g").
@@ -131,7 +181,7 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		return nil, fmt.Errorf("load product gallery for catalog: %w", err)
 	}
 
-	// Step 6: assemble entries indexed by product ID.
+	// Assemble lookup maps.
 	tagsByProduct := make(map[string][]string, len(ids))
 	for _, row := range tagRows {
 		tagsByProduct[row.ProductID] = append(tagsByProduct[row.ProductID], row.TagName)
@@ -145,13 +195,12 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		})
 	}
 
-	// Build gallery: collapse included realm rows per gallery item.
 	type galleryKey struct {
 		productID     string
 		galleryItemID uint
 	}
 	galleryByProduct := make(map[string][]port.ProductGalleryEntry)
-	itemSeen := make(map[galleryKey]int) // maps key → index in galleryByProduct[productID]
+	itemSeen := make(map[galleryKey]int)
 	for _, row := range galleryRows {
 		key := galleryKey{productID: row.ProductID, galleryItemID: row.GalleryItemID}
 		if idx, exists := itemSeen[key]; exists {
@@ -173,8 +222,13 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		}
 	}
 
-	entries := make([]port.ProductCatalogEntry, 0, len(baseRecords))
-	for _, rec := range baseRecords {
+	// Build result preserving input order.
+	entries := make([]port.ProductCatalogEntry, 0, len(ids))
+	for _, id := range ids {
+		rec, ok := baseByID[id]
+		if !ok {
+			continue
+		}
 		price := 0.0
 		if rec.Price != nil {
 			price = *rec.Price
@@ -188,15 +242,12 @@ func (r *ProductCatalogRepository) GetProductsByBaseTag(ctx context.Context, bas
 		})
 	}
 
-	if len(entries) > limit {
-		entries = entries[:limit]
-	}
-
 	return entries, nil
 }
 
-// resolveProductIDs returns product IDs matching the base tag filter, optional expanded tags, and optional category.
-func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTag string, expandedTags []string, categoryID string, limit int) ([]string, error) {
+// resolveProductIDs returns product IDs matching the base tag filter, optional expanded tags,
+// optional category, and excluding the given product IDs.
+func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTag string, expandedTags []string, categoryID string, excludeIDs []string, limit int) ([]string, error) {
 	// Resolve tag ID for baseTag.
 	var baseTagID int64
 	if err := r.db.WithContext(ctx).
@@ -270,14 +321,17 @@ func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTa
 		return nil, nil
 	}
 
-	// Apply soft-delete filter and limit.
-	var result []string
-	if err := r.db.WithContext(ctx).
+	// Apply soft-delete filter, exclusion list, and limit.
+	q := r.db.WithContext(ctx).
 		Table("products").
 		Select("id").
-		Where("id IN ? AND deleted_at IS NULL", candidateIDs).
-		Limit(limit).
-		Pluck("id", &result).Error; err != nil {
+		Where("id IN ? AND deleted_at IS NULL", candidateIDs)
+	if len(excludeIDs) > 0 {
+		q = q.Where("id NOT IN ?", excludeIDs)
+	}
+
+	var result []string
+	if err := q.Limit(limit).Pluck("id", &result).Error; err != nil {
 		return nil, fmt.Errorf("filter active products: %w", err)
 	}
 

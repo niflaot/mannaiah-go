@@ -48,18 +48,23 @@ func (h *RecommendationHandler) RegisterRoutes(router corehttp.Router) {
 // getRecommendations handles GET /analytics/recommendations/contacts/:contactId.
 //
 // Query parameters:
-//   - baseTag     (required) product base tag to filter by
+//   - baseTag     (required unless pinnedIds set) product base tag to filter by
 //   - categoryId  (optional) restrict to one category
 //   - realm       (optional) display realm, default "default"
 //   - limit       (optional) max results [1,10], default 3
 //   - affinity    (optional) "true" to enable contact-affinity filtering
 //   - minScore    (optional) minimum affinity score percentile [0,100], default 0
+//   - pinnedIds   (optional) comma-separated product IDs always shown first
+//   - excludeIds  (optional) comma-separated product IDs never shown
 func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 	contactID := strings.TrimSpace(ctx.Params("contactId"))
 
 	baseTag := strings.TrimSpace(ctx.Query("baseTag"))
-	if baseTag == "" {
-		return corehttp.NewAppError(400, "baseTag query parameter is required", nil)
+	pinnedIDs := splitCommaSeparated(ctx.Query("pinnedIds"))
+	excludeIDs := splitCommaSeparated(ctx.Query("excludeIds"))
+
+	if baseTag == "" && len(pinnedIDs) == 0 {
+		return corehttp.NewAppError(400, "baseTag query parameter is required when pinnedIds is not set", nil)
 	}
 
 	useAffinity := strings.EqualFold(strings.TrimSpace(ctx.Query("affinity")), "true")
@@ -71,6 +76,8 @@ func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 		CategoryID:          strings.TrimSpace(ctx.Query("categoryId")),
 		Realm:               strings.TrimSpace(ctx.Query("realm")),
 		Limit:               queryInt(ctx, "limit", 3),
+		PinnedProductIDs:    pinnedIDs,
+		ExcludeProductIDs:   excludeIDs,
 	}
 
 	products, err := h.service.Recommend(ctx.Context(), contactID, query)
@@ -98,6 +105,25 @@ func (h *RecommendationHandler) protect(permission string, next corehttp.Handler
 
 		return next(ctx)
 	}
+}
+
+// splitCommaSeparated splits a comma-separated query parameter into trimmed non-empty strings.
+func splitCommaSeparated(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			result = append(result, s)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // mapRecommendationError maps recommendation service errors to HTTP-layer app errors.

@@ -2,7 +2,8 @@ package domain
 
 // RecommendationQuery defines parameters for per-contact product recommendation resolution.
 type RecommendationQuery struct {
-	// BaseTag is a required product tag; only products with this tag are candidates.
+	// BaseTag is the product base tag; only products with this tag are dynamic candidates.
+	// May be empty when PinnedProductIDs is non-empty (pinned-only mode).
 	BaseTag string
 	// UseContactAffinity enables affinity-driven filtering when true.
 	// When true, the resolver expands the contact's top affinity tags via tag_correlations
@@ -18,6 +19,13 @@ type RecommendationQuery struct {
 	Realm string
 	// Limit is the maximum number of products to return (clamped to [1, 10]).
 	Limit int
+	// PinnedProductIDs lists product IDs that are always included first in the result,
+	// regardless of base tag or affinity. Pinned products are loaded by ID and
+	// prepended before any dynamically ranked candidates.
+	PinnedProductIDs []string
+	// ExcludeProductIDs lists product IDs that must never appear in results,
+	// applied after pinned resolution and before dynamic candidate ranking.
+	ExcludeProductIDs []string
 }
 
 // Normalize canonicalizes query values before resolution.
