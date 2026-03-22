@@ -20,6 +20,6 @@ Provides campaign module composition-root wiring: repository + service + HTTP ad
 - Events: none.
 
 ## Configuration
-- `MN_PUBLIC_URL`: Public frontend base URL used to build `.Custom.unsubscribe_url` as `${MN_PUBLIC_URL}/public/marketing/optout/{token}`.
-- `MN_MARKETING_OPTOUT_SECRET`: HMAC secret used to sign unsubscribe tokens.
+- `UNSUBSCRIBE_BASE_URL`: Public frontend base URL used to build `.Custom.unsubscribe_url` as `${UNSUBSCRIBE_BASE_URL}/public/marketing/optout/{token}`.
+- `MARKETING_OPTOUT_SECRET`: HMAC secret used to sign unsubscribe tokens.
 - `MN_MARKETING_OPTOUT_TOKEN_TTL_HOURS`: Expiration window in hours for generated unsubscribe tokens (default `720`).

@@ -42,8 +42,8 @@ func New(cfg Config, db *gorm.DB, resolver port.SegmentResolver, sender port.Ema
 		return nil, err
 	}
 	service.SetUnsubscribeURLConfig(
-		cfg.PublicURL,
-		cfg.MarketingOptOutSecret,
+		cfg.UnsubscribeBaseURL,
+		cfg.ResolvedMarketingOptOutSecret(),
 		time.Duration(cfg.MarketingOptOutTokenTTLHours)*time.Hour,
 	)
 

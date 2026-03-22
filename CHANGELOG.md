@@ -52,6 +52,20 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.18] - 2026-03-22
+- Normalize unsubscribe env contract for campaign templates (development-stage strict mode):
+  - Unsubscribe base URL config key is now `UNSUBSCRIBE_BASE_URL` (replaces `MN_PUBLIC_URL`).
+  - HMAC secret config key is now `MARKETING_OPTOUT_SECRET` (no fallback compatibility path).
+  - `.Custom.unsubscribe_url` generation now depends strictly on `UNSUBSCRIBE_BASE_URL` + `MARKETING_OPTOUT_SECRET`.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.9`.
+  - `POST /campaigns/{id}/test` OpenAPI description now documents `UNSUBSCRIBE_BASE_URL` + `MARKETING_OPTOUT_SECRET`.
+  - Campaign runtime README and `.env.example` updated to the new env names.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.18` (`2.9.18` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.18`.
+- Tests added/updated:
+  - `module/campaign/runtime/config_test.go` verifies opt-out secret normalization behavior.
+
 ### [v2.9.17] - 2026-03-22
 - Add campaign unsubscribe template interpolation support:
   - Runtime now injects `.Custom.unsubscribe_url` into campaign template context when unsubscribe config is enabled.
