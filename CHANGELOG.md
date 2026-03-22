@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.22] - 2026-03-22
+- Fix SNS subscription-confirmation signature verification:
+  - Corrected SNS canonical `StringToSign` field order for `SubscriptionConfirmation`/`UnsubscribeConfirmation`.
+  - `Timestamp` is now included before `Token` (AWS-required order), preventing false `invalid_webhook_signature` (`401`) responses during SNS confirmation.
+- Tests updated:
+  - Strengthened `module/email/adapter/ses/sns_verifier_test.go` to assert `Timestamp` appears before `Token` in canonical payload.
+- OpenAPI/docs/version updates:
+  - Email OpenAPI metadata bumped to `2.2.3`.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.22` (`2.9.22` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.22`.
+
 ### [v2.9.21] - 2026-03-22
 - Harden SNS webhook envelope decoding for `POST /email/webhooks/ses`:
   - Added multi-format decode support for SNS payloads arriving as:

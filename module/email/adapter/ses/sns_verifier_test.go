@@ -52,8 +52,16 @@ func TestBuildSNSStringToSignSubscriptionConfirmation(t *testing.T) {
 	if !strings.Contains(value, "SubscribeURL\nhttps://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription\n") {
 		t.Fatalf("stringToSign missing SubscribeURL block: %q", value)
 	}
+	if !strings.Contains(value, "Timestamp\n2026-03-22T20:20:20.000Z\n") {
+		t.Fatalf("stringToSign missing Timestamp block: %q", value)
+	}
 	if !strings.Contains(value, "Token\ntoken-1\n") {
 		t.Fatalf("stringToSign missing Token block: %q", value)
+	}
+	timestampIndex := strings.Index(value, "Timestamp\n2026-03-22T20:20:20.000Z\n")
+	tokenIndex := strings.Index(value, "Token\ntoken-1\n")
+	if timestampIndex < 0 || tokenIndex < 0 || timestampIndex > tokenIndex {
+		t.Fatalf("stringToSign order invalid, expected Timestamp before Token: %q", value)
 	}
 }
 

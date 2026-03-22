@@ -171,11 +171,15 @@ func buildSNSStringToSign(message port.SNSMessage) (string, error) {
 		}
 	case "subscriptionconfirmation", "unsubscribeconfirmation":
 		appendPart("SubscribeURL", strings.TrimSpace(message.SubscribeURL))
+		appendPart("Timestamp", strings.TrimSpace(message.Timestamp))
 		appendPart("Token", strings.TrimSpace(message.Token))
 	default:
 		return "", errors.New("sns message type is unsupported")
 	}
-	appendPart("Timestamp", strings.TrimSpace(message.Timestamp))
+	if !strings.EqualFold(messageType, "subscriptionconfirmation") &&
+		!strings.EqualFold(messageType, "unsubscribeconfirmation") {
+		appendPart("Timestamp", strings.TrimSpace(message.Timestamp))
+	}
 	appendPart("TopicArn", strings.TrimSpace(message.TopicARN))
 	appendPart("Type", messageType)
 
