@@ -25,8 +25,8 @@ func TestResolveRealmURL(t *testing.T) {
 		t.Fatalf("resolveRealmURL(email) = %q, want email realm URL", value)
 	}
 
-	if value := resolveRealmURL(datasheets, "sms", nil); value != "https://store.example.com/default" {
-		t.Fatalf("resolveRealmURL(fallback) = %q, want first non-empty URL", value)
+	if value := resolveRealmURL(datasheets, "sms", nil); value != "" {
+		t.Fatalf("resolveRealmURL(non-matching realm) = %q, want empty", value)
 	}
 }
 
@@ -49,8 +49,8 @@ func TestResolveRealmURLPrefersVariationScopedURL(t *testing.T) {
 	}
 }
 
-// TestResolveRealmPriceFallback verifies price fallback behavior when requested realm has no price.
-func TestResolveRealmPriceFallback(t *testing.T) {
+// TestResolveRealmPriceRealmStrict verifies price resolution is strict to the requested realm.
+func TestResolveRealmPriceRealmStrict(t *testing.T) {
 	t.Parallel()
 
 	value := 79.9
@@ -60,11 +60,11 @@ func TestResolveRealmPriceFallback(t *testing.T) {
 	}
 
 	got, ok := resolveRealmPrice(datasheets, "default")
-	if !ok {
-		t.Fatalf("resolveRealmPrice() ok = false, want true")
+	if ok {
+		t.Fatalf("resolveRealmPrice() ok = true, want false")
 	}
-	if got != value {
-		t.Fatalf("resolveRealmPrice() = %v, want %v", got, value)
+	if got != 0 {
+		t.Fatalf("resolveRealmPrice() = %v, want 0", got)
 	}
 }
 
@@ -88,8 +88,8 @@ func TestResolveURLVariationCandidates(t *testing.T) {
 	}
 }
 
-// TestResolveRealmImageFallbackAcrossRealms verifies image fallback when no realm-visible images exist.
-func TestResolveRealmImageFallbackAcrossRealms(t *testing.T) {
+// TestResolveRealmImageRealmStrict verifies image resolution is strict to realm visibility.
+func TestResolveRealmImageRealmStrict(t *testing.T) {
 	t.Parallel()
 
 	value, ok := resolveRealmImage(context.Background(), []port.ProductGalleryEntry{
@@ -99,11 +99,11 @@ func TestResolveRealmImageFallbackAcrossRealms(t *testing.T) {
 			IncludedRealms: []string{"woo"},
 		},
 	}, "default", nil, noopAssetResolver{})
-	if !ok {
-		t.Fatalf("resolveRealmImage() ok = false, want true")
+	if ok {
+		t.Fatalf("resolveRealmImage() ok = true, want false")
 	}
-	if value != "https://cdn.example.com/woo-image.jpg" {
-		t.Fatalf("resolveRealmImage() = %q, want fallback image URL", value)
+	if value != "" {
+		t.Fatalf("resolveRealmImage() = %q, want empty", value)
 	}
 }
 

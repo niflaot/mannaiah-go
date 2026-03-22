@@ -232,25 +232,12 @@ func resolveDatasheetName(datasheets []port.ProductDatasheetEntry, realm string)
 }
 
 // resolveRealmPrice returns the price from the first datasheet matching the realm.
-// Falls back to the first available datasheet price when no realm match is found.
-// Returns (0, false) when no datasheet contains a valid price.
+// Returns (0, false) when no realm datasheet has a price attribute.
 func resolveRealmPrice(datasheets []port.ProductDatasheetEntry, realm string) (float64, bool) {
-	var fallback float64
-	hasFallback := false
 	for _, d := range datasheets {
-		if d.Price == nil {
-			continue
-		}
-		if !hasFallback {
-			fallback = *d.Price
-			hasFallback = true
-		}
-		if strings.EqualFold(d.Realm, realm) {
+		if strings.EqualFold(d.Realm, realm) && d.Price != nil {
 			return *d.Price, true
 		}
-	}
-	if hasFallback {
-		return fallback, true
 	}
 
 	return 0, false
@@ -263,8 +250,7 @@ func resolveRealmPrice(datasheets []port.ProductDatasheetEntry, realm string) (f
 //  2. First realm-visible image regardless of variation.
 //
 // An image is "visible in realm R" when its IncludedRealms is empty (all realms) or contains R.
-// Falls back to cross-realm candidates when no in-realm image exists.
-// Returns ("", false) when no image URL can be resolved.
+// Returns ("", false) when no realm-visible image URL can be resolved.
 func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, realm string, preferVariationIDs []string, resolver port.AssetURLResolver) (string, bool) {
 	// Pass 1: prefer variation-specific image visible in the realm.
 	if len(preferVariationIDs) > 0 {
@@ -292,28 +278,6 @@ func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, 
 			if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
 				return url, true
 			}
-		}
-	}
-	// Pass 3: prefer variation-specific image across all realms.
-	if len(preferVariationIDs) > 0 {
-		preferSet := make(map[string]struct{}, len(preferVariationIDs))
-		for _, v := range preferVariationIDs {
-			preferSet[v] = struct{}{}
-		}
-		for _, g := range gallery {
-			for _, vid := range g.VariationIDs {
-				if _, ok := preferSet[vid]; ok {
-					if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
-						return url, true
-					}
-				}
-			}
-		}
-	}
-	// Pass 4: first image regardless of realm/variation.
-	for _, g := range gallery {
-		if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
-			return url, true
 		}
 	}
 
@@ -353,23 +317,19 @@ func isVisibleInRealm(g port.ProductGalleryEntry, realm string) bool {
 
 // resolveRealmURL returns the first product URL matching the requested realm.
 // When variationCandidates are provided, "<variation>.url" values are preferred over plain "url".
-// Falls back to the first non-empty datasheet URL when no realm match is found.
+// Returns empty when no URL is available for the requested realm.
 func resolveRealmURL(datasheets []port.ProductDatasheetEntry, realm string, variationCandidates []string) string {
-	fallback := ""
 	for _, datasheet := range datasheets {
-		url := resolveDatasheetURL(datasheet, variationCandidates)
-		if url == "" {
+		if !strings.EqualFold(datasheet.Realm, realm) {
 			continue
 		}
-		if fallback == "" {
-			fallback = url
-		}
-		if strings.EqualFold(datasheet.Realm, realm) {
+		url := resolveDatasheetURL(datasheet, variationCandidates)
+		if url != "" {
 			return url
 		}
 	}
 
-	return fallback
+	return ""
 }
 
 // resolveDatasheetURL resolves one datasheet URL, preferring variation-scoped entries.

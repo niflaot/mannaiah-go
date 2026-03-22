@@ -14,6 +14,8 @@ var (
 	ErrNilRecommendationService = errors.New("recommendation service must not be nil")
 )
 
+const marketingDefaultRealm = "default"
+
 // ProductProvider adapts the analytics RecommendationService for use as an AffinityProductProvider
 // within the campaign module. It maps campaign ProductBlock values to RecommendationQuery values,
 // calls the analytics service, and maps the results to campaign TemplateProduct values.
@@ -40,7 +42,7 @@ func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, blo
 		UseContactAffinity:  block.UseAffinity,
 		AffinityMinScorePct: block.AffinityMinScorePct,
 		CategoryID:          block.CategoryID,
-		Realm:               block.Realm,
+		Realm:               marketingDefaultRealm,
 		Limit:               block.Limit,
 		PinnedProductIDs:    block.PinnedProductIDs,
 		ExcludeProductIDs:   block.ExcludeProductIDs,
