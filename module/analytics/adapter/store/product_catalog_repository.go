@@ -85,6 +85,14 @@ type productVariationLinkRow struct {
 	VariationID string `gorm:"column:variation_id"`
 }
 
+// productVariantSKURow holds a product_id → variant sku join result.
+type productVariantSKURow struct {
+	// ProductID is the owning product identifier.
+	ProductID string `gorm:"column:product_id"`
+	// SKU is the variant stock-keeping unit token.
+	SKU string `gorm:"column:sku"`
+}
+
 // assetMetadataRow holds one asset metadata key/value row.
 type assetMetadataRow struct {
 	// AssetID is the owning asset identifier.
@@ -382,6 +390,17 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		return nil, fmt.Errorf("load product variation links for catalog: %w", err)
 	}
 
+	// Load product-level variant SKU rows.
+	variantSKURows := make([]productVariantSKURow, 0)
+	if err := r.db.WithContext(ctx).
+		Table("product_variants").
+		Select("product_id, sku").
+		Where("product_id IN ?", ids).
+		Order("product_id ASC, position ASC, id ASC").
+		Scan(&variantSKURows).Error; err != nil {
+		return nil, fmt.Errorf("load product variant skus for catalog: %w", err)
+	}
+
 	// Assemble per-product tag map.
 	tagsByProduct := make(map[string][]string, len(ids))
 	for _, row := range tagRows {
@@ -436,6 +455,15 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 	for _, row := range variationLinkRows {
 		variationsByProduct[row.ProductID] = append(variationsByProduct[row.ProductID], row.VariationID)
 	}
+	// Assemble per-product variant sku map.
+	variantSKUsByProduct := make(map[string][]string)
+	for _, row := range variantSKURows {
+		sku := strings.TrimSpace(row.SKU)
+		if sku == "" {
+			continue
+		}
+		variantSKUsByProduct[row.ProductID] = append(variantSKUsByProduct[row.ProductID], sku)
+	}
 
 	// Build result preserving input order.
 	entries := make([]port.ProductCatalogEntry, 0, len(ids))
@@ -453,6 +481,7 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 			Price:        price,
 			Tags:         tagsByProduct[rec.ID],
 			VariationIDs: variationsByProduct[rec.ID],
+			VariantSKUs:  variantSKUsByProduct[rec.ID],
 			Datasheets:   datasheetsByProduct[rec.ID],
 			Gallery:      galleryByProduct[rec.ID],
 		})
@@ -645,7 +674,29 @@ func parseScopedURLAttributeKey(key string) (string, bool) {
 
 // normalizeVariationToken resolves trimmed lower-case variation tokens.
 func normalizeVariationToken(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return ""
+	}
+	for {
+		switch {
+		case strings.HasPrefix(normalized, "(") && strings.HasSuffix(normalized, ")"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "[") && strings.HasSuffix(normalized, "]"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "{") && strings.HasSuffix(normalized, "}"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "\"") && strings.HasSuffix(normalized, "\""):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "'") && strings.HasSuffix(normalized, "'"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		default:
+			return strings.ToLower(normalized)
+		}
+		if normalized == "" {
+			return ""
+		}
+	}
 }
 
 // metadataURLPriority resolves known metadata-key priorities for public URL lookup.

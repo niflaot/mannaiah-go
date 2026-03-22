@@ -12,6 +12,8 @@ type ProductCatalogEntry struct {
 	Tags []string
 	// VariationIDs contains the variation IDs linked to this product via product_variation_links.
 	VariationIDs []string
+	// VariantSKUs contains variant SKU tokens linked to this product via product_variants.
+	VariantSKUs []string
 	// Datasheets contains realm-scoped display data ordered by position.
 	Datasheets []ProductDatasheetEntry
 	// Gallery contains gallery image entries ordered by position.

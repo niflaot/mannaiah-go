@@ -192,7 +192,7 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		if !hasPrice {
 			continue
 		}
-		urlVariationCandidates := resolveURLVariationCandidates(c.VariationIDs, query.PreferVariationIDs, query.FilterVariationIDs)
+		urlVariationCandidates := resolveURLVariationCandidates(c.VariationIDs, c.VariantSKUs, query.PreferVariationIDs, query.FilterVariationIDs)
 		results = append(results, domain.RecommendedProduct{
 			ID:       c.ID,
 			Name:     resolveDatasheetName(c.Datasheets, query.Realm),
@@ -342,14 +342,31 @@ func resolveDatasheetURL(datasheet port.ProductDatasheetEntry, variationCandidat
 			}
 		}
 	}
+	if len(datasheet.VariationURLs) > 0 {
+		keys := make([]string, 0, len(datasheet.VariationURLs))
+		for key := range datasheet.VariationURLs {
+			normalized := normalizeVariationToken(key)
+			if normalized == "" {
+				continue
+			}
+			keys = append(keys, normalized)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			url := strings.TrimSpace(datasheet.VariationURLs[key])
+			if url != "" {
+				return url
+			}
+		}
+	}
 
 	return strings.TrimSpace(datasheet.URL)
 }
 
 // resolveURLVariationCandidates builds ordered variation candidates for scoped URL lookup.
 // Order: preferVariationIDs -> filterVariationIDs -> product variation links.
-func resolveURLVariationCandidates(productVariationIDs []string, preferVariationIDs []string, filterVariationIDs []string) []string {
-	if len(productVariationIDs) == 0 {
+func resolveURLVariationCandidates(productVariationIDs []string, productVariantSKUs []string, preferVariationIDs []string, filterVariationIDs []string) []string {
+	if len(productVariationIDs) == 0 && len(productVariantSKUs) == 0 {
 		return nil
 	}
 
@@ -366,13 +383,21 @@ func resolveURLVariationCandidates(productVariationIDs []string, preferVariation
 		productSet[variationID] = struct{}{}
 		orderedProductVariations = append(orderedProductVariations, variationID)
 	}
-	if len(orderedProductVariations) == 0 {
+	productSKUs := make([]string, 0, len(productVariantSKUs))
+	for _, rawSKU := range productVariantSKUs {
+		sku := normalizeVariationToken(rawSKU)
+		if sku == "" {
+			continue
+		}
+		productSKUs = append(productSKUs, sku)
+	}
+	if len(orderedProductVariations) == 0 && len(productSKUs) == 0 {
 		return nil
 	}
 
-	result := make([]string, 0, len(orderedProductVariations))
-	seen := make(map[string]struct{}, len(orderedProductVariations))
-	appendCandidates := func(source []string) {
+	result := make([]string, 0, len(orderedProductVariations)+len(productSKUs))
+	seen := make(map[string]struct{}, len(orderedProductVariations)+len(productSKUs))
+	appendVariationCandidates := func(source []string) {
 		for _, rawVariationID := range source {
 			variationID := normalizeVariationToken(rawVariationID)
 			if variationID == "" {
@@ -388,14 +413,50 @@ func resolveURLVariationCandidates(productVariationIDs []string, preferVariation
 			result = append(result, variationID)
 		}
 	}
-	appendCandidates(preferVariationIDs)
-	appendCandidates(filterVariationIDs)
-	appendCandidates(orderedProductVariations)
+	appendAnyCandidates := func(source []string) {
+		for _, rawValue := range source {
+			value := normalizeVariationToken(rawValue)
+			if value == "" {
+				continue
+			}
+			if _, already := seen[value]; already {
+				continue
+			}
+			seen[value] = struct{}{}
+			result = append(result, value)
+		}
+	}
+	appendVariationCandidates(preferVariationIDs)
+	appendVariationCandidates(filterVariationIDs)
+	appendVariationCandidates(orderedProductVariations)
+	appendAnyCandidates(productSKUs)
 
 	return result
 }
 
 // normalizeVariationToken resolves trimmed lower-case variation tokens.
 func normalizeVariationToken(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return ""
+	}
+	for {
+		switch {
+		case strings.HasPrefix(normalized, "(") && strings.HasSuffix(normalized, ")"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "[") && strings.HasSuffix(normalized, "]"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "{") && strings.HasSuffix(normalized, "}"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "\"") && strings.HasSuffix(normalized, "\""):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		case strings.HasPrefix(normalized, "'") && strings.HasSuffix(normalized, "'"):
+			normalized = strings.TrimSpace(normalized[1 : len(normalized)-1])
+		default:
+			return strings.ToLower(normalized)
+		}
+		if normalized == "" {
+			return ""
+		}
+	}
 }

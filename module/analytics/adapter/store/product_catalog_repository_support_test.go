@@ -14,6 +14,8 @@ func TestParseScopedURLAttributeKey(t *testing.T) {
 	}{
 		{name: "valid", key: "var-1.url", wantScope: "var-1", wantOK: true},
 		{name: "valid uppercase suffix", key: "VAR-2.URL", wantScope: "var-2", wantOK: true},
+		{name: "valid parenthesized scope", key: "(SKU-RED-M).url", wantScope: "sku-red-m", wantOK: true},
+		{name: "valid quoted scope", key: "\"SKU-BLACK-S\".url", wantScope: "sku-black-s", wantOK: true},
 		{name: "invalid suffix", key: "var-1.link", wantOK: false},
 		{name: "missing scope", key: ".url", wantOK: false},
 		{name: "missing separator", key: "url", wantOK: false},

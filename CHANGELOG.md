@@ -52,6 +52,19 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.16] - 2026-03-22
+- Fix campaign product link rendering when product datasheet URLs are variation-scoped:
+  - Recommendation URL resolution now supports scoped URL keys matched by both `product_variation_links` IDs and `product_variants` SKU tokens.
+  - Scoped URL token normalization now accepts wrapped scopes such as `(sku).url`, `[sku].url`, `{sku}.url`, and quoted scopes.
+  - When plain `url` is empty and scoped URLs exist, recommendation now falls back to a deterministic first scoped URL so template `.URL` is not empty.
+  - Product catalog entries now include variant SKU tokens for recommendation URL candidate matching.
+- Tests added/updated:
+  - `module/analytics/application/recommendation/service_support_test.go`
+  - `module/analytics/adapter/store/product_catalog_repository_support_test.go`
+- Documentation/OpenAPI/version updates:
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.16` (`2.9.16` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.16`.
+
 ### [v2.9.15] - 2026-03-22
 - Fix campaign/recommendation email product image resolution in runtime sends:
   - Core startup now wires a concrete analytics asset URL resolver into recommendation service after assets module startup.

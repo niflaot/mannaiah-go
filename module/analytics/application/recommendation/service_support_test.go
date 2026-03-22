@@ -74,6 +74,7 @@ func TestResolveURLVariationCandidates(t *testing.T) {
 
 	candidates := resolveURLVariationCandidates(
 		[]string{"v-1", "v-2", "v-3"},
+		nil,
 		[]string{"v-2", "v-x"},
 		[]string{"v-3", "v-1"},
 	)
@@ -85,6 +86,41 @@ func TestResolveURLVariationCandidates(t *testing.T) {
 		if candidates[i] != want[i] {
 			t.Fatalf("candidates[%d] = %q, want %q (%#v)", i, candidates[i], want[i], candidates)
 		}
+	}
+}
+
+// TestResolveURLVariationCandidatesIncludesVariantSKUFallback verifies SKU fallback candidates.
+func TestResolveURLVariationCandidatesIncludesVariantSKUFallback(t *testing.T) {
+	t.Parallel()
+
+	candidates := resolveURLVariationCandidates(
+		nil,
+		[]string{"SKU-RED-M", "sku-black-s"},
+		nil,
+		nil,
+	)
+	want := []string{"sku-red-m", "sku-black-s"}
+	if len(candidates) != len(want) {
+		t.Fatalf("len(candidates) = %d, want %d (%#v)", len(candidates), len(want), candidates)
+	}
+	for i := range want {
+		if candidates[i] != want[i] {
+			t.Fatalf("candidates[%d] = %q, want %q (%#v)", i, candidates[i], want[i], candidates)
+		}
+	}
+}
+
+// TestResolveDatasheetURLFallsBackToScopedURL verifies scoped-URL fallback when plain URL is missing.
+func TestResolveDatasheetURLFallsBackToScopedURL(t *testing.T) {
+	t.Parallel()
+
+	value := resolveDatasheetURL(port.ProductDatasheetEntry{
+		VariationURLs: map[string]string{
+			"sku-red": "https://store.example.com/red",
+		},
+	}, nil)
+	if value != "https://store.example.com/red" {
+		t.Fatalf("resolveDatasheetURL(scoped-fallback) = %q, want scoped value", value)
 	}
 }
 
