@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.15] - 2026-03-22
+- Fix campaign/recommendation email product image resolution in runtime sends:
+  - Core startup now wires a concrete analytics asset URL resolver into recommendation service after assets module startup.
+  - Recommendation image URLs now resolve from assets service using metadata URL keys with priority and key-based fallback URL building.
+  - Fallback public base URL for assets now resolves from `FALABELLA_PRODUCT_IMAGE_BASE_URL` or `STORAGE_ENDPOINT + STORAGE_BUCKET_NAME`.
+- Tests added:
+  - `module/core/cmd/api/analytics_asset_url_resolver_test.go` covering metadata priority, key-based URL fallback, lookup error behavior, and base URL fallback resolution.
+- Documentation/OpenAPI/version updates:
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.15` (`2.9.15` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.15`.
+
 ### [v2.9.12] - 2026-03-22
 - Campaign/frontend contract and template-population fixes:
   - `PATCH /campaigns/{id}` now preserves explicit empty `productBlocks: []` updates (clear semantics) instead of treating empty arrays as omitted fields.

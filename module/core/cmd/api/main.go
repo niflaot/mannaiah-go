@@ -187,7 +187,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.9.12",
+		Version:     "2.9.15",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -363,6 +363,15 @@ func run(ctx context.Context, envFile string) error {
 	}
 	if err := assetsModule.Start(ctx); err != nil {
 		return fmt.Errorf("start assets module: %w", err)
+	}
+	if recommendationService := analyticsModule.RecommendationService(); recommendationService != nil {
+		recommendationService.SetAssetResolver(analyticsAssetURLResolver{
+			assetService: assetsModule.Service(),
+			assetBaseURL: resolveMarketingAssetBaseURL(
+				falabellaCfg.ProductImageBaseURL,
+				buildStorageBucketBaseURL(storageCfg.Endpoint, storageCfg.BucketName),
+			),
+		})
 	}
 	defer func() {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
