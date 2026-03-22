@@ -1,9 +1,12 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	neturl "net/url"
 	"strings"
 
 	corehttp "mannaiah/module/core/http"
@@ -159,16 +162,18 @@ func (h *Handler) send(ctx corehttp.Context) error {
 
 // webhook handles SES webhook requests.
 func (h *Handler) webhook(ctx corehttp.Context) error {
-	request := webhookRequest{}
-	body := ctx.Body()
-	if unmarshalErr := json.Unmarshal(body, &request); unmarshalErr != nil {
-		// Keep backward compatibility with application/json request parsing semantics.
-		if parseErr := ctx.BodyParser(&request); parseErr != nil {
-			return corehttp.NewAppError(400, "invalid_payload", unmarshalErr)
-		}
+	request, requestErr := decodeWebhookRequest(ctx.Body(), ctx.BodyParser)
+	if requestErr != nil {
+		return corehttp.NewAppError(400, "invalid_payload", requestErr)
 	}
 	if strings.TrimSpace(request.MessageType) == "" {
 		request.MessageType = strings.TrimSpace(ctx.GetHeader("x-amz-sns-message-type"))
+	}
+	if strings.TrimSpace(request.TopicARN) == "" {
+		request.TopicARN = strings.TrimSpace(ctx.GetHeader("x-amz-sns-topic-arn"))
+	}
+	if strings.TrimSpace(request.MessageID) == "" {
+		request.MessageID = strings.TrimSpace(ctx.GetHeader("x-amz-sns-message-id"))
 	}
 
 	if err := h.service.HandleWebhook(ctx.Context(), application.WebhookCommand{
@@ -192,6 +197,82 @@ func (h *Handler) webhook(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(map[string]string{"status": "ok"})
+}
+
+// decodeWebhookRequest decodes webhook payloads from JSON/body-parser/form-encoded representations.
+func decodeWebhookRequest(body []byte, bodyParser func(out any) error) (webhookRequest, error) {
+	request := webhookRequest{}
+	trimmedBody := bytes.TrimSpace(body)
+	if len(trimmedBody) > 0 {
+		if jsonErr := json.Unmarshal(trimmedBody, &request); jsonErr == nil {
+			if hasWebhookRequestData(request) {
+				return request, nil
+			}
+		}
+
+		payloadString := ""
+		if jsonErr := json.Unmarshal(trimmedBody, &payloadString); jsonErr == nil {
+			embedded := webhookRequest{}
+			if embeddedJSONErr := json.Unmarshal([]byte(strings.TrimSpace(payloadString)), &embedded); embeddedJSONErr == nil {
+				if hasWebhookRequestData(embedded) {
+					return embedded, nil
+				}
+			}
+		}
+
+		values, valuesErr := neturl.ParseQuery(string(trimmedBody))
+		if valuesErr == nil {
+			formRequest := webhookRequest{
+				ProviderMessageID: strings.TrimSpace(values.Get("providerMessageId")),
+				Status:            strings.TrimSpace(values.Get("status")),
+				Reason:            strings.TrimSpace(values.Get("reason")),
+				Email:             strings.TrimSpace(values.Get("email")),
+				MessageType:       strings.TrimSpace(values.Get("Type")),
+				Message:           values.Get("Message"),
+				MessageID:         strings.TrimSpace(values.Get("MessageId")),
+				Subject:           strings.TrimSpace(values.Get("Subject")),
+				Timestamp:         strings.TrimSpace(values.Get("Timestamp")),
+				TopicARN:          strings.TrimSpace(values.Get("TopicArn")),
+				Token:             strings.TrimSpace(values.Get("Token")),
+				SubscribeURL:      strings.TrimSpace(values.Get("SubscribeURL")),
+				SignatureVersion:  strings.TrimSpace(values.Get("SignatureVersion")),
+				Signature:         strings.TrimSpace(values.Get("Signature")),
+				SigningCertURL:    strings.TrimSpace(values.Get("SigningCertURL")),
+			}
+			if hasWebhookRequestData(formRequest) {
+				return formRequest, nil
+			}
+		}
+	}
+
+	if bodyParser != nil {
+		if parserErr := bodyParser(&request); parserErr == nil {
+			if hasWebhookRequestData(request) {
+				return request, nil
+			}
+		}
+	}
+
+	return webhookRequest{}, fmt.Errorf("unable to decode webhook payload")
+}
+
+// hasWebhookRequestData reports whether one decoded webhook request contains meaningful data.
+func hasWebhookRequestData(request webhookRequest) bool {
+	return strings.TrimSpace(request.ProviderMessageID) != "" ||
+		strings.TrimSpace(request.Status) != "" ||
+		strings.TrimSpace(request.Reason) != "" ||
+		strings.TrimSpace(request.Email) != "" ||
+		strings.TrimSpace(request.MessageType) != "" ||
+		strings.TrimSpace(request.Message) != "" ||
+		strings.TrimSpace(request.MessageID) != "" ||
+		strings.TrimSpace(request.Subject) != "" ||
+		strings.TrimSpace(request.Timestamp) != "" ||
+		strings.TrimSpace(request.TopicARN) != "" ||
+		strings.TrimSpace(request.Token) != "" ||
+		strings.TrimSpace(request.SubscribeURL) != "" ||
+		strings.TrimSpace(request.SignatureVersion) != "" ||
+		strings.TrimSpace(request.Signature) != "" ||
+		strings.TrimSpace(request.SigningCertURL) != ""
 }
 
 // delivery handles delivery lookup requests.

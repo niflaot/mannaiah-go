@@ -52,6 +52,24 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.21] - 2026-03-22
+- Harden SNS webhook envelope decoding for `POST /email/webhooks/ses`:
+  - Added multi-format decode support for SNS payloads arriving as:
+    - JSON (`application/json` and `text/plain`)
+    - JSON encoded as string (double-encoded body payloads)
+    - URL form-encoded key/value envelopes (`Type`, `Message`, `TopicArn`, `SubscribeURL`, etc.).
+  - Added header fallback extraction for:
+    - `x-amz-sns-message-type`
+    - `x-amz-sns-topic-arn`
+    - `x-amz-sns-message-id`
+  - Prevented false-positive parser success by requiring meaningful webhook fields before accepting decoded payloads.
+- Tests added:
+  - `module/email/adapter/http/handler_webhook_decode_test.go`
+- OpenAPI/docs/version updates:
+  - Email OpenAPI metadata bumped to `2.2.2`.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.21` (`2.9.21` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.21`.
+
 ### [v2.9.20] - 2026-03-22
 - Fix SNS HTTPS subscription confirmation webhook parsing:
   - `POST /email/webhooks/ses` now parses raw JSON bodies regardless of `Content-Type`, handling SNS default `text/plain` payloads correctly.
