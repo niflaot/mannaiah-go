@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.10] - 2026-03-22
+- Fix backend/frontend personalization discrepancy on campaign test-send:
+  - Campaign runtime now wires a real contact-data provider from contacts service into campaign rendering (`SetContactDataProvider`), replacing noop fallback behavior.
+  - `.Contact.Name` and `.Contact.Email` in test-send templates now resolve from the provided `contactId` when the contact exists, instead of defaulting to the override test email.
+  - Campaign runtime now wires analytics-backed affinity product provider for campaign rendering (`SetAffinityProductProvider`) so dynamic product blocks resolve consistently with recommendation rules.
+- Tests added:
+  - `module/core/cmd/api/campaign_contact_data_adapter_test.go` verifies contact personalization mapping and display-name fallback behavior.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.5`.
+- Release version bumped to `v2.9.10`.
+
 ### [v2.9.9] - 2026-03-22
 - Fix campaign test-send behavior for invalid template syntax:
   - `TestSend` now uses strict template rendering and returns a controlled validation error when template parse/execute fails, instead of silently delivering raw `{{...}}` content.

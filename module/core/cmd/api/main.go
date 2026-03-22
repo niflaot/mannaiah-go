@@ -20,11 +20,13 @@ import (
 	assetsport "mannaiah/module/assets/port"
 	"mannaiah/module/auth"
 	"mannaiah/module/campaign"
+	campaignaffinity "mannaiah/module/campaign/adapter/affinity"
 	campaignevent "mannaiah/module/campaign/adapter/event"
 	campaignport "mannaiah/module/campaign/port"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
 	contactapplication "mannaiah/module/contacts/application"
+	contactdomain "mannaiah/module/contacts/domain"
 	contactport "mannaiah/module/contacts/port"
 	coreconfig "mannaiah/module/core/config"
 	corecron "mannaiah/module/core/cron"
@@ -185,7 +187,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.9.9",
+		Version:     "2.9.10",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -329,6 +331,12 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("initialize campaign module: %w", err)
 	}
+	affinityProductProvider, affinityProviderErr := campaignaffinity.NewProductProvider(analyticsModule.RecommendationService())
+	if affinityProviderErr != nil {
+		return fmt.Errorf("initialize campaign affinity provider: %w", affinityProviderErr)
+	}
+	campaignModule.Service().SetContactDataProvider(campaignContactDataProviderAdapter{contacts: contactsModule.Service()})
+	campaignModule.Service().SetAffinityProductProvider(affinityProductProvider)
 	campaignModule.SetSyncRecorder(campaignSyncRecorderAdapter{recorder: recorderAdapter})
 	campaignModule.SetAuthorizer(authModule)
 	if err := campaignModule.Load(runtime); err != nil {
@@ -859,6 +867,34 @@ type campaignSegmentResolverAdapter struct {
 	contacts contactapplication.Service
 }
 
+// campaignContactDataProviderAdapter adapts contacts service behavior for campaign template personalization.
+type campaignContactDataProviderAdapter struct {
+	// contacts defines contact lookup dependencies.
+	contacts contactapplication.Service
+}
+
+// GetContactData resolves one contact snapshot used for campaign template rendering.
+func (a campaignContactDataProviderAdapter) GetContactData(ctx context.Context, contactID string) (campaignport.ContactData, error) {
+	if a.contacts == nil {
+		return campaignport.ContactData{}, errors.New("contacts service is not configured")
+	}
+
+	trimmedID := strings.TrimSpace(contactID)
+	if trimmedID == "" {
+		return campaignport.ContactData{}, nil
+	}
+
+	contact, err := a.contacts.Get(ctx, trimmedID)
+	if err != nil || contact == nil {
+		return campaignport.ContactData{}, err
+	}
+
+	return campaignport.ContactData{
+		Name:  resolveContactDisplayName(contact),
+		Email: strings.TrimSpace(contact.Email),
+	}, nil
+}
+
 // ResolveSegment resolves contact ids for a segment.
 func (a campaignSegmentResolverAdapter) ResolveSegment(ctx context.Context, segmentID string, page int, limit int) ([]string, error) {
 	if a.segments == nil {
@@ -893,6 +929,22 @@ func (a campaignSegmentResolverAdapter) ResolveEmails(ctx context.Context, conta
 	}
 
 	return result, nil
+}
+
+// resolveContactDisplayName resolves one contact display name from legal/personal name fields.
+func resolveContactDisplayName(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	legalName := strings.TrimSpace(contact.LegalName)
+	if legalName != "" {
+		return legalName
+	}
+
+	firstName := strings.TrimSpace(contact.FirstName)
+	lastName := strings.TrimSpace(contact.LastName)
+	return strings.TrimSpace(firstName + " " + lastName)
 }
 
 // campaignDeliveryReaderAdapter adapts email repository behavior for campaign delivery reads.
