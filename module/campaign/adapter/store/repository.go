@@ -226,16 +226,24 @@ func mapModel(row model) *domain.Campaign {
 }
 
 // marshalTemplateFields encodes TemplateVars and ProductBlocks as JSON strings for storage.
+// Falls back to valid JSON defaults ("{}" / "[]") so MySQL JSON NOT NULL columns never
+// receive an empty string.
 func marshalTemplateFields(campaign *domain.Campaign) (templateVars string, productBlocks string) {
 	if len(campaign.TemplateVars) > 0 {
 		if b, err := json.Marshal(campaign.TemplateVars); err == nil {
 			templateVars = string(b)
 		}
 	}
+	if templateVars == "" {
+		templateVars = "{}"
+	}
 	if len(campaign.ProductBlocks) > 0 {
 		if b, err := json.Marshal(campaign.ProductBlocks); err == nil {
 			productBlocks = string(b)
 		}
+	}
+	if productBlocks == "" {
+		productBlocks = "[]"
 	}
 	return templateVars, productBlocks
 }

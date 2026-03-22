@@ -52,6 +52,11 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.1] - 2026-03-22
+- Fix campaign `PATCH` returning `500` when `template_vars` or `product_blocks` is empty:
+  - `marshalTemplateFields` now falls back to `"{}"` / `"[]"` instead of empty string `""` so MySQL `JSON NOT NULL` columns always receive valid JSON.
+- Release version bumped to `v2.9.1`.
+
 ### [v2.9.0] - 2026-03-21
 - Add contact name interpolation modes for campaign templates:
   - **`{{.Contact.FirstName}}`** — first word of the contact name before the first space (e.g. `"Juan"` from `"Juan Pérez"`).
