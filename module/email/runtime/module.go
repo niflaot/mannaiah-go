@@ -52,8 +52,10 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 	}
 	if cfg.Enabled && strings.EqualFold(strings.TrimSpace(cfg.Provider), "ses") && sender != "" {
 		sesProvider, providerErr := ses.NewProvider(context.Background(), ses.Config{
-			Region: region,
-			Sender: sender,
+			Region:          region,
+			Sender:          sender,
+			AccessKeyID:     strings.TrimSpace(cfg.SESAccessKeyID),
+			SecretAccessKey: strings.TrimSpace(cfg.SESSecretAccessKey),
 		})
 		if providerErr == nil {
 			provider = sesProvider

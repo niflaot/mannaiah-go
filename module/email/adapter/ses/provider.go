@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 	"mannaiah/module/email/port"
@@ -23,6 +24,10 @@ type Config struct {
 	Region string
 	// Sender defines SES sender email values.
 	Sender string
+	// AccessKeyID defines static AWS access key values.
+	AccessKeyID string
+	// SecretAccessKey defines static AWS secret key values.
+	SecretAccessKey string
 }
 
 // Provider defines SES-backed email delivery behavior.
@@ -45,12 +50,25 @@ func NewProvider(ctx context.Context, cfg Config) (*Provider, error) {
 		return nil, ErrSenderRequired
 	}
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, func(options *awsconfig.LoadOptions) error {
-		if strings.TrimSpace(cfg.Region) != "" {
-			options.Region = strings.TrimSpace(cfg.Region)
-		}
-		return nil
-	})
+	loaderOpts := []func(*awsconfig.LoadOptions) error{
+		func(options *awsconfig.LoadOptions) error {
+			if strings.TrimSpace(cfg.Region) != "" {
+				options.Region = strings.TrimSpace(cfg.Region)
+			}
+			return nil
+		},
+	}
+	if strings.TrimSpace(cfg.AccessKeyID) != "" && strings.TrimSpace(cfg.SecretAccessKey) != "" {
+		loaderOpts = append(loaderOpts, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				strings.TrimSpace(cfg.AccessKeyID),
+				strings.TrimSpace(cfg.SecretAccessKey),
+				"",
+			),
+		))
+	}
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loaderOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}

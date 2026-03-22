@@ -52,6 +52,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.3] - 2026-03-22
+- Fix SES static credentials not forwarded to AWS SDK:
+  - `EMAIL_SES_ACCESS_KEY_ID` and `EMAIL_SES_SECRET_ACCESS_KEY` config fields were parsed but never passed to `ses.NewProvider`, causing the AWS SDK to fall through its credential chain to EC2 IMDS and time out (500 on all email send operations in non-EC2 environments).
+  - `ses.Config` now includes `AccessKeyID` and `SecretAccessKey`; when both are non-empty, `awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(...))` is used instead of relying on the ambient credential chain.
+- Release version bumped to `v2.9.3`.
+
 ### [v2.9.2] - 2026-03-22
 - Add campaign test-send endpoint:
   - **`POST /campaigns/:id/test`** — renders the campaign template for a given `contactId` and delivers the result to an override `email` address. Does not modify campaign status, counters, or stats.
