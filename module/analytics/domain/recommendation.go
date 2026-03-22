@@ -106,4 +106,6 @@ type RecommendedProduct struct {
 	Price float64 `json:"price"`
 	// ImageURL is the public URL of the first realm-matched gallery image.
 	ImageURL string `json:"imageUrl"`
+	// URL is the realm-scoped product detail URL when available.
+	URL string `json:"url,omitempty"`
 }

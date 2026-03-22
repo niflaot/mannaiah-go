@@ -60,6 +60,7 @@ func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, blo
 			Name:     r.Name,
 			Price:    r.Price,
 			ImageURL: r.ImageURL,
+			URL:      r.URL,
 		})
 	}
 

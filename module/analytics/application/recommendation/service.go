@@ -192,11 +192,13 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		if !hasPrice || !hasImage {
 			continue
 		}
+		urlVariationCandidates := resolveURLVariationCandidates(c.VariationIDs, query.PreferVariationIDs, query.FilterVariationIDs)
 		results = append(results, domain.RecommendedProduct{
 			ID:       c.ID,
 			Name:     resolveDatasheetName(c.Datasheets, query.Realm),
 			Price:    price,
 			ImageURL: imageURL,
+			URL:      resolveRealmURL(c.Datasheets, query.Realm, urlVariationCandidates),
 		})
 	}
 
@@ -262,7 +264,9 @@ func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, 
 			}
 			for _, vid := range g.VariationIDs {
 				if _, ok := preferSet[vid]; ok {
-					return resolver.ResolveURL(ctx, g.AssetID), true
+					if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
+						return url, true
+					}
 				}
 			}
 		}
@@ -271,11 +275,29 @@ func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, 
 	// Pass 2: first realm-visible image regardless of variation.
 	for _, g := range gallery {
 		if isVisibleInRealm(g, realm) {
-			return resolver.ResolveURL(ctx, g.AssetID), true
+			if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
+				return url, true
+			}
 		}
 	}
 
 	return "", false
+}
+
+// resolveGalleryImageURL resolves one gallery image URL from resolver and metadata fallbacks.
+func resolveGalleryImageURL(ctx context.Context, galleryItem port.ProductGalleryEntry, resolver port.AssetURLResolver) string {
+	if resolved := strings.TrimSpace(resolver.ResolveURL(ctx, galleryItem.AssetID)); resolved != "" {
+		return resolved
+	}
+	if resolved := strings.TrimSpace(galleryItem.AssetURL); resolved != "" {
+		return resolved
+	}
+	assetID := strings.TrimSpace(galleryItem.AssetID)
+	if strings.HasPrefix(strings.ToLower(assetID), "http://") || strings.HasPrefix(strings.ToLower(assetID), "https://") {
+		return assetID
+	}
+
+	return ""
 }
 
 // isVisibleInRealm reports whether a gallery entry is visible in the given realm.
@@ -291,4 +313,93 @@ func isVisibleInRealm(g port.ProductGalleryEntry, realm string) bool {
 	}
 
 	return false
+}
+
+// resolveRealmURL returns the first product URL matching the requested realm.
+// When variationCandidates are provided, "<variation>.url" values are preferred over plain "url".
+// Falls back to the first non-empty datasheet URL when no realm match is found.
+func resolveRealmURL(datasheets []port.ProductDatasheetEntry, realm string, variationCandidates []string) string {
+	fallback := ""
+	for _, datasheet := range datasheets {
+		url := resolveDatasheetURL(datasheet, variationCandidates)
+		if url == "" {
+			continue
+		}
+		if fallback == "" {
+			fallback = url
+		}
+		if strings.EqualFold(datasheet.Realm, realm) {
+			return url
+		}
+	}
+
+	return fallback
+}
+
+// resolveDatasheetURL resolves one datasheet URL, preferring variation-scoped entries.
+func resolveDatasheetURL(datasheet port.ProductDatasheetEntry, variationCandidates []string) string {
+	if len(variationCandidates) > 0 && len(datasheet.VariationURLs) > 0 {
+		for _, variationID := range variationCandidates {
+			url := strings.TrimSpace(datasheet.VariationURLs[variationID])
+			if url != "" {
+				return url
+			}
+		}
+	}
+
+	return strings.TrimSpace(datasheet.URL)
+}
+
+// resolveURLVariationCandidates builds ordered variation candidates for scoped URL lookup.
+// Order: preferVariationIDs -> filterVariationIDs -> product variation links.
+func resolveURLVariationCandidates(productVariationIDs []string, preferVariationIDs []string, filterVariationIDs []string) []string {
+	if len(productVariationIDs) == 0 {
+		return nil
+	}
+
+	productSet := make(map[string]struct{}, len(productVariationIDs))
+	orderedProductVariations := make([]string, 0, len(productVariationIDs))
+	for _, rawVariationID := range productVariationIDs {
+		variationID := normalizeVariationToken(rawVariationID)
+		if variationID == "" {
+			continue
+		}
+		if _, exists := productSet[variationID]; exists {
+			continue
+		}
+		productSet[variationID] = struct{}{}
+		orderedProductVariations = append(orderedProductVariations, variationID)
+	}
+	if len(orderedProductVariations) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(orderedProductVariations))
+	seen := make(map[string]struct{}, len(orderedProductVariations))
+	appendCandidates := func(source []string) {
+		for _, rawVariationID := range source {
+			variationID := normalizeVariationToken(rawVariationID)
+			if variationID == "" {
+				continue
+			}
+			if _, allowed := productSet[variationID]; !allowed {
+				continue
+			}
+			if _, alreadyIncluded := seen[variationID]; alreadyIncluded {
+				continue
+			}
+			seen[variationID] = struct{}{}
+			result = append(result, variationID)
+		}
+	}
+	appendCandidates(preferVariationIDs)
+	appendCandidates(filterVariationIDs)
+	appendCandidates(orderedProductVariations)
+
+	return result
+}
+
+// normalizeVariationToken resolves trimmed lower-case variation tokens.
+func normalizeVariationToken(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }

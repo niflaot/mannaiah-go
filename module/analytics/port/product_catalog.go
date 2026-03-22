@@ -27,12 +27,19 @@ type ProductDatasheetEntry struct {
 	// Price is the realm-specific price parsed from product_datasheet_attributes key="price".
 	// Nil when the attribute is absent or cannot be parsed as a number.
 	Price *float64
+	// URL is the realm-scoped product detail URL parsed from product_datasheet_attributes key="url".
+	URL string
+	// VariationURLs maps variation-scoped URL values from product_datasheet_attributes keys
+	// in the form "<variation_id>.url".
+	VariationURLs map[string]string
 }
 
 // ProductGalleryEntry defines one gallery item for a product.
 type ProductGalleryEntry struct {
 	// AssetID is the referenced asset identifier.
 	AssetID string
+	// AssetURL is the resolved public URL from asset metadata when available.
+	AssetURL string
 	// IncludedRealms defines realms where this image is visible (empty means all realms).
 	IncludedRealms []string
 	// IsMain reports whether this is the primary product image.

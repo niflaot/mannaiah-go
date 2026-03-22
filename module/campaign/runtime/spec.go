@@ -17,6 +17,9 @@ func OpenAPISpec() *openapi3.T {
 	}
 	components.Schemas = openapi3.Schemas{
 		"Campaign":               {Value: campaignSchema()},
+		"CampaignProductBlock":   {Value: campaignProductBlockSchema()},
+		"CampaignCreateRequest":  {Value: campaignCreateRequestSchema()},
+		"CampaignUpdateRequest":  {Value: campaignUpdateRequestSchema()},
 		"CampaignListResult":     {Value: campaignListSchema()},
 		"CampaignDelete":         {Value: deleteStatusSchema()},
 		"CampaignDeliveryRow":    {Value: campaignDeliveryRowSchema()},
@@ -26,7 +29,7 @@ func OpenAPISpec() *openapi3.T {
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info: &openapi3.Info{Title: "Campaign API", Version: "2.5.6"},
+		Info:    &openapi3.Info{Title: "Campaign API", Version: "2.5.7"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/campaigns", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
 			openapi3.WithPath("/campaigns/{id}", &openapi3.PathItem{Get: getOperation(), Patch: updateOperation(), Delete: deleteOperation()}),
@@ -42,6 +45,15 @@ func OpenAPISpec() *openapi3.T {
 // createOperation builds create campaign OpenAPI operations.
 func createOperation() *openapi3.Operation {
 	operation := baseOperation("CampaignController_create", "Create campaign")
+	operation.RequestBody = &openapi3.RequestBodyRef{
+		Value: openapi3.NewRequestBody().
+			WithRequired(true).
+			WithContent(openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{Ref: "#/components/schemas/CampaignCreateRequest"},
+				},
+			}),
+	}
 	operation.Responses = openapi3.NewResponses(
 		openapi3.WithStatus(201, jsonResponse("Campaign created.", "#/components/schemas/Campaign")),
 		openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
@@ -80,6 +92,15 @@ func getOperation() *openapi3.Operation {
 // updateOperation builds update campaign OpenAPI operations.
 func updateOperation() *openapi3.Operation {
 	operation := baseOperation("CampaignController_update", "Update campaign")
+	operation.RequestBody = &openapi3.RequestBodyRef{
+		Value: openapi3.NewRequestBody().
+			WithRequired(true).
+			WithContent(openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{Ref: "#/components/schemas/CampaignUpdateRequest"},
+				},
+			}),
+	}
 	operation.Responses = openapi3.NewResponses(
 		openapi3.WithStatus(200, jsonResponse("Campaign updated.", "#/components/schemas/Campaign")),
 		openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
@@ -123,7 +144,7 @@ func testSendOperation() *openapi3.Operation {
 	}
 	operation.Responses = openapi3.NewResponses(
 		openapi3.WithStatus(202, jsonResponse("Test email submitted.", "#/components/schemas/CampaignTestSendResult")),
-		openapi3.WithStatus(400, responseWithDescription("Missing or invalid email address, or invalid template syntax.")),
+		openapi3.WithStatus(400, responseWithDescription("Missing or invalid email address, invalid template syntax, or invalid contact personalization context.")),
 		openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 		openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		openapi3.WithStatus(404, responseWithDescription("Campaign not found.")),
@@ -209,8 +230,47 @@ func campaignSchema() *openapi3.Schema {
 		WithProperty("totalRecipients", openapi3.NewInt64Schema()).
 		WithProperty("sentCount", openapi3.NewInt64Schema()).
 		WithProperty("failedCount", openapi3.NewInt64Schema()).
+		WithProperty("templateVars", openapi3.NewObjectSchema().WithAdditionalProperties(openapi3.NewStringSchema())).
+		WithProperty("productBlocks", openapi3.NewArraySchema().WithItems(campaignProductBlockSchema())).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
+}
+
+// campaignProductBlockSchema defines campaign product-block payload schema values.
+func campaignProductBlockSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("id", openapi3.NewStringSchema()).
+		WithProperty("baseTag", openapi3.NewStringSchema()).
+		WithProperty("baseTags", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("baseTagMode", openapi3.NewStringSchema().WithEnum("any", "all")).
+		WithProperty("useAffinity", openapi3.NewBoolSchema()).
+		WithProperty("affinityMinScorePct", openapi3.NewFloat64Schema()).
+		WithProperty("categoryId", openapi3.NewStringSchema()).
+		WithProperty("realm", openapi3.NewStringSchema()).
+		WithProperty("limit", openapi3.NewInt64Schema()).
+		WithProperty("pinnedProductIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("excludeProductIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("filterVariationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("preferVariationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema()))
+}
+
+// campaignCreateRequestSchema defines create request payload schema values.
+func campaignCreateRequestSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("name", openapi3.NewStringSchema()).
+		WithProperty("slug", openapi3.NewStringSchema()).
+		WithProperty("channel", openapi3.NewStringSchema().WithEnum("email", "all")).
+		WithProperty("segmentId", openapi3.NewStringSchema()).
+		WithProperty("subject", openapi3.NewStringSchema()).
+		WithProperty("htmlBody", openapi3.NewStringSchema()).
+		WithProperty("textBody", openapi3.NewStringSchema()).
+		WithProperty("templateVars", openapi3.NewObjectSchema().WithAdditionalProperties(openapi3.NewStringSchema())).
+		WithProperty("productBlocks", openapi3.NewArraySchema().WithItems(campaignProductBlockSchema()))
+}
+
+// campaignUpdateRequestSchema defines update request payload schema values.
+func campaignUpdateRequestSchema() *openapi3.Schema {
+	return campaignCreateRequestSchema()
 }
 
 // campaignListSchema defines campaign-list response schema values.

@@ -16,26 +16,26 @@ func OpenAPISpec() *openapi3.T {
 		bearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
 	}
 	components.Schemas = openapi3.Schemas{
-		"AnalyticsStatus":     {Value: analyticsStatusSchema()},
-		"AnalyticsSeed":       {Value: analyticsSeedSchema()},
-		"RFMBandConfig":       {Value: rfmBandConfigSchema()},
+		"AnalyticsStatus":      {Value: analyticsStatusSchema()},
+		"AnalyticsSeed":        {Value: analyticsSeedSchema()},
+		"RFMBandConfig":        {Value: rfmBandConfigSchema()},
 		"RFMBandUpdateRequest": {Value: rfmBandUpdateRequestSchema()},
-		"RFMGroup":            {Value: rfmGroupSchema()},
-		"RFMGroupRequest":     {Value: rfmGroupRequestSchema()},
-		"RFMScore":            {Value: rfmScoreSchema()},
+		"RFMGroup":             {Value: rfmGroupSchema()},
+		"RFMGroupRequest":      {Value: rfmGroupRequestSchema()},
+		"RFMScore":             {Value: rfmScoreSchema()},
 		"RFMScoreBatchRequest": {Value: rfmScoreBatchRequestSchema()},
-		"TagAffinity":        {Value: tagAffinitySchema()},
-		"CategoryAffinity":   {Value: categoryAffinitySchema()},
-		"VariationAffinity":  {Value: variationAffinitySchema()},
-		"AffinityProfile":    {Value: affinityProfileSchema()},
-		"RecommendedProduct": {Value: recommendedProductSchema()},
+		"TagAffinity":          {Value: tagAffinitySchema()},
+		"CategoryAffinity":     {Value: categoryAffinitySchema()},
+		"VariationAffinity":    {Value: variationAffinitySchema()},
+		"AffinityProfile":      {Value: affinityProfileSchema()},
+		"RecommendedProduct":   {Value: recommendedProductSchema()},
 	}
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Analytics API",
-			Version: "2.6.0",
+			Version: "2.6.1",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/analytics/status", &openapi3.PathItem{Get: statusOperation()}),

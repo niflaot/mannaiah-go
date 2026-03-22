@@ -45,11 +45,13 @@ type productDatasheetRecord struct {
 	Name string `gorm:"column:name"`
 }
 
-// productDatasheetPriceRecord holds a datasheet_id → price value_json join result.
-type productDatasheetPriceRecord struct {
+// productDatasheetAttributeRecord holds a datasheet_id/key/value_json join result.
+type productDatasheetAttributeRecord struct {
 	// DatasheetID is the owning datasheet row identifier.
 	DatasheetID uint `gorm:"column:datasheet_id"`
-	// ValueJSON is the raw JSON-encoded attribute value for key='price'.
+	// Key is the attribute key name.
+	Key string `gorm:"column:key"`
+	// ValueJSON is the raw JSON-encoded attribute value.
 	ValueJSON string `gorm:"column:value_json"`
 }
 
@@ -81,6 +83,16 @@ type productVariationLinkRow struct {
 	ProductID string `gorm:"column:product_id"`
 	// VariationID is the linked variation identifier.
 	VariationID string `gorm:"column:variation_id"`
+}
+
+// assetMetadataRow holds one asset metadata key/value row.
+type assetMetadataRow struct {
+	// AssetID is the owning asset identifier.
+	AssetID string `gorm:"column:asset_id"`
+	// Key is the metadata key name.
+	Key string `gorm:"column:key"`
+	// Value is the metadata value.
+	Value string `gorm:"column:value"`
 }
 
 // NewProductCatalogRepository creates GORM-backed product catalog repositories.
@@ -224,24 +236,53 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		return nil, fmt.Errorf("load product datasheets for catalog: %w", err)
 	}
 
-	// Load datasheet price attributes (key='price') for all loaded datasheets.
+	// Load datasheet attributes (price + url, including variation-scoped "<variation>.url")
+	// for all loaded datasheets.
 	datasheetPrices := make(map[uint]*float64)
+	datasheetURLs := make(map[uint]string)
+	datasheetVariationURLs := make(map[uint]map[string]string)
 	if len(datasheetRows) > 0 {
 		datasheetIDs := make([]uint, 0, len(datasheetRows))
 		for _, ds := range datasheetRows {
 			datasheetIDs = append(datasheetIDs, ds.ID)
 		}
-		priceRows := make([]productDatasheetPriceRecord, 0)
+		attributeRows := make([]productDatasheetAttributeRecord, 0)
 		if err := r.db.WithContext(ctx).
 			Table("product_datasheet_attributes").
-			Select("datasheet_id, value_json").
-			Where("datasheet_id IN ? AND `key` = 'price'", datasheetIDs).
-			Scan(&priceRows).Error; err != nil {
-			return nil, fmt.Errorf("load product datasheet prices for catalog: %w", err)
+			Select("datasheet_id, `key`, value_json").
+			Where(
+				"datasheet_id IN ? AND (LOWER(`key`) = ? OR LOWER(`key`) = ? OR LOWER(`key`) LIKE ?)",
+				datasheetIDs,
+				"price",
+				"url",
+				"%.url",
+			).
+			Scan(&attributeRows).Error; err != nil {
+			return nil, fmt.Errorf("load product datasheet attributes for catalog: %w", err)
 		}
-		for _, pr := range priceRows {
-			if p := parsePrice(pr.ValueJSON); p != nil {
-				datasheetPrices[pr.DatasheetID] = p
+		for _, attribute := range attributeRows {
+			switch strings.ToLower(strings.TrimSpace(attribute.Key)) {
+			case "price":
+				if p := parsePrice(attribute.ValueJSON); p != nil {
+					datasheetPrices[attribute.DatasheetID] = p
+				}
+			case "url":
+				if value := parseStringAttribute(attribute.ValueJSON); value != "" {
+					datasheetURLs[attribute.DatasheetID] = value
+				}
+			default:
+				variationID, ok := parseScopedURLAttributeKey(attribute.Key)
+				if !ok {
+					continue
+				}
+				value := parseStringAttribute(attribute.ValueJSON)
+				if value == "" {
+					continue
+				}
+				if datasheetVariationURLs[attribute.DatasheetID] == nil {
+					datasheetVariationURLs[attribute.DatasheetID] = make(map[string]string)
+				}
+				datasheetVariationURLs[attribute.DatasheetID][variationID] = value
 			}
 		}
 	}
@@ -267,6 +308,19 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 			galleryItemIDs = append(galleryItemIDs, row.GalleryItemID)
 		}
 	}
+	assetIDs := make([]string, 0, len(galleryRows))
+	seenAssetIDs := make(map[string]struct{}, len(galleryRows))
+	for _, row := range galleryRows {
+		assetID := strings.TrimSpace(row.AssetID)
+		if assetID == "" {
+			continue
+		}
+		if _, ok := seenAssetIDs[assetID]; ok {
+			continue
+		}
+		seenAssetIDs[assetID] = struct{}{}
+		assetIDs = append(assetIDs, assetID)
+	}
 
 	// Load gallery variation links.
 	galleryVariationsByItem := make(map[uint][]string)
@@ -281,6 +335,40 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		}
 		for _, row := range galleryVarRows {
 			galleryVariationsByItem[row.GalleryItemID] = append(galleryVariationsByItem[row.GalleryItemID], row.VariationID)
+		}
+	}
+	assetURLsByID := make(map[string]string, len(assetIDs))
+	assetURLPriorityByID := make(map[string]int, len(assetIDs))
+	if len(assetIDs) > 0 {
+		metadataRows := make([]assetMetadataRow, 0)
+		if err := r.db.WithContext(ctx).
+			Table("asset_metadata").
+			Select("asset_id, `key`, value").
+			Where("asset_id IN ?", assetIDs).
+			Scan(&metadataRows).Error; err != nil {
+			return nil, fmt.Errorf("load asset metadata URLs for catalog: %w", err)
+		}
+		for _, row := range metadataRows {
+			assetID := strings.TrimSpace(row.AssetID)
+			if assetID == "" {
+				continue
+			}
+			priority := metadataURLPriority(row.Key)
+			if priority == 0 {
+				continue
+			}
+			value := strings.TrimSpace(row.Value)
+			if value == "" {
+				continue
+			}
+			currentPriority := assetURLPriorityByID[assetID]
+			if currentPriority != 0 && currentPriority <= priority {
+				continue
+			}
+			assetURLPriorityByID[assetID] = priority
+			if value != "" {
+				assetURLsByID[assetID] = value
+			}
 		}
 	}
 
@@ -305,9 +393,11 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 	for _, row := range datasheetRows {
 		price := datasheetPrices[row.ID]
 		datasheetsByProduct[row.ProductID] = append(datasheetsByProduct[row.ProductID], port.ProductDatasheetEntry{
-			Realm: row.Realm,
-			Name:  row.Name,
-			Price: price,
+			Realm:         row.Realm,
+			Name:          row.Name,
+			Price:         price,
+			URL:           datasheetURLs[row.ID],
+			VariationURLs: datasheetVariationURLs[row.ID],
 		})
 	}
 
@@ -329,6 +419,7 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 		} else {
 			entry := port.ProductGalleryEntry{
 				AssetID:      row.AssetID,
+				AssetURL:     assetURLsByID[strings.TrimSpace(row.AssetID)],
 				IsMain:       row.IsMain,
 				VariationIDs: galleryVariationsByItem[row.GalleryItemID],
 			}
@@ -521,4 +612,62 @@ func parsePrice(valueJSON string) *float64 {
 	}
 
 	return nil
+}
+
+// parseStringAttribute attempts to parse a JSON-encoded attribute value as string.
+// Supports JSON string ("https://...") and plain scalar fallback.
+func parseStringAttribute(valueJSON string) string {
+	valueJSON = strings.TrimSpace(valueJSON)
+	if valueJSON == "" {
+		return ""
+	}
+
+	var value string
+	if err := json.Unmarshal([]byte(valueJSON), &value); err == nil {
+		return strings.TrimSpace(value)
+	}
+
+	return strings.Trim(valueJSON, "\"")
+}
+
+// parseScopedURLAttributeKey parses "<variation>.url" datasheet attribute keys.
+func parseScopedURLAttributeKey(key string) (string, bool) {
+	scope, field, ok := strings.Cut(strings.TrimSpace(key), ".")
+	if !ok {
+		return "", false
+	}
+	if strings.TrimSpace(scope) == "" || !strings.EqualFold(strings.TrimSpace(field), "url") {
+		return "", false
+	}
+
+	return normalizeVariationToken(scope), true
+}
+
+// normalizeVariationToken resolves trimmed lower-case variation tokens.
+func normalizeVariationToken(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+// metadataURLPriority resolves known metadata-key priorities for public URL lookup.
+// Lower numbers indicate higher priority.
+func metadataURLPriority(key string) int {
+	normalizedKey := strings.ToLower(strings.TrimSpace(key))
+	if normalizedKey == "" {
+		return 0
+	}
+
+	switch normalizedKey {
+	case "falabella_url":
+		return 1
+	case "public_url", "publicurl":
+		return 2
+	case "cdn_url", "cdnurl":
+		return 3
+	case "image_url":
+		return 4
+	case "url":
+		return 5
+	default:
+		return 0
+	}
 }

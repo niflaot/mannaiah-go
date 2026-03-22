@@ -49,11 +49,13 @@ type TemplateProduct struct {
 	Price float64
 	// ImageURL is the public URL of the first realm-matched gallery image.
 	ImageURL string
+	// URL is the realm-scoped product detail URL when available.
+	URL string
 }
 
 // ContactTemplateData defines the per-contact data available inside the campaign template context.
 type ContactTemplateData struct {
-	// Name is the contact display name (backward-compatible alias for FullName).
+	// Name is the contact short display name (first-name preference).
 	Name string
 	// FullName is the complete contact display name.
 	FullName string

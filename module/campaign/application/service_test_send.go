@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -29,6 +30,9 @@ func (s *CampaignService) TestSend(ctx context.Context, campaignID string, comma
 	contactID := strings.TrimSpace(command.ContactID)
 	htmlBody, textBody, renderErr := s.renderForContactStrict(ctx, campaign, contactID, email)
 	if renderErr != nil {
+		if errors.Is(renderErr, domain.ErrContactPersonalization) {
+			return nil, renderErr
+		}
 		return nil, fmt.Errorf("%w: %v", domain.ErrInvalidTemplate, renderErr)
 	}
 

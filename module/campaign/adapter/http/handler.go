@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	corehttp "mannaiah/module/core/http"
 	"mannaiah/module/campaign/application"
 	"mannaiah/module/campaign/domain"
+	corehttp "mannaiah/module/core/http"
 )
 
 var (
@@ -110,9 +110,9 @@ type updateRequest struct {
 	// TextBody defines optional text content values.
 	TextBody *string `json:"textBody"`
 	// TemplateVars defines optional campaign-level custom variable values.
-	TemplateVars map[string]string `json:"templateVars"`
+	TemplateVars *map[string]string `json:"templateVars"`
 	// ProductBlocks defines optional product recommendation block configurations.
-	ProductBlocks []productBlockRequest `json:"productBlocks"`
+	ProductBlocks *[]productBlockRequest `json:"productBlocks"`
 }
 
 // NewHandler creates campaign HTTP handlers.
@@ -205,6 +205,16 @@ func (h *Handler) update(ctx corehttp.Context) error {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
 
+	var templateVars map[string]string
+	if request.TemplateVars != nil {
+		templateVars = *request.TemplateVars
+	}
+
+	var productBlocks []domain.ProductBlock
+	if request.ProductBlocks != nil {
+		productBlocks = mapProductBlockRequests(*request.ProductBlocks)
+	}
+
 	campaign, err := h.service.Update(ctx.Context(), strings.TrimSpace(ctx.Params("id")), application.UpdateCommand{
 		Name:          request.Name,
 		Slug:          request.Slug,
@@ -213,8 +223,8 @@ func (h *Handler) update(ctx corehttp.Context) error {
 		Subject:       request.Subject,
 		HTMLBody:      request.HTMLBody,
 		TextBody:      request.TextBody,
-		TemplateVars:  request.TemplateVars,
-		ProductBlocks: mapProductBlockRequests(request.ProductBlocks),
+		TemplateVars:  templateVars,
+		ProductBlocks: productBlocks,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -260,9 +270,6 @@ func (h *Handler) protect(permission string, next corehttp.Handler) corehttp.Han
 
 // mapProductBlockRequests maps HTTP product block requests to domain product blocks.
 func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
-	if len(reqs) == 0 {
-		return nil
-	}
 	blocks := make([]domain.ProductBlock, 0, len(reqs))
 	for _, r := range reqs {
 		blocks = append(blocks, domain.ProductBlock{
@@ -299,6 +306,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, domain.ErrInvalidTemplate) {
 		return corehttp.NewAppError(400, "invalid_template", err)
+	}
+	if errors.Is(err, domain.ErrContactPersonalization) {
+		return corehttp.NewAppError(400, "invalid_contact_personalization", err)
 	}
 	if errors.Is(err, domain.ErrSenderNotConfigured) {
 		return corehttp.NewAppError(503, "email_sender_not_configured", err)

@@ -21,4 +21,6 @@ var (
 	ErrSenderUnavailable = errors.New("email sender is unavailable")
 	// ErrInvalidTemplate is returned when campaign template parsing or execution fails.
 	ErrInvalidTemplate = errors.New("campaign template is invalid")
+	// ErrContactPersonalization is returned when contact personalization cannot be resolved for an explicit contact id.
+	ErrContactPersonalization = errors.New("campaign contact personalization failed")
 )

@@ -227,7 +227,10 @@ func (s *CampaignService) renderForContactStrict(ctx context.Context, campaign *
 		return htmlBody, textBody, nil
 	}
 
-	tplCtx := s.buildTemplateContext(ctx, campaign, contactID, email)
+	tplCtx, buildErr := s.buildTemplateContext(ctx, campaign, contactID, email)
+	if buildErr != nil {
+		return "", "", buildErr
+	}
 
 	renderedHTML, renderHTMLErr := s.templateRenderer.Render("html:"+campaign.ID, campaign.HTMLBody, tplCtx)
 	if renderHTMLErr != nil {
@@ -242,11 +245,27 @@ func (s *CampaignService) renderForContactStrict(ctx context.Context, campaign *
 }
 
 // buildTemplateContext builds one per-contact template context value.
-func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *domain.Campaign, contactID string, email string) domain.TemplateContext {
-	// Build contact data (fail-open: use defaults on error).
-	contactData, _ := s.contactDataProvider.GetContactData(ctx, contactID)
-	if contactData.Name == "" {
-		contactData.Name = email
+func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *domain.Campaign, contactID string, email string) (domain.TemplateContext, error) {
+	// Build contact data (fail-open for bulk send, strict for explicit test-send contact ids).
+	contactData, contactErr := s.contactDataProvider.GetContactData(ctx, contactID)
+	trimmedContactID := strings.TrimSpace(contactID)
+	if contactErr != nil && trimmedContactID != "" {
+		return domain.TemplateContext{}, fmt.Errorf("%w: %v", domain.ErrContactPersonalization, contactErr)
+	}
+	fullName := strings.TrimSpace(contactData.Name)
+	firstName := campaigntemplate.ExtractFirstName(fullName)
+	displayName := strings.TrimSpace(firstName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(fullName)
+	}
+	if displayName == "" {
+		displayName = email
+	}
+	if fullName == "" {
+		fullName = displayName
+	}
+	if firstName == "" {
+		firstName = campaigntemplate.ExtractFirstName(fullName)
 	}
 
 	// Build product blocks (fail-open: skip failed blocks).
@@ -267,15 +286,15 @@ func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *do
 
 	return domain.TemplateContext{
 		Contact: domain.ContactTemplateData{
-			Name:         contactData.Name,
-			FullName:     contactData.Name,
-			FirstName:    campaigntemplate.ExtractFirstName(contactData.Name),
+			Name:         displayName,
+			FullName:     fullName,
+			FirstName:    firstName,
 			Email:        email,
 			LastSaleDate: contactData.LastSaleDate,
 		},
 		Custom:   campaign.TemplateVars,
 		Products: products,
-	}
+	}, nil
 }
 
 // hasProductSource reports whether a product block has at least one source capable of resolving products.

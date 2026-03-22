@@ -8,7 +8,8 @@ func recommendedProductSchema() *openapi3.Schema {
 		WithProperty("id", openapi3.NewStringSchema()).
 		WithProperty("name", openapi3.NewStringSchema()).
 		WithProperty("price", openapi3.NewFloat64Schema()).
-		WithProperty("imageUrl", openapi3.NewStringSchema())
+		WithProperty("imageUrl", openapi3.NewStringSchema()).
+		WithProperty("url", openapi3.NewStringSchema())
 }
 
 // recommendationContactPathItem returns the path item for the contact recommendation endpoint.

@@ -52,6 +52,30 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.12] - 2026-03-22
+- Campaign/frontend contract and template-population fixes:
+  - `PATCH /campaigns/{id}` now preserves explicit empty `productBlocks: []` updates (clear semantics) instead of treating empty arrays as omitted fields.
+  - Test-send strict personalization now fails with controlled `400 invalid_contact_personalization` when an explicit `contactId` cannot be resolved, preventing silent fallback discrepancies.
+  - Template context name semantics updated: `.Contact.Name` now resolves as short-name (first-name preference), while `.Contact.FullName` keeps full display name.
+- Product DSL enrichment and media resolution improvements:
+  - Added `.URL` in product template items, resolved from product datasheet attribute key `url` (realm-aware with fallback).
+  - Improved recommendation image URL resolution fallback chain:
+    - asset resolver output,
+    - `asset_metadata` URL keys (`falabella_url`, `public_url/publicUrl`, `cdn_url/cdnUrl`, `image_url`, `url`),
+    - direct `asset_id` when already an absolute `http(s)` URL.
+- Email tracking pixel fallback:
+  - When `EMAIL_TRACKING_BASE_URL` is empty, runtime now falls back to `https://<sender-domain>` from configured sender email.
+- Documentation and OpenAPI:
+  - Added root spec file `FINAL-DSL-EMAILS.md` as backend DSL source of truth for frontend integration.
+  - Campaign OpenAPI now documents create/update request bodies and campaign template fields (`templateVars`, `productBlocks`) and was bumped to `2.5.7`.
+  - Analytics recommended-product schema now includes `url` and Analytics OpenAPI was bumped to `2.6.1`.
+- Tests added/updated:
+  - Campaign HTTP: explicit empty `productBlocks` mapping regression.
+  - Campaign application: strict personalization failure behavior, short-name rendering semantics, product URL template rendering.
+  - Email runtime: tracking-base-url fallback behavior.
+  - Analytics recommendation: realm URL and gallery image URL fallback helpers.
+- Release version bumped to `v2.9.12`.
+
 ### [v2.9.11] - 2026-03-22
 - Prevent contact-email leakage in campaign template context:
   - Template context now sets `.Contact.Email` to the actual recipient email for the current send operation (test-send override email in `POST /campaigns/{id}/test`), instead of using contact-repository email data.

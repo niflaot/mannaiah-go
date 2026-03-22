@@ -1,11 +1,12 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v2.9.11-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.9.12-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
 Frontend integration for the 2.0+ marketing/BI stack is documented through the aggregated API docs at `/docs` and `/openapi.json`.
+Campaign-template parsing and runtime DSL behavior are documented in `FINAL-DSL-EMAILS.md`.
 
 ## Architecture
 
@@ -53,6 +54,11 @@ The API listens on `CORE_HOST:CORE_PORT` (`0.0.0.0:8080` by default).
 - `ANALYTICS_ENABLED=true` enables ClickHouse analytics and integration consumers.
 - `SEGMENT_ENABLED=true` requires analytics to be enabled.
 - Run `POST /analytics/seed` once (admin scope `marketing:manage`) to backfill ClickHouse from transactional data.
+
+### Email Tracking Pixel
+
+- `EMAIL_TRACKING_BASE_URL` defines the public base URL for open-tracking pixel injection.
+- When empty, runtime falls back to `https://<sender-domain>` from `EMAIL_SES_FROM_ADDRESS` / `EMAIL_SENDER_ADDRESS`.
 
 ### Assets JPG Worker
 

@@ -66,7 +66,7 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	service.SetTrackingBaseURL(cfg.TrackingBaseURL)
+	service.SetTrackingBaseURL(resolveTrackingBaseURL(cfg.TrackingBaseURL, sender))
 
 	handler, err := emailhttp.NewHandler(service)
 	if err != nil {
@@ -74,6 +74,26 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 	}
 
 	return &Module{cfg: cfg, service: service, handler: handler, repository: repository}, nil
+}
+
+// resolveTrackingBaseURL resolves open-tracking base URLs from explicit config or sender-domain fallback.
+func resolveTrackingBaseURL(configuredBaseURL string, senderEmail string) string {
+	trimmedConfigured := strings.TrimSpace(configuredBaseURL)
+	if trimmedConfigured != "" {
+		return trimmedConfigured
+	}
+
+	trimmedSender := strings.TrimSpace(senderEmail)
+	at := strings.LastIndex(trimmedSender, "@")
+	if at <= 0 || at+1 >= len(trimmedSender) {
+		return ""
+	}
+	domain := strings.TrimSpace(trimmedSender[at+1:])
+	if domain == "" {
+		return ""
+	}
+
+	return "https://" + domain
 }
 
 // RegisterRoutes registers email routes on the provided router.
