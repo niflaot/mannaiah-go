@@ -86,7 +86,7 @@ func (s *RecommendationService) SetAssetResolver(resolver port.AssetURLResolver)
 //  3. If BaseTag is set, fetch contact tag affinity and expand via tag_correlations.
 //  4. Query dynamic candidates (excluded IDs removed), rank by affinity score.
 //  5. Combine: pinned first, then dynamic up to Limit total.
-//  6. For each product: resolve realm price and realm image — skip if either is missing.
+//  6. For each product: resolve realm price and optional realm image — skip only when price is missing.
 func (s *RecommendationService) Recommend(ctx context.Context, contactID string, query domain.RecommendationQuery) ([]domain.RecommendedProduct, error) {
 	query.Normalize()
 
@@ -184,12 +184,12 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		return nil, nil
 	}
 
-	// Step 6: resolve realm price and realm image; skip products missing either.
+	// Step 6: resolve realm price and optional image; skip products missing price.
 	results := make([]domain.RecommendedProduct, 0, len(all))
 	for _, c := range all {
 		price, hasPrice := resolveRealmPrice(c.Datasheets, query.Realm)
-		imageURL, hasImage := resolveRealmImage(ctx, c.Gallery, query.Realm, query.PreferVariationIDs, s.assetResolver)
-		if !hasPrice || !hasImage {
+		imageURL, _ := resolveRealmImage(ctx, c.Gallery, query.Realm, query.PreferVariationIDs, s.assetResolver)
+		if !hasPrice {
 			continue
 		}
 		urlVariationCandidates := resolveURLVariationCandidates(c.VariationIDs, query.PreferVariationIDs, query.FilterVariationIDs)
@@ -232,12 +232,25 @@ func resolveDatasheetName(datasheets []port.ProductDatasheetEntry, realm string)
 }
 
 // resolveRealmPrice returns the price from the first datasheet matching the realm.
-// Returns (0, false) when no realm datasheet has a price attribute — the product must be excluded.
+// Falls back to the first available datasheet price when no realm match is found.
+// Returns (0, false) when no datasheet contains a valid price.
 func resolveRealmPrice(datasheets []port.ProductDatasheetEntry, realm string) (float64, bool) {
+	var fallback float64
+	hasFallback := false
 	for _, d := range datasheets {
-		if strings.EqualFold(d.Realm, realm) && d.Price != nil {
+		if d.Price == nil {
+			continue
+		}
+		if !hasFallback {
+			fallback = *d.Price
+			hasFallback = true
+		}
+		if strings.EqualFold(d.Realm, realm) {
 			return *d.Price, true
 		}
+	}
+	if hasFallback {
+		return fallback, true
 	}
 
 	return 0, false
@@ -250,7 +263,8 @@ func resolveRealmPrice(datasheets []port.ProductDatasheetEntry, realm string) (f
 //  2. First realm-visible image regardless of variation.
 //
 // An image is "visible in realm R" when its IncludedRealms is empty (all realms) or contains R.
-// Returns ("", false) when no realm-visible image exists — the product must be excluded.
+// Falls back to cross-realm candidates when no in-realm image exists.
+// Returns ("", false) when no image URL can be resolved.
 func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, realm string, preferVariationIDs []string, resolver port.AssetURLResolver) (string, bool) {
 	// Pass 1: prefer variation-specific image visible in the realm.
 	if len(preferVariationIDs) > 0 {
@@ -278,6 +292,28 @@ func resolveRealmImage(ctx context.Context, gallery []port.ProductGalleryEntry, 
 			if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
 				return url, true
 			}
+		}
+	}
+	// Pass 3: prefer variation-specific image across all realms.
+	if len(preferVariationIDs) > 0 {
+		preferSet := make(map[string]struct{}, len(preferVariationIDs))
+		for _, v := range preferVariationIDs {
+			preferSet[v] = struct{}{}
+		}
+		for _, g := range gallery {
+			for _, vid := range g.VariationIDs {
+				if _, ok := preferSet[vid]; ok {
+					if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
+						return url, true
+					}
+				}
+			}
+		}
+	}
+	// Pass 4: first image regardless of realm/variation.
+	for _, g := range gallery {
+		if url := resolveGalleryImageURL(ctx, g, resolver); url != "" {
+			return url, true
 		}
 	}
 

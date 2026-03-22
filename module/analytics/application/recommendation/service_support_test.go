@@ -49,6 +49,25 @@ func TestResolveRealmURLPrefersVariationScopedURL(t *testing.T) {
 	}
 }
 
+// TestResolveRealmPriceFallback verifies price fallback behavior when requested realm has no price.
+func TestResolveRealmPriceFallback(t *testing.T) {
+	t.Parallel()
+
+	value := 79.9
+	datasheets := []port.ProductDatasheetEntry{
+		{Realm: "default", Price: nil},
+		{Realm: "woo", Price: &value},
+	}
+
+	got, ok := resolveRealmPrice(datasheets, "default")
+	if !ok {
+		t.Fatalf("resolveRealmPrice() ok = false, want true")
+	}
+	if got != value {
+		t.Fatalf("resolveRealmPrice() = %v, want %v", got, value)
+	}
+}
+
 // TestResolveURLVariationCandidates verifies variation URL candidate ordering and filtering behavior.
 func TestResolveURLVariationCandidates(t *testing.T) {
 	t.Parallel()
@@ -66,6 +85,25 @@ func TestResolveURLVariationCandidates(t *testing.T) {
 		if candidates[i] != want[i] {
 			t.Fatalf("candidates[%d] = %q, want %q (%#v)", i, candidates[i], want[i], candidates)
 		}
+	}
+}
+
+// TestResolveRealmImageFallbackAcrossRealms verifies image fallback when no realm-visible images exist.
+func TestResolveRealmImageFallbackAcrossRealms(t *testing.T) {
+	t.Parallel()
+
+	value, ok := resolveRealmImage(context.Background(), []port.ProductGalleryEntry{
+		{
+			AssetID:        "asset-woo",
+			AssetURL:       "https://cdn.example.com/woo-image.jpg",
+			IncludedRealms: []string{"woo"},
+		},
+	}, "default", nil, noopAssetResolver{})
+	if !ok {
+		t.Fatalf("resolveRealmImage() ok = false, want true")
+	}
+	if value != "https://cdn.example.com/woo-image.jpg" {
+		t.Fatalf("resolveRealmImage() = %q, want fallback image URL", value)
 	}
 }
 
