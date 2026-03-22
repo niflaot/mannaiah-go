@@ -226,7 +226,7 @@ func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain
 	// Build product blocks (fail-open: skip failed blocks).
 	products := make(map[string][]domain.TemplateProduct, len(campaign.ProductBlocks))
 	for _, block := range campaign.ProductBlocks {
-		if block.ID == "" || block.BaseTag == "" {
+		if strings.TrimSpace(block.ID) == "" || !hasProductSource(block) {
 			continue
 		}
 		items, err := s.affinityProductProvider.GetProducts(ctx, contactID, block)
@@ -259,6 +259,20 @@ func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain
 	}
 
 	return htmlBody, textBody
+}
+
+// hasProductSource reports whether a product block has at least one source capable of resolving products.
+func hasProductSource(block domain.ProductBlock) bool {
+	if strings.TrimSpace(block.BaseTag) != "" {
+		return true
+	}
+	for _, tag := range block.BaseTags {
+		if strings.TrimSpace(tag) != "" {
+			return true
+		}
+	}
+
+	return len(block.PinnedProductIDs) > 0
 }
 
 // publishDeliveryEvent publishes campaign delivery integration events.

@@ -52,6 +52,17 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.8] - 2026-03-22
+- Fix campaign template-product block resolution when using modern block inputs:
+  - `renderForContact` no longer skips product blocks when `BaseTag` is empty but `BaseTags` or `PinnedProductIDs` are present.
+  - Product block source detection now accepts any of: non-empty `baseTag`, non-empty `baseTags`, or non-empty `pinnedProductIds`.
+  - This prevents false-empty product collections that could trigger template execution failures and raw-template fallback behavior in delivered emails.
+- Tests added:
+  - `module/campaign/application/service_send_render_test.go` verifies rendering resolves products for both BaseTags-only and pinned-only block configurations.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.3`.
+- Release version bumped to `v2.9.8`.
+
 ### [v2.9.7] - 2026-03-22
 - Fix campaign test-send error mapping for SES identity-verification failures:
   - SES `MessageRejected` errors caused by unverified sender/recipient identities are now classified as `domain.ErrSenderUnavailable` in campaign application flows.
