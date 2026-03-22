@@ -164,7 +164,7 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 			for item := range jobs {
 				htmlBody, textBody := s.renderForContact(ctx, campaign, item.contactID, item.email)
 				idempotencyKey := campaign.ID + ":" + item.contactID
-				sendErr := s.sender.SendCampaignEmail(ctx, item.contactID, item.email, campaign.Subject, htmlBody, textBody, idempotencyKey)
+				sendErr := normalizeSenderError(s.sender.SendCampaignEmail(ctx, item.contactID, item.email, campaign.Subject, htmlBody, textBody, idempotencyKey))
 				results <- sendResult{contactID: item.contactID, email: item.email, err: sendErr}
 			}
 		}()

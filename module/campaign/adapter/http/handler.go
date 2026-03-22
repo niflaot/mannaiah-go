@@ -300,6 +300,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrSenderNotConfigured) {
 		return corehttp.NewAppError(503, "email_sender_not_configured", err)
 	}
+	if errors.Is(err, domain.ErrSenderUnavailable) {
+		return corehttp.NewAppError(503, "email_sender_unavailable", err)
+	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "campaign_not_found", err)
 	}

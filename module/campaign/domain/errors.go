@@ -17,4 +17,6 @@ var (
 	ErrInvalidTestEmail = errors.New("test recipient email is required")
 	// ErrSenderNotConfigured is returned when a test send is attempted without an email sender.
 	ErrSenderNotConfigured = errors.New("email sender is not configured")
+	// ErrSenderUnavailable is returned when email provider dependencies reject delivery due configuration/outage constraints.
+	ErrSenderUnavailable = errors.New("email sender is unavailable")
 )

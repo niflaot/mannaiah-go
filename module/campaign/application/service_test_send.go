@@ -31,7 +31,7 @@ func (s *CampaignService) TestSend(ctx context.Context, campaignID string, comma
 
 	idempotencyKey := "test:" + campaign.ID + ":" + uuid.NewString()
 	if err := s.sender.SendCampaignEmail(ctx, contactID, email, campaign.Subject, htmlBody, textBody, idempotencyKey); err != nil {
-		return nil, fmt.Errorf("test send campaign email: %w", err)
+		return nil, fmt.Errorf("test send campaign email: %w", normalizeSenderError(err))
 	}
 
 	return &TestSendResult{

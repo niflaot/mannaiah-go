@@ -52,6 +52,19 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.7] - 2026-03-22
+- Fix campaign test-send error mapping for SES identity-verification failures:
+  - SES `MessageRejected` errors caused by unverified sender/recipient identities are now classified as `domain.ErrSenderUnavailable` in campaign application flows.
+  - `POST /campaigns/{id}/test` now returns controlled `503` (`email_sender_unavailable`) for this provider-unavailable/configuration state instead of `500`.
+  - Async campaign fan-out send workers reuse the same sender error classification for consistent failure semantics.
+- Tests added:
+  - `module/campaign/application/sender_error_test.go` verifies SES unverified-identity detection and passthrough behavior for unrelated errors.
+  - `module/campaign/adapter/http/handler_error_test.go` verifies `ErrSenderUnavailable` maps to HTTP `503` with the expected error code.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.2`.
+  - `POST /campaigns/{id}/test` `503` response description updated to include unavailable sender states.
+- Release version bumped to `v2.9.7`.
+
 ### [v2.9.6] - 2026-03-22
 - Finalize SES email-tag compatibility rollout for campaign sends:
   - Keep SES `idempotency_key` message-tag sanitization active so unsupported characters (for example `:` in `campaignID:contactID` and `test:campaignID:uuid`) are replaced with `_` before `SendEmail`.
