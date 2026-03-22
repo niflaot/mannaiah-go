@@ -52,6 +52,16 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.11] - 2026-03-22
+- Prevent contact-email leakage in campaign template context:
+  - Template context now sets `.Contact.Email` to the actual recipient email for the current send operation (test-send override email in `POST /campaigns/{id}/test`), instead of using contact-repository email data.
+  - This keeps test-send personalization safe while preserving real-contact name resolution from `contactId`.
+- Tests added:
+  - `module/campaign/application/service_send_render_test.go`: verifies `.Contact.Email` resolves to the send target email in both HTML and text renders.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.6`.
+- Release version bumped to `v2.9.11`.
+
 ### [v2.9.10] - 2026-03-22
 - Fix backend/frontend personalization discrepancy on campaign test-send:
   - Campaign runtime now wires a real contact-data provider from contacts service into campaign rendering (`SetContactDataProvider`), replacing noop fallback behavior.

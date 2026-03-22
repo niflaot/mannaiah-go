@@ -270,7 +270,7 @@ func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *do
 			Name:         contactData.Name,
 			FullName:     contactData.Name,
 			FirstName:    campaigntemplate.ExtractFirstName(contactData.Name),
-			Email:        contactData.Email,
+			Email:        email,
 			LastSaleDate: contactData.LastSaleDate,
 		},
 		Custom:   campaign.TemplateVars,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	campaigntemplate "mannaiah/module/campaign/application/template"
 	"mannaiah/module/campaign/domain"
@@ -12,6 +13,15 @@ import (
 
 type affinityProductProviderSpy struct {
 	calls int
+}
+
+type contactDataProviderStub struct {
+	data port.ContactData
+}
+
+// GetContactData returns predefined contact data for rendering assertions.
+func (s contactDataProviderStub) GetContactData(_ context.Context, _ string) (port.ContactData, error) {
+	return s.data, nil
 }
 
 // GetProducts tracks calls and returns one deterministic product for rendering assertions.
@@ -102,5 +112,40 @@ func TestRenderForContactStrictReturnsTemplateError(t *testing.T) {
 	_, _, err := service.renderForContactStrict(context.Background(), campaign, "contact-1", "jane@example.com")
 	if err == nil {
 		t.Fatalf("expected strict render error for invalid template syntax")
+	}
+}
+
+// TestRenderForContactStrictUsesRecipientEmailInTemplateContext verifies contact email in templates follows the actual send recipient.
+func TestRenderForContactStrictUsesRecipientEmailInTemplateContext(t *testing.T) {
+	t.Parallel()
+
+	lastSaleDate := time.Now().UTC()
+	service := &CampaignService{
+		contactDataProvider: contactDataProviderStub{
+			data: port.ContactData{
+				Name:         "Juliana Marcela",
+				Email:        "real-contact@example.com",
+				LastSaleDate: &lastSaleDate,
+			},
+		},
+		affinityProductProvider: &affinityProductProviderSpy{},
+		templateRenderer:        campaigntemplate.NewRenderer(),
+	}
+	campaign := &domain.Campaign{
+		ID:       "c-4",
+		Slug:     "slug",
+		HTMLBody: `{{ .Contact.Email }}`,
+		TextBody: `{{ .Contact.Email }}`,
+	}
+
+	htmlBody, textBody, err := service.renderForContactStrict(context.Background(), campaign, "contact-1", "override-test@example.com")
+	if err != nil {
+		t.Fatalf("renderForContactStrict() error = %v", err)
+	}
+	if htmlBody != "override-test@example.com" {
+		t.Fatalf("html email = %q, want override email", htmlBody)
+	}
+	if textBody != "override-test@example.com" {
+		t.Fatalf("text email = %q, want override email", textBody)
 	}
 }
