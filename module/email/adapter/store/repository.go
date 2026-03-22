@@ -35,8 +35,8 @@ type deliveryModel struct {
 	IdempotencyKey string `gorm:"column:idempotency_key"`
 	// Provider defines provider labels.
 	Provider string `gorm:"column:provider"`
-	// ProviderMessageID defines provider message id values.
-	ProviderMessageID string `gorm:"column:provider_message_id"`
+	// ProviderMessageID defines provider message id values. Nullable — NULL until the provider confirms.
+	ProviderMessageID *string `gorm:"column:provider_message_id"`
 	// Status defines current delivery status values.
 	Status string `gorm:"column:status"`
 	// CreatedAt defines row creation timestamp values.
@@ -102,7 +102,7 @@ func (r *Repository) CreateDelivery(ctx context.Context, delivery *domain.Delive
 		TextBody:          delivery.TextBody,
 		IdempotencyKey:    delivery.IdempotencyKey,
 		Provider:          delivery.Provider,
-		ProviderMessageID: delivery.ProviderMessageID,
+		ProviderMessageID: nullableString(delivery.ProviderMessageID),
 		Status:            string(delivery.Status),
 	}
 	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
@@ -225,9 +225,25 @@ func mapDelivery(row deliveryModel) *domain.Delivery {
 		TextBody:          row.TextBody,
 		IdempotencyKey:    row.IdempotencyKey,
 		Provider:          row.Provider,
-		ProviderMessageID: row.ProviderMessageID,
+		ProviderMessageID: derefString(row.ProviderMessageID),
 		Status:            domain.DeliveryStatus(row.Status),
 		CreatedAt:         row.CreatedAt.UTC(),
 		UpdatedAt:         row.UpdatedAt.UTC(),
 	}
+}
+
+// nullableString converts an empty string to nil for nullable DB columns.
+func nullableString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// derefString dereferences a nullable string pointer, returning "" for nil.
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

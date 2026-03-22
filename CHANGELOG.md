@@ -52,6 +52,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.4] - 2026-03-22
+- Fix duplicate `provider_message_id` unique constraint violation on concurrent or repeated email sends:
+  - `deliveryModel.ProviderMessageID` was `string`, causing `''` to be inserted for all deliveries before SES confirms. MySQL unique indexes reject duplicate empty strings but allow multiple `NULL`s.
+  - Changed field to `*string`; empty strings now persist as `NULL` via `nullableString` helper; reads back via `derefString`.
+- Release version bumped to `v2.9.4`.
+
 ### [v2.9.3] - 2026-03-22
 - Fix SES static credentials not forwarded to AWS SDK:
   - `EMAIL_SES_ACCESS_KEY_ID` and `EMAIL_SES_SECRET_ACCESS_KEY` config fields were parsed but never passed to `ses.NewProvider`, causing the AWS SDK to fall through its credential chain to EC2 IMDS and time out (500 on all email send operations in non-EC2 environments).
