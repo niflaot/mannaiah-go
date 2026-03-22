@@ -1,6 +1,6 @@
 # Email Application Package
 
-Implements send and webhook status update use-cases.
+Implements send, SNS webhook status update, and complaint/bounce handling use-cases.
 
 ## Key methods / endpoints / events
 - Methods:

@@ -147,6 +147,19 @@ func (r *Repository) AddStatusEntry(ctx context.Context, entry *domain.StatusEnt
 	return nil
 }
 
+// CountStatusEntries counts status timeline rows for one delivery/status pair.
+func (r *Repository) CountStatusEntries(ctx context.Context, deliveryID string, status domain.DeliveryStatus) (int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).
+		Model(&statusEntryModel{}).
+		Where("delivery_id = ? AND status = ?", deliveryID, string(status)).
+		Count(&total).Error; err != nil {
+		return 0, fmt.Errorf("count email status entries: %w", err)
+	}
+
+	return total, nil
+}
+
 // GetByID retrieves delivery rows by id.
 func (r *Repository) GetByID(ctx context.Context, id string) (*domain.Delivery, error) {
 	row := deliveryModel{}

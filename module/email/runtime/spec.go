@@ -20,7 +20,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Email API",
-			Version: "2.1.0",
+			Version: "2.2.0",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/email/send", &openapi3.PathItem{Post: sendOperation()}),
@@ -66,9 +66,14 @@ func webhookOperation() *openapi3.Operation {
 	return &openapi3.Operation{
 		OperationID: "EmailController_webhook",
 		Summary:     "Receive SES webhook notifications",
+		Description: "Public SNS webhook endpoint for SES notifications. Verifies SNS signatures, confirms subscriptions, maps Delivery/Bounce/Complaint statuses into email deliveries, and stamps membership opt-out on permanent bounce/complaint events.",
 		Tags:        []string{emailTag},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, responseWithDescription("Webhook accepted.")),
+			openapi3.WithStatus(400, responseWithDescription("Invalid webhook payload.")),
+			openapi3.WithStatus(401, responseWithDescription("Invalid webhook signature.")),
+			openapi3.WithStatus(403, responseWithDescription("Webhook topic mismatch.")),
+			openapi3.WithStatus(503, responseWithDescription("Webhook subscription confirmation failed.")),
 		),
 	}
 }

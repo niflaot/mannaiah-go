@@ -52,6 +52,35 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.19] - 2026-03-22
+- Add SES SNS webhook protection and delivery-feedback automation:
+  - `POST /email/webhooks/ses` now accepts AWS SNS envelopes (`Notification`, `SubscriptionConfirmation`, `UnsubscribeConfirmation`).
+  - SNS signatures are verified (enabled by default) using `SigningCertURL` + RSA signature validation for signature versions `1` and `2`.
+  - Optional `TopicArn` guard added to reject unexpected SNS topics.
+  - Subscription confirmations are now auto-confirmed from backend.
+- Bounce/complaint delivery handling updates:
+  - `Complaint` events now mark delivery as `complained` and auto-stamp membership email opt-out (`ses_complaint`).
+  - `Bounce` events now differentiate:
+    - `Transient` -> `failed_retryable` + delayed retry submit.
+    - `Permanent`/`Undetermined` -> `bounced` + auto-stamp membership email opt-out (`ses_bounce_permanent`).
+  - `Reject`/`RenderingFailure` map to `failed_permanent`.
+- New webhook and retry configuration:
+  - `EMAIL_WEBHOOK_SNS_VERIFY_SIGNATURE`
+  - `EMAIL_WEBHOOK_SNS_TOPIC_ARN`
+  - `EMAIL_WEBHOOK_SNS_REQUEST_TIMEOUT_MS`
+  - `EMAIL_WEBHOOK_SOFT_BOUNCE_RETRY_DELAY_SECONDS`
+  - `EMAIL_WEBHOOK_SOFT_BOUNCE_MAX_RETRIES`
+- Docs/spec updates:
+  - Email OpenAPI metadata bumped to `2.2.0` with webhook error responses and SNS description.
+  - Added rollout/integration guide: `plan/EMAIL-COMPLAINTS.md`.
+  - Email runtime/adapter/module README files updated for SNS webhook behavior.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.19` (`2.9.19` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.19`.
+- Tests added:
+  - `module/email/application/service_webhook_sns_test.go`
+  - `module/email/adapter/http/handler_error_test.go`
+  - `module/email/adapter/ses/sns_verifier_test.go`
+
 ### [v2.9.18] - 2026-03-22
 - Normalize unsubscribe env contract for campaign templates (development-stage strict mode):
   - Unsubscribe base URL config key is now `UNSUBSCRIBE_BASE_URL` (replaces `MN_PUBLIC_URL`).

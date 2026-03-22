@@ -25,4 +25,14 @@ type Config struct {
 	// TrackingBaseURL defines the public base URL used to build open-tracking pixel URLs.
 	// When empty, open tracking pixel injection is disabled.
 	TrackingBaseURL string `mapstructure:"EMAIL_TRACKING_BASE_URL" default:""`
+	// WebhookSNSTopicARN defines expected SNS topic arn values for SES webhook notifications.
+	WebhookSNSTopicARN string `mapstructure:"EMAIL_WEBHOOK_SNS_TOPIC_ARN" default:""`
+	// WebhookSNSVerifySignature enables SNS signature verification for webhook requests.
+	WebhookSNSVerifySignature bool `mapstructure:"EMAIL_WEBHOOK_SNS_VERIFY_SIGNATURE" default:"true"`
+	// WebhookSNSRequestTimeoutMS defines request timeout values for SNS signature/cert and subscription confirmation HTTP calls.
+	WebhookSNSRequestTimeoutMS int `mapstructure:"EMAIL_WEBHOOK_SNS_REQUEST_TIMEOUT_MS" default:"5000"`
+	// WebhookSoftBounceRetryDelaySeconds defines retry delay values for transient-bounce retry attempts.
+	WebhookSoftBounceRetryDelaySeconds int `mapstructure:"EMAIL_WEBHOOK_SOFT_BOUNCE_RETRY_DELAY_SECONDS" default:"300"`
+	// WebhookSoftBounceMaxRetries defines max retry attempts for transient-bounce handling.
+	WebhookSoftBounceMaxRetries int `mapstructure:"EMAIL_WEBHOOK_SOFT_BOUNCE_MAX_RETRIES" default:"1"`
 }

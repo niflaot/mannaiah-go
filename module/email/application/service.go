@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -43,6 +44,28 @@ type WebhookCommand struct {
 	Reason string
 	// Email defines optional recipient email values.
 	Email string
+	// MessageType defines optional SNS message-type values.
+	MessageType string
+	// Message defines optional SNS embedded-message values.
+	Message string
+	// MessageID defines optional SNS message identifier values.
+	MessageID string
+	// Subject defines optional SNS subject values.
+	Subject string
+	// Timestamp defines optional SNS timestamp values.
+	Timestamp string
+	// TopicARN defines optional SNS topic arn values.
+	TopicARN string
+	// Token defines optional SNS subscription token values.
+	Token string
+	// SubscribeURL defines optional SNS subscription confirmation URL values.
+	SubscribeURL string
+	// SignatureVersion defines optional SNS signature version values.
+	SignatureVersion string
+	// Signature defines optional SNS signature values.
+	Signature string
+	// SigningCertURL defines optional SNS signing certificate URL values.
+	SigningCertURL string
 }
 
 // Service defines email use-case behavior.
@@ -70,6 +93,16 @@ type EmailService struct {
 	// trackingBaseURL defines the public base URL for open-tracking pixel injection.
 	// Empty string disables pixel injection.
 	trackingBaseURL string
+	// snsMessageVerifier defines optional SNS signature verification dependencies.
+	snsMessageVerifier port.SNSMessageVerifier
+	// expectedWebhookTopicARN defines optional topic ARN values expected from SNS webhook messages.
+	expectedWebhookTopicARN string
+	// webhookHTTPClient defines HTTP dependencies for SNS subscription confirmation requests.
+	webhookHTTPClient *http.Client
+	// softBounceRetryDelay defines retry delay values for transient bounce handling.
+	softBounceRetryDelay time.Duration
+	// softBounceMaxRetries defines max retry attempts for transient bounce handling.
+	softBounceMaxRetries int
 }
 
 // noopProvider defines no-op provider fallback behavior.
@@ -95,7 +128,16 @@ func NewService(repository port.Repository, provider port.Provider, membershipSt
 		membershipStamper = membershipStampers[0]
 	}
 
-	return &EmailService{repository: repository, provider: resolvedProvider, membershipStamper: membershipStamper, providerName: "ses"}, nil
+	return &EmailService{
+		repository:           repository,
+		provider:             resolvedProvider,
+		membershipStamper:    membershipStamper,
+		providerName:         "ses",
+		snsMessageVerifier:   port.NoopSNSMessageVerifier{},
+		webhookHTTPClient:    &http.Client{Timeout: 5 * time.Second},
+		softBounceRetryDelay: 5 * time.Minute,
+		softBounceMaxRetries: 1,
+	}, nil
 }
 
 // SetTrackingBaseURL configures the public base URL used for open-tracking pixel injection.
@@ -119,6 +161,36 @@ func (s *EmailService) SetMembershipStamper(stamper port.MembershipStamper) {
 	}
 
 	s.membershipStamper = stamper
+}
+
+// SetSNSMessageVerifier configures SNS signature verification dependencies.
+func (s *EmailService) SetSNSMessageVerifier(verifier port.SNSMessageVerifier) {
+	if s == nil {
+		return
+	}
+	if verifier == nil {
+		s.snsMessageVerifier = port.NoopSNSMessageVerifier{}
+		return
+	}
+
+	s.snsMessageVerifier = verifier
+}
+
+// SetWebhookPolicy configures SNS topic checks and transient-bounce retry behavior.
+func (s *EmailService) SetWebhookPolicy(expectedTopicARN string, softBounceRetryDelay time.Duration, softBounceMaxRetries int) {
+	if s == nil {
+		return
+	}
+
+	s.expectedWebhookTopicARN = strings.TrimSpace(expectedTopicARN)
+	if softBounceRetryDelay < 0 {
+		softBounceRetryDelay = 0
+	}
+	s.softBounceRetryDelay = softBounceRetryDelay
+	if softBounceMaxRetries < 0 {
+		softBounceMaxRetries = 0
+	}
+	s.softBounceMaxRetries = softBounceMaxRetries
 }
 
 // Send dispatches one email and tracks delivery status.
@@ -194,6 +266,10 @@ func (s *EmailService) Send(ctx context.Context, command SendCommand) (*domain.D
 
 // HandleWebhook updates delivery status from provider webhook payloads.
 func (s *EmailService) HandleWebhook(ctx context.Context, command WebhookCommand) error {
+	if strings.TrimSpace(command.MessageType) != "" {
+		return s.handleSNSWebhook(ctx, command)
+	}
+
 	providerMessageID := strings.TrimSpace(command.ProviderMessageID)
 	if providerMessageID == "" {
 		return domain.ErrNotFound
@@ -221,6 +297,9 @@ func (s *EmailService) HandleWebhook(ctx context.Context, command WebhookCommand
 
 	if status == domain.StatusComplained {
 		_ = s.membershipStamper.OptOutByEmail(ctx, delivery.Email, "ses_complaint")
+	}
+	if status == domain.StatusBounced {
+		_ = s.membershipStamper.OptOutByEmail(ctx, delivery.Email, "ses_bounce_permanent")
 	}
 
 	return nil

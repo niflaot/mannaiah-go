@@ -8,5 +8,5 @@ Transactional email delivery module with provider abstraction and status trackin
 - Endpoints:
   - `POST /email/send`
   - `GET /email/deliveries/:id`
-  - `POST /email/webhooks/ses`
+  - `POST /email/webhooks/ses` (public SNS endpoint, signature-verified)
 - Events: none.

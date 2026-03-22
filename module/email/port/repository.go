@@ -13,6 +13,8 @@ type Repository interface {
 	UpdateDeliveryStatus(ctx context.Context, deliveryID string, status domain.DeliveryStatus, providerMessageID string) error
 	// AddStatusEntry persists immutable status timeline rows.
 	AddStatusEntry(ctx context.Context, entry *domain.StatusEntry) error
+	// CountStatusEntries counts status timeline rows for one delivery/status pair.
+	CountStatusEntries(ctx context.Context, deliveryID string, status domain.DeliveryStatus) (int64, error)
 	// GetByID retrieves delivery rows by id.
 	GetByID(ctx context.Context, id string) (*domain.Delivery, error)
 	// GetByProviderMessageID retrieves delivery rows by provider message id.

@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"gorm.io/gorm"
@@ -67,6 +68,16 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 		return nil, err
 	}
 	service.SetTrackingBaseURL(resolveTrackingBaseURL(cfg.TrackingBaseURL, sender))
+	service.SetWebhookPolicy(
+		cfg.WebhookSNSTopicARN,
+		time.Duration(cfg.WebhookSoftBounceRetryDelaySeconds)*time.Second,
+		cfg.WebhookSoftBounceMaxRetries,
+	)
+	if cfg.WebhookSNSVerifySignature {
+		service.SetSNSMessageVerifier(ses.NewSNSMessageVerifier(ses.SNSMessageVerifierConfig{
+			RequestTimeout: time.Duration(cfg.WebhookSNSRequestTimeoutMS) * time.Millisecond,
+		}))
+	}
 
 	handler, err := emailhttp.NewHandler(service)
 	if err != nil {

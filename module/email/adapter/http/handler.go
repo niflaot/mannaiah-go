@@ -71,6 +71,28 @@ type webhookRequest struct {
 	Reason string `json:"reason"`
 	// Email defines optional recipient email values.
 	Email string `json:"email"`
+	// MessageType defines optional SNS message-type values.
+	MessageType string `json:"Type"`
+	// Message defines optional SNS embedded-message values.
+	Message string `json:"Message"`
+	// MessageID defines optional SNS message id values.
+	MessageID string `json:"MessageId"`
+	// Subject defines optional SNS subject values.
+	Subject string `json:"Subject"`
+	// Timestamp defines optional SNS timestamp values.
+	Timestamp string `json:"Timestamp"`
+	// TopicARN defines optional SNS topic arn values.
+	TopicARN string `json:"TopicArn"`
+	// Token defines optional SNS subscription token values.
+	Token string `json:"Token"`
+	// SubscribeURL defines optional SNS subscription confirmation URL values.
+	SubscribeURL string `json:"SubscribeURL"`
+	// SignatureVersion defines optional SNS signature version values.
+	SignatureVersion string `json:"SignatureVersion"`
+	// Signature defines optional SNS signature values.
+	Signature string `json:"Signature"`
+	// SigningCertURL defines optional SNS signing certificate URL values.
+	SigningCertURL string `json:"SigningCertURL"`
 }
 
 // NewHandler creates email HTTP handlers.
@@ -140,12 +162,26 @@ func (h *Handler) webhook(ctx corehttp.Context) error {
 	if err := ctx.BodyParser(&request); err != nil {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
+	if strings.TrimSpace(request.MessageType) == "" {
+		request.MessageType = strings.TrimSpace(ctx.GetHeader("x-amz-sns-message-type"))
+	}
 
 	if err := h.service.HandleWebhook(ctx.Context(), application.WebhookCommand{
 		ProviderMessageID: strings.TrimSpace(request.ProviderMessageID),
 		Status:            strings.TrimSpace(request.Status),
 		Reason:            strings.TrimSpace(request.Reason),
 		Email:             strings.TrimSpace(request.Email),
+		MessageType:       strings.TrimSpace(request.MessageType),
+		Message:           request.Message,
+		MessageID:         strings.TrimSpace(request.MessageID),
+		Subject:           strings.TrimSpace(request.Subject),
+		Timestamp:         strings.TrimSpace(request.Timestamp),
+		TopicARN:          strings.TrimSpace(request.TopicARN),
+		Token:             strings.TrimSpace(request.Token),
+		SubscribeURL:      strings.TrimSpace(request.SubscribeURL),
+		SignatureVersion:  strings.TrimSpace(request.SignatureVersion),
+		Signature:         strings.TrimSpace(request.Signature),
+		SigningCertURL:    strings.TrimSpace(request.SigningCertURL),
 	}); err != nil {
 		return h.mapError(err)
 	}
@@ -204,6 +240,18 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, domain.ErrInvalidEmail) || errors.Is(err, domain.ErrInvalidSubject) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	if errors.Is(err, domain.ErrInvalidWebhookPayload) {
+		return corehttp.NewAppError(400, "invalid_webhook_payload", err)
+	}
+	if errors.Is(err, domain.ErrInvalidWebhookSignature) {
+		return corehttp.NewAppError(401, "invalid_webhook_signature", err)
+	}
+	if errors.Is(err, domain.ErrWebhookTopicMismatch) {
+		return corehttp.NewAppError(403, "webhook_topic_mismatch", err)
+	}
+	if errors.Is(err, domain.ErrWebhookSubscriptionConfirmationFailed) {
+		return corehttp.NewAppError(503, "webhook_subscription_confirmation_failed", err)
 	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "email_delivery_not_found", err)

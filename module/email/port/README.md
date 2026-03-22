@@ -1,6 +1,6 @@
 # Email Port Package
 
-Defines provider, repository, and membership-stamper contracts.
+Defines provider, repository, membership-stamper, and SNS signature-verifier contracts.
 
 ## Key methods / endpoints / events
 - Methods:
@@ -8,6 +8,8 @@ Defines provider, repository, and membership-stamper contracts.
   - `Repository.CreateDelivery(...)`
   - `Repository.UpdateDeliveryStatus(...)`
   - `Repository.AddStatusEntry(...)`
+  - `Repository.CountStatusEntries(...)`
   - `MembershipStamper.OptOutByEmail(...)`
+  - `SNSMessageVerifier.Verify(...)`
 - Endpoints: none.
 - Events: none.
