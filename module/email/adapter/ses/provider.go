@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -12,6 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 	"mannaiah/module/email/port"
 )
+
+// sesTagInvalidChars matches characters not allowed in SES email tag values.
+var sesTagInvalidChars = regexp.MustCompile(`[^a-zA-Z0-9_\-.@]`)
 
 var (
 	// ErrSenderRequired is returned when sender values are blank.
@@ -92,7 +96,7 @@ func (p *Provider) Send(ctx context.Context, request port.SendRequest) (string, 
 				},
 			},
 		},
-		EmailTags: []types.MessageTag{{Name: ptr("idempotency_key"), Value: ptr(strings.TrimSpace(request.IdempotencyKey))}},
+		EmailTags: []types.MessageTag{{Name: ptr("idempotency_key"), Value: ptr(sanitizeSESTagValue(request.IdempotencyKey))}},
 	})
 	if err != nil {
 		return "", fmt.Errorf("send ses email: %w", err)
@@ -102,6 +106,11 @@ func (p *Provider) Send(ctx context.Context, request port.SendRequest) (string, 
 	}
 
 	return strings.TrimSpace(*result.MessageId), nil
+}
+
+// sanitizeSESTagValue replaces characters not allowed in SES tag values with '_'.
+func sanitizeSESTagValue(value string) string {
+	return sesTagInvalidChars.ReplaceAllString(strings.TrimSpace(value), "_")
 }
 
 // ptr resolves string pointers for SES payload values.

@@ -52,6 +52,21 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.6] - 2026-03-22
+- Finalize SES email-tag compatibility rollout for campaign sends:
+  - Keep SES `idempotency_key` message-tag sanitization active so unsupported characters (for example `:` in `campaignID:contactID` and `test:campaignID:uuid`) are replaced with `_` before `SendEmail`.
+  - Add regression tests in `module/email/adapter/ses/provider_test.go` covering campaign/test-send idempotency-key patterns and unsupported-character replacement.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.1`.
+  - `POST /campaigns/{id}/test` operation description now documents internal SES tag-value sanitization behavior.
+- Release version bumped to `v2.9.6`.
+
+### [v2.9.5] - 2026-03-22
+- Fix SES `BadRequestException` caused by invalid characters in email tag values:
+  - Idempotency keys (`campaignID:contactID`, `test:campaignID:uuid`) contain colons which SES rejects in tag values (only `[a-zA-Z0-9_\-.@]` allowed).
+  - `sanitizeSESTagValue` now replaces any disallowed character with `_` before the tag is sent.
+- Release version bumped to `v2.9.5`.
+
 ### [v2.9.4] - 2026-03-22
 - Fix duplicate `provider_message_id` unique constraint violation on concurrent or repeated email sends:
   - `deliveryModel.ProviderMessageID` was `string`, causing `''` to be inserted for all deliveries before SES confirms. MySQL unique indexes reject duplicate empty strings but allow multiple `NULL`s.
