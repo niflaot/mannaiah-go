@@ -42,6 +42,8 @@ type Service interface {
 	Send(ctx context.Context, id string) (*domain.Campaign, error)
 	// ListDeliveries retrieves paged delivery rows for one campaign.
 	ListDeliveries(ctx context.Context, id string, page int, limit int) (*application.DeliveryListResult, error)
+	// TestSend renders and delivers the campaign to a single override email for preview purposes.
+	TestSend(ctx context.Context, campaignID string, command application.TestSendCommand) (*application.TestSendResult, error)
 }
 
 // Handler defines HTTP route handlers for campaign endpoints.
@@ -144,6 +146,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Patch("/campaigns/:id", h.protect("marketing:manage", h.update))
 	router.Delete("/campaigns/:id", h.protect("marketing:manage", h.remove))
 	router.Post("/campaigns/:id/send", h.protect("marketing:manage", h.send))
+	router.Post("/campaigns/:id/test", h.protect("marketing:manage", h.testSend))
 	router.Get("/campaigns/:id/deliveries", h.protect("marketing:manage", h.listDeliveries))
 }
 
@@ -291,8 +294,11 @@ func (h *Handler) mapError(err error) error {
 			return corehttp.NewAppError(403, "forbidden", err)
 		}
 	}
-	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) {
+	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrInvalidTestEmail) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	if errors.Is(err, domain.ErrSenderNotConfigured) {
+		return corehttp.NewAppError(503, "email_sender_not_configured", err)
 	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "campaign_not_found", err)

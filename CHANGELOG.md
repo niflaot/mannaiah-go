@@ -52,6 +52,15 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.2] - 2026-03-22
+- Add campaign test-send endpoint:
+  - **`POST /campaigns/:id/test`** — renders the campaign template for a given `contactId` and delivers the result to an override `email` address. Does not modify campaign status, counters, or stats.
+  - Request body: `{ "contactId": "...", "email": "..." }`. `contactId` is optional — omitting it uses the override email as the name fallback.
+  - Response: `{ "email": "...", "subject": "...", "status": "submitted" }`.
+  - Returns `400` when `email` is missing, `503` when the email sender is not configured.
+  - Campaign OpenAPI bumped to `2.5.0`.
+- Release version bumped to `v2.9.2`.
+
 ### [v2.9.1] - 2026-03-22
 - Fix campaign `PATCH` returning `500` when `template_vars` or `product_blocks` is empty:
   - `marshalTemplateFields` now falls back to `"{}"` / `"[]"` instead of empty string `""` so MySQL `JSON NOT NULL` columns always receive valid JSON.

@@ -13,4 +13,8 @@ var (
 	ErrNotFound = errors.New("campaign not found")
 	// ErrSendConflict is returned when send operations are called after processing/sent states.
 	ErrSendConflict = errors.New("campaign cannot be sent in current status")
+	// ErrInvalidTestEmail is returned when a test send is requested without a valid recipient email.
+	ErrInvalidTestEmail = errors.New("test recipient email is required")
+	// ErrSenderNotConfigured is returned when a test send is attempted without an email sender.
+	ErrSenderNotConfigured = errors.New("email sender is not configured")
 )

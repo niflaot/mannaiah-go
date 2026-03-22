@@ -102,6 +102,25 @@ type DeliveryListResult struct {
 	TotalPages int `json:"totalPages"`
 }
 
+// TestSendCommand defines test email delivery payload values.
+type TestSendCommand struct {
+	// ContactID defines the contact identifier used for template personalization.
+	// When empty, personalization falls back to the override email address as the name.
+	ContactID string
+	// Email defines the override recipient email address for the test delivery.
+	Email string
+}
+
+// TestSendResult defines test email delivery response values.
+type TestSendResult struct {
+	// Email defines the recipient email address the test was sent to.
+	Email string `json:"email"`
+	// Subject defines the campaign subject sent.
+	Subject string `json:"subject"`
+	// Status defines the resulting delivery status.
+	Status string `json:"status"`
+}
+
 // Service defines campaign use-case behavior.
 type Service interface {
 	// Create persists campaign rows.
@@ -118,6 +137,9 @@ type Service interface {
 	Send(ctx context.Context, id string) (*domain.Campaign, error)
 	// ListDeliveries retrieves paged delivery rows for one campaign.
 	ListDeliveries(ctx context.Context, id string, page int, limit int) (*DeliveryListResult, error)
+	// TestSend renders and delivers the campaign to a single override email for preview purposes.
+	// It does not affect campaign status or counters.
+	TestSend(ctx context.Context, campaignID string, command TestSendCommand) (*TestSendResult, error)
 }
 
 // CampaignService implements campaign use-cases.

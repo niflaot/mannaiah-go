@@ -16,20 +16,22 @@ func OpenAPISpec() *openapi3.T {
 		campaignBearerSecurityScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewJWTSecurityScheme()},
 	}
 	components.Schemas = openapi3.Schemas{
-		"Campaign":             {Value: campaignSchema()},
-		"CampaignListResult":   {Value: campaignListSchema()},
-		"CampaignDelete":       {Value: deleteStatusSchema()},
-		"CampaignDeliveryRow":  {Value: campaignDeliveryRowSchema()},
-		"CampaignDeliveryList": {Value: campaignDeliveryListSchema()},
+		"Campaign":               {Value: campaignSchema()},
+		"CampaignListResult":     {Value: campaignListSchema()},
+		"CampaignDelete":         {Value: deleteStatusSchema()},
+		"CampaignDeliveryRow":    {Value: campaignDeliveryRowSchema()},
+		"CampaignDeliveryList":   {Value: campaignDeliveryListSchema()},
+		"CampaignTestSendResult": {Value: campaignTestSendResultSchema()},
 	}
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Campaign API", Version: "2.4.0"},
+		Info: &openapi3.Info{Title: "Campaign API", Version: "2.5.0"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/campaigns", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
 			openapi3.WithPath("/campaigns/{id}", &openapi3.PathItem{Get: getOperation(), Patch: updateOperation(), Delete: deleteOperation()}),
 			openapi3.WithPath("/campaigns/{id}/send", &openapi3.PathItem{Post: sendOperation()}),
+			openapi3.WithPath("/campaigns/{id}/test", &openapi3.PathItem{Post: testSendOperation()}),
 			openapi3.WithPath("/campaigns/{id}/deliveries", &openapi3.PathItem{Get: listDeliveriesOperation()}),
 		),
 		Components: &components,
@@ -97,6 +99,35 @@ func deleteOperation() *openapi3.Operation {
 		openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 		openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		openapi3.WithStatus(404, responseWithDescription("Campaign not found.")),
+	)
+
+	return operation
+}
+
+// testSendOperation builds test-send campaign OpenAPI operations.
+func testSendOperation() *openapi3.Operation {
+	operation := baseOperation("CampaignController_testSend", "Test-send campaign to a single recipient")
+	operation.Description = "Renders the campaign template for the given contact and delivers it to the override email address. Does not affect campaign status or counters."
+	operation.RequestBody = &openapi3.RequestBodyRef{
+		Value: openapi3.NewRequestBody().
+			WithRequired(true).
+			WithContent(openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{
+						Value: openapi3.NewObjectSchema().
+							WithProperty("contactId", openapi3.NewStringSchema()).
+							WithProperty("email", openapi3.NewStringSchema()),
+					},
+				},
+			}),
+	}
+	operation.Responses = openapi3.NewResponses(
+		openapi3.WithStatus(202, jsonResponse("Test email submitted.", "#/components/schemas/CampaignTestSendResult")),
+		openapi3.WithStatus(400, responseWithDescription("Missing or invalid email address.")),
+		openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+		openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+		openapi3.WithStatus(404, responseWithDescription("Campaign not found.")),
+		openapi3.WithStatus(503, responseWithDescription("Email sender not configured.")),
 	)
 
 	return operation
@@ -190,6 +221,14 @@ func campaignListSchema() *openapi3.Schema {
 		WithProperty("limit", openapi3.NewInt64Schema()).
 		WithProperty("total", openapi3.NewInt64Schema()).
 		WithProperty("totalPages", openapi3.NewInt64Schema())
+}
+
+// campaignTestSendResultSchema defines test-send response schema values.
+func campaignTestSendResultSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("email", openapi3.NewStringSchema()).
+		WithProperty("subject", openapi3.NewStringSchema()).
+		WithProperty("status", openapi3.NewStringSchema())
 }
 
 // deleteStatusSchema defines delete response schema values.
