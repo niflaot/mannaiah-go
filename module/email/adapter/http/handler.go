@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -159,8 +160,12 @@ func (h *Handler) send(ctx corehttp.Context) error {
 // webhook handles SES webhook requests.
 func (h *Handler) webhook(ctx corehttp.Context) error {
 	request := webhookRequest{}
-	if err := ctx.BodyParser(&request); err != nil {
-		return corehttp.NewAppError(400, "invalid_payload", err)
+	body := ctx.Body()
+	if unmarshalErr := json.Unmarshal(body, &request); unmarshalErr != nil {
+		// Keep backward compatibility with application/json request parsing semantics.
+		if parseErr := ctx.BodyParser(&request); parseErr != nil {
+			return corehttp.NewAppError(400, "invalid_payload", unmarshalErr)
+		}
 	}
 	if strings.TrimSpace(request.MessageType) == "" {
 		request.MessageType = strings.TrimSpace(ctx.GetHeader("x-amz-sns-message-type"))

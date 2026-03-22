@@ -70,6 +70,11 @@ func (a *fiberContextAdapter) BodyParser(out any) error {
 	return a.ctx.BodyParser(out)
 }
 
+// Body returns raw request body bytes.
+func (a *fiberContextAdapter) Body() []byte {
+	return a.ctx.Body()
+}
+
 // FormFile reads multipart file payload values.
 func (a *fiberContextAdapter) FormFile(key string) (*multipart.FileHeader, error) {
 	return a.ctx.FormFile(key)

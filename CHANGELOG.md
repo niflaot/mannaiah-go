@@ -52,6 +52,16 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.20] - 2026-03-22
+- Fix SNS HTTPS subscription confirmation webhook parsing:
+  - `POST /email/webhooks/ses` now parses raw JSON bodies regardless of `Content-Type`, handling SNS default `text/plain` payloads correctly.
+  - Added SNS message-type fallback from header `x-amz-sns-message-type` when not present in parsed body fields.
+  - Introduced `core/http` raw request body access in context contract to support provider webhooks with non-standard content type.
+- OpenAPI/docs/version updates:
+  - Email OpenAPI metadata bumped to `2.2.1`.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.20` (`2.9.20` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.20`.
+
 ### [v2.9.19] - 2026-03-22
 - Add SES SNS webhook protection and delivery-feedback automation:
   - `POST /email/webhooks/ses` now accepts AWS SNS envelopes (`Notification`, `SubscriptionConfirmation`, `UnsubscribeConfirmation`).

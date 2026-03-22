@@ -34,6 +34,8 @@ type Context interface {
 	Query(key string, defaultValue ...string) string
 	// BodyParser decodes request body into output.
 	BodyParser(out any) error
+	// Body returns raw request body bytes.
+	Body() []byte
 	// FormFile reads multipart file payload values.
 	FormFile(key string) (*multipart.FileHeader, error)
 	// FormValue reads multipart/form values.
