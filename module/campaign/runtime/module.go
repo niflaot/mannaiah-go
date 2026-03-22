@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"time"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"gorm.io/gorm"
 	campaignhttp "mannaiah/module/campaign/adapter/http"
@@ -39,6 +41,11 @@ func New(cfg Config, db *gorm.DB, resolver port.SegmentResolver, sender port.Ema
 	if err != nil {
 		return nil, err
 	}
+	service.SetUnsubscribeURLConfig(
+		cfg.PublicURL,
+		cfg.MarketingOptOutSecret,
+		time.Duration(cfg.MarketingOptOutTokenTTLHours)*time.Hour,
+	)
 
 	handler, err := campaignhttp.NewHandler(service)
 	if err != nil {

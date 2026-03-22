@@ -284,6 +284,12 @@ func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *do
 		products[block.ID] = items
 	}
 
+	custom := cloneTemplateVars(campaign.TemplateVars)
+	unsubscribeURL := s.buildUnsubscribeURL(email, fullName, campaign.ID)
+	if unsubscribeURL != "" {
+		custom["unsubscribe_url"] = unsubscribeURL
+	}
+
 	return domain.TemplateContext{
 		Contact: domain.ContactTemplateData{
 			Name:         displayName,
@@ -292,7 +298,7 @@ func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *do
 			Email:        email,
 			LastSaleDate: contactData.LastSaleDate,
 		},
-		Custom:   campaign.TemplateVars,
+		Custom:   custom,
 		Products: products,
 	}, nil
 }

@@ -2,7 +2,10 @@ package application
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -230,5 +233,80 @@ func TestRenderForContactStrictUsesNameOnlyForContactName(t *testing.T) {
 	}
 	if htmlBody != "Juliana|Juliana Marcela Villegas Sarmiento|Juliana" {
 		t.Fatalf("htmlBody = %q, want first|full|first", htmlBody)
+	}
+}
+
+// TestRenderForContactStrictInjectsSignedUnsubscribeURL verifies .Custom.unsubscribe_url is generated from env-backed settings and includes signed payload values.
+func TestRenderForContactStrictInjectsSignedUnsubscribeURL(t *testing.T) {
+	t.Parallel()
+
+	service := &CampaignService{
+		contactDataProvider: contactDataProviderStub{
+			data: port.ContactData{Name: "Juliana Marcela Villegas Sarmiento"},
+		},
+		affinityProductProvider: &affinityProductProviderSpy{},
+		templateRenderer:        campaigntemplate.NewRenderer(),
+	}
+	service.SetUnsubscribeURLConfig("https://mannaiah.flockstore.co/", "test-optout-secret", 2*time.Hour)
+
+	campaign := &domain.Campaign{
+		ID:           "c-7",
+		Slug:         "slug",
+		HTMLBody:     `{{ .Custom.brand }}|{{ .Custom.unsubscribe_url }}`,
+		TextBody:     ``,
+		TemplateVars: map[string]string{"brand": "FLOCK"},
+	}
+
+	htmlBody, _, err := service.renderForContactStrict(context.Background(), campaign, "contact-1", "override-test@example.com")
+	if err != nil {
+		t.Fatalf("renderForContactStrict() error = %v", err)
+	}
+	if !strings.HasPrefix(htmlBody, "FLOCK|https://mannaiah.flockstore.co/public/marketing/optout/") {
+		t.Fatalf("htmlBody = %q, want unsubscribe URL prefix", htmlBody)
+	}
+	if _, exists := campaign.TemplateVars["unsubscribe_url"]; exists {
+		t.Fatalf("campaign.TemplateVars mutated with unsubscribe_url")
+	}
+
+	parts := strings.SplitN(htmlBody, "|", 2)
+	if len(parts) != 2 {
+		t.Fatalf("htmlBody = %q, want custom+url parts", htmlBody)
+	}
+	tokenEncoded := strings.TrimPrefix(parts[1], "https://mannaiah.flockstore.co/public/marketing/optout/")
+	token, decodeErr := url.PathUnescape(tokenEncoded)
+	if decodeErr != nil {
+		t.Fatalf("PathUnescape() error = %v", decodeErr)
+	}
+	tokenParts := strings.Split(token, ".")
+	if len(tokenParts) != 2 {
+		t.Fatalf("token = %q, want payload.signature", token)
+	}
+	if got, want := tokenParts[1], signMarketingOptOutToken(tokenParts[0], "test-optout-secret"); got != want {
+		t.Fatalf("signature = %q, want %q", got, want)
+	}
+
+	payloadBytes, payloadErr := base64.RawURLEncoding.DecodeString(tokenParts[0])
+	if payloadErr != nil {
+		t.Fatalf("DecodeString() error = %v", payloadErr)
+	}
+	var payload marketingOptOutTokenPayload
+	if unmarshalErr := json.Unmarshal(payloadBytes, &payload); unmarshalErr != nil {
+		t.Fatalf("Unmarshal() error = %v", unmarshalErr)
+	}
+	if payload.Email != "override-test@example.com" {
+		t.Fatalf("payload.Email = %q, want override recipient email", payload.Email)
+	}
+	if payload.Name == nil || *payload.Name != "Juliana Marcela Villegas Sarmiento" {
+		t.Fatalf("payload.Name = %v, want full contact name", payload.Name)
+	}
+	if payload.CampaignID == nil || *payload.CampaignID != "c-7" {
+		t.Fatalf("payload.CampaignID = %v, want campaign id", payload.CampaignID)
+	}
+	if payload.IssuedAt <= 0 || payload.ExpiresAt <= payload.IssuedAt {
+		t.Fatalf("iat/exp invalid: iat=%d exp=%d", payload.IssuedAt, payload.ExpiresAt)
+	}
+	ttl := payload.ExpiresAt - payload.IssuedAt
+	if ttl < int64((2*time.Hour)-time.Minute)/int64(time.Second) || ttl > int64((2*time.Hour)+time.Minute)/int64(time.Second) {
+		t.Fatalf("ttl=%d, want approximately %d", ttl, int64((2*time.Hour)/time.Second))
 	}
 }

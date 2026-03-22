@@ -29,7 +29,7 @@ func OpenAPISpec() *openapi3.T {
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info:    &openapi3.Info{Title: "Campaign API", Version: "2.5.7"},
+		Info:    &openapi3.Info{Title: "Campaign API", Version: "2.5.8"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/campaigns", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
 			openapi3.WithPath("/campaigns/{id}", &openapi3.PathItem{Get: getOperation(), Patch: updateOperation(), Delete: deleteOperation()}),
@@ -128,7 +128,7 @@ func deleteOperation() *openapi3.Operation {
 // testSendOperation builds test-send campaign OpenAPI operations.
 func testSendOperation() *openapi3.Operation {
 	operation := baseOperation("CampaignController_testSend", "Test-send campaign to a single recipient")
-	operation.Description = "Renders the campaign template for the given contact and delivers it to the override email address. Does not affect campaign status or counters. SES message-tag values are sanitized internally for provider compatibility."
+	operation.Description = "Renders the campaign template for the given contact and delivers it to the override email address. Does not affect campaign status or counters. SES message-tag values are sanitized internally for provider compatibility. When MN_PUBLIC_URL and MN_MARKETING_OPTOUT_SECRET are configured, template context injects .Custom.unsubscribe_url with a signed opt-out token."
 	operation.RequestBody = &openapi3.RequestBodyRef{
 		Value: openapi3.NewRequestBody().
 			WithRequired(true).

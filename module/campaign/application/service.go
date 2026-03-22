@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"sync"
+	"time"
 
 	"mannaiah/module/campaign/application/template"
 	"mannaiah/module/campaign/domain"
@@ -164,6 +166,12 @@ type CampaignService struct {
 	affinityProductProvider port.AffinityProductProvider
 	// templateRenderer renders campaign HTML/text bodies with per-contact context.
 	templateRenderer *template.Renderer
+	// unsubscribeBaseURL defines public opt-out URL base values used in template context.
+	unsubscribeBaseURL string
+	// unsubscribeTokenSecret defines HMAC secret values for opt-out token signing.
+	unsubscribeTokenSecret string
+	// unsubscribeTokenTTL defines opt-out token expiration windows.
+	unsubscribeTokenTTL time.Duration
 	// mutex guards active send guards.
 	mutex sync.Mutex
 	// activeSends prevents duplicate in-memory sends per campaign.
@@ -195,6 +203,7 @@ func NewService(repository port.Repository, resolver port.SegmentResolver, sende
 		contactDataProvider:     port.NoopContactDataProvider{},
 		affinityProductProvider: port.NoopAffinityProductProvider{},
 		templateRenderer:        template.NewRenderer(),
+		unsubscribeTokenTTL:     defaultUnsubscribeTokenTTL,
 		activeSends:             map[string]struct{}{},
 	}, nil
 }
@@ -234,6 +243,21 @@ func (s *CampaignService) SetSyncRecorder(recorder port.SyncRecorder) {
 	}
 
 	s.syncRecorder = recorder
+}
+
+// SetUnsubscribeURLConfig configures unsubscribe URL generation for template context.
+func (s *CampaignService) SetUnsubscribeURLConfig(baseURL string, secret string, tokenTTL time.Duration) {
+	if s == nil {
+		return
+	}
+
+	s.unsubscribeBaseURL = normalizeUnsubscribeBaseURL(baseURL)
+	s.unsubscribeTokenSecret = strings.TrimSpace(secret)
+	if tokenTTL <= 0 {
+		s.unsubscribeTokenTTL = defaultUnsubscribeTokenTTL
+		return
+	}
+	s.unsubscribeTokenTTL = tokenTTL
 }
 
 // totalPages computes total page count from total rows and page size.

@@ -52,6 +52,24 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.17] - 2026-03-22
+- Add campaign unsubscribe template interpolation support:
+  - Runtime now injects `.Custom.unsubscribe_url` into campaign template context when unsubscribe config is enabled.
+  - URL format: `${MN_PUBLIC_URL}/public/marketing/optout/{token}` with signed token payload fields `email`, `name`, `campaignId`, `iat`, `exp`.
+  - Token signature uses HMAC-SHA256 with `MN_MARKETING_OPTOUT_SECRET`; expiration is configurable via `MN_MARKETING_OPTOUT_TOKEN_TTL_HOURS` (default `720`).
+- Runtime/config wiring and docs:
+  - Campaign runtime config now reads `MN_PUBLIC_URL`, `MN_MARKETING_OPTOUT_SECRET`, and `MN_MARKETING_OPTOUT_TOKEN_TTL_HOURS`.
+  - Campaign runtime README documents unsubscribe URL generation and required env vars.
+  - Campaign module README now includes `POST /campaigns/:id/test` endpoint.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.8`.
+  - `POST /campaigns/{id}/test` OpenAPI description now documents `.Custom.unsubscribe_url` injection behavior.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.17` (`2.9.17` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.17`.
+- Tests added:
+  - `module/campaign/application/service_unsubscribe_test.go` for token payload/signature behavior.
+  - `module/campaign/application/service_send_render_test.go` coverage for rendered `.Custom.unsubscribe_url`.
+
 ### [v2.9.16] - 2026-03-22
 - Fix campaign product link rendering when product datasheet URLs are variation-scoped:
   - Recommendation URL resolution now supports scoped URL keys matched by both `product_variation_links` IDs and `product_variants` SKU tokens.
