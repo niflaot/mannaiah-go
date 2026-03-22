@@ -52,6 +52,20 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.9] - 2026-03-22
+- Fix campaign test-send behavior for invalid template syntax:
+  - `TestSend` now uses strict template rendering and returns a controlled validation error when template parse/execute fails, instead of silently delivering raw `{{...}}` content.
+  - New domain sentinel `ErrInvalidTemplate` mapped by campaign HTTP adapter to `400` with message key `invalid_template`.
+  - `POST /campaigns/{id}/test` OpenAPI `400` response description now includes invalid template syntax cases.
+- Rendering robustness:
+  - Keep product block source detection fix (`baseTag` / `baseTags` / `pinnedProductIds`) so modern block configs are resolved before template execution.
+- Tests added:
+  - `module/campaign/application/service_send_render_test.go`: strict-render invalid template regression.
+  - `module/campaign/adapter/http/handler_error_test.go`: `ErrInvalidTemplate` → `400 invalid_template`.
+- OpenAPI/docs updates:
+  - Campaign OpenAPI metadata bumped to `2.5.4`.
+- Release version bumped to `v2.9.9`.
+
 ### [v2.9.8] - 2026-03-22
 - Fix campaign template-product block resolution when using modern block inputs:
   - `renderForContact` no longer skips product blocks when `BaseTag` is empty but `BaseTags` or `PinnedProductIDs` are present.

@@ -19,4 +19,6 @@ var (
 	ErrSenderNotConfigured = errors.New("email sender is not configured")
 	// ErrSenderUnavailable is returned when email provider dependencies reject delivery due configuration/outage constraints.
 	ErrSenderUnavailable = errors.New("email sender is unavailable")
+	// ErrInvalidTemplate is returned when campaign template parsing or execution fails.
+	ErrInvalidTemplate = errors.New("campaign template is invalid")
 )

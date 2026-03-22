@@ -82,3 +82,25 @@ func TestRenderForContactUsesPinnedOnlyBlock(t *testing.T) {
 		t.Fatalf("htmlBody = %q, want rendered product name", htmlBody)
 	}
 }
+
+// TestRenderForContactStrictReturnsTemplateError verifies strict rendering returns template parse/execute errors.
+func TestRenderForContactStrictReturnsTemplateError(t *testing.T) {
+	t.Parallel()
+
+	service := &CampaignService{
+		contactDataProvider:     port.NoopContactDataProvider{},
+		affinityProductProvider: &affinityProductProviderSpy{},
+		templateRenderer:        campaigntemplate.NewRenderer(),
+	}
+	campaign := &domain.Campaign{
+		ID:       "c-3",
+		Slug:     "slug",
+		HTMLBody: `{{ if .Products }}{{ with index .Products.hero_products o }}{{ end }}{{ end }}`,
+		TextBody: ``,
+	}
+
+	_, _, err := service.renderForContactStrict(context.Background(), campaign, "contact-1", "jane@example.com")
+	if err == nil {
+		t.Fatalf("expected strict render error for invalid template syntax")
+	}
+}

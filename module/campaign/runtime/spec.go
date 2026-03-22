@@ -26,7 +26,7 @@ func OpenAPISpec() *openapi3.T {
 
 	return &openapi3.T{
 		OpenAPI: "3.0.3",
-		Info: &openapi3.Info{Title: "Campaign API", Version: "2.5.3"},
+		Info: &openapi3.Info{Title: "Campaign API", Version: "2.5.4"},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/campaigns", &openapi3.PathItem{Post: createOperation(), Get: listOperation()}),
 			openapi3.WithPath("/campaigns/{id}", &openapi3.PathItem{Get: getOperation(), Patch: updateOperation(), Delete: deleteOperation()}),
@@ -123,7 +123,7 @@ func testSendOperation() *openapi3.Operation {
 	}
 	operation.Responses = openapi3.NewResponses(
 		openapi3.WithStatus(202, jsonResponse("Test email submitted.", "#/components/schemas/CampaignTestSendResult")),
-		openapi3.WithStatus(400, responseWithDescription("Missing or invalid email address.")),
+		openapi3.WithStatus(400, responseWithDescription("Missing or invalid email address, or invalid template syntax.")),
 		openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 		openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 		openapi3.WithStatus(404, responseWithDescription("Campaign not found.")),

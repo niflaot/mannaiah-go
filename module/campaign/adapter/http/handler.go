@@ -297,6 +297,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrInvalidTestEmail) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
+	if errors.Is(err, domain.ErrInvalidTemplate) {
+		return corehttp.NewAppError(400, "invalid_template", err)
+	}
 	if errors.Is(err, domain.ErrSenderNotConfigured) {
 		return corehttp.NewAppError(503, "email_sender_not_configured", err)
 	}

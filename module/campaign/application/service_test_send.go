@@ -27,7 +27,10 @@ func (s *CampaignService) TestSend(ctx context.Context, campaignID string, comma
 	}
 
 	contactID := strings.TrimSpace(command.ContactID)
-	htmlBody, textBody := s.renderForContact(ctx, campaign, contactID, email)
+	htmlBody, textBody, renderErr := s.renderForContactStrict(ctx, campaign, contactID, email)
+	if renderErr != nil {
+		return nil, fmt.Errorf("%w: %v", domain.ErrInvalidTemplate, renderErr)
+	}
 
 	idempotencyKey := "test:" + campaign.ID + ":" + uuid.NewString()
 	if err := s.sender.SendCampaignEmail(ctx, contactID, email, campaign.Subject, htmlBody, textBody, idempotencyKey); err != nil {

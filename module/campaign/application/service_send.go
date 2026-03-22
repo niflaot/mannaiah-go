@@ -210,13 +210,39 @@ func (s *CampaignService) processCampaignSend(ctx context.Context, campaignID st
 // renderForContact builds a per-contact template context and renders HTML and text bodies.
 // Falls back to the raw campaign bodies on any enrichment or render failure (fail-open).
 func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain.Campaign, contactID string, email string) (htmlBody string, textBody string) {
+	htmlBody, textBody, err := s.renderForContactStrict(ctx, campaign, contactID, email)
+	if err != nil {
+		return campaign.HTMLBody, campaign.TextBody
+	}
+
+	return htmlBody, textBody
+}
+
+// renderForContactStrict renders one campaign template context and returns render errors to callers.
+func (s *CampaignService) renderForContactStrict(ctx context.Context, campaign *domain.Campaign, contactID string, email string) (htmlBody string, textBody string, err error) {
 	htmlBody = campaign.HTMLBody
 	textBody = campaign.TextBody
 
 	if s.templateRenderer == nil {
-		return
+		return htmlBody, textBody, nil
 	}
 
+	tplCtx := s.buildTemplateContext(ctx, campaign, contactID, email)
+
+	renderedHTML, renderHTMLErr := s.templateRenderer.Render("html:"+campaign.ID, campaign.HTMLBody, tplCtx)
+	if renderHTMLErr != nil {
+		return "", "", fmt.Errorf("render html template: %w", renderHTMLErr)
+	}
+	renderedText, renderTextErr := s.templateRenderer.Render("text:"+campaign.ID, campaign.TextBody, tplCtx)
+	if renderTextErr != nil {
+		return "", "", fmt.Errorf("render text template: %w", renderTextErr)
+	}
+
+	return campaigntemplate.RewriteLinks(renderedHTML, campaign.ID, campaign.Slug), renderedText, nil
+}
+
+// buildTemplateContext builds one per-contact template context value.
+func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *domain.Campaign, contactID string, email string) domain.TemplateContext {
 	// Build contact data (fail-open: use defaults on error).
 	contactData, _ := s.contactDataProvider.GetContactData(ctx, contactID)
 	if contactData.Name == "" {
@@ -239,7 +265,7 @@ func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain
 		products[block.ID] = items
 	}
 
-	tplCtx := domain.TemplateContext{
+	return domain.TemplateContext{
 		Contact: domain.ContactTemplateData{
 			Name:         contactData.Name,
 			FullName:     contactData.Name,
@@ -250,15 +276,6 @@ func (s *CampaignService) renderForContact(ctx context.Context, campaign *domain
 		Custom:   campaign.TemplateVars,
 		Products: products,
 	}
-
-	if rendered, err := s.templateRenderer.Render("html:"+campaign.ID, campaign.HTMLBody, tplCtx); err == nil {
-		htmlBody = campaigntemplate.RewriteLinks(rendered, campaign.ID, campaign.Slug)
-	}
-	if rendered, err := s.templateRenderer.Render("text:"+campaign.ID, campaign.TextBody, tplCtx); err == nil {
-		textBody = rendered
-	}
-
-	return htmlBody, textBody
 }
 
 // hasProductSource reports whether a product block has at least one source capable of resolving products.
