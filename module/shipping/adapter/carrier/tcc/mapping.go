@@ -220,8 +220,8 @@ func BuildQuoteRequest(account string, businessUnit int, request domain.Quotatio
 
 	return QuoteRequest{
 		TipoEnvio:      "",
-		OriginCityCode: normalized.OriginCityCode,
-		DestCityCode:   normalized.DestCityCode,
+		OriginCityCode: NormalizeCityCode(normalized.OriginCityCode),
+		DestCityCode:   NormalizeCityCode(normalized.DestCityCode),
 		DeclaredValue:  normalized.DeclaredValue,
 		Boomerang:      0,
 		Identification: "",
@@ -293,6 +293,16 @@ func ParseTrackingDate(value string) time.Time {
 	return time.Now().UTC()
 }
 
+// NormalizeCityCode maps internal 5-digit city codes to TCC DANE8 format.
+func NormalizeCityCode(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) == 5 && isNumeric(trimmed) {
+		return trimmed + "000"
+	}
+
+	return trimmed
+}
+
 func max(value float64, minimum float64) float64 {
 	if value < minimum {
 		return minimum
@@ -347,4 +357,14 @@ func ParseResultCode(code string) int {
 	}
 
 	return parsed
+}
+
+func isNumeric(value string) bool {
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+
+	return true
 }
