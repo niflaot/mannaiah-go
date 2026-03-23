@@ -16,17 +16,29 @@ func TestProviderLifecycle(t *testing.T) {
 		switch request.URL.Path {
 		case "/api/clientes/tarifas/v5/consultarliquidacion":
 			_ = json.NewEncoder(writer).Encode(map[string]any{"codigoResultado": "0", "mensajeResultado": "OK", "total": map[string]any{"totaldespacho": 20000, "unidadnegocio": "PAQ"}})
-		case "/api/clientes/remesas/grabardespacho8":
+		case "/api/clientes/remesas/grabardespacho7":
 			_ = json.NewEncoder(writer).Encode(map[string]any{"codigoresultado": "0", "mensajeresultado": "OK", "numeroremesa": "1001", "urlguia": "https://carrier/guide/1001"})
 		case "/api/clientes/remesas/consultarestatusremesasv3":
-			_ = json.NewEncoder(writer).Encode(map[string]any{"codigoresultado": "0", "mensajeresultado": "OK", "estados": []any{map[string]any{"codigo": "3000", "descripcion": "Entregado", "fecha": "2026-03-22T10:00:00Z"}}})
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesas": []any{
+					map[string]any{
+						"numeroremesa": "1001",
+						"estados": []any{
+							map[string]any{"codigo": "3000", "descripcion": "Entregado", "fecha": "2026-03-22T10:00:00Z"},
+						},
+						"ciudadorigen":  map[string]any{"descripcion": "MEDELLIN"},
+						"ciudaddestino": map[string]any{"descripcion": "BOGOTA"},
+					},
+				},
+				"respuesta": map[string]any{"codigo": "0", "mensaje": "OK"},
+			})
 		default:
 			writer.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
 
-	provider, err := NewProvider(ProviderConfig{Enabled: true, BaseURL: server.URL, AccessToken: "token", AccountNumber: "7000880", BusinessUnit: 1, PaymentForm: 1, Sender: domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"}})
+	provider, err := NewProvider(ProviderConfig{Enabled: true, IsSandbox: true, BaseURLOverride: server.URL, AccessToken: "token", AccountNumber: "7000880", BusinessUnit: 1, PaymentForm: 1, Sender: domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"}})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
 	}

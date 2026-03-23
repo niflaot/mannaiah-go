@@ -72,6 +72,12 @@ Use these env vars to convert tagged assets to `.jpg` through scheduled jobs:
 - `ASSETS_JPG_WORKER_JPEG_QUALITY`
 - `ASSETS_JPG_WORKER_TIMEOUT_MS`
 
+### Shipping (TCC)
+
+- `SHIPPING_TCC_ENABLED=true` enables the TCC provider.
+- `SHIPPING_TCC_SANDBOX=true` targets sandbox (`https://testsomos.tcc.com.co`).
+- `SHIPPING_TCC_SANDBOX=false` targets production (`https://somos.tcc.com.co`).
+
 ## Testing
 
 ### Module Unit Tests

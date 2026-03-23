@@ -16,8 +16,8 @@ type Config struct {
 type TCCConfig struct {
 	// Enabled defines whether TCC provider wiring should be active.
 	Enabled bool `mapstructure:"SHIPPING_TCC_ENABLED" default:"false"`
-	// BaseURL defines TCC API base URL values.
-	BaseURL string `mapstructure:"SHIPPING_TCC_BASE_URL" default:""`
+	// Sandbox defines whether TCC sandbox endpoints should be used.
+	Sandbox bool `mapstructure:"SHIPPING_TCC_SANDBOX" default:"true"`
 	// AccessToken defines TCC access-token values.
 	AccessToken string `mapstructure:"SHIPPING_TCC_ACCESS_TOKEN" default:""`
 	// AccountNumber defines TCC account number values.

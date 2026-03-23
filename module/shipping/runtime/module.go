@@ -72,7 +72,7 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	if cfg.TCC.Enabled {
 		tccProvider, providerErr := tcc.NewProvider(tcc.ProviderConfig{
 			Enabled:       cfg.TCC.Enabled,
-			BaseURL:       strings.TrimSpace(cfg.TCC.BaseURL),
+			IsSandbox:     cfg.TCC.Sandbox,
 			AccessToken:   strings.TrimSpace(cfg.TCC.AccessToken),
 			AccountNumber: strings.TrimSpace(cfg.TCC.AccountNumber),
 			BusinessUnit:  cfg.TCC.BusinessUnit,

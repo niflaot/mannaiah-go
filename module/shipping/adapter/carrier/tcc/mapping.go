@@ -45,70 +45,81 @@ type QuoteResponse struct {
 
 // DispatchRequest defines TCC dispatch request payload values.
 type DispatchRequest struct {
-	DispatchNumber       string              `json:"numerodespacho"`
-	DispatchDate         string              `json:"fechadespacho"`
-	BusinessUnit         int                 `json:"unidadnegocio"`
-	SenderAccount        string              `json:"cuentaremitente"`
-	SenderBranch         string              `json:"sederemitente"`
-	SenderFirstName      string              `json:"primernombreremitente"`
-	SenderSecondName     string              `json:"segundonombreremitente"`
-	SenderFirstLastName  string              `json:"primerapellidoremitente"`
-	SenderSecondLastName string              `json:"segundoapellidoremitente"`
-	SenderCompanyName    string              `json:"razonsocialremitente"`
-	SenderContact        string              `json:"contactoremitente"`
-	SenderIDType         string              `json:"tipoidentificacionremitente"`
-	SenderID             string              `json:"identificacionremitente"`
-	SenderAddress        string              `json:"direccionremitente"`
-	OriginCityCode       string              `json:"ciudadorigen"`
-	SenderPhone          string              `json:"telefonoremitente"`
-	SenderEmail          string              `json:"emailremitente"`
-	Recipients           []DispatchRecipient `json:"destinatarios"`
-	ReferenceDocuments   []DispatchDocument  `json:"documentosreferencia"`
+	RelationNumber        string                `json:"numerorelacion"`
+	RelationDateTime      string                `json:"fechahorarelacion"`
+	PickupRequest         DispatchPickupRequest `json:"solicitudrecogida"`
+	BusinessUnit          string                `json:"unidadnegocio"`
+	ShipmentNumber        string                `json:"numeroremesa"`
+	DispatchDate          string                `json:"fechadespacho"`
+	SenderAccount         string                `json:"cuentaremitente"`
+	SenderIDType          string                `json:"tipoidentificacionremitente"`
+	SenderID              string                `json:"identificacionremitente"`
+	SenderBranch          string                `json:"sederemitente"`
+	SenderFirstName       string                `json:"primernombreremitente"`
+	SenderSecondName      string                `json:"segundonombreremitente"`
+	SenderFirstLastName   string                `json:"primerapellidoremitente"`
+	SenderSecondLastName  string                `json:"segundoapellidoremitente"`
+	SenderCompanyName     string                `json:"razonsocialremitente"`
+	SenderNature          string                `json:"naturalezaremitente"`
+	SenderAddress         string                `json:"direccionremitente"`
+	SenderContact         string                `json:"contactoremitente"`
+	SenderEmail           string                `json:"emailremitente"`
+	SenderPhone           string                `json:"telefonoremitente"`
+	OriginCityCode        string                `json:"ciudadorigen"`
+	RecipientIDType       string                `json:"tipoidentificaciondestinatario"`
+	RecipientID           string                `json:"identificaciondestinatario"`
+	RecipientBranch       string                `json:"sededestinatario"`
+	RecipientFirstName    string                `json:"primernombredestinatario"`
+	RecipientSecondName   string                `json:"segundonombredestinatario"`
+	RecipientFirstLast    string                `json:"primerapellidodestinatario"`
+	RecipientSecondLast   string                `json:"segundoapellidodestinatario"`
+	RecipientCompany      string                `json:"razonsocialdestinatario"`
+	RecipientNature       string                `json:"naturalezadestinatario"`
+	RecipientAddress      string                `json:"direcciondestinatario"`
+	RecipientContact      string                `json:"contactodestinatario"`
+	RecipientEmail        string                `json:"emaildestinatario"`
+	RecipientPhone        string                `json:"telefonodestinatario"`
+	DestCityCode          string                `json:"ciudaddestinatario"`
+	RecipientNeighborhood string                `json:"barriodestinatario"`
+	TotalWeight           string                `json:"totalpeso"`
+	TotalVolumeWeight     string                `json:"totalpesovolumen"`
+	PaymentForm           string                `json:"formapago"`
+	Observations          string                `json:"observaciones"`
+	DeliverWarehouse      string                `json:"llevabodega"`
+	PickupWarehouse       string                `json:"recogebodega"`
+	CostCenter            string                `json:"centrocostos"`
+	TotalProductValue     string                `json:"totalvalorproducto"`
+	GenerateDocuments     string                `json:"generardocumentos"`
+	GenerateBinaries      string                `json:"generarbinarios"`
+	Units                 []DispatchUnit        `json:"unidades"`
+	ServiceType           string                `json:"tiposervicio"`
+	ReferenceDocuments    []DispatchDocument    `json:"documentosreferencia"`
 }
 
-// DispatchRecipient defines TCC dispatch recipient values.
-type DispatchRecipient struct {
-	ControlNumber           string         `json:"numerocontrol"`
-	ShipmentNumber          string         `json:"numeroremesa"`
-	ClientReferenceNumber   string         `json:"numeroreferenciacliente"`
-	RecipientIDType         string         `json:"tipoidentificaciondestinatario"`
-	RecipientID             string         `json:"identificaciondestinatario"`
-	RecipientBranch         string         `json:"sededestinatario"`
-	RecipientFirstName      string         `json:"primernombredestinatario"`
-	RecipientSecondName     string         `json:"segundonombredestinatario"`
-	RecipientFirstLastName  string         `json:"primerapellidodestinatario"`
-	RecipientSecondLastName string         `json:"segundoapellidodestinatario"`
-	RecipientCompanyName    string         `json:"razonsocialdestinatario"`
-	RecipientContact        string         `json:"contactodestinatario"`
-	RecipientAddress        string         `json:"direcciondestinatario"`
-	RecipientPhone          string         `json:"telefonodestinatario"`
-	DestCityCode            string         `json:"ciudaddestino"`
-	PaymentForm             int            `json:"formapago"`
-	DeliverWarehouse        string         `json:"llevabodega"`
-	PickupWarehouse         string         `json:"recogebodega"`
-	CostCenter              string         `json:"centrocostos"`
-	ServiceType             string         `json:"tiposervicio"`
-	Observations            string         `json:"observaciones"`
-	ProductCollection       string         `json:"recaudoproducto"`
-	Units                   []DispatchUnit `json:"unidades"`
+// DispatchPickupRequest defines optional pickup-window values.
+type DispatchPickupRequest struct {
+	Number      string `json:"numero"`
+	Date        string `json:"fecha"`
+	WindowStart string `json:"ventanainicio"`
+	WindowEnd   string `json:"ventanafin"`
 }
 
 // DispatchUnit defines TCC dispatch unit values.
 type DispatchUnit struct {
-	UnitType       string  `json:"tipounidad"`
-	PackageType    string  `json:"tipoempaque"`
-	PackageClass   string  `json:"claseempaque"`
-	Contains       string  `json:"dicecontener"`
-	RealWeightKG   float64 `json:"kilosreales"`
-	DepthCM        float64 `json:"largo"`
-	HeightCM       float64 `json:"alto"`
-	WidthCM        float64 `json:"ancho"`
-	VolumeWeightKG float64 `json:"pesovolumen"`
-	DeclaredValue  float64 `json:"valormercancia"`
-	Barcode        string  `json:"codigodebarras"`
-	BagNumber      string  `json:"numerobolsa"`
-	References     string  `json:"referencias"`
-	InnerUnits     string  `json:"unidadesinternas"`
+	UnitType       string `json:"tipounidad"`
+	PackageType    string `json:"tipoempaque"`
+	PackageClass   string `json:"claseempaque"`
+	Contains       string `json:"dicecontener"`
+	RealWeightKG   string `json:"kilosreales"`
+	DepthCM        string `json:"largo"`
+	HeightCM       string `json:"alto"`
+	WidthCM        string `json:"ancho"`
+	VolumeWeightKG string `json:"pesovolumen"`
+	DeclaredValue  string `json:"valormercancia"`
+	Barcode        string `json:"codigobarras"`
+	BagNumber      string `json:"numerobolsa"`
+	References     string `json:"referencias"`
+	InnerUnits     string `json:"unidadesinternas"`
 }
 
 // DispatchDocument defines TCC dispatch reference-document values.
@@ -145,16 +156,25 @@ type DispatchResponseShipment struct {
 
 // TrackingRequest defines TCC tracking request payload values.
 type TrackingRequest struct {
+	Remittances        []TrackingRequestRemittance `json:"remesas"`
+	ReferenceDocuments []TrackingRequestReference  `json:"documentosreferencia"`
+	GenerateImage      bool                        `json:"generarimagen"`
+}
+
+// TrackingRequestRemittance defines remittance filters for tracking lookups.
+type TrackingRequestRemittance struct {
 	ShipmentNumber string `json:"numeroremesa"`
+}
+
+// TrackingRequestReference defines reference-document filters for tracking lookups.
+type TrackingRequestReference struct {
+	ReferenceDocument string `json:"documentoreferencia"`
 }
 
 // TrackingResponse defines TCC tracking response payload values.
 type TrackingResponse struct {
-	ResultCode    string               `json:"codigoresultado"`
-	ResultMessage string               `json:"mensajeresultado"`
-	States        []TrackingState      `json:"estados"`
-	OriginCity    trackingCityResponse `json:"ciudadorigen"`
-	DestCity      trackingCityResponse `json:"ciudaddestino"`
+	Remittances []TrackingRemittanceResponse `json:"remesas"`
+	Result      TrackingResultResponse       `json:"respuesta"`
 }
 
 // TrackingState defines TCC tracking state payload values.
@@ -162,6 +182,20 @@ type TrackingState struct {
 	Code        string `json:"codigo"`
 	Description string `json:"descripcion"`
 	Date        string `json:"fecha"`
+}
+
+// TrackingRemittanceResponse defines per-remittance tracking payload values.
+type TrackingRemittanceResponse struct {
+	ShipmentNumber string               `json:"numeroremesa"`
+	States         []TrackingState      `json:"estados"`
+	OriginCity     trackingCityResponse `json:"ciudadorigen"`
+	DestCity       trackingCityResponse `json:"ciudaddestino"`
+}
+
+// TrackingResultResponse defines TCC tracking response result values.
+type TrackingResultResponse struct {
+	Code    string `json:"codigo"`
+	Message string `json:"mensaje"`
 }
 
 type trackingCityResponse struct {

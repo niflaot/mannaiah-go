@@ -40,3 +40,8 @@
   - `shipping.v1.batch.created`
   - `shipping.v1.batch.closed`
   - `shipping.v1.tracking.updated`
+
+## TCC Environment Switch
+- `SHIPPING_TCC_ENABLED=true` enables the TCC carrier adapter.
+- `SHIPPING_TCC_SANDBOX=true` routes requests to `https://testsomos.tcc.com.co`.
+- `SHIPPING_TCC_SANDBOX=false` routes requests to `https://somos.tcc.com.co`.

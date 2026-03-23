@@ -76,6 +76,12 @@ Keep newest entries on top. Add one section per version.
 - Runtime/bootstrap integration:
   - Core startup now loads `shipping.Config`, initializes module, authorizer, and registers routes/spec.
   - Workspace/build integration updated (`go.work`, root/core `go.mod`, `.drone.yml` module sweep).
+- TCC carrier contract updates:
+  - Base URLs are hardcoded by mode (`SHIPPING_TCC_SANDBOX=true|false`):
+    - sandbox: `https://testsomos.tcc.com.co`
+    - production: `https://somos.tcc.com.co`
+  - Guide generation endpoint switched to `/api/clientes/remesas/grabardespacho7`.
+  - Tracking request/response mapping aligned with `consultarestatusremesasv3` (`remesas[]` + `respuesta`).
 - Docs and release metadata updates:
   - Root `README.md` and `module/woocommerce/README.md` latest badge set to `v1.0.0`.
   - Core OpenAPI version references set to `1.0.0` (`module/core/cmd/api/main.go`, `module/core/startup/runtime.go`).

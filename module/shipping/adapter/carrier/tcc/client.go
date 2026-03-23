@@ -14,12 +14,24 @@ import (
 const (
 	// defaultRequestTimeout defines outbound TCC HTTP timeout values.
 	defaultRequestTimeout = 10 * time.Second
+	// sandboxBaseURL defines the official TCC sandbox API base URL.
+	sandboxBaseURL = "https://testsomos.tcc.com.co"
+	// productionBaseURL defines the official TCC production API base URL.
+	productionBaseURL = "https://somos.tcc.com.co"
+	// quotePath defines quotation endpoint paths.
+	quotePath = "/api/clientes/tarifas/v5/consultarliquidacion"
+	// dispatchPath defines shipment-generation endpoint paths.
+	dispatchPath = "/api/clientes/remesas/grabardespacho7"
+	// trackingPath defines remittance-tracking endpoint paths.
+	trackingPath = "/api/clientes/remesas/consultarestatusremesasv3"
 )
 
 // ClientConfig defines TCC API client configuration values.
 type ClientConfig struct {
-	// BaseURL defines TCC base URL values.
-	BaseURL string
+	// IsSandbox defines whether requests target TCC sandbox URLs.
+	IsSandbox bool
+	// BaseURLOverride defines optional base URL override values (for local tests only).
+	BaseURLOverride string
 	// AccessToken defines TCC access-token values.
 	AccessToken string
 	// RequestTimeout defines outbound request timeout values.
@@ -38,10 +50,14 @@ type Client struct {
 
 // NewClient creates TCC API clients.
 func NewClient(config ClientConfig) (*Client, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(config.BaseURL), "/")
-	if baseURL == "" {
-		return nil, fmt.Errorf("tcc base url is required")
+	baseURL := productionBaseURL
+	if config.IsSandbox {
+		baseURL = sandboxBaseURL
 	}
+	if strings.TrimSpace(config.BaseURLOverride) != "" {
+		baseURL = strings.TrimSpace(config.BaseURLOverride)
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	accessToken := strings.TrimSpace(config.AccessToken)
 	if accessToken == "" {
 		return nil, fmt.Errorf("tcc access token is required")
@@ -57,7 +73,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 // Quote requests one quotation from the TCC quotation endpoint.
 func (c *Client) Quote(ctx context.Context, request QuoteRequest) (*QuoteResponse, error) {
 	response := QuoteResponse{}
-	if err := c.postJSON(ctx, "/api/clientes/tarifas/v5/consultarliquidacion", request, &response); err != nil {
+	if err := c.postJSON(ctx, quotePath, request, &response); err != nil {
 		return nil, err
 	}
 
@@ -67,7 +83,7 @@ func (c *Client) Quote(ctx context.Context, request QuoteRequest) (*QuoteRespons
 // Dispatch creates one shipment in TCC.
 func (c *Client) Dispatch(ctx context.Context, request DispatchRequest) (*DispatchResponse, error) {
 	response := DispatchResponse{}
-	if err := c.postJSON(ctx, "/api/clientes/remesas/grabardespacho8", request, &response); err != nil {
+	if err := c.postJSON(ctx, dispatchPath, request, &response); err != nil {
 		return nil, err
 	}
 
@@ -77,7 +93,7 @@ func (c *Client) Dispatch(ctx context.Context, request DispatchRequest) (*Dispat
 // Track requests one tracking response from TCC.
 func (c *Client) Track(ctx context.Context, request TrackingRequest) (*TrackingResponse, error) {
 	response := TrackingResponse{}
-	if err := c.postJSON(ctx, "/api/clientes/remesas/consultarestatusremesasv3", request, &response); err != nil {
+	if err := c.postJSON(ctx, trackingPath, request, &response); err != nil {
 		return nil, err
 	}
 

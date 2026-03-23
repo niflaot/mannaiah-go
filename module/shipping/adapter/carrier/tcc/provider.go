@@ -14,8 +14,10 @@ import (
 type ProviderConfig struct {
 	// Enabled defines whether TCC provider wiring should be active.
 	Enabled bool
-	// BaseURL defines TCC base URL values.
-	BaseURL string
+	// IsSandbox defines whether TCC sandbox endpoints should be used.
+	IsSandbox bool
+	// BaseURLOverride defines optional base URL override values for local tests.
+	BaseURLOverride string
 	// AccessToken defines TCC access-token values.
 	AccessToken string
 	// AccountNumber defines sender account-number values.
@@ -50,9 +52,10 @@ func NewProvider(config ProviderConfig) (*Provider, error) {
 		config.PaymentForm = 1
 	}
 	client, err := NewClient(ClientConfig{
-		BaseURL:        config.BaseURL,
-		AccessToken:    config.AccessToken,
-		RequestTimeout: config.RequestTimeout,
+		IsSandbox:       config.IsSandbox,
+		BaseURLOverride: config.BaseURLOverride,
+		AccessToken:     config.AccessToken,
+		RequestTimeout:  config.RequestTimeout,
 	})
 	if err != nil {
 		return nil, err
@@ -129,12 +132,12 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 			PackageType:    "",
 			PackageClass:   fallback(normalized.PackageType, "CLEM_CAJA"),
 			Contains:       normalized.Description,
-			RealWeightKG:   normalized.Dimensions.RealWeightKG,
-			DepthCM:        normalized.Dimensions.DepthCM,
-			HeightCM:       normalized.Dimensions.HeightCM,
-			WidthCM:        normalized.Dimensions.WidthCM,
-			VolumeWeightKG: normalized.Dimensions.VolumetricWeightKG,
-			DeclaredValue:  normalized.Dimensions.DeclaredValueCOP,
+			RealWeightKG:   FormatFloatString(max(normalized.Dimensions.RealWeightKG, 1)),
+			DepthCM:        FormatFloatString(normalized.Dimensions.DepthCM),
+			HeightCM:       FormatFloatString(normalized.Dimensions.HeightCM),
+			WidthCM:        FormatFloatString(normalized.Dimensions.WidthCM),
+			VolumeWeightKG: FormatFloatString(max(normalized.Dimensions.VolumetricWeightKG, 1)),
+			DeclaredValue:  FormatFloatString(max(normalized.Dimensions.DeclaredValueCOP, 0)),
 			Barcode:        "",
 			BagNumber:      "",
 			References:     "",
@@ -142,48 +145,54 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		})
 	}
 	request := DispatchRequest{
-		DispatchNumber:       "",
-		DispatchDate:         time.Now().UTC().Format("2006-01-02"),
-		BusinessUnit:         p.cfg.BusinessUnit,
-		SenderAccount:        strings.TrimSpace(p.cfg.AccountNumber),
-		SenderBranch:         "",
-		SenderFirstName:      sender.Name,
-		SenderSecondName:     sender.Name,
-		SenderFirstLastName:  sender.Name,
-		SenderSecondLastName: sender.Name,
-		SenderCompanyName:    sender.Name,
-		SenderContact:        "",
-		SenderIDType:         sender.IDType,
-		SenderID:             sender.ID,
-		SenderAddress:        sender.AddressLine,
-		OriginCityCode:       sender.CityCode,
-		SenderPhone:          sender.Phone,
-		SenderEmail:          sender.Email,
-		Recipients: []DispatchRecipient{{
-			ControlNumber:           "1",
-			ShipmentNumber:          "",
-			ClientReferenceNumber:   "",
-			RecipientIDType:         recipient.IDType,
-			RecipientID:             recipient.ID,
-			RecipientBranch:         "",
-			RecipientFirstName:      splitName(recipient.Name, 0),
-			RecipientSecondName:     splitName(recipient.Name, 1),
-			RecipientFirstLastName:  splitName(recipient.Name, 2),
-			RecipientSecondLastName: splitName(recipient.Name, 3),
-			RecipientCompanyName:    recipient.Name,
-			RecipientContact:        "",
-			RecipientAddress:        recipient.AddressLine,
-			RecipientPhone:          recipient.Phone,
-			DestCityCode:            recipient.CityCode,
-			PaymentForm:             p.cfg.PaymentForm,
-			DeliverWarehouse:        "",
-			PickupWarehouse:         "",
-			CostCenter:              "",
-			ServiceType:             "TISE_NORMAL_PAQ",
-			Observations:            resolved.Observations,
-			ProductCollection:       "0",
-			Units:                   units,
-		}},
+		RelationNumber:        "",
+		RelationDateTime:      "",
+		PickupRequest:         DispatchPickupRequest{},
+		BusinessUnit:          strconv.Itoa(p.cfg.BusinessUnit),
+		ShipmentNumber:        "",
+		DispatchDate:          time.Now().UTC().Format("2006-01-02"),
+		SenderAccount:         strings.TrimSpace(p.cfg.AccountNumber),
+		SenderIDType:          sender.IDType,
+		SenderID:              sender.ID,
+		SenderBranch:          "",
+		SenderFirstName:       splitName(sender.Name, 0),
+		SenderSecondName:      splitName(sender.Name, 1),
+		SenderFirstLastName:   splitName(sender.Name, 2),
+		SenderSecondLastName:  splitName(sender.Name, 3),
+		SenderCompanyName:     sender.Name,
+		SenderNature:          "N",
+		SenderAddress:         sender.AddressLine,
+		SenderContact:         sender.Name,
+		SenderEmail:           sender.Email,
+		SenderPhone:           sender.Phone,
+		OriginCityCode:        sender.CityCode,
+		RecipientIDType:       recipient.IDType,
+		RecipientID:           recipient.ID,
+		RecipientBranch:       "",
+		RecipientFirstName:    splitName(recipient.Name, 0),
+		RecipientSecondName:   splitName(recipient.Name, 1),
+		RecipientFirstLast:    splitName(recipient.Name, 2),
+		RecipientSecondLast:   splitName(recipient.Name, 3),
+		RecipientCompany:      recipient.Name,
+		RecipientNature:       "N",
+		RecipientAddress:      recipient.AddressLine,
+		RecipientContact:      recipient.Name,
+		RecipientEmail:        recipient.Email,
+		RecipientPhone:        recipient.Phone,
+		DestCityCode:          recipient.CityCode,
+		RecipientNeighborhood: "",
+		TotalWeight:           FormatFloatString(resolved.TotalWeight),
+		TotalVolumeWeight:     FormatFloatString(resolved.TotalVolumetricWeight),
+		PaymentForm:           strconv.Itoa(p.cfg.PaymentForm),
+		Observations:          resolved.Observations,
+		DeliverWarehouse:      "",
+		PickupWarehouse:       "",
+		CostCenter:            "",
+		TotalProductValue:     FormatFloatString(resolved.DeclaredValue),
+		GenerateDocuments:     "true",
+		GenerateBinaries:      "false",
+		Units:                 units,
+		ServiceType:           "TISE_NORMAL_PAQ",
 		ReferenceDocuments: []DispatchDocument{{
 			DocumentType:   "PE",
 			DocumentNumber: fallback(resolved.OrderID, resolved.ID),
@@ -232,22 +241,34 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 	if trimmedTracking == "" {
 		return nil, domain.ErrInvalidID
 	}
-	response, err := p.client.Track(ctx, TrackingRequest{ShipmentNumber: trimmedTracking})
+	response, err := p.client.Track(ctx, TrackingRequest{
+		Remittances: []TrackingRequestRemittance{
+			{ShipmentNumber: trimmedTracking},
+		},
+		ReferenceDocuments: []TrackingRequestReference{
+			{ReferenceDocument: ""},
+		},
+		GenerateImage: false,
+	})
 	if err != nil {
 		return nil, err
 	}
-	if ParseResultCode(response.ResultCode) != 0 {
-		return nil, fmt.Errorf("tcc tracking rejected: %s", strings.TrimSpace(response.ResultMessage))
+	if ParseResultCode(response.Result.Code) != 0 {
+		return nil, fmt.Errorf("tcc tracking rejected: %s", strings.TrimSpace(response.Result.Message))
 	}
-	history := make([]domain.TrackingEvent, 0, len(response.States))
+	if len(response.Remittances) == 0 {
+		return nil, fmt.Errorf("tcc tracking returned no remittance data")
+	}
+	remittance := response.Remittances[0]
+	history := make([]domain.TrackingEvent, 0, len(remittance.States))
 	latestStatus := domain.TrackingStatusProcessing
 	latestDate := time.Time{}
-	for _, state := range response.States {
+	for _, state := range remittance.States {
 		status := MapTrackingStatus(state.Code, state.Description)
 		eventDate := ParseTrackingDate(state.Date)
-		city := response.OriginCity.Description
+		city := remittance.OriginCity.Description
 		if status == domain.TrackingStatusCompleted {
-			city = response.DestCity.Description
+			city = remittance.DestCity.Description
 		}
 		history = append(history, domain.TrackingEvent{
 			Date:   eventDate,
