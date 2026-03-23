@@ -77,6 +77,9 @@ Use these env vars to convert tagged assets to `.jpg` through scheduled jobs:
 - `SHIPPING_TCC_ENABLED=true` enables the TCC provider.
 - `SHIPPING_TCC_SANDBOX=true` targets sandbox (`https://testsomos.tcc.com.co`).
 - `SHIPPING_TCC_SANDBOX=false` targets production (`https://somos.tcc.com.co`).
+- `SHIPPING_TCC_SANDBOX_ACCESS_TOKEN` is used when `SHIPPING_TCC_SANDBOX=true`.
+- `SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN` is used when `SHIPPING_TCC_SANDBOX=false`.
+- `SHIPPING_QUOTATION_DISCOUNT_PERCENT` applies a global percentage discount to carrier quotations and exposes both full and discounted values in API responses.
 
 ## Testing
 

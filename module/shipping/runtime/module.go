@@ -70,10 +70,11 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	trackingProviders = append(trackingProviders, manualProvider)
 
 	if cfg.TCC.Enabled {
+		tccAccessToken := resolveTCCAccessToken(cfg.TCC)
 		tccProvider, providerErr := tcc.NewProvider(tcc.ProviderConfig{
 			Enabled:       cfg.TCC.Enabled,
 			IsSandbox:     cfg.TCC.Sandbox,
-			AccessToken:   strings.TrimSpace(cfg.TCC.AccessToken),
+			AccessToken:   tccAccessToken,
 			AccountNumber: strings.TrimSpace(cfg.TCC.AccountNumber),
 			BusinessUnit:  cfg.TCC.BusinessUnit,
 			PaymentForm:   cfg.TCC.PaymentForm,
@@ -97,7 +98,9 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 
 	registry := shippingcarrier.NewRegistry(providers, trackingProviders)
 	publisher := resolvePublisher(publishers)
-	quotationSvc := quotationservice.NewService(quotationRepository, registry)
+	quotationSvc := quotationservice.NewService(quotationRepository, registry, quotationservice.Config{
+		DiscountPercent: cfg.Quotation.DiscountPercent,
+	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher)
 	trackingSvc := trackingservice.NewService(registry, publisher)
@@ -230,4 +233,13 @@ func resolvePublisher(publishers []port.IntegrationEventPublisher) port.Integrat
 	}
 
 	return publishers[0]
+}
+
+// resolveTCCAccessToken resolves TCC access tokens according to configured runtime mode.
+func resolveTCCAccessToken(config TCCConfig) string {
+	if config.Sandbox {
+		return strings.TrimSpace(config.SandboxAccessToken)
+	}
+
+	return strings.TrimSpace(config.ProductionAccessToken)
 }

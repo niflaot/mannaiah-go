@@ -30,6 +30,19 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postQuotationResponse.Value == nil || postQuotationResponse.Value.Content.Get("application/json") == nil {
 		t.Fatalf("expected /shipping/quotations POST 201 JSON schema")
 	}
+	postQuotationSchema := postQuotationResponse.Value.Content.Get("application/json").Schema
+	if postQuotationSchema == nil || postQuotationSchema.Value == nil {
+		t.Fatalf("expected /shipping/quotations POST 201 schema object")
+	}
+	if postQuotationSchema.Value.Properties["fullFreightCost"] == nil {
+		t.Fatalf("expected fullFreightCost in quotation response schema")
+	}
+	if postQuotationSchema.Value.Properties["discountedFreightCost"] == nil {
+		t.Fatalf("expected discountedFreightCost in quotation response schema")
+	}
+	if postQuotationSchema.Value.Properties["discountPercent"] == nil {
+		t.Fatalf("expected discountPercent in quotation response schema")
+	}
 
 	postMark := paths.Find("/shipping/marks").Post
 	if postMark == nil || postMark.RequestBody == nil {

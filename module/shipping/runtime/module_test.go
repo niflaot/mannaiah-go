@@ -21,3 +21,21 @@ func TestNew(t *testing.T) {
 		t.Fatalf("module services are nil")
 	}
 }
+
+// TestResolveTCCAccessToken verifies sandbox/production token selection behavior.
+func TestResolveTCCAccessToken(t *testing.T) {
+	if token := resolveTCCAccessToken(TCCConfig{
+		Sandbox:               true,
+		SandboxAccessToken:    "sandbox-token",
+		ProductionAccessToken: "production-token",
+	}); token != "sandbox-token" {
+		t.Fatalf("sandbox token = %q", token)
+	}
+	if token := resolveTCCAccessToken(TCCConfig{
+		Sandbox:               false,
+		SandboxAccessToken:    "sandbox-token",
+		ProductionAccessToken: "production-token",
+	}); token != "production-token" {
+		t.Fatalf("production token = %q", token)
+	}
+}

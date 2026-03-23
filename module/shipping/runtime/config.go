@@ -6,10 +6,18 @@ type Config struct {
 	Enabled bool `mapstructure:"SHIPPING_ENABLED" default:"true"`
 	// TrackingCacheTTLSeconds defines tracking cache TTL values in seconds.
 	TrackingCacheTTLSeconds int `mapstructure:"SHIPPING_TRACKING_CACHE_TTL_SECONDS" default:"300"`
+	// Quotation defines quotation behavior configuration values.
+	Quotation QuotationConfig `mapstructure:",squash"`
 	// TCC defines TCC carrier configuration values.
 	TCC TCCConfig `mapstructure:",squash"`
 	// DefaultSender defines fallback sender information used for mark generation.
 	DefaultSender DefaultSenderConfig `mapstructure:",squash"`
+}
+
+// QuotationConfig defines quotation behavior configuration values.
+type QuotationConfig struct {
+	// DiscountPercent defines the freight discount percentage applied to carrier quotations.
+	DiscountPercent float64 `mapstructure:"SHIPPING_QUOTATION_DISCOUNT_PERCENT" default:"0"`
 }
 
 // TCCConfig defines TCC carrier configuration values.
@@ -18,8 +26,10 @@ type TCCConfig struct {
 	Enabled bool `mapstructure:"SHIPPING_TCC_ENABLED" default:"false"`
 	// Sandbox defines whether TCC sandbox endpoints should be used.
 	Sandbox bool `mapstructure:"SHIPPING_TCC_SANDBOX" default:"true"`
-	// AccessToken defines TCC access-token values.
-	AccessToken string `mapstructure:"SHIPPING_TCC_ACCESS_TOKEN" default:""`
+	// SandboxAccessToken defines TCC sandbox access-token values.
+	SandboxAccessToken string `mapstructure:"SHIPPING_TCC_SANDBOX_ACCESS_TOKEN" default:""`
+	// ProductionAccessToken defines TCC production access-token values.
+	ProductionAccessToken string `mapstructure:"SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN" default:""`
 	// AccountNumber defines TCC account number values.
 	AccountNumber string `mapstructure:"SHIPPING_TCC_ACCOUNT_NUMBER" default:""`
 	// BusinessUnit defines TCC business-unit values.

@@ -90,7 +90,13 @@ type QuotationResult struct {
 	OriginCityCode string `json:"originCityCode"`
 	// DestCityCode defines destination city-code values.
 	DestCityCode string `json:"destCityCode"`
-	// FreightCost defines total freight-cost amounts.
+	// FullFreightCost defines carrier-reported freight-cost amounts before discount.
+	FullFreightCost float64 `json:"fullFreightCost"`
+	// DiscountPercent defines configured freight discount percentage values.
+	DiscountPercent float64 `json:"discountPercent"`
+	// DiscountedFreightCost defines freight-cost amounts after discount.
+	DiscountedFreightCost float64 `json:"discountedFreightCost"`
+	// FreightCost defines discounted freight-cost amounts for backward compatibility.
 	FreightCost float64 `json:"freightCost"`
 	// EstimatedDays defines estimated delivery-day values.
 	EstimatedDays int `json:"estimatedDays"`

@@ -237,15 +237,17 @@ func (r QuoteResponse) ToDomain(carrierID string, request domain.QuotationReques
 	normalized := request.Normalize()
 
 	return &domain.QuotationResult{
-		CarrierID:      strings.TrimSpace(carrierID),
-		OrderID:        normalized.OrderID,
-		OriginCityCode: normalized.OriginCityCode,
-		DestCityCode:   normalized.DestCityCode,
-		FreightCost:    r.Total.DispatchTotal,
-		EstimatedDays:  1,
-		CurrencyCode:   "COP",
-		ExpiresAt:      time.Now().UTC().Add(60 * time.Second),
-		RawResponse:    r.ResultMessage,
+		CarrierID:             strings.TrimSpace(carrierID),
+		OrderID:               normalized.OrderID,
+		OriginCityCode:        normalized.OriginCityCode,
+		DestCityCode:          normalized.DestCityCode,
+		FullFreightCost:       r.Total.DispatchTotal,
+		DiscountedFreightCost: r.Total.DispatchTotal,
+		FreightCost:           r.Total.DispatchTotal,
+		EstimatedDays:         1,
+		CurrencyCode:          "COP",
+		ExpiresAt:             time.Now().UTC().Add(60 * time.Second),
+		RawResponse:           r.ResultMessage,
 	}
 }
 

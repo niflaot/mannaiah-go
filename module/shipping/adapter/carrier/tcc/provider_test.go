@@ -55,6 +55,9 @@ func TestProviderLifecycle(t *testing.T) {
 	if quote.FreightCost <= 0 {
 		t.Fatalf("invalid quote = %#v", quote)
 	}
+	if quote.FullFreightCost != quote.FreightCost {
+		t.Fatalf("quote.FullFreightCost = %v, quote.FreightCost = %v", quote.FullFreightCost, quote.FreightCost)
+	}
 
 	mark := &domain.ShippingMark{ID: "mark-1", OrderID: "order-1", CarrierID: "tcc", Sender: domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"}, Recipient: domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"}, Units: []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}}}
 	if err := provider.GenerateMark(context.Background(), mark); err != nil {
