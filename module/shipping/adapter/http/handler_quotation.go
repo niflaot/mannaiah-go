@@ -24,6 +24,8 @@ type quotationRequest struct {
 	DeclaredValue float64 `json:"declaredValue"`
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
+	// CollectOnDeliveryFeePercent defines requested cash-on-delivery fee percentages.
+	CollectOnDeliveryFeePercent float64 `json:"collectOnDeliveryFeePercent"`
 	// Units defines package-unit values.
 	Units []quotationUnitRequest `json:"units"`
 }
@@ -61,13 +63,14 @@ func (h *Handler) createQuotation(ctx corehttp.Context) error {
 		})
 	}
 	result, err := h.quotations.Quote(ctx.Context(), quotationservice.QuoteCommand{
-		OrderID:                 strings.TrimSpace(request.OrderID),
-		CarrierID:               strings.TrimSpace(request.CarrierID),
-		OriginCityCode:          strings.TrimSpace(request.OriginCityCode),
-		DestCityCode:            strings.TrimSpace(request.DestCityCode),
-		Units:                   units,
-		DeclaredValue:           request.DeclaredValue,
-		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		OrderID:                     strings.TrimSpace(request.OrderID),
+		CarrierID:                   strings.TrimSpace(request.CarrierID),
+		OriginCityCode:              strings.TrimSpace(request.OriginCityCode),
+		DestCityCode:                strings.TrimSpace(request.DestCityCode),
+		Units:                       units,
+		DeclaredValue:               request.DeclaredValue,
+		CollectOnDeliveryAmount:     request.CollectOnDeliveryAmount,
+		CollectOnDeliveryFeePercent: request.CollectOnDeliveryFeePercent,
 	})
 	if err != nil {
 		return h.mapError(err)

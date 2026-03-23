@@ -349,6 +349,7 @@ func quotationRequestSchema() *openapi3.Schema {
 		WithProperty("destCityCode", openapi3.NewStringSchema()).
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryFeePercent", openapi3.NewFloat64Schema()).
 		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema()))
 	schema.Required = []string{"carrierId", "originCityCode", "destCityCode", "units"}
 

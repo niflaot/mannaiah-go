@@ -27,6 +27,8 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 		t.Fatalf("expected /shipping/quotations POST JSON request schema")
 	} else if postQuotationRequestContent.Schema.Value.Properties["collectOnDeliveryAmount"] == nil {
 		t.Fatalf("expected collectOnDeliveryAmount in quotation request schema")
+	} else if postQuotationRequestContent.Schema.Value.Properties["collectOnDeliveryFeePercent"] == nil {
+		t.Fatalf("expected collectOnDeliveryFeePercent in quotation request schema")
 	}
 	if postQuotation.Responses == nil || postQuotation.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/quotations POST 201 response")

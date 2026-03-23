@@ -105,6 +105,32 @@ func TestQuote(t *testing.T) {
 	}
 }
 
+// TestQuoteAppliesRequestedCODFee verifies COD fee fallback behavior when providers omit COD fee fields.
+func TestQuoteAppliesRequestedCODFee(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{DiscountPercent: 0})
+
+	result, err := service.Quote(context.Background(), QuoteCommand{
+		OrderID:                     "order-2",
+		CarrierID:                   "manual",
+		OriginCityCode:              "11001000",
+		DestCityCode:                "76001000",
+		DeclaredValue:               50000,
+		CollectOnDeliveryAmount:     100000,
+		CollectOnDeliveryFeePercent: 4,
+		Units:                       []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+	})
+	if err != nil {
+		t.Fatalf("Quote() error = %v", err)
+	}
+	if result.CollectOnDeliveryFeePercent != 4 {
+		t.Fatalf("result.CollectOnDeliveryFeePercent = %v, want 4", result.CollectOnDeliveryFeePercent)
+	}
+	if result.CollectOnDeliveryChargedAmount != 104000 {
+		t.Fatalf("result.CollectOnDeliveryChargedAmount = %v, want 104000", result.CollectOnDeliveryChargedAmount)
+	}
+}
+
 // TestNormalizeDiscountPercent verifies discount normalization behavior.
 func TestNormalizeDiscountPercent(t *testing.T) {
 	if got := normalizeDiscountPercent(-10); got != 0 {
@@ -115,5 +141,18 @@ func TestNormalizeDiscountPercent(t *testing.T) {
 	}
 	if got := normalizeDiscountPercent(12.345); got != 12.35 {
 		t.Fatalf("normalizeDiscountPercent(12.345) = %v", got)
+	}
+}
+
+// TestApplySurcharge verifies surcharge application behavior.
+func TestApplySurcharge(t *testing.T) {
+	if got := applySurcharge(100000, 4); got != 104000 {
+		t.Fatalf("applySurcharge(100000, 4) = %v", got)
+	}
+	if got := applySurcharge(100000, 0); got != 100000 {
+		t.Fatalf("applySurcharge(100000, 0) = %v", got)
+	}
+	if got := applySurcharge(100000, -4); got != 100000 {
+		t.Fatalf("applySurcharge(100000, -4) = %v", got)
 	}
 }

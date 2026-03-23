@@ -35,6 +35,8 @@ type QuoteCommand struct {
 	DeclaredValue float64
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64
+	// CollectOnDeliveryFeePercent defines requested cash-on-delivery fee percentages.
+	CollectOnDeliveryFeePercent float64
 }
 
 // Service defines quotation orchestration behavior.
@@ -61,13 +63,14 @@ func NewService(repository port.QuotationRepository, registry port.ProviderRegis
 // Quote requests one carrier quotation and stores the audit record.
 func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.QuotationResult, error) {
 	request := domain.QuotationRequest{
-		OrderID:                 strings.TrimSpace(command.OrderID),
-		CarrierID:               strings.TrimSpace(command.CarrierID),
-		OriginCityCode:          strings.TrimSpace(command.OriginCityCode),
-		DestCityCode:            strings.TrimSpace(command.DestCityCode),
-		Units:                   command.Units,
-		DeclaredValue:           command.DeclaredValue,
-		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		OrderID:                     strings.TrimSpace(command.OrderID),
+		CarrierID:                   strings.TrimSpace(command.CarrierID),
+		OriginCityCode:              strings.TrimSpace(command.OriginCityCode),
+		DestCityCode:                strings.TrimSpace(command.DestCityCode),
+		Units:                       command.Units,
+		DeclaredValue:               command.DeclaredValue,
+		CollectOnDeliveryAmount:     command.CollectOnDeliveryAmount,
+		CollectOnDeliveryFeePercent: command.CollectOnDeliveryFeePercent,
 	}.Normalize()
 	if err := request.Validate(); err != nil {
 		return nil, err
@@ -127,9 +130,13 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 		result.CollectOnDeliveryFeePercent = 0
 		result.CollectOnDeliveryChargedAmount = 0
 	} else {
+		requestedCODFeePercent := normalizeDiscountPercent(request.CollectOnDeliveryFeePercent)
+		if result.CollectOnDeliveryFeePercent <= 0 && requestedCODFeePercent > 0 {
+			result.CollectOnDeliveryFeePercent = requestedCODFeePercent
+		}
 		result.CollectOnDeliveryChargedAmount = normalizeMoney(result.CollectOnDeliveryChargedAmount)
 		if result.CollectOnDeliveryChargedAmount <= 0 {
-			result.CollectOnDeliveryChargedAmount = result.CollectOnDeliveryAmount
+			result.CollectOnDeliveryChargedAmount = applySurcharge(result.CollectOnDeliveryAmount, result.CollectOnDeliveryFeePercent)
 		}
 	}
 
@@ -196,6 +203,18 @@ func applyDiscount(value float64, discountPercent float64) float64 {
 	}
 
 	factor := 1 - (normalizedDiscount / 100)
+
+	return normalizeMoney(normalizedValue * factor)
+}
+
+func applySurcharge(value float64, percent float64) float64 {
+	normalizedValue := normalizeMoney(value)
+	normalizedPercent := normalizeDiscountPercent(percent)
+	if normalizedPercent <= 0 {
+		return normalizedValue
+	}
+
+	factor := 1 + (normalizedPercent / 100)
 
 	return normalizeMoney(normalizedValue * factor)
 }
