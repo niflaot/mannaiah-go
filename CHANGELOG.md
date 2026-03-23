@@ -52,6 +52,35 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.0.0] - 2026-03-22
+- Release train reset:
+  - New tag baseline starts again at `v1.0.0`.
+- New shipping module (`module/shipping`) added with DDD + hexagonal structure:
+  - Quotation flow (`POST/GET /shipping/quotations`).
+  - Shipping mark flow (`POST /shipping/marks`, `PATCH /shipping/marks/{id}/void`, list/get endpoints).
+  - Dispatch batch flow (`POST /shipping/batches`, add/remove marks, close batch, list/get endpoints).
+  - Tracking flow (`GET /shipping/tracking/{trackingNumber}`).
+  - Carrier catalog flow (`GET /shipping/carriers`, `GET /shipping/carriers/{id}`).
+  - Carrier adapters:
+    - `tcc` (quotation, mark generation, tracking mapping aligned to TCC plugin payload shapes).
+    - `manual` fallback provider.
+  - Shipping integration events:
+    - `shipping.v1.mark.generated`
+    - `shipping.v1.mark.failed`
+    - `shipping.v1.mark.voided`
+    - `shipping.v1.batch.created`
+    - `shipping.v1.batch.closed`
+    - `shipping.v1.tracking.updated`
+- Database migrations added for shipping persistence:
+  - MySQL + SQLite `000022_shipping_schema` (`dispatch_batches`, `shipping_marks`, `shipping_mark_units`, `shipping_quotations`).
+- Runtime/bootstrap integration:
+  - Core startup now loads `shipping.Config`, initializes module, authorizer, and registers routes/spec.
+  - Workspace/build integration updated (`go.work`, root/core `go.mod`, `.drone.yml` module sweep).
+- Docs and release metadata updates:
+  - Root `README.md` and `module/woocommerce/README.md` latest badge set to `v1.0.0`.
+  - Core OpenAPI version references set to `1.0.0` (`module/core/cmd/api/main.go`, `module/core/startup/runtime.go`).
+  - Telemetry default service version set to `v1.0.0` (`module/core/telemetry/config.go`, `.env.example`).
+
 ### [v2.9.23] - 2026-03-22
 - Fix open-tracking status projection mismatch:
   - `GET /email/track/open/{id}` now updates both:

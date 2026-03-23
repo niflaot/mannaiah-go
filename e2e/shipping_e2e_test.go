@@ -1,0 +1,125 @@
+package e2e_test
+
+import (
+	"net/http"
+	"testing"
+
+	"mannaiah/module/shipping"
+)
+
+// TestShippingManualFlowE2E verifies shipping manual-carrier flows end-to-end through HTTP.
+func TestShippingManualFlowE2E(t *testing.T) {
+	harness := newContactsE2EHarness(t)
+	defer harness.Close(t)
+
+	harness.tracer.Step("initialize shipping module")
+	shippingModule, err := shipping.New(shipping.Config{Enabled: true}, harness.db)
+	if err != nil {
+		t.Fatalf("shipping.New() error = %v", err)
+	}
+	shippingModule.SetAuthorizer(harness.authModule)
+	harness.server.RegisterRoutes(shippingModule.RegisterRoutes)
+
+	manageToken := harness.SignToken(t, "marketing:manage")
+
+	harness.tracer.Step("request carriers without authorization header")
+	status, payload := harness.DoJSONRequest(t, http.MethodGet, "/shipping/carriers", "", nil)
+	if status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", status, http.StatusUnauthorized)
+	}
+	if payload["message"] != "unauthorized" {
+		t.Fatalf("payload.message = %v, want %q", payload["message"], "unauthorized")
+	}
+
+	harness.tracer.Step("list available carriers")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/shipping/carriers", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	rows, ok := payload["data"].([]any)
+	if !ok || len(rows) == 0 {
+		t.Fatalf("payload.data = %v, want at least one carrier", payload["data"])
+	}
+
+	harness.tracer.Step("request quotation with manual carrier and assert controlled not-supported error")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/quotations", manageToken, []byte(`{
+	  "orderId":"order-shipping-1",
+	  "carrierId":"manual",
+	  "originCityCode":"11001000",
+	  "destCityCode":"76001000",
+	  "declaredValue":120000,
+	  "units":[{"description":"box","packageType":"CAJA","dimensions":{"heightCm":15,"widthCm":20,"depthCm":30,"realWeightKg":2.2}}]
+	}`))
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if payload["message"] != "quotation_not_supported" {
+		t.Fatalf("payload.message = %v, want %q", payload["message"], "quotation_not_supported")
+	}
+
+	harness.tracer.Step("create manual shipping mark")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/marks", manageToken, []byte(`{
+	  "orderId":"order-shipping-1",
+	  "carrierId":"manual",
+	  "sender":{"name":"Flock","id":"901599500","idType":"NIT","addressLine":"Sender street 123","cityCode":"11001000","phone":"3000000000","email":"contacto@flockstore.co"},
+	  "recipient":{"name":"Marylu","id":"83395cf06d6837104f19a7c9a99a2517","idType":"CC","addressLine":"Recipient street 456","cityCode":"76001000","phone":"3110000000","email":"coccostoreco@gmail.com"},
+	  "paymentForm":"1",
+	  "declaredValue":162000,
+	  "units":[{"description":"morral","packageType":"CAJA","dimensions":{"heightCm":20,"widthCm":18,"depthCm":12,"realWeightKg":1.4}}]
+	}`))
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
+	}
+	markID, _ := payload["id"].(string)
+	if markID == "" {
+		t.Fatalf("expected mark id")
+	}
+	trackingNumber, _ := payload["trackingNumber"].(string)
+	if trackingNumber == "" {
+		t.Fatalf("expected tracking number")
+	}
+	if payload["status"] != "GENERATED" {
+		t.Fatalf("payload.status = %v, want %q", payload["status"], "GENERATED")
+	}
+
+	harness.tracer.Step("create dispatch batch")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/batches", manageToken, []byte(`{"name":"Dispatch 2026-03-22 #1","carrierId":"manual"}`))
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
+	}
+	batchID, _ := payload["id"].(string)
+	if batchID == "" {
+		t.Fatalf("expected batch id")
+	}
+
+	harness.tracer.Step("add mark to dispatch batch")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/batches/"+batchID+"/marks", manageToken, []byte(`{"markIds":["`+markID+`"]}`))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	markIDs, ok := payload["markIds"].([]any)
+	if !ok || len(markIDs) != 1 {
+		t.Fatalf("payload.markIds = %v, want one mark", payload["markIds"])
+	}
+
+	harness.tracer.Step("close dispatch batch")
+	status, payload = harness.DoJSONRequest(t, http.MethodPatch, "/shipping/batches/"+batchID+"/close", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["status"] != "CLOSED" {
+		t.Fatalf("payload.status = %v, want %q", payload["status"], "CLOSED")
+	}
+
+	harness.tracer.Step("resolve manual tracking history")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/shipping/tracking/"+trackingNumber+"?carrier=manual", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["globalStatus"] != "PROCESSING" {
+		t.Fatalf("payload.globalStatus = %v, want %q", payload["globalStatus"], "PROCESSING")
+	}
+
+	harness.tracer.Step("assert e2e trace logs")
+	harness.tracer.AssertStepCount(9)
+}

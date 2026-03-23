@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v2.9.23-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v1.0.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -24,6 +24,7 @@ Campaign-template parsing and runtime DSL behavior are documented in `FINAL-DSL-
 - `module/segment`: audience segment definitions and resolution via analytics resolver.
 - `module/email`: optional email delivery tracking and webhook module.
 - `module/campaign`: campaign lifecycle and fan-out orchestration module.
+- `module/shipping`: carrier-agnostic shipping module (quotation, mark generation, dispatch batches, tracking).
 - `e2e/`: root end-to-end validation flows.
 
 ## Key Runtime Endpoints
@@ -84,7 +85,7 @@ done
 Extended module sweep including marketing modules:
 
 ```bash
-for module in module/syncrecord module/membership module/analytics module/segment module/email module/campaign; do
+for module in module/syncrecord module/membership module/analytics module/segment module/email module/campaign module/shipping; do
   (cd "$module" && go test ./...)
 done
 ```

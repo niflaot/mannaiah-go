@@ -57,6 +57,8 @@ import (
 	"mannaiah/module/products"
 	"mannaiah/module/segment"
 	segmentapplication "mannaiah/module/segment/application"
+	"mannaiah/module/shipping"
+	shippingevent "mannaiah/module/shipping/adapter/event"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -97,6 +99,7 @@ func run(ctx context.Context, envFile string) error {
 	var campaignCfg campaign.Config
 	var membershipCfg membership.Config
 	var syncRecordCfg syncrecord.Config
+	var shippingCfg shipping.Config
 	var telemetryCfg coretelemetry.Config
 
 	if err := coreconfig.Load(
@@ -118,6 +121,7 @@ func run(ctx context.Context, envFile string) error {
 		&campaignCfg,
 		&membershipCfg,
 		&syncRecordCfg,
+		&shippingCfg,
 		&telemetryCfg,
 	); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
@@ -187,7 +191,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.9.23",
+		Version:     "1.0.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -223,6 +227,10 @@ func run(ctx context.Context, envFile string) error {
 	campaignPublisher, err := campaignevent.NewPublisher(messaging.Publisher())
 	if err != nil {
 		return fmt.Errorf("create campaign integration publisher: %w", err)
+	}
+	shippingPublisher, err := shippingevent.NewPublisher(messaging.Publisher())
+	if err != nil {
+		return fmt.Errorf("create shipping integration publisher: %w", err)
 	}
 
 	authModule, err := auth.New(authCfg, coreCfg.Environment, logger)
@@ -341,6 +349,15 @@ func run(ctx context.Context, envFile string) error {
 	campaignModule.SetAuthorizer(authModule)
 	if err := campaignModule.Load(runtime); err != nil {
 		return fmt.Errorf("load campaign module: %w", err)
+	}
+
+	shippingModule, err := shipping.New(shippingCfg, db, shippingPublisher)
+	if err != nil {
+		return fmt.Errorf("initialize shipping module: %w", err)
+	}
+	shippingModule.SetAuthorizer(authModule)
+	if err := shippingModule.Load(runtime); err != nil {
+		return fmt.Errorf("load shipping module: %w", err)
 	}
 
 	var assetsScheduler corecron.Scheduler

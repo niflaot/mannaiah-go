@@ -16,4 +16,5 @@ use (
 	./module/syncrecord
 	./module/woocommerce
 	./module/analytics
+	./module/shipping
 )

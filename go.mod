@@ -14,6 +14,7 @@ require (
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
+	mannaiah/module/shipping v0.0.0
 	mannaiah/module/woocommerce v0.0.0
 )
 
@@ -137,3 +138,5 @@ replace mannaiah/module/products => ./module/products
 replace mannaiah/module/woocommerce => ./module/woocommerce
 
 replace mannaiah/module/falabella => ./module/falabella
+
+replace mannaiah/module/shipping => ./module/shipping

@@ -40,6 +40,7 @@ require (
 	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
 	mannaiah/module/segment v0.0.0
+	mannaiah/module/shipping v0.0.0
 	mannaiah/module/syncrecord v0.0.0
 	mannaiah/module/woocommerce v0.0.0
 )
@@ -192,3 +193,5 @@ replace mannaiah/module/segment => ../segment
 replace mannaiah/module/email => ../email
 
 replace mannaiah/module/campaign => ../campaign
+
+replace mannaiah/module/shipping => ../shipping

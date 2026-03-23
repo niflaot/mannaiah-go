@@ -36,7 +36,8 @@ steps:
           module/analytics \
           module/segment \
           module/email \
-          module/campaign
+          module/campaign \
+          module/shipping
         do
           echo "Running tests for $module"
           (cd "$module" && go test ./...)
