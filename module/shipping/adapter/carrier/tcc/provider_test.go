@@ -43,7 +43,17 @@ func TestProviderLifecycle(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewProvider(ProviderConfig{Enabled: true, IsSandbox: true, BaseURLOverride: server.URL, AccessToken: "token", AccountNumber: "7000880", BusinessUnit: 1, PaymentForm: 1, Sender: domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"}})
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:            true,
+		IsSandbox:          true,
+		BaseURLOverride:    server.URL,
+		AccessToken:        "token",
+		AccountNumber:      "7000880",
+		BusinessUnit:       1,
+		PaymentForm:        1,
+		CODDiscountPercent: 4,
+		Sender:             domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
@@ -59,7 +69,15 @@ func TestProviderLifecycle(t *testing.T) {
 		t.Fatalf("quote.FullFreightCost = %v, quote.FreightCost = %v", quote.FullFreightCost, quote.FreightCost)
 	}
 
-	mark := &domain.ShippingMark{ID: "mark-1", OrderID: "order-1", CarrierID: "tcc", Sender: domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"}, Recipient: domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"}, Units: []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}}}
+	mark := &domain.ShippingMark{
+		ID:                      "mark-1",
+		OrderID:                 "order-1",
+		CarrierID:               "tcc",
+		Sender:                  domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:               domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		CollectOnDeliveryAmount: 100000,
+	}
 	if err := provider.GenerateMark(context.Background(), mark); err != nil {
 		t.Fatalf("GenerateMark() error = %v", err)
 	}
@@ -72,6 +90,12 @@ func TestProviderLifecycle(t *testing.T) {
 	if dispatchRequest.DestCityCode != "76001000" {
 		t.Fatalf("dispatchRequest.DestCityCode = %q", dispatchRequest.DestCityCode)
 	}
+	if dispatchRequest.CollectOnDeliveryAmount != "104000" {
+		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q", dispatchRequest.CollectOnDeliveryAmount)
+	}
+	if mark.CollectOnDeliveryChargedAmount != 104000 {
+		t.Fatalf("mark.CollectOnDeliveryChargedAmount = %v", mark.CollectOnDeliveryChargedAmount)
+	}
 
 	history, err := provider.GetTrackingHistory(context.Background(), mark.TrackingNumber)
 	if err != nil {
@@ -79,5 +103,18 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 	if history.GlobalStatus != domain.TrackingStatusCompleted {
 		t.Fatalf("history status = %q", history.GlobalStatus)
+	}
+}
+
+// TestCalculateCollectOnDeliveryChargedAmount verifies COD surcharge behavior.
+func TestCalculateCollectOnDeliveryChargedAmount(t *testing.T) {
+	if got := calculateCollectOnDeliveryChargedAmount(100000, 4); got != 104000 {
+		t.Fatalf("calculateCollectOnDeliveryChargedAmount() = %v", got)
+	}
+	if got := calculateCollectOnDeliveryChargedAmount(100000, -4); got != 100000 {
+		t.Fatalf("calculateCollectOnDeliveryChargedAmount() negative discount = %v", got)
+	}
+	if got := calculateCollectOnDeliveryChargedAmount(0, 4); got != 0 {
+		t.Fatalf("calculateCollectOnDeliveryChargedAmount() zero amount = %v", got)
 	}
 }

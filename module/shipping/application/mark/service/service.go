@@ -28,6 +28,8 @@ type GenerateCommand struct {
 	DeclaredValue float64
 	// PaymentForm defines payment arrangement values.
 	PaymentForm string
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64
 	// Observations defines optional observation values.
 	Observations string
 	// TrackingNumber defines optional manual tracking-number values.
@@ -76,21 +78,22 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 	}
 
 	mark := domain.ShippingMark{
-		ID:             uuid.NewString(),
-		OrderID:        strings.TrimSpace(command.OrderID),
-		CarrierID:      strings.TrimSpace(command.CarrierID),
-		Status:         domain.MarkStatusPending,
-		DocumentType:   command.DocumentType,
-		DocumentRef:    strings.TrimSpace(command.DocumentRef),
-		TrackingNumber: strings.TrimSpace(command.TrackingNumber),
-		Sender:         command.Sender,
-		Recipient:      command.Recipient,
-		Units:          command.Units,
-		DeclaredValue:  command.DeclaredValue,
-		PaymentForm:    strings.TrimSpace(command.PaymentForm),
-		Observations:   strings.TrimSpace(command.Observations),
-		CreatedAt:      time.Now().UTC(),
-		UpdatedAt:      time.Now().UTC(),
+		ID:                      uuid.NewString(),
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		CarrierID:               strings.TrimSpace(command.CarrierID),
+		Status:                  domain.MarkStatusPending,
+		DocumentType:            command.DocumentType,
+		DocumentRef:             strings.TrimSpace(command.DocumentRef),
+		TrackingNumber:          strings.TrimSpace(command.TrackingNumber),
+		Sender:                  command.Sender,
+		Recipient:               command.Recipient,
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(command.PaymentForm),
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		Observations:            strings.TrimSpace(command.Observations),
+		CreatedAt:               time.Now().UTC(),
+		UpdatedAt:               time.Now().UTC(),
 	}.Normalize()
 	if err := mark.Validate(); err != nil {
 		return nil, err

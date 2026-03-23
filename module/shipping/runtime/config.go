@@ -36,6 +36,8 @@ type TCCConfig struct {
 	BusinessUnit int `mapstructure:"SHIPPING_TCC_BUSINESS_UNIT" default:"1"`
 	// PaymentForm defines TCC payment-form values.
 	PaymentForm int `mapstructure:"SHIPPING_TCC_PAYMENT_FORM" default:"1"`
+	// CODDiscountPercent defines COD surcharge percentage applied to collected values.
+	CODDiscountPercent float64 `mapstructure:"SHIPPING_TCC_COD_DISCOUNT_PERCENT" default:"0"`
 	// RequestTimeoutMS defines outbound TCC request timeout values in milliseconds.
 	RequestTimeoutMS int `mapstructure:"SHIPPING_TCC_REQUEST_TIMEOUT_MS" default:"10000"`
 }

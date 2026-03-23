@@ -410,6 +410,7 @@ func markRequestSchema() *openapi3.Schema {
 		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("paymentForm", openapi3.NewStringSchema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("trackingNumber", openapi3.NewStringSchema()).
 		WithProperty("documentType", openapi3.NewStringSchema()).
@@ -515,6 +516,9 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("totalVolumetricWeight", openapi3.NewFloat64Schema()).
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("paymentForm", openapi3.NewStringSchema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryDiscountPercent", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryChargedAmount", openapi3.NewFloat64Schema()).
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("dispatchBatchId", openapi3.NewStringSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).

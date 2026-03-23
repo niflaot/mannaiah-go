@@ -24,6 +24,8 @@ type markRequest struct {
 	DeclaredValue float64 `json:"declaredValue"`
 	// PaymentForm defines payment arrangement values.
 	PaymentForm string `json:"paymentForm"`
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
 	// Observations defines observation values.
 	Observations string `json:"observations"`
 	// TrackingNumber defines optional manual tracking-number values.
@@ -77,17 +79,18 @@ func (h *Handler) createMark(ctx corehttp.Context) error {
 		})
 	}
 	mark, err := h.marks.Generate(ctx.Context(), markservice.GenerateCommand{
-		OrderID:        strings.TrimSpace(request.OrderID),
-		CarrierID:      strings.TrimSpace(request.CarrierID),
-		Sender:         request.Sender,
-		Recipient:      request.Recipient,
-		Units:          units,
-		DeclaredValue:  request.DeclaredValue,
-		PaymentForm:    strings.TrimSpace(request.PaymentForm),
-		Observations:   strings.TrimSpace(request.Observations),
-		TrackingNumber: strings.TrimSpace(request.TrackingNumber),
-		DocumentType:   request.DocumentType,
-		DocumentRef:    strings.TrimSpace(request.DocumentRef),
+		OrderID:                 strings.TrimSpace(request.OrderID),
+		CarrierID:               strings.TrimSpace(request.CarrierID),
+		Sender:                  request.Sender,
+		Recipient:               request.Recipient,
+		Units:                   units,
+		DeclaredValue:           request.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(request.PaymentForm),
+		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		Observations:            strings.TrimSpace(request.Observations),
+		TrackingNumber:          strings.TrimSpace(request.TrackingNumber),
+		DocumentType:            request.DocumentType,
+		DocumentRef:             strings.TrimSpace(request.DocumentRef),
 	})
 	if err != nil {
 		return h.mapError(err)

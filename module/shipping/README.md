@@ -47,6 +47,7 @@
 - `SHIPPING_TCC_SANDBOX=false` routes requests to `https://somos.tcc.com.co`.
 - `SHIPPING_TCC_SANDBOX_ACCESS_TOKEN` is used for sandbox requests.
 - `SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN` is used for production requests.
+- `SHIPPING_TCC_COD_DISCOUNT_PERCENT` adds a COD surcharge percent to requested collection amounts (`recaudoproducto`).
 
 ## Quotation Discount
 - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` applies a global percentage discount to all carrier quotations.
@@ -55,3 +56,10 @@
   - `discountPercent` (configured percent)
   - `discountedFreightCost` (value after discount)
   - `freightCost` (compatibility alias of `discountedFreightCost`)
+
+## COD Collection
+- Mark create requests accept `collectOnDeliveryAmount`.
+- Mark responses expose:
+  - `collectOnDeliveryAmount` (requested amount)
+  - `collectOnDeliveryDiscountPercent` (carrier-applied percent)
+  - `collectOnDeliveryChargedAmount` (amount sent to carrier)

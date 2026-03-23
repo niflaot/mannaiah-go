@@ -51,6 +51,20 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postMark.Responses == nil || postMark.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/marks POST 201 response")
 	}
+	postMarkResponse := postMark.Responses.Value("201")
+	if postMarkResponse == nil || postMarkResponse.Value == nil || postMarkResponse.Value.Content.Get("application/json") == nil {
+		t.Fatalf("expected /shipping/marks POST 201 JSON schema")
+	}
+	postMarkSchema := postMarkResponse.Value.Content.Get("application/json").Schema
+	if postMarkSchema == nil || postMarkSchema.Value == nil {
+		t.Fatalf("expected /shipping/marks POST 201 schema object")
+	}
+	if postMarkSchema.Value.Properties["collectOnDeliveryAmount"] == nil {
+		t.Fatalf("expected collectOnDeliveryAmount in mark response schema")
+	}
+	if postMarkSchema.Value.Properties["collectOnDeliveryChargedAmount"] == nil {
+		t.Fatalf("expected collectOnDeliveryChargedAmount in mark response schema")
+	}
 
 	postBatch := paths.Find("/shipping/batches").Post
 	if postBatch == nil || postBatch.RequestBody == nil {

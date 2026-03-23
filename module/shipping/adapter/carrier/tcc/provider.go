@@ -3,6 +3,7 @@ package tcc
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ type ProviderConfig struct {
 	BusinessUnit int
 	// PaymentForm defines TCC payment-form values.
 	PaymentForm int
+	// CODDiscountPercent defines COD surcharge percentage applied to collected values.
+	CODDiscountPercent float64
 	// RequestTimeout defines outbound request timeout values.
 	RequestTimeout time.Duration
 }
@@ -124,6 +127,9 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		sender = resolved.Sender
 	}
 	recipient := resolved.Recipient.Normalize()
+	collectOnDeliveryAmount := max(resolved.CollectOnDeliveryAmount, 0)
+	collectOnDeliveryDiscountPercent := normalizePercent(p.cfg.CODDiscountPercent)
+	collectOnDeliveryChargedAmount := calculateCollectOnDeliveryChargedAmount(collectOnDeliveryAmount, collectOnDeliveryDiscountPercent)
 	units := make([]DispatchUnit, 0, len(resolved.Units))
 	for _, unit := range resolved.Units {
 		normalized := unit.Normalize()
@@ -145,54 +151,55 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		})
 	}
 	request := DispatchRequest{
-		RelationNumber:        "",
-		RelationDateTime:      "",
-		PickupRequest:         DispatchPickupRequest{},
-		BusinessUnit:          strconv.Itoa(p.cfg.BusinessUnit),
-		ShipmentNumber:        "",
-		DispatchDate:          time.Now().UTC().Format("2006-01-02"),
-		SenderAccount:         strings.TrimSpace(p.cfg.AccountNumber),
-		SenderIDType:          sender.IDType,
-		SenderID:              sender.ID,
-		SenderBranch:          "",
-		SenderFirstName:       splitName(sender.Name, 0),
-		SenderSecondName:      splitName(sender.Name, 1),
-		SenderFirstLastName:   splitName(sender.Name, 2),
-		SenderSecondLastName:  splitName(sender.Name, 3),
-		SenderCompanyName:     sender.Name,
-		SenderNature:          "N",
-		SenderAddress:         sender.AddressLine,
-		SenderContact:         sender.Name,
-		SenderEmail:           sender.Email,
-		SenderPhone:           sender.Phone,
-		OriginCityCode:        NormalizeCityCode(sender.CityCode),
-		RecipientIDType:       recipient.IDType,
-		RecipientID:           recipient.ID,
-		RecipientBranch:       "",
-		RecipientFirstName:    splitName(recipient.Name, 0),
-		RecipientSecondName:   splitName(recipient.Name, 1),
-		RecipientFirstLast:    splitName(recipient.Name, 2),
-		RecipientSecondLast:   splitName(recipient.Name, 3),
-		RecipientCompany:      recipient.Name,
-		RecipientNature:       "N",
-		RecipientAddress:      recipient.AddressLine,
-		RecipientContact:      recipient.Name,
-		RecipientEmail:        recipient.Email,
-		RecipientPhone:        recipient.Phone,
-		DestCityCode:          NormalizeCityCode(recipient.CityCode),
-		RecipientNeighborhood: "",
-		TotalWeight:           FormatFloatString(resolved.TotalWeight),
-		TotalVolumeWeight:     FormatFloatString(resolved.TotalVolumetricWeight),
-		PaymentForm:           strconv.Itoa(p.cfg.PaymentForm),
-		Observations:          resolved.Observations,
-		DeliverWarehouse:      "",
-		PickupWarehouse:       "",
-		CostCenter:            "",
-		TotalProductValue:     FormatFloatString(resolved.DeclaredValue),
-		GenerateDocuments:     "true",
-		GenerateBinaries:      "false",
-		Units:                 units,
-		ServiceType:           "TISE_NORMAL_PAQ",
+		RelationNumber:          "",
+		RelationDateTime:        "",
+		PickupRequest:           DispatchPickupRequest{},
+		BusinessUnit:            strconv.Itoa(p.cfg.BusinessUnit),
+		ShipmentNumber:          "",
+		DispatchDate:            time.Now().UTC().Format("2006-01-02"),
+		SenderAccount:           strings.TrimSpace(p.cfg.AccountNumber),
+		SenderIDType:            sender.IDType,
+		SenderID:                sender.ID,
+		SenderBranch:            "",
+		SenderFirstName:         splitName(sender.Name, 0),
+		SenderSecondName:        splitName(sender.Name, 1),
+		SenderFirstLastName:     splitName(sender.Name, 2),
+		SenderSecondLastName:    splitName(sender.Name, 3),
+		SenderCompanyName:       sender.Name,
+		SenderNature:            "N",
+		SenderAddress:           sender.AddressLine,
+		SenderContact:           sender.Name,
+		SenderEmail:             sender.Email,
+		SenderPhone:             sender.Phone,
+		OriginCityCode:          NormalizeCityCode(sender.CityCode),
+		RecipientIDType:         recipient.IDType,
+		RecipientID:             recipient.ID,
+		RecipientBranch:         "",
+		RecipientFirstName:      splitName(recipient.Name, 0),
+		RecipientSecondName:     splitName(recipient.Name, 1),
+		RecipientFirstLast:      splitName(recipient.Name, 2),
+		RecipientSecondLast:     splitName(recipient.Name, 3),
+		RecipientCompany:        recipient.Name,
+		RecipientNature:         "N",
+		RecipientAddress:        recipient.AddressLine,
+		RecipientContact:        recipient.Name,
+		RecipientEmail:          recipient.Email,
+		RecipientPhone:          recipient.Phone,
+		DestCityCode:            NormalizeCityCode(recipient.CityCode),
+		RecipientNeighborhood:   "",
+		TotalWeight:             FormatFloatString(resolved.TotalWeight),
+		TotalVolumeWeight:       FormatFloatString(resolved.TotalVolumetricWeight),
+		PaymentForm:             strconv.Itoa(p.cfg.PaymentForm),
+		CollectOnDeliveryAmount: FormatFloatString(collectOnDeliveryChargedAmount),
+		Observations:            resolved.Observations,
+		DeliverWarehouse:        "",
+		PickupWarehouse:         "",
+		CostCenter:              "",
+		TotalProductValue:       FormatFloatString(resolved.DeclaredValue),
+		GenerateDocuments:       "true",
+		GenerateBinaries:        "false",
+		Units:                   units,
+		ServiceType:             "TISE_NORMAL_PAQ",
 		ReferenceDocuments: []DispatchDocument{{
 			DocumentType:   "PE",
 			DocumentNumber: fallback(resolved.OrderID, resolved.ID),
@@ -217,6 +224,9 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	mark.TotalWeight = resolved.TotalWeight
 	mark.TotalVolumetricWeight = resolved.TotalVolumetricWeight
 	mark.DeclaredValue = resolved.DeclaredValue
+	mark.CollectOnDeliveryAmount = collectOnDeliveryAmount
+	mark.CollectOnDeliveryDiscountPercent = collectOnDeliveryDiscountPercent
+	mark.CollectOnDeliveryChargedAmount = collectOnDeliveryChargedAmount
 	mark.Sender = sender
 	mark.Recipient = recipient
 	mark.Units = resolved.Units
@@ -323,4 +333,28 @@ func FormatFloatString(value float64) string {
 	}
 
 	return strconv.FormatFloat(value, 'f', 2, 64)
+}
+
+func normalizePercent(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 100 {
+		return 100
+	}
+
+	return math.Round(value*100) / 100
+}
+
+func calculateCollectOnDeliveryChargedAmount(amount float64, discountPercent float64) float64 {
+	normalizedAmount := max(amount, 0)
+	if normalizedAmount == 0 {
+		return 0
+	}
+	normalizedDiscount := normalizePercent(discountPercent)
+	if normalizedDiscount == 0 {
+		return math.Round(normalizedAmount*100) / 100
+	}
+
+	return math.Round((normalizedAmount*(1+(normalizedDiscount/100)))*100) / 100
 }

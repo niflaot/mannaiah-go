@@ -112,17 +112,21 @@ func TestGenerateAndVoid(t *testing.T) {
 	service := NewService(repository, markRegistryStub{provider: markProviderStub{}}, publisher)
 
 	created, err := service.Generate(context.Background(), GenerateCommand{
-		OrderID:   "order-1",
-		CarrierID: "manual",
-		Sender:    domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
-		Recipient: domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
-		Units:     []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		OrderID:                 "order-1",
+		CarrierID:               "manual",
+		Sender:                  domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:               domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		CollectOnDeliveryAmount: 100000,
 	})
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 	if created == nil || created.Status != domain.MarkStatusGenerated {
 		t.Fatalf("created status = %#v", created)
+	}
+	if created.CollectOnDeliveryAmount != 100000 || created.CollectOnDeliveryChargedAmount != 100000 {
+		t.Fatalf("created COD values = %#v", created)
 	}
 	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicMarkGenerated {
 		t.Fatalf("unexpected generated event = %#v", publisher.events)

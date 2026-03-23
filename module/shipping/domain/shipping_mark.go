@@ -59,6 +59,12 @@ type ShippingMark struct {
 	DeclaredValue float64 `json:"declaredValue"`
 	// PaymentForm defines freight payment-form values.
 	PaymentForm string `json:"paymentForm,omitempty"`
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount,omitempty"`
+	// CollectOnDeliveryDiscountPercent defines applied COD discount percentage values.
+	CollectOnDeliveryDiscountPercent float64 `json:"collectOnDeliveryDiscountPercent,omitempty"`
+	// CollectOnDeliveryChargedAmount defines final COD amount requested from the carrier.
+	CollectOnDeliveryChargedAmount float64 `json:"collectOnDeliveryChargedAmount,omitempty"`
 	// Observations defines observation values.
 	Observations string `json:"observations,omitempty"`
 	// DispatchBatchID defines assigned dispatch batch identifiers.
@@ -87,26 +93,51 @@ func (m ShippingMark) Normalize() ShippingMark {
 	if declaredValue < 0 {
 		declaredValue = 0
 	}
+	collectOnDeliveryAmount := m.CollectOnDeliveryAmount
+	if collectOnDeliveryAmount < 0 {
+		collectOnDeliveryAmount = 0
+	}
+	collectOnDeliveryDiscountPercent := m.CollectOnDeliveryDiscountPercent
+	if collectOnDeliveryDiscountPercent < 0 {
+		collectOnDeliveryDiscountPercent = 0
+	}
+	if collectOnDeliveryDiscountPercent > 100 {
+		collectOnDeliveryDiscountPercent = 100
+	}
+	collectOnDeliveryChargedAmount := m.CollectOnDeliveryChargedAmount
+	if collectOnDeliveryChargedAmount < 0 {
+		collectOnDeliveryChargedAmount = 0
+	}
+	if collectOnDeliveryAmount <= 0 {
+		collectOnDeliveryDiscountPercent = 0
+		collectOnDeliveryChargedAmount = 0
+	}
+	if collectOnDeliveryAmount > 0 && collectOnDeliveryChargedAmount <= 0 {
+		collectOnDeliveryChargedAmount = collectOnDeliveryAmount
+	}
 
 	copy := ShippingMark{
-		ID:                    strings.TrimSpace(m.ID),
-		OrderID:               strings.TrimSpace(m.OrderID),
-		CarrierID:             strings.TrimSpace(m.CarrierID),
-		TrackingNumber:        strings.TrimSpace(m.TrackingNumber),
-		Status:                m.Status,
-		DocumentType:          m.DocumentType,
-		DocumentRef:           strings.TrimSpace(m.DocumentRef),
-		Sender:                m.Sender.Normalize(),
-		Recipient:             m.Recipient.Normalize(),
-		Units:                 units,
-		TotalWeight:           round2(totalWeight),
-		TotalVolumetricWeight: round2(totalVolWeight),
-		DeclaredValue:         round2(declaredValue),
-		PaymentForm:           strings.TrimSpace(m.PaymentForm),
-		Observations:          strings.TrimSpace(m.Observations),
-		DispatchBatchID:       m.DispatchBatchID,
-		CreatedAt:             m.CreatedAt,
-		UpdatedAt:             m.UpdatedAt,
+		ID:                               strings.TrimSpace(m.ID),
+		OrderID:                          strings.TrimSpace(m.OrderID),
+		CarrierID:                        strings.TrimSpace(m.CarrierID),
+		TrackingNumber:                   strings.TrimSpace(m.TrackingNumber),
+		Status:                           m.Status,
+		DocumentType:                     m.DocumentType,
+		DocumentRef:                      strings.TrimSpace(m.DocumentRef),
+		Sender:                           m.Sender.Normalize(),
+		Recipient:                        m.Recipient.Normalize(),
+		Units:                            units,
+		TotalWeight:                      round2(totalWeight),
+		TotalVolumetricWeight:            round2(totalVolWeight),
+		DeclaredValue:                    round2(declaredValue),
+		PaymentForm:                      strings.TrimSpace(m.PaymentForm),
+		CollectOnDeliveryAmount:          round2(collectOnDeliveryAmount),
+		CollectOnDeliveryDiscountPercent: round2(collectOnDeliveryDiscountPercent),
+		CollectOnDeliveryChargedAmount:   round2(collectOnDeliveryChargedAmount),
+		Observations:                     strings.TrimSpace(m.Observations),
+		DispatchBatchID:                  m.DispatchBatchID,
+		CreatedAt:                        m.CreatedAt,
+		UpdatedAt:                        m.UpdatedAt,
 	}
 	if copy.Status == "" {
 		copy.Status = MarkStatusPending
