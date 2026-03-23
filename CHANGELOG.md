@@ -52,6 +52,19 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v2.9.23] - 2026-03-22
+- Fix open-tracking status projection mismatch:
+  - `GET /email/track/open/{id}` now updates both:
+    - current delivery snapshot status (`email_deliveries.status = opened`)
+    - immutable status history row (`email_delivery_status_history`)
+  - This keeps campaign delivery list status in sync with open-pixel events.
+- Tests added:
+  - `module/email/application/service_track_open_test.go`
+- OpenAPI/docs/version updates:
+  - Email OpenAPI metadata bumped to `2.2.4`.
+  - Core Swagger/OpenAPI and telemetry/default version references bumped to `v2.9.23` (`2.9.23` in OpenAPI `info.version` fields).
+  - Root/module README latest version badges bumped to `v2.9.23`.
+
 ### [v2.9.22] - 2026-03-22
 - Fix SNS subscription-confirmation signature verification:
   - Corrected SNS canonical `StringToSign` field order for `SubscriptionConfirmation`/`UnsubscribeConfirmation`.

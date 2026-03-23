@@ -328,6 +328,10 @@ func (s *EmailService) TrackOpen(ctx context.Context, deliveryID string) error {
 		return domain.ErrNotFound
 	}
 
+	if statusErr := s.repository.UpdateDeliveryStatus(ctx, trimmedID, domain.StatusOpened, ""); statusErr != nil {
+		return statusErr
+	}
+
 	return s.repository.AddStatusEntry(ctx, &domain.StatusEntry{
 		ID:         uuid.NewString(),
 		DeliveryID: trimmedID,

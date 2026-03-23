@@ -20,7 +20,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info: &openapi3.Info{
 			Title:   "Email API",
-			Version: "2.2.3",
+			Version: "2.2.4",
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/email/send", &openapi3.PathItem{Post: sendOperation()}),
