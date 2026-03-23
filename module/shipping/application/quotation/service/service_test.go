@@ -105,29 +105,31 @@ func TestQuote(t *testing.T) {
 	}
 }
 
-// TestQuoteAppliesRequestedCODFee verifies COD fee fallback behavior when providers omit COD fee fields.
-func TestQuoteAppliesRequestedCODFee(t *testing.T) {
+// TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields verifies COD fee fallback behavior when providers omit COD fee fields.
+func TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields(t *testing.T) {
 	repository := &quotationRepositoryStub{}
 	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{DiscountPercent: 0})
 
 	result, err := service.Quote(context.Background(), QuoteCommand{
-		OrderID:                     "order-2",
-		CarrierID:                   "manual",
-		OriginCityCode:              "11001000",
-		DestCityCode:                "76001000",
-		DeclaredValue:               50000,
-		CollectOnDeliveryAmount:     100000,
-		CollectOnDeliveryFeePercent: 4,
-		Units:                       []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		OrderID:                 "order-2",
+		CarrierID:               "manual",
+		OriginCityCode:          "11001000",
+		DestCityCode:            "76001000",
+		DeclaredValue:           50000,
+		CollectOnDeliveryAmount: 100000,
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 	})
 	if err != nil {
 		t.Fatalf("Quote() error = %v", err)
 	}
-	if result.CollectOnDeliveryFeePercent != 4 {
-		t.Fatalf("result.CollectOnDeliveryFeePercent = %v, want 4", result.CollectOnDeliveryFeePercent)
+	if result.CollectOnDeliveryFeePercent != 0 {
+		t.Fatalf("result.CollectOnDeliveryFeePercent = %v, want 0", result.CollectOnDeliveryFeePercent)
 	}
-	if result.CollectOnDeliveryChargedAmount != 104000 {
-		t.Fatalf("result.CollectOnDeliveryChargedAmount = %v, want 104000", result.CollectOnDeliveryChargedAmount)
+	if result.CollectOnDeliveryFeeAmount != 0 {
+		t.Fatalf("result.CollectOnDeliveryFeeAmount = %v, want 0", result.CollectOnDeliveryFeeAmount)
+	}
+	if result.CollectOnDeliveryChargedAmount != 100000 {
+		t.Fatalf("result.CollectOnDeliveryChargedAmount = %v, want 100000", result.CollectOnDeliveryChargedAmount)
 	}
 }
 

@@ -83,6 +83,9 @@ func TestProviderLifecycle(t *testing.T) {
 	if quote.CollectOnDeliveryFeePercent != 4 {
 		t.Fatalf("quote.CollectOnDeliveryFeePercent = %v", quote.CollectOnDeliveryFeePercent)
 	}
+	if quote.CollectOnDeliveryFeeAmount != 4000 {
+		t.Fatalf("quote.CollectOnDeliveryFeeAmount = %v", quote.CollectOnDeliveryFeeAmount)
+	}
 	if quote.CollectOnDeliveryChargedAmount != 104000 {
 		t.Fatalf("quote.CollectOnDeliveryChargedAmount = %v", quote.CollectOnDeliveryChargedAmount)
 	}

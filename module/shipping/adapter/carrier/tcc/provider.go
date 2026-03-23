@@ -115,6 +115,7 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 	collectOnDeliveryChargedAmount := calculateCollectOnDeliveryChargedAmount(collectOnDeliveryAmount, collectOnDeliveryFeePercent)
 	result.CollectOnDeliveryAmount = collectOnDeliveryAmount
 	result.CollectOnDeliveryFeePercent = collectOnDeliveryFeePercent
+	result.CollectOnDeliveryFeeAmount = max(collectOnDeliveryChargedAmount-collectOnDeliveryAmount, 0)
 	result.CollectOnDeliveryChargedAmount = collectOnDeliveryChargedAmount
 
 	return result, nil

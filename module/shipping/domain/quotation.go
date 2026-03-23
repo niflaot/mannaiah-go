@@ -40,8 +40,6 @@ type QuotationRequest struct {
 	DeclaredValue float64 `json:"declaredValue"`
 	// CollectOnDeliveryAmount defines requested COD collection amounts.
 	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount,omitempty"`
-	// CollectOnDeliveryFeePercent defines requested COD fee percentage values.
-	CollectOnDeliveryFeePercent float64 `json:"collectOnDeliveryFeePercent,omitempty"`
 }
 
 // Normalize normalizes quotation request fields.
@@ -59,26 +57,15 @@ func (r QuotationRequest) Normalize() QuotationRequest {
 	if collectOnDeliveryAmount < 0 {
 		collectOnDeliveryAmount = 0
 	}
-	collectOnDeliveryFeePercent := r.CollectOnDeliveryFeePercent
-	if collectOnDeliveryFeePercent < 0 {
-		collectOnDeliveryFeePercent = 0
-	}
-	if collectOnDeliveryFeePercent > 100 {
-		collectOnDeliveryFeePercent = 100
-	}
-	if collectOnDeliveryAmount <= 0 {
-		collectOnDeliveryFeePercent = 0
-	}
 
 	return QuotationRequest{
-		OrderID:                     strings.TrimSpace(r.OrderID),
-		CarrierID:                   strings.TrimSpace(r.CarrierID),
-		OriginCityCode:              strings.TrimSpace(r.OriginCityCode),
-		DestCityCode:                strings.TrimSpace(r.DestCityCode),
-		Units:                       units,
-		DeclaredValue:               round2(value),
-		CollectOnDeliveryAmount:     round2(collectOnDeliveryAmount),
-		CollectOnDeliveryFeePercent: round2(collectOnDeliveryFeePercent),
+		OrderID:                 strings.TrimSpace(r.OrderID),
+		CarrierID:               strings.TrimSpace(r.CarrierID),
+		OriginCityCode:          strings.TrimSpace(r.OriginCityCode),
+		DestCityCode:            strings.TrimSpace(r.DestCityCode),
+		Units:                   units,
+		DeclaredValue:           round2(value),
+		CollectOnDeliveryAmount: round2(collectOnDeliveryAmount),
 	}
 }
 
@@ -122,6 +109,8 @@ type QuotationResult struct {
 	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount,omitempty"`
 	// CollectOnDeliveryFeePercent defines applied COD fee percentage values.
 	CollectOnDeliveryFeePercent float64 `json:"collectOnDeliveryFeePercent,omitempty"`
+	// CollectOnDeliveryFeeAmount defines applied COD fee amount values.
+	CollectOnDeliveryFeeAmount float64 `json:"collectOnDeliveryFeeAmount,omitempty"`
 	// CollectOnDeliveryChargedAmount defines final COD amount sent to carrier.
 	CollectOnDeliveryChargedAmount float64 `json:"collectOnDeliveryChargedAmount,omitempty"`
 	// EstimatedDays defines estimated delivery-day values.

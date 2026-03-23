@@ -67,4 +67,5 @@
 - Quotation responses expose:
   - `collectOnDeliveryAmount` (requested amount)
   - `collectOnDeliveryFeePercent` (carrier-applied fee percent)
+  - `collectOnDeliveryFeeAmount` (carrier-applied fee amount)
   - `collectOnDeliveryChargedAmount` (amount projected to carrier)

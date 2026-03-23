@@ -35,8 +35,6 @@ type QuoteCommand struct {
 	DeclaredValue float64
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64
-	// CollectOnDeliveryFeePercent defines requested cash-on-delivery fee percentages.
-	CollectOnDeliveryFeePercent float64
 }
 
 // Service defines quotation orchestration behavior.
@@ -63,14 +61,13 @@ func NewService(repository port.QuotationRepository, registry port.ProviderRegis
 // Quote requests one carrier quotation and stores the audit record.
 func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.QuotationResult, error) {
 	request := domain.QuotationRequest{
-		OrderID:                     strings.TrimSpace(command.OrderID),
-		CarrierID:                   strings.TrimSpace(command.CarrierID),
-		OriginCityCode:              strings.TrimSpace(command.OriginCityCode),
-		DestCityCode:                strings.TrimSpace(command.DestCityCode),
-		Units:                       command.Units,
-		DeclaredValue:               command.DeclaredValue,
-		CollectOnDeliveryAmount:     command.CollectOnDeliveryAmount,
-		CollectOnDeliveryFeePercent: command.CollectOnDeliveryFeePercent,
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		CarrierID:               strings.TrimSpace(command.CarrierID),
+		OriginCityCode:          strings.TrimSpace(command.OriginCityCode),
+		DestCityCode:            strings.TrimSpace(command.DestCityCode),
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 	}.Normalize()
 	if err := request.Validate(); err != nil {
 		return nil, err
@@ -128,15 +125,16 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	result.CollectOnDeliveryFeePercent = normalizeMoney(result.CollectOnDeliveryFeePercent)
 	if result.CollectOnDeliveryAmount <= 0 {
 		result.CollectOnDeliveryFeePercent = 0
+		result.CollectOnDeliveryFeeAmount = 0
 		result.CollectOnDeliveryChargedAmount = 0
 	} else {
-		requestedCODFeePercent := normalizeDiscountPercent(request.CollectOnDeliveryFeePercent)
-		if result.CollectOnDeliveryFeePercent <= 0 && requestedCODFeePercent > 0 {
-			result.CollectOnDeliveryFeePercent = requestedCODFeePercent
-		}
 		result.CollectOnDeliveryChargedAmount = normalizeMoney(result.CollectOnDeliveryChargedAmount)
 		if result.CollectOnDeliveryChargedAmount <= 0 {
 			result.CollectOnDeliveryChargedAmount = applySurcharge(result.CollectOnDeliveryAmount, result.CollectOnDeliveryFeePercent)
+		}
+		result.CollectOnDeliveryFeeAmount = normalizeMoney(result.CollectOnDeliveryChargedAmount - result.CollectOnDeliveryAmount)
+		if result.CollectOnDeliveryFeeAmount < 0 {
+			result.CollectOnDeliveryFeeAmount = 0
 		}
 	}
 
