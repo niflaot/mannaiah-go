@@ -330,6 +330,7 @@ func orderCreateSchema() *openapi3.Schema {
 		WithProperty("description", openapi3.NewStringSchema()).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
+		WithProperty("paymentMethod", openapi3.NewStringSchema()).
 		WithProperty("source", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"identifier", "realm", "contactId", "items"})
@@ -370,6 +371,7 @@ func orderSchema() *openapi3.Schema {
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("hasCustomShippingAddress", openapi3.NewBoolSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
+		WithProperty("paymentMethod", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())

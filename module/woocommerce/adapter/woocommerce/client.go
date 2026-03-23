@@ -274,6 +274,7 @@ func mapSDKOrder(item wcentity.Order) port.WooOrder {
 	return port.WooOrder{
 		ID:                     item.ID,
 		Status:                 strings.TrimSpace(item.Status),
+		PaymentMethod:          strings.TrimSpace(item.PaymentMethod),
 		BillingEmail:           strings.TrimSpace(item.Billing.Email),
 		BillingFirstName:       strings.TrimSpace(item.Billing.FirstName),
 		BillingLastName:        strings.TrimSpace(item.Billing.LastName),

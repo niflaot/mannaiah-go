@@ -97,6 +97,8 @@ type createRequest struct {
 	ShippingAddress *shippingAddressRequest `json:"shippingAddress"`
 	// ShippingCharges defines shipping charge values.
 	ShippingCharges []shippingChargeRequest `json:"shippingCharges"`
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string `json:"paymentMethod"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata"`
 	// Source defines optional mutation source values.
@@ -190,6 +192,7 @@ func (h *Handler) create(ctx corehttp.Context) error {
 		Description:     request.Description,
 		Items:           mapCreateItems(request.Items),
 		ShippingCharges: mapShippingCharges(request.ShippingCharges),
+		PaymentMethod:   request.PaymentMethod,
 		Metadata:        request.Metadata,
 		Source:          resolveCommandSource(ctx, request.Source),
 	}

@@ -85,6 +85,8 @@ type WooOrder struct {
 	ShippingAddressLine2 string
 	// ShippingCityCode defines shipping city-code values.
 	ShippingCityCode string
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string
 	// Items defines order item values.
 	Items []WooOrderItem
 	// ShippingCharges defines order shipping charge values.

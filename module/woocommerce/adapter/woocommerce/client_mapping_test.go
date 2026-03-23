@@ -6,6 +6,32 @@ import (
 	wcentity "github.com/jmolboy/woocommerce-go/entity"
 )
 
+// TestMapRawOrderMapsPaymentMethod verifies payment_method field mapping in raw order decode.
+func TestMapRawOrderMapsPaymentMethod(t *testing.T) {
+	order := mapRawOrder(rawOrderPayload{
+		ID:            1001,
+		Status:        "processing",
+		PaymentMethod: "  cod  ",
+		Billing: struct {
+			Email     string `json:"email"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+			Company   string `json:"company"`
+			Phone     string `json:"phone"`
+			Address1  string `json:"address_1"`
+			Address2  string `json:"address_2"`
+			City      string `json:"city"`
+		}{
+			Email:     "raw@example.com",
+			FirstName: "Raw",
+			LastName:  "Test",
+		},
+	})
+	if order.PaymentMethod != "cod" {
+		t.Fatalf("PaymentMethod = %q, want %q", order.PaymentMethod, "cod")
+	}
+}
+
 // TestMapSDKOrderItemsIncludesQuotaRows verifies SDK item mapping behavior for non-SKU quota rows.
 func TestMapSDKOrderItemsIncludesQuotaRows(t *testing.T) {
 	items := mapSDKOrderItems([]wcentity.LineItem{

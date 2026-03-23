@@ -7,6 +7,25 @@ import (
 	"mannaiah/module/woocommerce/port"
 )
 
+// TestMapOrderToCommandMapsPaymentMethod verifies payment method propagation behavior.
+func TestMapOrderToCommandMapsPaymentMethod(t *testing.T) {
+	command, ok, _ := mapOrderToCommand(port.WooOrder{
+		ID:               1001,
+		Status:           "processing",
+		PaymentMethod:    "paypal",
+		BillingEmail:     "pm@example.com",
+		BillingFirstName: "Pay",
+		BillingLastName:  "Method",
+		Items:            []port.WooOrderItem{{SKU: "SKU-1", Quantity: 1}},
+	})
+	if !ok {
+		t.Fatalf("expected mapped command")
+	}
+	if command.PaymentMethod != "paypal" {
+		t.Fatalf("command.PaymentMethod = %q, want %q", command.PaymentMethod, "paypal")
+	}
+}
+
 // TestMapOrderToCommandFallbackIdentifier verifies metadata fallback identifier behavior.
 func TestMapOrderToCommandFallbackIdentifier(t *testing.T) {
 	command, ok, reason := mapOrderToCommand(port.WooOrder{

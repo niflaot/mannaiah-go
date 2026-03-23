@@ -67,6 +67,7 @@ func mapOrderToCommand(order port.WooOrder) (port.OrderSyncCommand, bool, mapOrd
 		Identifier:      identifier,
 		Realm:           "woocommerce",
 		Status:          strings.TrimSpace(strings.ToLower(order.Status)),
+		PaymentMethod:   strings.TrimSpace(order.PaymentMethod),
 		CreatedAt:       createdAt,
 		Contact:         contactCommand,
 		Items:           items,

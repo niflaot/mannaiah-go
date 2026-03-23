@@ -16,6 +16,8 @@ type orderRecord struct {
 	Realm string `gorm:"size:128;not null;index:idx_orders_realm_identifier,priority:1,unique"`
 	// ContactID defines linked customer identifiers.
 	ContactID string `gorm:"size:64;not null;index"`
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string `gorm:"size:128;not null;default:''"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.

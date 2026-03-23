@@ -84,6 +84,8 @@ type CreateCommand struct {
 	ShippingAddress *ShippingAddressCommand
 	// ShippingCharges defines shipping charge values.
 	ShippingCharges []ShippingChargeCommand
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string
 	// Metadata defines order metadata values.
 	Metadata map[string]string
 	// CreatedAt defines optional source creation timestamps.
@@ -287,6 +289,7 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		CurrentStatus:   initialStatus,
 		StatusHistory:   []ordersdomain.StatusEntry{entry},
 		ShippingCharges: normalizeShippingCharges(command.ShippingCharges),
+		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
 		Metadata:        command.Metadata,
 	}
 	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {

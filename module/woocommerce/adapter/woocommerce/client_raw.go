@@ -101,6 +101,8 @@ type rawOrderPayload struct {
 		// City defines shipping city values.
 		City string `json:"city"`
 	} `json:"shipping"`
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string `json:"payment_method"`
 	// CustomerNote defines order customer note values.
 	CustomerNote string `json:"customer_note"`
 	// LineItems defines order line-item payload values.
@@ -216,6 +218,7 @@ func mapRawOrder(item rawOrderPayload) port.WooOrder {
 	return port.WooOrder{
 		ID:                     item.ID,
 		Status:                 strings.TrimSpace(item.Status),
+		PaymentMethod:          strings.TrimSpace(item.PaymentMethod),
 		BillingEmail:           strings.TrimSpace(item.Billing.Email),
 		BillingFirstName:       strings.TrimSpace(item.Billing.FirstName),
 		BillingLastName:        strings.TrimSpace(item.Billing.LastName),

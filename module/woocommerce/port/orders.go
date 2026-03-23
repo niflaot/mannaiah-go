@@ -59,6 +59,8 @@ type OrderSyncCommand struct {
 	Realm string
 	// Status defines source status values.
 	Status string
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string
 	// CreatedAt defines source order creation timestamps.
 	CreatedAt *time.Time
 	// Contact defines contact-sync payload values used when target contacts do not exist.

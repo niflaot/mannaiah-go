@@ -151,6 +151,8 @@ type Order struct {
 	HasCustomShippingAddress bool `json:"hasCustomShippingAddress"`
 	// ShippingCharges defines shipping charge values.
 	ShippingCharges []ShippingCharge `json:"shippingCharges,omitempty"`
+	// PaymentMethod defines order payment method values.
+	PaymentMethod string `json:"paymentMethod,omitempty"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt defines creation timestamps.
@@ -169,6 +171,7 @@ func (o *Order) Normalize() {
 	o.Identifier = strings.TrimSpace(o.Identifier)
 	o.Realm = strings.TrimSpace(o.Realm)
 	o.ContactID = strings.TrimSpace(o.ContactID)
+	o.PaymentMethod = strings.TrimSpace(o.PaymentMethod)
 	o.CurrentStatus = Status(strings.TrimSpace(string(o.CurrentStatus)))
 	o.ShippingAddress = normalizeShippingAddress(o.ShippingAddress)
 

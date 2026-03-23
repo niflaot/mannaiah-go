@@ -25,6 +25,7 @@ func toCreateCommand(
 		Description:     syncStatusDescription,
 		ShippingAddress: toShippingAddress(command.ShippingAddress),
 		ShippingCharges: toShippingCharges(command.ShippingCharges),
+		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
 		Metadata:        normalizeMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
 		Source:          syncStatusAuthor,

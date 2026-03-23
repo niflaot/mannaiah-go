@@ -15,12 +15,13 @@ import (
 // toOrderRecord maps order aggregate values to root storage records.
 func toOrderRecord(order ordersdomain.Order) orderRecord {
 	return orderRecord{
-		ID:         strings.TrimSpace(order.ID),
-		Identifier: strings.TrimSpace(order.Identifier),
-		Realm:      strings.TrimSpace(order.Realm),
-		ContactID:  strings.TrimSpace(order.ContactID),
-		CreatedAt:  order.CreatedAt,
-		UpdatedAt:  order.UpdatedAt,
+		ID:            strings.TrimSpace(order.ID),
+		Identifier:    strings.TrimSpace(order.Identifier),
+		Realm:         strings.TrimSpace(order.Realm),
+		ContactID:     strings.TrimSpace(order.ContactID),
+		PaymentMethod: strings.TrimSpace(order.PaymentMethod),
+		CreatedAt:     order.CreatedAt,
+		UpdatedAt:     order.UpdatedAt,
 	}
 }
 
@@ -129,6 +130,7 @@ func toOrderEntity(
 		Identifier:      strings.TrimSpace(record.Identifier),
 		Realm:           strings.TrimSpace(record.Realm),
 		ContactID:       strings.TrimSpace(record.ContactID),
+		PaymentMethod:   strings.TrimSpace(record.PaymentMethod),
 		CurrentStatus:   resolvedStatus.Status,
 		CreatedAt:       record.CreatedAt,
 		UpdatedAt:       record.UpdatedAt,
