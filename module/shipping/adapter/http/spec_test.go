@@ -23,6 +23,11 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postQuotation == nil || postQuotation.RequestBody == nil {
 		t.Fatalf("expected /shipping/quotations POST request body")
 	}
+	if postQuotationRequestContent := postQuotation.RequestBody.Value.Content.Get("application/json"); postQuotationRequestContent == nil || postQuotationRequestContent.Schema == nil || postQuotationRequestContent.Schema.Value == nil {
+		t.Fatalf("expected /shipping/quotations POST JSON request schema")
+	} else if postQuotationRequestContent.Schema.Value.Properties["collectOnDeliveryAmount"] == nil {
+		t.Fatalf("expected collectOnDeliveryAmount in quotation request schema")
+	}
 	if postQuotation.Responses == nil || postQuotation.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/quotations POST 201 response")
 	}
@@ -42,6 +47,15 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	}
 	if postQuotationSchema.Value.Properties["discountPercent"] == nil {
 		t.Fatalf("expected discountPercent in quotation response schema")
+	}
+	if postQuotationSchema.Value.Properties["collectOnDeliveryAmount"] == nil {
+		t.Fatalf("expected collectOnDeliveryAmount in quotation response schema")
+	}
+	if postQuotationSchema.Value.Properties["collectOnDeliveryFeePercent"] == nil {
+		t.Fatalf("expected collectOnDeliveryFeePercent in quotation response schema")
+	}
+	if postQuotationSchema.Value.Properties["collectOnDeliveryChargedAmount"] == nil {
+		t.Fatalf("expected collectOnDeliveryChargedAmount in quotation response schema")
 	}
 
 	postMark := paths.Find("/shipping/marks").Post
@@ -64,6 +78,9 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	}
 	if postMarkSchema.Value.Properties["collectOnDeliveryChargedAmount"] == nil {
 		t.Fatalf("expected collectOnDeliveryChargedAmount in mark response schema")
+	}
+	if postMarkSchema.Value.Properties["collectOnDeliveryFeePercent"] == nil {
+		t.Fatalf("expected collectOnDeliveryFeePercent in mark response schema")
 	}
 
 	postBatch := paths.Find("/shipping/batches").Post

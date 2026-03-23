@@ -44,21 +44,30 @@ func TestProviderLifecycle(t *testing.T) {
 	defer server.Close()
 
 	provider, err := NewProvider(ProviderConfig{
-		Enabled:            true,
-		IsSandbox:          true,
-		BaseURLOverride:    server.URL,
-		AccessToken:        "token",
-		AccountNumber:      "7000880",
-		BusinessUnit:       1,
-		PaymentForm:        1,
-		CODDiscountPercent: 4,
-		Sender:             domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Enabled:         true,
+		IsSandbox:       true,
+		BaseURLOverride: server.URL,
+		AccessToken:     "token",
+		AccountNumber:   "7000880",
+		BusinessUnit:    1,
+		PaymentForm:     1,
+		CODFeePercent:   4,
+		Sender:          domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
 	})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
 
-	quote, err := provider.Quote(context.Background(), domain.QuotationRequest{CarrierID: "tcc", OriginCityCode: "11001", DestCityCode: "76001", DeclaredValue: 50000, Units: []domain.PackageUnit{{Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}}})
+	quote, err := provider.Quote(context.Background(), domain.QuotationRequest{
+		CarrierID:               "tcc",
+		OriginCityCode:          "11001",
+		DestCityCode:            "76001",
+		DeclaredValue:           50000,
+		CollectOnDeliveryAmount: 100000,
+		Units: []domain.PackageUnit{
+			{Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}},
+		},
+	})
 	if err != nil {
 		t.Fatalf("Quote() error = %v", err)
 	}
@@ -67,6 +76,15 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 	if quote.FullFreightCost != quote.FreightCost {
 		t.Fatalf("quote.FullFreightCost = %v, quote.FreightCost = %v", quote.FullFreightCost, quote.FreightCost)
+	}
+	if quote.CollectOnDeliveryAmount != 100000 {
+		t.Fatalf("quote.CollectOnDeliveryAmount = %v", quote.CollectOnDeliveryAmount)
+	}
+	if quote.CollectOnDeliveryFeePercent != 4 {
+		t.Fatalf("quote.CollectOnDeliveryFeePercent = %v", quote.CollectOnDeliveryFeePercent)
+	}
+	if quote.CollectOnDeliveryChargedAmount != 104000 {
+		t.Fatalf("quote.CollectOnDeliveryChargedAmount = %v", quote.CollectOnDeliveryChargedAmount)
 	}
 
 	mark := &domain.ShippingMark{
@@ -106,13 +124,13 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 }
 
-// TestCalculateCollectOnDeliveryChargedAmount verifies COD surcharge behavior.
+// TestCalculateCollectOnDeliveryChargedAmount verifies COD fee behavior.
 func TestCalculateCollectOnDeliveryChargedAmount(t *testing.T) {
 	if got := calculateCollectOnDeliveryChargedAmount(100000, 4); got != 104000 {
 		t.Fatalf("calculateCollectOnDeliveryChargedAmount() = %v", got)
 	}
 	if got := calculateCollectOnDeliveryChargedAmount(100000, -4); got != 100000 {
-		t.Fatalf("calculateCollectOnDeliveryChargedAmount() negative discount = %v", got)
+		t.Fatalf("calculateCollectOnDeliveryChargedAmount() negative fee = %v", got)
 	}
 	if got := calculateCollectOnDeliveryChargedAmount(0, 4); got != 0 {
 		t.Fatalf("calculateCollectOnDeliveryChargedAmount() zero amount = %v", got)

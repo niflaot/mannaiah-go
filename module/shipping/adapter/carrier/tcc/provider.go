@@ -29,8 +29,8 @@ type ProviderConfig struct {
 	BusinessUnit int
 	// PaymentForm defines TCC payment-form values.
 	PaymentForm int
-	// CODDiscountPercent defines COD surcharge percentage applied to collected values.
-	CODDiscountPercent float64
+	// CODFeePercent defines COD fee percentage applied to collected values.
+	CODFeePercent float64
 	// RequestTimeout defines outbound request timeout values.
 	RequestTimeout time.Duration
 }
@@ -109,8 +109,15 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 	if ParseResultCode(response.ResultCode) != 0 {
 		return nil, fmt.Errorf("tcc quotation rejected: %s", strings.TrimSpace(response.ResultMessage))
 	}
+	result := response.ToDomain(p.CarrierID(), request)
+	collectOnDeliveryAmount := max(request.Normalize().CollectOnDeliveryAmount, 0)
+	collectOnDeliveryFeePercent := normalizePercent(p.cfg.CODFeePercent)
+	collectOnDeliveryChargedAmount := calculateCollectOnDeliveryChargedAmount(collectOnDeliveryAmount, collectOnDeliveryFeePercent)
+	result.CollectOnDeliveryAmount = collectOnDeliveryAmount
+	result.CollectOnDeliveryFeePercent = collectOnDeliveryFeePercent
+	result.CollectOnDeliveryChargedAmount = collectOnDeliveryChargedAmount
 
-	return response.ToDomain(p.CarrierID(), request), nil
+	return result, nil
 }
 
 // GenerateMark creates shipping marks via TCC dispatch endpoints.
@@ -128,8 +135,8 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	}
 	recipient := resolved.Recipient.Normalize()
 	collectOnDeliveryAmount := max(resolved.CollectOnDeliveryAmount, 0)
-	collectOnDeliveryDiscountPercent := normalizePercent(p.cfg.CODDiscountPercent)
-	collectOnDeliveryChargedAmount := calculateCollectOnDeliveryChargedAmount(collectOnDeliveryAmount, collectOnDeliveryDiscountPercent)
+	collectOnDeliveryFeePercent := normalizePercent(p.cfg.CODFeePercent)
+	collectOnDeliveryChargedAmount := calculateCollectOnDeliveryChargedAmount(collectOnDeliveryAmount, collectOnDeliveryFeePercent)
 	units := make([]DispatchUnit, 0, len(resolved.Units))
 	for _, unit := range resolved.Units {
 		normalized := unit.Normalize()
@@ -225,7 +232,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	mark.TotalVolumetricWeight = resolved.TotalVolumetricWeight
 	mark.DeclaredValue = resolved.DeclaredValue
 	mark.CollectOnDeliveryAmount = collectOnDeliveryAmount
-	mark.CollectOnDeliveryDiscountPercent = collectOnDeliveryDiscountPercent
+	mark.CollectOnDeliveryFeePercent = collectOnDeliveryFeePercent
 	mark.CollectOnDeliveryChargedAmount = collectOnDeliveryChargedAmount
 	mark.Sender = sender
 	mark.Recipient = recipient
@@ -346,15 +353,15 @@ func normalizePercent(value float64) float64 {
 	return math.Round(value*100) / 100
 }
 
-func calculateCollectOnDeliveryChargedAmount(amount float64, discountPercent float64) float64 {
+func calculateCollectOnDeliveryChargedAmount(amount float64, feePercent float64) float64 {
 	normalizedAmount := max(amount, 0)
 	if normalizedAmount == 0 {
 		return 0
 	}
-	normalizedDiscount := normalizePercent(discountPercent)
-	if normalizedDiscount == 0 {
+	normalizedFee := normalizePercent(feePercent)
+	if normalizedFee == 0 {
 		return math.Round(normalizedAmount*100) / 100
 	}
 
-	return math.Round((normalizedAmount*(1+(normalizedDiscount/100)))*100) / 100
+	return math.Round((normalizedAmount*(1+(normalizedFee/100)))*100) / 100
 }

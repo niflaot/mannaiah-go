@@ -1,0 +1,1 @@
+ALTER TABLE shipping_marks RENAME COLUMN collect_on_delivery_discount_percent TO collect_on_delivery_fee_percent;

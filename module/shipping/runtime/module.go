@@ -72,13 +72,13 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	if cfg.TCC.Enabled {
 		tccAccessToken := resolveTCCAccessToken(cfg.TCC)
 		tccProvider, providerErr := tcc.NewProvider(tcc.ProviderConfig{
-			Enabled:            cfg.TCC.Enabled,
-			IsSandbox:          cfg.TCC.Sandbox,
-			AccessToken:        tccAccessToken,
-			AccountNumber:      strings.TrimSpace(cfg.TCC.AccountNumber),
-			BusinessUnit:       cfg.TCC.BusinessUnit,
-			PaymentForm:        cfg.TCC.PaymentForm,
-			CODDiscountPercent: cfg.TCC.CODDiscountPercent,
+			Enabled:       cfg.TCC.Enabled,
+			IsSandbox:     cfg.TCC.Sandbox,
+			AccessToken:   tccAccessToken,
+			AccountNumber: strings.TrimSpace(cfg.TCC.AccountNumber),
+			BusinessUnit:  cfg.TCC.BusinessUnit,
+			PaymentForm:   cfg.TCC.PaymentForm,
+			CODFeePercent: cfg.TCC.CODFeePercent,
 			Sender: domain.Address{
 				Name:        strings.TrimSpace(cfg.DefaultSender.Name),
 				ID:          strings.TrimSpace(cfg.DefaultSender.ID),

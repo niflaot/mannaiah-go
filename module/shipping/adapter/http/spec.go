@@ -348,6 +348,7 @@ func quotationRequestSchema() *openapi3.Schema {
 		WithProperty("originCityCode", openapi3.NewStringSchema()).
 		WithProperty("destCityCode", openapi3.NewStringSchema()).
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
 		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema()))
 	schema.Required = []string{"carrierId", "originCityCode", "destCityCode", "units"}
 
@@ -366,6 +367,9 @@ func quotationResultSchema() *openapi3.Schema {
 		WithProperty("discountPercent", openapi3.NewFloat64Schema()).
 		WithProperty("discountedFreightCost", openapi3.NewFloat64Schema()).
 		WithProperty("freightCost", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryFeePercent", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryChargedAmount", openapi3.NewFloat64Schema()).
 		WithProperty("estimatedDays", openapi3.NewIntegerSchema()).
 		WithProperty("currencyCode", openapi3.NewStringSchema()).
 		WithProperty("expiresAt", openapi3.NewDateTimeSchema()).
@@ -517,7 +521,7 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("paymentForm", openapi3.NewStringSchema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
-		WithProperty("collectOnDeliveryDiscountPercent", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryFeePercent", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryChargedAmount", openapi3.NewFloat64Schema()).
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("dispatchBatchId", openapi3.NewStringSchema()).

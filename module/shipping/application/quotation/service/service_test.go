@@ -65,12 +65,13 @@ func TestQuote(t *testing.T) {
 	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{DiscountPercent: 10})
 
 	result, err := service.Quote(context.Background(), QuoteCommand{
-		OrderID:        "order-1",
-		CarrierID:      "manual",
-		OriginCityCode: "11001000",
-		DestCityCode:   "76001000",
-		DeclaredValue:  50000,
-		Units:          []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		OrderID:                 "order-1",
+		CarrierID:               "manual",
+		OriginCityCode:          "11001000",
+		DestCityCode:            "76001000",
+		DeclaredValue:           50000,
+		CollectOnDeliveryAmount: 100000,
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 	})
 	if err != nil {
 		t.Fatalf("Quote() error = %v", err)
@@ -86,6 +87,15 @@ func TestQuote(t *testing.T) {
 	}
 	if result.DiscountPercent != 10 {
 		t.Fatalf("result.DiscountPercent = %v, want %v", result.DiscountPercent, 10.0)
+	}
+	if result.CollectOnDeliveryAmount != 100000 {
+		t.Fatalf("result.CollectOnDeliveryAmount = %v, want %v", result.CollectOnDeliveryAmount, 100000.0)
+	}
+	if result.CollectOnDeliveryChargedAmount != 100000 {
+		t.Fatalf("result.CollectOnDeliveryChargedAmount = %v, want %v", result.CollectOnDeliveryChargedAmount, 100000.0)
+	}
+	if result.CollectOnDeliveryFeePercent != 0 {
+		t.Fatalf("result.CollectOnDeliveryFeePercent = %v, want 0", result.CollectOnDeliveryFeePercent)
 	}
 	if len(repository.rows) != 1 {
 		t.Fatalf("stored rows = %d, want 1", len(repository.rows))

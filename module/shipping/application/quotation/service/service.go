@@ -33,6 +33,8 @@ type QuoteCommand struct {
 	Units []domain.PackageUnit
 	// DeclaredValue defines declared shipment value amounts.
 	DeclaredValue float64
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64
 }
 
 // Service defines quotation orchestration behavior.
@@ -59,12 +61,13 @@ func NewService(repository port.QuotationRepository, registry port.ProviderRegis
 // Quote requests one carrier quotation and stores the audit record.
 func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.QuotationResult, error) {
 	request := domain.QuotationRequest{
-		OrderID:        strings.TrimSpace(command.OrderID),
-		CarrierID:      strings.TrimSpace(command.CarrierID),
-		OriginCityCode: strings.TrimSpace(command.OriginCityCode),
-		DestCityCode:   strings.TrimSpace(command.DestCityCode),
-		Units:          command.Units,
-		DeclaredValue:  command.DeclaredValue,
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		CarrierID:               strings.TrimSpace(command.CarrierID),
+		OriginCityCode:          strings.TrimSpace(command.OriginCityCode),
+		DestCityCode:            strings.TrimSpace(command.DestCityCode),
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 	}.Normalize()
 	if err := request.Validate(); err != nil {
 		return nil, err
@@ -118,6 +121,17 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	result.DiscountPercent = discountPercent
 	result.DiscountedFreightCost = discountedFreightCost
 	result.FreightCost = discountedFreightCost
+	result.CollectOnDeliveryAmount = normalizeMoney(request.CollectOnDeliveryAmount)
+	result.CollectOnDeliveryFeePercent = normalizeMoney(result.CollectOnDeliveryFeePercent)
+	if result.CollectOnDeliveryAmount <= 0 {
+		result.CollectOnDeliveryFeePercent = 0
+		result.CollectOnDeliveryChargedAmount = 0
+	} else {
+		result.CollectOnDeliveryChargedAmount = normalizeMoney(result.CollectOnDeliveryChargedAmount)
+		if result.CollectOnDeliveryChargedAmount <= 0 {
+			result.CollectOnDeliveryChargedAmount = result.CollectOnDeliveryAmount
+		}
+	}
 
 	if s.repository != nil {
 		snapshot, _ := json.Marshal(request)

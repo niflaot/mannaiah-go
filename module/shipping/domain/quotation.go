@@ -38,6 +38,8 @@ type QuotationRequest struct {
 	Units []PackageUnit `json:"units"`
 	// DeclaredValue defines total declared-value amounts.
 	DeclaredValue float64 `json:"declaredValue"`
+	// CollectOnDeliveryAmount defines requested COD collection amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount,omitempty"`
 }
 
 // Normalize normalizes quotation request fields.
@@ -51,14 +53,19 @@ func (r QuotationRequest) Normalize() QuotationRequest {
 	if value < 0 {
 		value = 0
 	}
+	collectOnDeliveryAmount := r.CollectOnDeliveryAmount
+	if collectOnDeliveryAmount < 0 {
+		collectOnDeliveryAmount = 0
+	}
 
 	return QuotationRequest{
-		OrderID:        strings.TrimSpace(r.OrderID),
-		CarrierID:      strings.TrimSpace(r.CarrierID),
-		OriginCityCode: strings.TrimSpace(r.OriginCityCode),
-		DestCityCode:   strings.TrimSpace(r.DestCityCode),
-		Units:          units,
-		DeclaredValue:  round2(value),
+		OrderID:                 strings.TrimSpace(r.OrderID),
+		CarrierID:               strings.TrimSpace(r.CarrierID),
+		OriginCityCode:          strings.TrimSpace(r.OriginCityCode),
+		DestCityCode:            strings.TrimSpace(r.DestCityCode),
+		Units:                   units,
+		DeclaredValue:           round2(value),
+		CollectOnDeliveryAmount: round2(collectOnDeliveryAmount),
 	}
 }
 
@@ -98,6 +105,12 @@ type QuotationResult struct {
 	DiscountedFreightCost float64 `json:"discountedFreightCost"`
 	// FreightCost defines discounted freight-cost amounts for backward compatibility.
 	FreightCost float64 `json:"freightCost"`
+	// CollectOnDeliveryAmount defines requested COD collection amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount,omitempty"`
+	// CollectOnDeliveryFeePercent defines applied COD fee percentage values.
+	CollectOnDeliveryFeePercent float64 `json:"collectOnDeliveryFeePercent,omitempty"`
+	// CollectOnDeliveryChargedAmount defines final COD amount sent to carrier.
+	CollectOnDeliveryChargedAmount float64 `json:"collectOnDeliveryChargedAmount,omitempty"`
 	// EstimatedDays defines estimated delivery-day values.
 	EstimatedDays int `json:"estimatedDays"`
 	// CurrencyCode defines currency-code values.
