@@ -52,18 +52,7 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.0.1] - 2026-03-23
-- Orders module: added `payment_method` field stored on order records.
-  - New `payment_method` column on `orders` table (`000026_order_payment_method` migration, MySQL + SQLite).
-  - `Order` domain, `CreateCommand`, and repository mapper updated to carry and persist payment method values.
-  - HTTP `POST /orders` request accepts optional `paymentMethod` string field.
-  - OpenAPI `Order` response schema and `OrderCreate` request schema updated with `paymentMethod` property.
-  - WooCommerce sync chain updated end-to-end: `WooOrder`, `rawOrderPayload` (raw-decode path), `mapSDKOrder` (SDK path), `OrderSyncCommand`, `mapOrderToCommand`, and `toCreateCommand` all propagate `payment_method`.
-  - Unit tests added: raw order decode, `mapOrderToCommand`, and `toCreateCommand` payment method propagation.
-- Version references set to `v1.0.1` (`module/core/telemetry/config.go`, `module/core/cmd/api/main.go`, `module/core/startup/runtime.go`, `.env.example`).
-- `README.md` and `module/woocommerce/README.md` latest badge updated to `v1.0.1`.
-
-### [v1.0.0] - 2026-03-22
+### [v1.0.0] - 2026-03-23
 - Release train reset:
   - New tag baseline starts again at `v1.0.0`.
 - New shipping module (`module/shipping`) added with DDD + hexagonal structure:
@@ -97,3 +86,8 @@ Keep newest entries on top. Add one section per version.
   - Root `README.md` and `module/woocommerce/README.md` latest badge set to `v1.0.0`.
   - Core OpenAPI version references set to `1.0.0` (`module/core/cmd/api/main.go`, `module/core/startup/runtime.go`).
   - Telemetry default service version set to `v1.0.0` (`module/core/telemetry/config.go`, `.env.example`).
+- Orders module: `payment_method` field added to order records.
+  - Migration `000026_order_payment_method` (MySQL + SQLite): `payment_method VARCHAR(128) NOT NULL DEFAULT ''` on `orders` table.
+  - `Order` domain, `CreateCommand`, repository mapper, and HTTP `POST /orders` handler accept and persist payment method.
+  - OpenAPI `Order` response schema and `OrderCreate` request schema include `paymentMethod`.
+  - WooCommerce sync chain propagates `payment_method` end-to-end (raw decode, SDK path, `OrderSyncCommand`, `mapOrderToCommand`, `toCreateCommand`).
