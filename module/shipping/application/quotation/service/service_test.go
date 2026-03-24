@@ -71,6 +71,7 @@ func TestQuote(t *testing.T) {
 		DestCityCode:            "76001000",
 		DeclaredValue:           50000,
 		CollectOnDeliveryAmount: 100000,
+		ShipmentMode:            domain.ShipmentModeParcel,
 		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 	})
 	if err != nil {
@@ -117,6 +118,7 @@ func TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields(t *testing.T) {
 		DestCityCode:            "76001000",
 		DeclaredValue:           50000,
 		CollectOnDeliveryAmount: 100000,
+		ShipmentMode:            domain.ShipmentModeParcel,
 		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 	})
 	if err != nil {

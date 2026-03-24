@@ -48,6 +48,8 @@ type DraftMarkCommand struct {
 	PaymentForm string
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64
+	// ShipmentMode defines the delivery mode for this draft mark.
+	ShipmentMode domain.ShipmentMode
 	// Observations defines optional observation values.
 	Observations string
 }
@@ -160,6 +162,7 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 		DeclaredValue:           command.DeclaredValue,
 		PaymentForm:             strings.TrimSpace(command.PaymentForm),
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
 		Observations:            strings.TrimSpace(command.Observations),
 		DispatchBatchID:         &batchID,
 		QuotationID:             quotationID,

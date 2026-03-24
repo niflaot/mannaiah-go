@@ -32,8 +32,6 @@ type TCCConfig struct {
 	ProductionAccessToken string `mapstructure:"SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN" default:""`
 	// AccountNumber defines TCC account number values.
 	AccountNumber string `mapstructure:"SHIPPING_TCC_ACCOUNT_NUMBER" default:""`
-	// BusinessUnit defines TCC business-unit values.
-	BusinessUnit int `mapstructure:"SHIPPING_TCC_BUSINESS_UNIT" default:"1"`
 	// PaymentForm defines TCC payment-form values.
 	PaymentForm int `mapstructure:"SHIPPING_TCC_PAYMENT_FORM" default:"1"`
 	// CODFeePercent defines COD fee percentage applied to collected values.

@@ -164,7 +164,7 @@ func (h *Handler) mapError(err error) error {
 			return corehttp.NewAppError(403, "forbidden", err)
 		}
 	}
-	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidCarrierID) {
+	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidCarrierID) || errors.Is(err, domain.ErrInvalidShipmentMode) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
 	if errors.Is(err, domain.ErrCarrierNotSupported) {

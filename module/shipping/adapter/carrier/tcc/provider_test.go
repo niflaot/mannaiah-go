@@ -49,7 +49,6 @@ func TestProviderLifecycle(t *testing.T) {
 		BaseURLOverride: server.URL,
 		AccessToken:     "token",
 		AccountNumber:   "7000880",
-		BusinessUnit:    1,
 		PaymentForm:     1,
 		CODFeePercent:   4,
 		Sender:          domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
@@ -64,6 +63,7 @@ func TestProviderLifecycle(t *testing.T) {
 		DestCityCode:            "76001",
 		DeclaredValue:           50000,
 		CollectOnDeliveryAmount: 100000,
+		ShipmentMode:            domain.ShipmentModeParcel,
 		Units: []domain.PackageUnit{
 			{Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}},
 		},
@@ -98,6 +98,7 @@ func TestProviderLifecycle(t *testing.T) {
 		Recipient:               domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
 		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 		CollectOnDeliveryAmount: 100000,
+		ShipmentMode:            domain.ShipmentModeParcel,
 	}
 	if err := provider.GenerateMark(context.Background(), mark); err != nil {
 		t.Fatalf("GenerateMark() error = %v", err)

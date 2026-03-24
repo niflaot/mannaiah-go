@@ -200,6 +200,7 @@ func (r *MarkRepository) Update(ctx context.Context, mark *domain.ShippingMark) 
 			"quotation_id":          row.QuotationID,
 			"quoted_freight_cost":   row.QuotedFreightCost,
 			"draft_snapshot":        row.DraftSnapshot,
+			"shipment_mode":         row.ShipmentMode,
 			"updated_at":            row.UpdatedAt,
 		})
 		if result.Error != nil {

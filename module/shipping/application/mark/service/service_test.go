@@ -118,6 +118,7 @@ func TestGenerateAndVoid(t *testing.T) {
 		Recipient:               domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
 		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 		CollectOnDeliveryAmount: 100000,
+		ShipmentMode:            domain.ShipmentModeParcel,
 	})
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)

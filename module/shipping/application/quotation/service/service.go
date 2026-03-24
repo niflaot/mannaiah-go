@@ -35,6 +35,8 @@ type QuoteCommand struct {
 	DeclaredValue float64
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64
+	// ShipmentMode defines the delivery mode for this quotation.
+	ShipmentMode domain.ShipmentMode
 }
 
 // Service defines quotation orchestration behavior.
@@ -68,6 +70,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 		Units:                   command.Units,
 		DeclaredValue:           command.DeclaredValue,
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
 	}.Normalize()
 	if err := request.Validate(); err != nil {
 		return nil, err

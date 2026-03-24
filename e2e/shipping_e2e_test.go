@@ -48,6 +48,7 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	  "originCityCode":"11001000",
 	  "destCityCode":"76001000",
 	  "declaredValue":120000,
+	  "shipmentMode":"parcel",
 	  "units":[{"description":"box","packageType":"CAJA","dimensions":{"heightCm":15,"widthCm":20,"depthCm":30,"realWeightKg":2.2}}]
 	}`))
 	if status != http.StatusBadRequest {
@@ -65,6 +66,7 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	  "recipient":{"name":"Marylu","id":"83395cf06d6837104f19a7c9a99a2517","idType":"CC","addressLine":"Recipient street 456","cityCode":"76001000","phone":"3110000000","email":"coccostoreco@gmail.com"},
 	  "paymentForm":"1",
 	  "declaredValue":162000,
+	  "shipmentMode":"parcel",
 	  "units":[{"description":"morral","packageType":"CAJA","dimensions":{"heightCm":20,"widthCm":18,"depthCm":12,"realWeightKg":1.4}}]
 	}`))
 	if status != http.StatusCreated {
@@ -98,6 +100,7 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	  "sender":{"name":"Flock","id":"901599500","idType":"NIT","addressLine":"Sender street 123","cityCode":"11001000","phone":"3000000000","email":"contacto@flockstore.co"},
 	  "recipient":{"name":"Marylu","id":"83395cf06d6837104f19a7c9a99a2517","idType":"CC","addressLine":"Recipient street 456","cityCode":"76001000","phone":"3110000000","email":"coccostoreco@gmail.com"},
 	  "declaredValue":162000,
+	  "shipmentMode":"parcel",
 	  "units":[{"description":"morral","packageType":"CAJA","dimensions":{"heightCm":20,"widthCm":18,"depthCm":12,"realWeightKg":1.4}}]
 	}`))
 	if status != http.StatusCreated {

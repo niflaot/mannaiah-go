@@ -52,6 +52,25 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.1.0] - 2026-03-24
+- Shipping quotation: discounted freight-cost fields added to quotation result.
+  - `fullFreightCost`, `discountPercent`, `discountedFreightCost` added to `QuotationResult` and `port.QuotationRecord`.
+  - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` env var configures the discount percentage applied at quotation time.
+  - `quotationModel` stores `full_freight_cost`, `discount_percent`, `discounted_freight_cost`; migration `000023_shipping_quotation_discount` (MySQL + SQLite).
+- Shipping TCC: dual access tokens (sandbox / production) + configurable COD fee.
+  - `SHIPPING_TCC_SANDBOX_ACCESS_TOKEN` and `SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN` replace the single token env var.
+  - `SHIPPING_TCC_COD_FEE_PERCENT` configures the COD surcharge percentage for TCC; applied in quotation and mark generation.
+  - `collectOnDeliveryFeePercent`, `collectOnDeliveryFeeAmount`, `collectOnDeliveryChargedAmount` added to `QuotationResult` and `ShippingMark`.
+  - `collect_on_delivery_fee_percent` and `collect_on_delivery_charged_amount` columns added; migration `000024_shipping_mark_cod_fee` (MySQL + SQLite).
+  - `quotation_cod_fee_percent`, `quotation_cod_fee_amount`, `quotation_cod_charged_amount` columns added to `shipping_quotations`; migration `000025_shipping_quotation_cod_fee` (MySQL + SQLite).
+- Shipping: `shipmentMode` required field added to quotation, mark, and draft-mark requests.
+  - Valid values: `parcel` (TCC business unit 1) and `express` (TCC business unit 2).
+  - `SHIPPING_TCC_BUSINESS_UNIT` global env var removed; mode is now per-request.
+  - `ErrInvalidShipmentMode` domain error added and mapped to HTTP 400 `invalid_payload`.
+  - `shipment_mode VARCHAR(16) NOT NULL DEFAULT 'parcel'` column added to `shipping_marks`; migration `000029_shipping_mark_shipment_mode` (MySQL + SQLite).
+  - OpenAPI spec updated: `shipmentMode` enum (`parcel`/`express`) added to quotation request, mark request, draft mark request, and `shippingMark` response schemas.
+- Docker DNS: added `dns: [8.8.8.8, 1.1.1.1]` to `docker-compose.yml` mannaiah service to ensure Go's pure-Go DNS resolver can reach TCC's Oracle WAAS endpoint (`somos.tcc.com.co`).
+
 ### [v1.0.0] - 2026-03-23
 - Release train reset:
   - New tag baseline starts again at `v1.0.0`.

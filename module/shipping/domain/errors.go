@@ -27,6 +27,8 @@ var (
 	ErrBatchMarkStatusMismatch = errors.New("shipping batch mark status mismatch")
 	// ErrMarkNotDraft is returned when a non-QUOTED mark is operated on as a draft.
 	ErrMarkNotDraft = errors.New("shipping mark is not a draft")
+	// ErrInvalidShipmentMode is returned when a shipment mode is not parcel or express.
+	ErrInvalidShipmentMode = errors.New("shipping shipment mode is invalid")
 	// ErrNotFound is returned when one shipping resource does not exist.
 	ErrNotFound = errors.New("shipping resource not found")
 )

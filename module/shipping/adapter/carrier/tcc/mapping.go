@@ -204,7 +204,7 @@ type trackingCityResponse struct {
 }
 
 // BuildQuoteRequest maps domain quotation values into TCC quotation request values.
-func BuildQuoteRequest(account string, businessUnit int, request domain.QuotationRequest) QuoteRequest {
+func BuildQuoteRequest(account string, request domain.QuotationRequest) QuoteRequest {
 	normalized := request.Normalize()
 	units := make([]QuoteRequestUnit, 0, len(normalized.Units))
 	for _, unit := range normalized.Units {
@@ -228,9 +228,18 @@ func BuildQuoteRequest(account string, businessUnit int, request domain.Quotatio
 		Identification: "",
 		Account:        strings.TrimSpace(account),
 		ShipmentDate:   time.Now().UTC().Format("2006-01-02"),
-		BusinessUnitID: businessUnit,
+		BusinessUnitID: mapShipmentMode(normalized.ShipmentMode),
 		Units:          units,
 	}
+}
+
+// mapShipmentMode maps domain shipment-mode values to TCC business-unit integers.
+func mapShipmentMode(mode domain.ShipmentMode) int {
+	if mode == domain.ShipmentModeExpress {
+		return 2
+	}
+
+	return 1
 }
 
 // ToDomain maps one TCC quotation response into domain quotation values.

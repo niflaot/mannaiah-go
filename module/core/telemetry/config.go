@@ -6,7 +6,7 @@ const (
 	// defaultServiceName defines fallback telemetry service-name values.
 	defaultServiceName = "mannaiah-api"
 	// defaultServiceVersion defines fallback telemetry service-version values.
-	defaultServiceVersion = "v1.0.0"
+	defaultServiceVersion = "v1.1.0"
 	// defaultMetricsPath defines fallback Prometheus metrics endpoint paths.
 	defaultMetricsPath = "/metrics"
 	// defaultTracesExporter defines fallback traces exporter values.
@@ -26,7 +26,7 @@ type Config struct {
 	// ServiceName defines telemetry service.name resource values.
 	ServiceName string `mapstructure:"TELEMETRY_SERVICE_NAME" default:"mannaiah-api"`
 	// ServiceVersion defines telemetry service.version resource values.
-	ServiceVersion string `mapstructure:"TELEMETRY_SERVICE_VERSION" default:"v1.0.0"`
+	ServiceVersion string `mapstructure:"TELEMETRY_SERVICE_VERSION" default:"v1.1.0"`
 	// TracesEnabled enables OpenTelemetry tracing pipelines.
 	TracesEnabled bool `mapstructure:"TELEMETRY_TRACES_ENABLED" default:"true"`
 	// TracesExporter defines traces exporter type (for example, otlp).

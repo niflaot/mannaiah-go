@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+// ShipmentMode defines delivery-mode values for marks and quotations.
+type ShipmentMode string
+
+const (
+	// ShipmentModeParcel defines standard parcel delivery mode (TCC business unit 1).
+	ShipmentModeParcel ShipmentMode = "parcel"
+	// ShipmentModeExpress defines express delivery mode (TCC business unit 2).
+	ShipmentModeExpress ShipmentMode = "express"
+)
+
 // MarkStatus defines shipping-mark lifecycle status values.
 type MarkStatus string
 
@@ -79,6 +89,8 @@ type ShippingMark struct {
 	QuotationID *string `json:"quotationId,omitempty"`
 	// QuotedFreightCost defines the freight cost snapshot from the quotation at draft time.
 	QuotedFreightCost float64 `json:"quotedFreightCost,omitempty"`
+	// ShipmentMode defines the delivery mode for this mark.
+	ShipmentMode ShipmentMode `json:"shipmentMode"`
 	// DraftSnapshot defines a JSON snapshot of all mark fields captured before carrier submission.
 	DraftSnapshot string `json:"draftSnapshot,omitempty"`
 	// CreatedAt defines row creation timestamps.
@@ -154,6 +166,7 @@ func (m ShippingMark) Normalize() ShippingMark {
 		DispatchBatchID:                m.DispatchBatchID,
 		QuotationID:                    m.QuotationID,
 		QuotedFreightCost:              round2(quotedFreightCost),
+		ShipmentMode:                   m.ShipmentMode,
 		DraftSnapshot:                  m.DraftSnapshot,
 		CreatedAt:                      m.CreatedAt,
 		UpdatedAt:                      m.UpdatedAt,
@@ -179,6 +192,9 @@ func (m ShippingMark) Validate() error {
 	}
 	if len(normalized.Units) == 0 {
 		return ErrInvalidID
+	}
+	if normalized.ShipmentMode != ShipmentModeParcel && normalized.ShipmentMode != ShipmentModeExpress {
+		return ErrInvalidShipmentMode
 	}
 
 	return nil

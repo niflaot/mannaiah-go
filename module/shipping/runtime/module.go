@@ -76,7 +76,6 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 			IsSandbox:     cfg.TCC.Sandbox,
 			AccessToken:   tccAccessToken,
 			AccountNumber: strings.TrimSpace(cfg.TCC.AccountNumber),
-			BusinessUnit:  cfg.TCC.BusinessUnit,
 			PaymentForm:   cfg.TCC.PaymentForm,
 			CODFeePercent: cfg.TCC.CODFeePercent,
 			Sender: domain.Address{

@@ -34,6 +34,8 @@ type draftMarkRequest struct {
 	PaymentForm string `json:"paymentForm"`
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
+	// ShipmentMode defines the delivery mode for this draft mark (parcel or express).
+	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
 	// Observations defines observation values.
 	Observations string `json:"observations"`
 }
@@ -132,6 +134,7 @@ func (h *Handler) addBatchMark(ctx corehttp.Context) error {
 		DeclaredValue:           request.DeclaredValue,
 		PaymentForm:             strings.TrimSpace(request.PaymentForm),
 		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		ShipmentMode:            request.ShipmentMode,
 		Observations:            strings.TrimSpace(request.Observations),
 	})
 	if err != nil {

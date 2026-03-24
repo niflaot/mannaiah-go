@@ -8,11 +8,12 @@ import (
 
 // TestBuildQuoteRequest verifies quotation request mapping behavior.
 func TestBuildQuoteRequest(t *testing.T) {
-	request := BuildQuoteRequest("7000880", 1, domain.QuotationRequest{
+	request := BuildQuoteRequest("7000880", domain.QuotationRequest{
 		CarrierID:      "tcc",
 		OriginCityCode: "11001",
 		DestCityCode:   "76001",
 		DeclaredValue:  50000,
+		ShipmentMode:   domain.ShipmentModeParcel,
 		Units:          []domain.PackageUnit{{Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 	})
 	if request.Account != "7000880" {

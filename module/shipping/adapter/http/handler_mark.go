@@ -34,6 +34,8 @@ type markRequest struct {
 	DocumentType domain.MarkDocumentType `json:"documentType"`
 	// DocumentRef defines optional manual document reference values.
 	DocumentRef string `json:"documentRef"`
+	// ShipmentMode defines the delivery mode for this mark (parcel or express).
+	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
 }
 
 // markUnitRequest defines shipping-mark package-unit payload values.
@@ -87,6 +89,7 @@ func (h *Handler) createMark(ctx corehttp.Context) error {
 		DeclaredValue:           request.DeclaredValue,
 		PaymentForm:             strings.TrimSpace(request.PaymentForm),
 		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		ShipmentMode:            request.ShipmentMode,
 		Observations:            strings.TrimSpace(request.Observations),
 		TrackingNumber:          strings.TrimSpace(request.TrackingNumber),
 		DocumentType:            request.DocumentType,

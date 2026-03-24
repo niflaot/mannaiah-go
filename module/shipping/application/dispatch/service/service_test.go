@@ -183,6 +183,7 @@ func TestDraftMarkAndClose(t *testing.T) {
 		Sender:            domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
 		Recipient:         domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
 		Units:             []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode:      domain.ShipmentModeParcel,
 	})
 	if err != nil {
 		t.Fatalf("DraftMark() error = %v", err)
@@ -222,11 +223,12 @@ func TestRemoveDraftMark(t *testing.T) {
 
 	batch, _ := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
 	mark, _ := service.DraftMark(context.Background(), DraftMarkCommand{
-		BatchID:   batch.ID,
-		OrderID:   "order-1",
-		Sender:    domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
-		Recipient: domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
-		Units:     []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		BatchID:      batch.ID,
+		OrderID:      "order-1",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
 	})
 
 	updated, err := service.RemoveDraftMark(context.Background(), batch.ID, mark.ID)

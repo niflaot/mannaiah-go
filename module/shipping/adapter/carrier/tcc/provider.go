@@ -25,8 +25,6 @@ type ProviderConfig struct {
 	AccountNumber string
 	// Sender defines fallback sender address values.
 	Sender domain.Address
-	// BusinessUnit defines TCC business-unit identifier values.
-	BusinessUnit int
 	// PaymentForm defines TCC payment-form values.
 	PaymentForm int
 	// CODFeePercent defines COD fee percentage applied to collected values.
@@ -47,9 +45,6 @@ type Provider struct {
 func NewProvider(config ProviderConfig) (*Provider, error) {
 	if !config.Enabled {
 		return nil, fmt.Errorf("tcc provider is disabled")
-	}
-	if config.BusinessUnit <= 0 {
-		config.BusinessUnit = 1
 	}
 	if config.PaymentForm <= 0 {
 		config.PaymentForm = 1
@@ -101,7 +96,7 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 	if err := request.Validate(); err != nil {
 		return nil, err
 	}
-	payload := BuildQuoteRequest(p.cfg.AccountNumber, p.cfg.BusinessUnit, request)
+	payload := BuildQuoteRequest(p.cfg.AccountNumber, request)
 	response, err := p.client.Quote(ctx, payload)
 	if err != nil {
 		return nil, err
@@ -162,7 +157,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		RelationNumber:          "",
 		RelationDateTime:        "",
 		PickupRequest:           DispatchPickupRequest{},
-		BusinessUnit:            strconv.Itoa(p.cfg.BusinessUnit),
+		BusinessUnit:            strconv.Itoa(mapShipmentMode(mark.ShipmentMode)),
 		ShipmentNumber:          "",
 		DispatchDate:            time.Now().UTC().Format("2006-01-02"),
 		SenderAccount:           strings.TrimSpace(p.cfg.AccountNumber),

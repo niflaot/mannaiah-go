@@ -26,6 +26,8 @@ type quotationRequest struct {
 	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
 	// Units defines package-unit values.
 	Units []quotationUnitRequest `json:"units"`
+	// ShipmentMode defines the delivery mode for this quotation (parcel or express).
+	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
 }
 
 // quotationUnitRequest defines quotation package-unit payload values.
@@ -68,6 +70,7 @@ func (h *Handler) createQuotation(ctx corehttp.Context) error {
 		Units:                   units,
 		DeclaredValue:           request.DeclaredValue,
 		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		ShipmentMode:            request.ShipmentMode,
 	})
 	if err != nil {
 		return h.mapError(err)

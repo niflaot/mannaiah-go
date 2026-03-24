@@ -31,6 +31,8 @@ type GenerateCommand struct {
 	PaymentForm string
 	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
 	CollectOnDeliveryAmount float64
+	// ShipmentMode defines the delivery mode for this mark.
+	ShipmentMode domain.ShipmentMode
 	// Observations defines optional observation values.
 	Observations string
 	// TrackingNumber defines optional manual tracking-number values.
@@ -92,6 +94,7 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 		DeclaredValue:           command.DeclaredValue,
 		PaymentForm:             strings.TrimSpace(command.PaymentForm),
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
 		Observations:            strings.TrimSpace(command.Observations),
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),

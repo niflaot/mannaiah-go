@@ -40,6 +40,8 @@ type QuotationRequest struct {
 	DeclaredValue float64 `json:"declaredValue"`
 	// CollectOnDeliveryAmount defines requested COD collection amounts.
 	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount,omitempty"`
+	// ShipmentMode defines the delivery mode for this quotation.
+	ShipmentMode ShipmentMode `json:"shipmentMode"`
 }
 
 // Normalize normalizes quotation request fields.
@@ -66,6 +68,7 @@ func (r QuotationRequest) Normalize() QuotationRequest {
 		Units:                   units,
 		DeclaredValue:           round2(value),
 		CollectOnDeliveryAmount: round2(collectOnDeliveryAmount),
+		ShipmentMode:            r.ShipmentMode,
 	}
 }
 
@@ -80,6 +83,9 @@ func (r QuotationRequest) Validate() error {
 	}
 	if len(normalized.Units) == 0 {
 		return ErrInvalidID
+	}
+	if normalized.ShipmentMode != ShipmentModeParcel && normalized.ShipmentMode != ShipmentModeExpress {
+		return ErrInvalidShipmentMode
 	}
 
 	return nil

@@ -340,6 +340,13 @@ func carrierGetOperation() *openapi3.Operation {
 	}
 }
 
+// shipmentModeSchema defines schema for shipment mode enum values (parcel or express).
+func shipmentModeSchema() *openapi3.Schema {
+	s := openapi3.NewStringSchema()
+	s.Enum = []interface{}{"parcel", "express"}
+	return s
+}
+
 // quotationRequestSchema defines schema for quotation request payloads.
 func quotationRequestSchema() *openapi3.Schema {
 	schema := openapi3.NewObjectSchema().
@@ -349,8 +356,9 @@ func quotationRequestSchema() *openapi3.Schema {
 		WithProperty("destCityCode", openapi3.NewStringSchema()).
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
-		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema()))
-	schema.Required = []string{"carrierId", "originCityCode", "destCityCode", "units"}
+		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
+		WithProperty("shipmentMode", shipmentModeSchema())
+	schema.Required = []string{"carrierId", "originCityCode", "destCityCode", "units", "shipmentMode"}
 
 	return schema
 }
@@ -419,8 +427,9 @@ func markRequestSchema() *openapi3.Schema {
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("trackingNumber", openapi3.NewStringSchema()).
 		WithProperty("documentType", openapi3.NewStringSchema()).
-		WithProperty("documentRef", openapi3.NewStringSchema())
-	schema.Required = []string{"orderId", "carrierId", "sender", "recipient", "units"}
+		WithProperty("documentRef", openapi3.NewStringSchema()).
+		WithProperty("shipmentMode", shipmentModeSchema())
+	schema.Required = []string{"orderId", "carrierId", "sender", "recipient", "units", "shipmentMode"}
 
 	return schema
 }
@@ -460,8 +469,9 @@ func draftMarkRequestSchema() *openapi3.Schema {
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("paymentForm", openapi3.NewStringSchema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
-		WithProperty("observations", openapi3.NewStringSchema())
-	schema.Required = []string{"orderId", "sender", "recipient", "units"}
+		WithProperty("observations", openapi3.NewStringSchema()).
+		WithProperty("shipmentMode", shipmentModeSchema())
+	schema.Required = []string{"orderId", "sender", "recipient", "units", "shipmentMode"}
 
 	return schema
 }
@@ -537,6 +547,7 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("quotationId", openapi3.NewStringSchema()).
 		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
 		WithProperty("draftSnapshot", openapi3.NewStringSchema()).
+		WithProperty("shipmentMode", shipmentModeSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
 }
