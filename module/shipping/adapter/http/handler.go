@@ -25,6 +25,9 @@ type Authorizer interface {
 	IsUnauthorized(err error) bool
 	// IsForbidden reports authorization errors.
 	IsForbidden(err error) bool
+	// Subject resolves the caller subject from the authorization header.
+	// Returns "system" for dev-bypass tokens or when authentication fails.
+	Subject(ctx context.Context, authorizationHeader string) string
 }
 
 // QuotationService defines quotation behavior required by HTTP handlers.

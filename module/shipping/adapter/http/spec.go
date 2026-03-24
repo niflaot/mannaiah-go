@@ -442,9 +442,8 @@ func voidMarkRequestSchema() *openapi3.Schema {
 // createBatchRequestSchema defines schema for batch creation request payloads.
 func createBatchRequestSchema() *openapi3.Schema {
 	schema := openapi3.NewObjectSchema().
-		WithProperty("name", openapi3.NewStringSchema()).
 		WithProperty("carrierId", openapi3.NewStringSchema())
-	schema.Required = []string{"name", "carrierId"}
+	schema.Required = []string{"carrierId"}
 
 	return schema
 }
@@ -534,9 +533,9 @@ func shippingMarkSchema() *openapi3.Schema {
 func dispatchBatchSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("id", openapi3.NewStringSchema()).
-		WithProperty("name", openapi3.NewStringSchema()).
 		WithProperty("carrierId", openapi3.NewStringSchema()).
 		WithProperty("status", openapi3.NewStringSchema()).
+		WithProperty("createdBy", openapi3.NewStringSchema()).
 		WithProperty("markIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("closedAt", openapi3.NewDateTimeSchema())

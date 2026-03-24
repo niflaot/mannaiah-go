@@ -10,8 +10,6 @@ import (
 
 // createBatchRequest defines batch creation request payload values.
 type createBatchRequest struct {
-	// Name defines batch name values.
-	Name string `json:"name"`
 	// CarrierID defines carrier identifier values.
 	CarrierID string `json:"carrierId"`
 }
@@ -40,9 +38,13 @@ func (h *Handler) createBatch(ctx corehttp.Context) error {
 	if err := ctx.BodyParser(&request); err != nil {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
+	createdBy := "system"
+	if h.authorizer != nil {
+		createdBy = h.authorizer.Subject(ctx.Context(), ctx.GetHeader("Authorization"))
+	}
 	batch, err := h.batches.Create(ctx.Context(), dispatchservice.CreateBatchCommand{
-		Name:      strings.TrimSpace(request.Name),
 		CarrierID: strings.TrimSpace(request.CarrierID),
+		CreatedBy: createdBy,
 	})
 	if err != nil {
 		return h.mapError(err)

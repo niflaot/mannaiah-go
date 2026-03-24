@@ -120,7 +120,7 @@ func TestCreateAddClose(t *testing.T) {
 	publisher := &dispatchPublisherStub{}
 	service := NewService(batchRepository, markRepository, publisher)
 
-	batch, err := service.Create(context.Background(), CreateBatchCommand{Name: "Batch A", CarrierID: "manual"})
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}

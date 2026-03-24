@@ -14,10 +14,10 @@ import (
 
 // CreateBatchCommand defines dispatch batch creation input values.
 type CreateBatchCommand struct {
-	// Name defines batch display-name values.
-	Name string
 	// CarrierID defines batch carrier identifier values.
 	CarrierID string
+	// CreatedBy defines the subject identifier of the caller creating the batch.
+	CreatedBy string
 }
 
 // AddMarksCommand defines mark assignment input values.
@@ -62,9 +62,9 @@ func (s *Service) Create(ctx context.Context, command CreateBatchCommand) (*doma
 	}
 	batch := domain.DispatchBatch{
 		ID:        uuid.NewString(),
-		Name:      strings.TrimSpace(command.Name),
 		CarrierID: strings.TrimSpace(command.CarrierID),
 		Status:    domain.BatchStatusOpen,
+		CreatedBy: strings.TrimSpace(command.CreatedBy),
 		CreatedAt: time.Now().UTC(),
 	}.Normalize()
 	if err := batch.Validate(); err != nil {

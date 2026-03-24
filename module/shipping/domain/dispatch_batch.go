@@ -19,12 +19,12 @@ const (
 type DispatchBatch struct {
 	// ID defines batch identifier values.
 	ID string `json:"id"`
-	// Name defines display-name values.
-	Name string `json:"name"`
 	// CarrierID defines batch carrier identifier values.
 	CarrierID string `json:"carrierId"`
 	// Status defines batch status values.
 	Status BatchStatus `json:"status"`
+	// CreatedBy defines the subject identifier of the caller that created the batch.
+	CreatedBy string `json:"createdBy"`
 	// MarkIDs defines assigned mark identifier values.
 	MarkIDs []string `json:"markIds,omitempty"`
 	// CreatedAt defines row creation timestamps.
@@ -50,9 +50,9 @@ func (b DispatchBatch) Normalize() DispatchBatch {
 	}
 	copy := DispatchBatch{
 		ID:        strings.TrimSpace(b.ID),
-		Name:      strings.TrimSpace(b.Name),
 		CarrierID: strings.TrimSpace(b.CarrierID),
 		Status:    b.Status,
+		CreatedBy: strings.TrimSpace(b.CreatedBy),
 		MarkIDs:   markIDs,
 		CreatedAt: b.CreatedAt,
 		ClosedAt:  b.ClosedAt,
@@ -68,9 +68,6 @@ func (b DispatchBatch) Normalize() DispatchBatch {
 func (b DispatchBatch) Validate() error {
 	normalized := b.Normalize()
 	if normalized.ID == "" {
-		return ErrInvalidID
-	}
-	if normalized.Name == "" {
 		return ErrInvalidID
 	}
 	if normalized.CarrierID == "" {

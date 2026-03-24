@@ -66,9 +66,9 @@ func (shippingMarkUnitModel) TableName() string {
 // dispatchBatchModel defines dispatch batch row values.
 type dispatchBatchModel struct {
 	ID        string     `gorm:"column:id;type:varchar(64);primaryKey"`
-	Name      string     `gorm:"column:name;type:varchar(255)"`
 	CarrierID string     `gorm:"column:carrier_id;type:varchar(100);index"`
 	Status    string     `gorm:"column:status;type:varchar(20);index"`
+	CreatedBy string     `gorm:"column:created_by;type:varchar(255);not null;default:system"`
 	CreatedAt time.Time  `gorm:"column:created_at"`
 	ClosedAt  *time.Time `gorm:"column:closed_at"`
 }

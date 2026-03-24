@@ -86,6 +86,12 @@ Keep newest entries on top. Add one section per version.
   - Root `README.md` and `module/woocommerce/README.md` latest badge set to `v1.0.0`.
   - Core OpenAPI version references set to `1.0.0` (`module/core/cmd/api/main.go`, `module/core/startup/runtime.go`).
   - Telemetry default service version set to `v1.0.0` (`module/core/telemetry/config.go`, `.env.example`).
+- Shipping dispatch batch: `name` field removed; `created_by` field added.
+  - Migration `000027_dispatch_batch_created_by` (MySQL + SQLite): drops `name`, adds `created_by VARCHAR(255) NOT NULL DEFAULT 'system'` on `dispatch_batches`.
+  - `DispatchBatch` domain, `CreateBatchCommand`, store model, store mapping, and event builder updated: `Name` removed, `CreatedBy` added.
+  - HTTP `POST /shipping/batches` now derives `created_by` from the JWT token owner (`Claims.Subject`), or `"system"` for dev-bypass credentials or internal callers.
+  - `Authorizer` interface extended with `Subject()` method; `auth.runtime.Module` implements it (returns `"system"` for dev-admin or auth errors).
+  - OpenAPI `DispatchBatch` response schema and `BatchCreate` request schema updated accordingly.
 - Orders module: `payment_method` field added to order records.
   - Migration `000026_order_payment_method` (MySQL + SQLite): `payment_method VARCHAR(128) NOT NULL DEFAULT ''` on `orders` table.
   - `Order` domain, `CreateCommand`, repository mapper, and HTTP `POST /orders` handler accept and persist payment method.

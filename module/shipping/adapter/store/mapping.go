@@ -109,9 +109,9 @@ func mapMarkDomain(mark domain.ShippingMark) shippingMarkModel {
 func mapBatchModel(row dispatchBatchModel, markIDs []string) domain.DispatchBatch {
 	return domain.DispatchBatch{
 		ID:        row.ID,
-		Name:      row.Name,
 		CarrierID: row.CarrierID,
 		Status:    domain.BatchStatus(row.Status),
+		CreatedBy: row.CreatedBy,
 		MarkIDs:   markIDs,
 		CreatedAt: row.CreatedAt.UTC(),
 		ClosedAt:  row.ClosedAt,

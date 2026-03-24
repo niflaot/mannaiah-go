@@ -22,6 +22,9 @@ type Authorizer interface {
 	IsUnauthorized(err error) bool
 	// IsForbidden reports whether an error is an authorization failure.
 	IsForbidden(err error) bool
+	// Subject resolves the caller subject from the authorization header.
+	// Returns "system" for dev-bypass tokens or when authentication fails.
+	Subject(ctx context.Context, authorizationHeader string) string
 }
 
 // Loader defines bootstrap hooks required by auth modules.
@@ -97,6 +100,23 @@ func (m *Module) IsUnauthorized(err error) bool {
 // IsForbidden reports whether an error is an authorization failure.
 func (m *Module) IsForbidden(err error) bool {
 	return errors.Is(err, application.ErrForbidden)
+}
+
+// Subject resolves the caller subject from the authorization header.
+// Returns "system" for dev-bypass tokens or when authentication fails.
+func (m *Module) Subject(ctx context.Context, authorizationHeader string) string {
+	if m == nil || m.service == nil {
+		return "system"
+	}
+	claims, err := m.service.Authenticate(ctx, authorizationHeader)
+	if err != nil {
+		return "system"
+	}
+	if strings.TrimSpace(claims.Subject) == "dev-admin" {
+		return "system"
+	}
+
+	return strings.TrimSpace(claims.Subject)
 }
 
 // RegisterRoutes registers auth routes on the provided router.

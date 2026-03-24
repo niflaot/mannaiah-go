@@ -51,7 +51,7 @@ func TestRepositories(t *testing.T) {
 		t.Fatalf("loaded COD values = %#v", loadedMark)
 	}
 
-	batch := domain.DispatchBatch{ID: "batch-1", Name: "Batch", CarrierID: "manual", Status: domain.BatchStatusOpen, CreatedAt: time.Now().UTC()}
+	batch := domain.DispatchBatch{ID: "batch-1", CarrierID: "manual", Status: domain.BatchStatusOpen, CreatedBy: "user-123", CreatedAt: time.Now().UTC()}
 	if err := batchRepository.Create(context.Background(), &batch); err != nil {
 		t.Fatalf("Create(batch) error = %v", err)
 	}

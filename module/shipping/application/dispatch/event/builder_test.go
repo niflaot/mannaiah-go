@@ -9,7 +9,7 @@ import (
 
 // TestBuildBatchEvents verifies dispatch batch event topic mapping.
 func TestBuildBatchEvents(t *testing.T) {
-	batch := domain.DispatchBatch{ID: "batch-1", CarrierID: "manual", Name: "demo", MarkIDs: []string{"m1", "m2"}}
+	batch := domain.DispatchBatch{ID: "batch-1", CarrierID: "manual", CreatedBy: "user-123", MarkIDs: []string{"m1", "m2"}}
 
 	created := BuildBatchCreated(batch)
 	if created.Topic != port.TopicBatchCreated {

@@ -20,8 +20,8 @@ type BatchCreatedPayload struct {
 	BatchID string `json:"batchId"`
 	// CarrierID defines carrier identifier values.
 	CarrierID string `json:"carrierId"`
-	// Name defines batch name values.
-	Name string `json:"name"`
+	// CreatedBy defines the subject identifier of the caller that created the batch.
+	CreatedBy string `json:"createdBy"`
 }
 
 // BatchClosedPayload defines batch-closed event payload values.
@@ -44,7 +44,7 @@ func BuildBatchCreated(batch domain.DispatchBatch) port.IntegrationEvent {
 		Payload: BatchCreatedPayload{
 			BatchID:   batch.ID,
 			CarrierID: batch.CarrierID,
-			Name:      batch.Name,
+			CreatedBy: batch.CreatedBy,
 		},
 	}
 }

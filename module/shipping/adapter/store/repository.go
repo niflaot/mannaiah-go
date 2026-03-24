@@ -255,9 +255,9 @@ func (r *BatchRepository) Create(ctx context.Context, batch *domain.DispatchBatc
 	normalized := batch.Normalize()
 	row := dispatchBatchModel{
 		ID:        normalized.ID,
-		Name:      normalized.Name,
 		CarrierID: normalized.CarrierID,
 		Status:    string(normalized.Status),
+		CreatedBy: normalized.CreatedBy,
 		CreatedAt: normalized.CreatedAt,
 		ClosedAt:  normalized.ClosedAt,
 	}
