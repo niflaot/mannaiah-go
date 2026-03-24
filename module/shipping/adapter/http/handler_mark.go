@@ -8,6 +8,28 @@ import (
 	"mannaiah/module/shipping/domain"
 )
 
+// getOrderDispatch handles order dispatch provisioning status requests.
+func (h *Handler) getOrderDispatch(ctx corehttp.Context) error {
+	result, err := h.marks.QueryDispatch(ctx.Context(), markservice.DispatchQuery{
+		OrderID: strings.TrimSpace(ctx.Params("orderID")),
+	})
+	if err != nil {
+		return h.mapError(err)
+	}
+	batchID := ""
+	if result.BatchID != nil {
+		batchID = *result.BatchID
+	}
+
+	return ctx.Status(200).JSON(orderDispatchResponse{
+		OrderID:     result.OrderID,
+		Provisioned: result.Provisioned,
+		MarkID:      result.MarkID,
+		BatchID:     batchID,
+		Status:      result.Status,
+	})
+}
+
 // markRequest defines shipping-mark request payload values.
 type markRequest struct {
 	// OrderID defines order identifier values.
@@ -64,6 +86,20 @@ type markListResponse struct {
 type voidMarkRequest struct {
 	// Reason defines void reason values.
 	Reason string `json:"reason"`
+}
+
+// orderDispatchResponse defines order dispatch provisioning status response payload values.
+type orderDispatchResponse struct {
+	// OrderID defines the queried order identifier.
+	OrderID string `json:"orderId"`
+	// Provisioned reports whether the order has an active mark in the dispatch workflow.
+	Provisioned bool `json:"provisioned"`
+	// MarkID defines the active mark identifier when provisioned.
+	MarkID string `json:"markId,omitempty"`
+	// BatchID defines the associated dispatch batch identifier when provisioned.
+	BatchID string `json:"batchId,omitempty"`
+	// Status defines the active mark status when provisioned.
+	Status domain.MarkStatus `json:"status,omitempty"`
 }
 
 // createMark handles mark creation requests.

@@ -153,6 +153,72 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]domain.ShippingM
 	})
 }
 
+// DispatchQuery defines order dispatch provisioning check query values.
+type DispatchQuery struct {
+	// OrderID defines the order identifier to check.
+	OrderID string
+}
+
+// DispatchResult defines the dispatch provisioning status of one order.
+type DispatchResult struct {
+	// OrderID defines the queried order identifier.
+	OrderID string
+	// Provisioned reports whether the order has an active mark in the dispatch workflow.
+	Provisioned bool
+	// MarkID defines the active mark identifier when provisioned.
+	MarkID string
+	// BatchID defines the associated batch identifier when provisioned.
+	BatchID *string
+	// Status defines the active mark status when provisioned.
+	Status domain.MarkStatus
+}
+
+// dispatchPriority returns the selection priority of one mark status.
+// Higher values win. Zero means the status is not considered active.
+func dispatchPriority(s domain.MarkStatus) int {
+	switch s {
+	case domain.MarkStatusQuoted:
+		return 3
+	case domain.MarkStatusCreated:
+		return 2
+	case domain.MarkStatusGenerated:
+		return 1
+	}
+
+	return 0
+}
+
+// QueryDispatch resolves the dispatch provisioning status for one order.
+func (s *Service) QueryDispatch(ctx context.Context, query DispatchQuery) (*DispatchResult, error) {
+	if s == nil || s.repository == nil {
+		return &DispatchResult{OrderID: strings.TrimSpace(query.OrderID)}, nil
+	}
+	trimmed := strings.TrimSpace(query.OrderID)
+	marks, err := s.repository.ListByOrderID(ctx, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	var best *domain.ShippingMark
+	for i := range marks {
+		m := &marks[i]
+		if dispatchPriority(m.Status) == 0 {
+			continue
+		}
+		if best == nil || dispatchPriority(m.Status) > dispatchPriority(best.Status) {
+			best = m
+		}
+	}
+	result := &DispatchResult{OrderID: trimmed}
+	if best != nil {
+		result.Provisioned = true
+		result.MarkID = best.ID
+		result.BatchID = best.DispatchBatchID
+		result.Status = best.Status
+	}
+
+	return result, nil
+}
+
 // Void voids one shipping mark with a local status change only.
 // No carrier API call is made; carrier-level void must be handled out-of-band when the carrier supports it.
 func (s *Service) Void(ctx context.Context, id string, reason string) (*domain.ShippingMark, error) {

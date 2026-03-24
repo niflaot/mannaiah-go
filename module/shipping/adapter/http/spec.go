@@ -24,6 +24,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
 		openapi3.WithPath("/shipping/carriers", &openapi3.PathItem{Get: carrierListOperation()}),
 		openapi3.WithPath("/shipping/carriers/{id}", &openapi3.PathItem{Get: carrierGetOperation()}),
+		openapi3.WithPath("/shipping/orders/{orderID}/dispatch", &openapi3.PathItem{Get: orderDispatchOperation()}),
 	)
 }
 
@@ -581,6 +582,32 @@ func dimensionsSchema() *openapi3.Schema {
 		WithProperty("realWeightKg", openapi3.NewFloat64Schema()).
 		WithProperty("volumetricWeightKg", openapi3.NewFloat64Schema()).
 		WithProperty("declaredValueCop", openapi3.NewFloat64Schema())
+}
+
+// orderDispatchOperation defines the OpenAPI operation for order dispatch provisioning status.
+func orderDispatchOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getOrderDispatch",
+		Summary:     "Get order dispatch provisioning status",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("orderID", "Order identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, jsonResponse("Order dispatch provisioning status.", orderDispatchResponseSchema())),
+		),
+	}
+}
+
+// orderDispatchResponseSchema defines schema for order dispatch provisioning response payloads.
+func orderDispatchResponseSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("orderId", openapi3.NewStringSchema()).
+		WithProperty("provisioned", openapi3.NewBoolSchema()).
+		WithProperty("markId", openapi3.NewStringSchema()).
+		WithProperty("batchId", openapi3.NewStringSchema()).
+		WithProperty("status", openapi3.NewStringSchema())
 }
 
 // addressSchema defines schema for address payloads.

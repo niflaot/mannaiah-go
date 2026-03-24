@@ -70,6 +70,10 @@ Keep newest entries on top. Add one section per version.
   - `shipment_mode VARCHAR(16) NOT NULL DEFAULT 'parcel'` column added to `shipping_marks`; migration `000029_shipping_mark_shipment_mode` (MySQL + SQLite).
   - OpenAPI spec updated: `shipmentMode` enum (`parcel`/`express`) added to quotation request, mark request, draft mark request, and `shippingMark` response schemas.
 - Docker DNS: added `dns: [8.8.8.8, 1.1.1.1]` to `docker-compose.yml` mannaiah service to ensure Go's pure-Go DNS resolver can reach TCC's Oracle WAAS endpoint (`somos.tcc.com.co`).
+- Shipping: `GET /shipping/orders/{orderID}/dispatch` utility endpoint added to check order dispatch provisioning status.
+  - Returns `orderId`, `provisioned` (bool), `markId`, `batchId`, `status` for the highest-priority active mark of the order.
+  - Priority: `QUOTED` > `CREATED` > `GENERATED`; `VOIDED`, `REMOVED`, `FAILED`, `PENDING` marks are excluded.
+  - OpenAPI spec updated: `orderDispatch` response schema and path registered under `/shipping/orders/{orderID}/dispatch`.
 
 ### [v1.0.0] - 2026-03-23
 - Release train reset:

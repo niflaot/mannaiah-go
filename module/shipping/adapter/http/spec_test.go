@@ -14,6 +14,9 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/batches/{id}/close") == nil {
 		t.Fatalf("missing /shipping/batches/{id}/close path")
 	}
+	if paths.Find("/shipping/orders/{orderID}/dispatch") == nil {
+		t.Fatalf("missing /shipping/orders/{orderID}/dispatch path")
+	}
 }
 
 // TestShippingOperationsExposeSchemas verifies shipping operations expose request/response schemas.

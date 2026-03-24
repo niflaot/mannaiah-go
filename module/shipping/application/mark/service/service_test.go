@@ -43,7 +43,14 @@ func (s *markRepositoryStub) GetByTrackingNumber(ctx context.Context, trackingNu
 	return nil, domain.ErrNotFound
 }
 func (s *markRepositoryStub) ListByOrderID(ctx context.Context, orderID string) ([]domain.ShippingMark, error) {
-	return nil, nil
+	var result []domain.ShippingMark
+	for _, row := range s.rows {
+		if row.OrderID == orderID {
+			result = append(result, row)
+		}
+	}
+
+	return result, nil
 }
 func (s *markRepositoryStub) ListByBatchID(ctx context.Context, batchID string) ([]domain.ShippingMark, error) {
 	return nil, nil
@@ -145,6 +152,39 @@ func TestGenerateAndVoid(t *testing.T) {
 	}
 	if _, ok := publisher.events[0].Payload.(markevent.MarkGeneratedPayload); !ok {
 		t.Fatalf("generated payload type mismatch")
+	}
+}
+
+// TestQueryDispatch verifies dispatch provisioning status resolution by order.
+func TestQueryDispatch(t *testing.T) {
+	repository := newMarkRepositoryStub()
+	publisher := &publisherStub{}
+	service := NewService(repository, markRegistryStub{}, publisher)
+
+	result, err := service.QueryDispatch(context.Background(), DispatchQuery{OrderID: "order-1"})
+	if err != nil {
+		t.Fatalf("QueryDispatch() error = %v", err)
+	}
+	if result.Provisioned {
+		t.Fatalf("expected not provisioned for unknown order")
+	}
+
+	repository.rows["mark-gen"] = domain.ShippingMark{ID: "mark-gen", OrderID: "order-1", Status: domain.MarkStatusGenerated}
+	repository.rows["mark-quoted"] = domain.ShippingMark{ID: "mark-quoted", OrderID: "order-1", Status: domain.MarkStatusQuoted}
+	repository.rows["mark-voided"] = domain.ShippingMark{ID: "mark-voided", OrderID: "order-1", Status: domain.MarkStatusVoided}
+
+	result, err = service.QueryDispatch(context.Background(), DispatchQuery{OrderID: "order-1"})
+	if err != nil {
+		t.Fatalf("QueryDispatch() error = %v", err)
+	}
+	if !result.Provisioned {
+		t.Fatalf("expected provisioned")
+	}
+	if result.MarkID != "mark-quoted" {
+		t.Fatalf("expected QUOTED mark to win; got %q", result.MarkID)
+	}
+	if result.Status != domain.MarkStatusQuoted {
+		t.Fatalf("expected status QUOTED; got %q", result.Status)
 	}
 }
 

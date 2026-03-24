@@ -36,6 +36,9 @@ func (markServiceStub) List(ctx context.Context, query markservice.ListQuery) ([
 func (markServiceStub) Void(ctx context.Context, id string, reason string) (*domain.ShippingMark, error) {
 	return &domain.ShippingMark{}, nil
 }
+func (markServiceStub) QueryDispatch(ctx context.Context, query markservice.DispatchQuery) (*markservice.DispatchResult, error) {
+	return &markservice.DispatchResult{}, nil
+}
 
 type dispatchServiceStub struct{}
 

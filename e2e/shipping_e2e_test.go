@@ -128,6 +128,27 @@ func TestShippingManualFlowE2E(t *testing.T) {
 		t.Fatalf("payload.globalStatus = %v, want %q", payload["globalStatus"], "PROCESSING")
 	}
 
+	harness.tracer.Step("check order-shipping-1 dispatch provisioning status")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/shipping/orders/order-shipping-1/dispatch", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["provisioned"] != true {
+		t.Fatalf("payload.provisioned = %v, want true", payload["provisioned"])
+	}
+	if payload["orderId"] != "order-shipping-1" {
+		t.Fatalf("payload.orderId = %v, want %q", payload["orderId"], "order-shipping-1")
+	}
+
+	harness.tracer.Step("check order-shipping-2 dispatch provisioning status")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/shipping/orders/order-shipping-2/dispatch", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if payload["provisioned"] != true {
+		t.Fatalf("payload.provisioned = %v, want true", payload["provisioned"])
+	}
+
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(9)
+	harness.tracer.AssertStepCount(11)
 }
