@@ -52,7 +52,7 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
-### [v1.4.0] - 2026-03-24
+### [v1.0.0] - 2026-03-24
 - Shipping quotation: discounted freight-cost fields added to quotation result.
   - `fullFreightCost`, `discountPercent`, `discountedFreightCost` added to `QuotationResult` and `port.QuotationRecord`.
   - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` env var configures the discount percentage applied at quotation time.
