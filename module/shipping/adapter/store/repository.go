@@ -195,9 +195,12 @@ func (r *MarkRepository) Update(ctx context.Context, mark *domain.ShippingMark) 
 			"total_volumetric_weight": row.TotalVolumetricWeight,
 			"declared_value":          row.DeclaredValue,
 			"payment_form":            row.PaymentForm,
-			"observations":            row.Observations,
-			"dispatch_batch_id":       row.DispatchBatchID,
-			"updated_at":              row.UpdatedAt,
+			"observations":          row.Observations,
+			"dispatch_batch_id":     row.DispatchBatchID,
+			"quotation_id":          row.QuotationID,
+			"quoted_freight_cost":   row.QuotedFreightCost,
+			"draft_snapshot":        row.DraftSnapshot,
+			"updated_at":            row.UpdatedAt,
 		})
 		if result.Error != nil {
 			return fmt.Errorf("update shipping mark: %w", result.Error)

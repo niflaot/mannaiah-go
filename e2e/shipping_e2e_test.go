@@ -92,14 +92,19 @@ func TestShippingManualFlowE2E(t *testing.T) {
 		t.Fatalf("expected batch id")
 	}
 
-	harness.tracer.Step("add mark to dispatch batch")
-	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/batches/"+batchID+"/marks", manageToken, []byte(`{"markIds":["`+markID+`"]}`))
-	if status != http.StatusOK {
-		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	harness.tracer.Step("create draft mark in dispatch batch")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/batches/"+batchID+"/marks", manageToken, []byte(`{
+	  "orderId":"order-shipping-2",
+	  "sender":{"name":"Flock","id":"901599500","idType":"NIT","addressLine":"Sender street 123","cityCode":"11001000","phone":"3000000000","email":"contacto@flockstore.co"},
+	  "recipient":{"name":"Marylu","id":"83395cf06d6837104f19a7c9a99a2517","idType":"CC","addressLine":"Recipient street 456","cityCode":"76001000","phone":"3110000000","email":"coccostoreco@gmail.com"},
+	  "declaredValue":162000,
+	  "units":[{"description":"morral","packageType":"CAJA","dimensions":{"heightCm":20,"widthCm":18,"depthCm":12,"realWeightKg":1.4}}]
+	}`))
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
-	markIDs, ok := payload["markIds"].([]any)
-	if !ok || len(markIDs) != 1 {
-		t.Fatalf("payload.markIds = %v, want one mark", payload["markIds"])
+	if payload["status"] != "QUOTED" {
+		t.Fatalf("payload.status = %v, want %q", payload["status"], "QUOTED")
 	}
 
 	harness.tracer.Step("close dispatch batch")

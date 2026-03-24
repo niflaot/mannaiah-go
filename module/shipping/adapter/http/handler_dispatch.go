@@ -14,10 +14,38 @@ type createBatchRequest struct {
 	CarrierID string `json:"carrierId"`
 }
 
-// addBatchMarksRequest defines batch mark assignment request payload values.
-type addBatchMarksRequest struct {
-	// MarkIDs defines assigned mark identifier values.
-	MarkIDs []string `json:"markIds"`
+// draftMarkRequest defines draft mark creation request payload values.
+type draftMarkRequest struct {
+	// QuotationID defines the optional quotation reference attached to this draft.
+	QuotationID string `json:"quotationId"`
+	// QuotedFreightCost defines the freight cost snapshot from the quotation.
+	QuotedFreightCost float64 `json:"quotedFreightCost"`
+	// OrderID defines order identifier values.
+	OrderID string `json:"orderId"`
+	// Sender defines sender address values.
+	Sender domain.Address `json:"sender"`
+	// Recipient defines recipient address values.
+	Recipient domain.Address `json:"recipient"`
+	// Units defines package-unit values.
+	Units []draftMarkUnitRequest `json:"units"`
+	// DeclaredValue defines declared shipment value amounts.
+	DeclaredValue float64 `json:"declaredValue"`
+	// PaymentForm defines payment arrangement values.
+	PaymentForm string `json:"paymentForm"`
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
+	// Observations defines observation values.
+	Observations string `json:"observations"`
+}
+
+// draftMarkUnitRequest defines package-unit values within a draft mark request.
+type draftMarkUnitRequest struct {
+	// Description defines package description values.
+	Description string `json:"description"`
+	// PackageType defines package-type values.
+	PackageType string `json:"packageType"`
+	// Dimensions defines package dimension values.
+	Dimensions domain.Dimensions `json:"dimensions"`
 }
 
 // batchListResponse defines batch list response values.
@@ -79,26 +107,43 @@ func (h *Handler) listBatches(ctx corehttp.Context) error {
 	return ctx.Status(200).JSON(batchListResponse{Data: rows, Total: total, Page: page, Limit: limit})
 }
 
-// addBatchMarks handles mark assignment to one batch.
-func (h *Handler) addBatchMarks(ctx corehttp.Context) error {
-	request := addBatchMarksRequest{}
+// addBatchMark handles draft mark creation for one open batch.
+func (h *Handler) addBatchMark(ctx corehttp.Context) error {
+	request := draftMarkRequest{}
 	if err := ctx.BodyParser(&request); err != nil {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
-	batch, err := h.batches.AddMarks(ctx.Context(), dispatchservice.AddMarksCommand{
-		BatchID: strings.TrimSpace(ctx.Params("id")),
-		MarkIDs: request.MarkIDs,
+	units := make([]domain.PackageUnit, 0, len(request.Units))
+	for _, unit := range request.Units {
+		units = append(units, domain.PackageUnit{
+			Description: strings.TrimSpace(unit.Description),
+			PackageType: strings.TrimSpace(unit.PackageType),
+			Dimensions:  unit.Dimensions,
+		})
+	}
+	mark, err := h.batches.DraftMark(ctx.Context(), dispatchservice.DraftMarkCommand{
+		BatchID:                 strings.TrimSpace(ctx.Params("id")),
+		QuotationID:             strings.TrimSpace(request.QuotationID),
+		QuotedFreightCost:       request.QuotedFreightCost,
+		OrderID:                 strings.TrimSpace(request.OrderID),
+		Sender:                  request.Sender,
+		Recipient:               request.Recipient,
+		Units:                   units,
+		DeclaredValue:           request.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(request.PaymentForm),
+		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		Observations:            strings.TrimSpace(request.Observations),
 	})
 	if err != nil {
 		return h.mapError(err)
 	}
 
-	return ctx.Status(200).JSON(batch)
+	return ctx.Status(201).JSON(mark)
 }
 
-// removeBatchMark handles mark removal from one batch.
+// removeBatchMark handles QUOTED mark removal from one batch.
 func (h *Handler) removeBatchMark(ctx corehttp.Context) error {
-	batch, err := h.batches.RemoveMark(ctx.Context(), strings.TrimSpace(ctx.Params("id")), strings.TrimSpace(ctx.Params("markID")))
+	batch, err := h.batches.RemoveDraftMark(ctx.Context(), strings.TrimSpace(ctx.Params("id")), strings.TrimSpace(ctx.Params("markID")))
 	if err != nil {
 		return h.mapError(err)
 	}

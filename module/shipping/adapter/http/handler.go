@@ -58,10 +58,10 @@ type DispatchService interface {
 	Get(ctx context.Context, id string) (*domain.DispatchBatch, error)
 	// List resolves dispatch batches with filters and pagination.
 	List(ctx context.Context, query dispatchservice.ListQuery) ([]domain.DispatchBatch, int64, error)
-	// AddMarks assigns marks to one batch.
-	AddMarks(ctx context.Context, command dispatchservice.AddMarksCommand) (*domain.DispatchBatch, error)
-	// RemoveMark removes one mark from one batch.
-	RemoveMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error)
+	// DraftMark creates one QUOTED draft mark and assigns it to an open batch.
+	DraftMark(ctx context.Context, command dispatchservice.DraftMarkCommand) (*domain.ShippingMark, error)
+	// RemoveDraftMark removes one QUOTED draft mark from a batch and sets it to REMOVED.
+	RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error)
 	// Close closes one dispatch batch.
 	Close(ctx context.Context, batchID string) (*domain.DispatchBatch, error)
 }
@@ -130,7 +130,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/batches", h.protect("marketing:manage", h.createBatch))
 	router.Get("/shipping/batches/:id", h.protect("marketing:manage", h.getBatch))
 	router.Get("/shipping/batches", h.protect("marketing:manage", h.listBatches))
-	router.Post("/shipping/batches/:id/marks", h.protect("marketing:manage", h.addBatchMarks))
+	router.Post("/shipping/batches/:id/marks", h.protect("marketing:manage", h.addBatchMark))
 	router.Delete("/shipping/batches/:id/marks/:markID", h.protect("marketing:manage", h.removeBatchMark))
 	router.Patch("/shipping/batches/:id/close", h.protect("marketing:manage", h.closeBatch))
 	router.Get("/shipping/tracking/:trackingNumber", h.protect("marketing:manage", h.getTracking))
@@ -187,6 +187,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, domain.ErrBatchMarkStatusMismatch) {
 		return corehttp.NewAppError(409, "batch_mark_status_mismatch", err)
+	}
+	if errors.Is(err, domain.ErrMarkNotDraft) {
+		return corehttp.NewAppError(409, "mark_not_draft", err)
 	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "shipping_resource_not_found", err)

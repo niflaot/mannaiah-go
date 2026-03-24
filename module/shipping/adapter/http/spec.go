@@ -18,7 +18,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/marks/{id}/void", &openapi3.PathItem{Patch: markVoidOperation()}),
 		openapi3.WithPath("/shipping/batches", &openapi3.PathItem{Post: batchCreateOperation(), Get: batchListOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}", &openapi3.PathItem{Get: batchGetOperation()}),
-		openapi3.WithPath("/shipping/batches/{id}/marks", &openapi3.PathItem{Post: batchAddMarksOperation()}),
+		openapi3.WithPath("/shipping/batches/{id}/marks", &openapi3.PathItem{Post: batchAddMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Delete: batchRemoveMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
@@ -244,19 +244,19 @@ func batchListOperation() *openapi3.Operation {
 	}
 }
 
-// batchAddMarksOperation defines the OpenAPI operation for mark assignment.
-func batchAddMarksOperation() *openapi3.Operation {
+// batchAddMarkOperation defines the OpenAPI operation for draft mark creation in a batch.
+func batchAddMarkOperation() *openapi3.Operation {
 	return &openapi3.Operation{
-		OperationID: "ShippingController_addBatchMarks",
-		Summary:     "Add mark(s) to one dispatch batch",
+		OperationID: "ShippingController_addBatchMark",
+		Summary:     "Create one draft mark in a batch",
 		Tags:        []string{shippingTag},
 		Security:    bearerSecurityRequirements(),
 		Parameters: openapi3.Parameters{
 			pathStringParameter("id", "Dispatch batch identifier."),
 		},
-		RequestBody: jsonRequestBody(addBatchMarksRequestSchema(), true),
+		RequestBody: jsonRequestBody(draftMarkRequestSchema(), true),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, jsonResponse("Dispatch batch.", dispatchBatchSchema())),
+			openapi3.WithStatus(201, jsonResponse("Draft shipping mark.", shippingMarkSchema())),
 		),
 	}
 }
@@ -448,11 +448,20 @@ func createBatchRequestSchema() *openapi3.Schema {
 	return schema
 }
 
-// addBatchMarksRequestSchema defines schema for batch mark-assignment request payloads.
-func addBatchMarksRequestSchema() *openapi3.Schema {
+// draftMarkRequestSchema defines schema for draft mark creation request payloads.
+func draftMarkRequestSchema() *openapi3.Schema {
 	schema := openapi3.NewObjectSchema().
-		WithProperty("markIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema()))
-	schema.Required = []string{"markIds"}
+		WithProperty("quotationId", openapi3.NewStringSchema()).
+		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
+		WithProperty("orderId", openapi3.NewStringSchema()).
+		WithProperty("sender", addressSchema()).
+		WithProperty("recipient", addressSchema()).
+		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
+		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
+		WithProperty("paymentForm", openapi3.NewStringSchema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
+		WithProperty("observations", openapi3.NewStringSchema())
+	schema.Required = []string{"orderId", "sender", "recipient", "units"}
 
 	return schema
 }
@@ -525,6 +534,9 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("collectOnDeliveryChargedAmount", openapi3.NewFloat64Schema()).
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("dispatchBatchId", openapi3.NewStringSchema()).
+		WithProperty("quotationId", openapi3.NewStringSchema()).
+		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
+		WithProperty("draftSnapshot", openapi3.NewStringSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
 }

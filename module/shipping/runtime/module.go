@@ -103,7 +103,7 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 		DiscountPercent: cfg.Quotation.DiscountPercent,
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
-	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher)
+	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
 	trackingSvc := trackingservice.NewService(registry, publisher)
 	carrierSvc := &carrierService{registry: registry}
 

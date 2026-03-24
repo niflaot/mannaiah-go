@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"mannaiah/module/shipping/domain"
 	"mannaiah/module/shipping/port"
@@ -73,7 +74,13 @@ type dispatchMarkRepositoryStub struct {
 	marks map[string]domain.ShippingMark
 }
 
+func newDispatchMarkRepositoryStub() *dispatchMarkRepositoryStub {
+	return &dispatchMarkRepositoryStub{marks: map[string]domain.ShippingMark{}}
+}
+
 func (s *dispatchMarkRepositoryStub) Create(ctx context.Context, mark *domain.ShippingMark) error {
+	s.marks[mark.ID] = *mark
+
 	return nil
 }
 func (s *dispatchMarkRepositoryStub) GetByID(ctx context.Context, id string) (*domain.ShippingMark, error) {
@@ -92,13 +99,38 @@ func (s *dispatchMarkRepositoryStub) ListByOrderID(ctx context.Context, orderID 
 	return nil, nil
 }
 func (s *dispatchMarkRepositoryStub) ListByBatchID(ctx context.Context, batchID string) ([]domain.ShippingMark, error) {
-	return nil, nil
+	result := make([]domain.ShippingMark, 0)
+	for _, m := range s.marks {
+		if m.DispatchBatchID != nil && *m.DispatchBatchID == batchID {
+			result = append(result, m)
+		}
+	}
+
+	return result, nil
 }
 func (s *dispatchMarkRepositoryStub) Update(ctx context.Context, mark *domain.ShippingMark) error {
+	s.marks[mark.ID] = *mark
+
 	return nil
 }
 func (s *dispatchMarkRepositoryStub) List(ctx context.Context, query port.MarkListQuery) ([]domain.ShippingMark, int64, error) {
 	return nil, 0, nil
+}
+
+type materializerStub struct {
+	calls      int
+	repository port.ShippingMarkRepository
+}
+
+func (s *materializerStub) Materialize(ctx context.Context, mark *domain.ShippingMark) error {
+	s.calls++
+	mark.Status = domain.MarkStatusCreated
+	mark.TrackingNumber = "TRACK-" + mark.ID
+	if s.repository != nil {
+		_ = s.repository.Update(ctx, mark)
+	}
+
+	return nil
 }
 
 type dispatchPublisherStub struct {
@@ -111,12 +143,10 @@ func (s *dispatchPublisherStub) Publish(ctx context.Context, event port.Integrat
 	return nil
 }
 
-// TestCreateAddClose verifies batch creation, mark assignment, and batch close behaviors.
-func TestCreateAddClose(t *testing.T) {
+// TestCreateBatch verifies batch creation publishes the batch-created event.
+func TestCreateBatch(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()
-	markRepository := &dispatchMarkRepositoryStub{marks: map[string]domain.ShippingMark{
-		"mark-1": {ID: "mark-1", CarrierID: "manual", Status: domain.MarkStatusGenerated},
-	}}
+	markRepository := newDispatchMarkRepositoryStub()
 	publisher := &dispatchPublisherStub{}
 	service := NewService(batchRepository, markRepository, publisher)
 
@@ -130,13 +160,38 @@ func TestCreateAddClose(t *testing.T) {
 	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicBatchCreated {
 		t.Fatalf("missing batch created event")
 	}
+}
 
-	updated, err := service.AddMarks(context.Background(), AddMarksCommand{BatchID: batch.ID, MarkIDs: []string{"mark-1"}})
+// TestDraftMarkAndClose verifies draft mark creation and batch close materialize flow.
+func TestDraftMarkAndClose(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	publisher := &dispatchPublisherStub{}
+	materializer := &materializerStub{repository: markRepository}
+	service := NewService(batchRepository, markRepository, publisher, materializer)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
 	if err != nil {
-		t.Fatalf("AddMarks() error = %v", err)
+		t.Fatalf("Create() error = %v", err)
 	}
-	if len(updated.MarkIDs) != 1 {
-		t.Fatalf("updated mark ids = %#v", updated.MarkIDs)
+
+	mark, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:           batch.ID,
+		QuotationID:       "quote-1",
+		QuotedFreightCost: 15000,
+		OrderID:           "order-1",
+		Sender:            domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:         domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:             []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+	if mark.Status != domain.MarkStatusQuoted {
+		t.Fatalf("draft mark status = %q", mark.Status)
+	}
+	if mark.QuotedFreightCost != 15000 {
+		t.Fatalf("quoted freight cost = %v", mark.QuotedFreightCost)
 	}
 
 	closed, err := service.Close(context.Background(), batch.ID)
@@ -146,7 +201,72 @@ func TestCreateAddClose(t *testing.T) {
 	if closed.Status != domain.BatchStatusClosed {
 		t.Fatalf("closed status = %q", closed.Status)
 	}
+	if materializer.calls != 1 {
+		t.Fatalf("materializer calls = %d", materializer.calls)
+	}
+	persisted, _ := markRepository.GetByID(context.Background(), mark.ID)
+	if persisted.Status != domain.MarkStatusCreated {
+		t.Fatalf("mark status after close = %q", persisted.Status)
+	}
 	if len(publisher.events) < 2 || publisher.events[len(publisher.events)-1].Topic != port.TopicBatchClosed {
 		t.Fatalf("missing batch closed event")
+	}
+}
+
+// TestRemoveDraftMark verifies that a QUOTED draft mark can be removed from a batch.
+func TestRemoveDraftMark(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	publisher := &dispatchPublisherStub{}
+	service := NewService(batchRepository, markRepository, publisher)
+
+	batch, _ := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	mark, _ := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:   batch.ID,
+		OrderID:   "order-1",
+		Sender:    domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient: domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:     []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+	})
+
+	updated, err := service.RemoveDraftMark(context.Background(), batch.ID, mark.ID)
+	if err != nil {
+		t.Fatalf("RemoveDraftMark() error = %v", err)
+	}
+	if len(updated.MarkIDs) != 0 {
+		t.Fatalf("batch mark ids after remove = %v", updated.MarkIDs)
+	}
+	persisted, _ := markRepository.GetByID(context.Background(), mark.ID)
+	if persisted.Status != domain.MarkStatusRemoved {
+		t.Fatalf("mark status after remove = %q", persisted.Status)
+	}
+}
+
+// TestRemoveDraftMarkRejectsNonDraft verifies that only QUOTED marks can be removed.
+func TestRemoveDraftMarkRejectsNonDraft(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	service := NewService(batchRepository, markRepository, nil)
+
+	batch, _ := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	batchID := batch.ID
+	markRepository.marks["mark-created"] = domain.ShippingMark{
+		ID:              "mark-created",
+		Status:          domain.MarkStatusCreated,
+		CarrierID:       "manual",
+		DispatchBatchID: &batchID,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+	batchRepository.batches[batch.ID] = domain.DispatchBatch{
+		ID:        batch.ID,
+		CarrierID: "manual",
+		Status:    domain.BatchStatusOpen,
+		MarkIDs:   []string{"mark-created"},
+	}
+
+	_, err := service.RemoveDraftMark(context.Background(), batch.ID, "mark-created")
+	if err == nil {
+		t.Fatal("RemoveDraftMark() expected error for non-QUOTED mark")
 	}
 }

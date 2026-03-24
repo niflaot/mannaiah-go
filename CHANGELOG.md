@@ -92,6 +92,17 @@ Keep newest entries on top. Add one section per version.
   - HTTP `POST /shipping/batches` now derives `created_by` from the JWT token owner (`Claims.Subject`), or `"system"` for dev-bypass credentials or internal callers.
   - `Authorizer` interface extended with `Subject()` method; `auth.runtime.Module` implements it (returns `"system"` for dev-admin or auth errors).
   - OpenAPI `DispatchBatch` response schema and `BatchCreate` request schema updated accordingly.
+- Shipping draft mark workflow added:
+  - New `MarkStatus` values: `QUOTED`, `CREATED`, `REMOVED`.
+  - Draft marks are created with `QUOTED` status in a batch; real carrier submission only occurs at batch close.
+  - `POST /shipping/batches/{id}/marks` now accepts a full mark payload (sender, recipient, units, optional quotation reference and quoted freight cost) and returns a `ShippingMark` with `status: QUOTED`.
+  - `PATCH /shipping/batches/{id}/close` materializes all `QUOTED` marks via the carrier provider before closing; failed marks transition to `FAILED` status without blocking the close.
+  - A JSON snapshot of the mark is captured immediately before carrier submission and stored in `draftSnapshot` for before/after audit trail.
+  - `Void()` changed to soft-only: no carrier API call is made; status is updated locally only.
+  - `MarkMaterializer` port defined in dispatch service package to avoid circular imports with mark service.
+  - `ErrMarkNotDraft` domain error added for removal of non-QUOTED marks.
+  - Migration `000028_shipping_mark_draft` (MySQL + SQLite): adds `quotation_id VARCHAR(64) NULL`, `quoted_freight_cost DECIMAL(15,2) NOT NULL DEFAULT 0`, `draft_snapshot TEXT NOT NULL DEFAULT ''` on `shipping_marks`.
+  - OpenAPI spec updated: `draftMarkRequest` schema, `shippingMark` extended with `quotationId`, `quotedFreightCost`, `draftSnapshot`.
 - Orders module: `payment_method` field added to order records.
   - Migration `000026_order_payment_method` (MySQL + SQLite): `payment_method VARCHAR(128) NOT NULL DEFAULT ''` on `orders` table.
   - `Order` domain, `CreateCommand`, repository mapper, and HTTP `POST /orders` handler accept and persist payment method.

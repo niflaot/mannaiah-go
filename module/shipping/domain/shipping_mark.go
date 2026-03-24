@@ -9,14 +9,20 @@ import (
 type MarkStatus string
 
 const (
-	// MarkStatusPending defines pending mark statuses.
+	// MarkStatusPending defines pending mark statuses (legacy standalone flow).
 	MarkStatusPending MarkStatus = "PENDING"
-	// MarkStatusGenerated defines generated mark statuses.
+	// MarkStatusGenerated defines generated mark statuses (legacy standalone flow).
 	MarkStatusGenerated MarkStatus = "GENERATED"
 	// MarkStatusFailed defines failed mark statuses.
 	MarkStatusFailed MarkStatus = "FAILED"
 	// MarkStatusVoided defines voided mark statuses.
 	MarkStatusVoided MarkStatus = "VOIDED"
+	// MarkStatusQuoted defines draft marks staged in a batch with a quotation reference.
+	MarkStatusQuoted MarkStatus = "QUOTED"
+	// MarkStatusCreated defines marks successfully submitted to the carrier at batch close.
+	MarkStatusCreated MarkStatus = "CREATED"
+	// MarkStatusRemoved defines draft marks removed from a batch before carrier submission.
+	MarkStatusRemoved MarkStatus = "REMOVED"
 )
 
 // MarkDocumentType defines mark artifact-storage mode values.
@@ -69,6 +75,12 @@ type ShippingMark struct {
 	Observations string `json:"observations,omitempty"`
 	// DispatchBatchID defines assigned dispatch batch identifiers.
 	DispatchBatchID *string `json:"dispatchBatchId,omitempty"`
+	// QuotationID defines the optional quotation used when drafting this mark.
+	QuotationID *string `json:"quotationId,omitempty"`
+	// QuotedFreightCost defines the freight cost snapshot from the quotation at draft time.
+	QuotedFreightCost float64 `json:"quotedFreightCost,omitempty"`
+	// DraftSnapshot defines a JSON snapshot of all mark fields captured before carrier submission.
+	DraftSnapshot string `json:"draftSnapshot,omitempty"`
 	// CreatedAt defines row creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines row update timestamps.
@@ -116,6 +128,10 @@ func (m ShippingMark) Normalize() ShippingMark {
 		collectOnDeliveryChargedAmount = collectOnDeliveryAmount
 	}
 
+	quotedFreightCost := m.QuotedFreightCost
+	if quotedFreightCost < 0 {
+		quotedFreightCost = 0
+	}
 	copy := ShippingMark{
 		ID:                             strings.TrimSpace(m.ID),
 		OrderID:                        strings.TrimSpace(m.OrderID),
@@ -136,6 +152,9 @@ func (m ShippingMark) Normalize() ShippingMark {
 		CollectOnDeliveryChargedAmount: round2(collectOnDeliveryChargedAmount),
 		Observations:                   strings.TrimSpace(m.Observations),
 		DispatchBatchID:                m.DispatchBatchID,
+		QuotationID:                    m.QuotationID,
+		QuotedFreightCost:              round2(quotedFreightCost),
+		DraftSnapshot:                  m.DraftSnapshot,
 		CreatedAt:                      m.CreatedAt,
 		UpdatedAt:                      m.UpdatedAt,
 	}

@@ -146,3 +146,66 @@ func TestGenerateAndVoid(t *testing.T) {
 		t.Fatalf("generated payload type mismatch")
 	}
 }
+
+// TestVoidNoRegistry verifies that Void does not require a carrier registry.
+func TestVoidNoRegistry(t *testing.T) {
+	repository := newMarkRepositoryStub()
+	publisher := &publisherStub{}
+	service := NewService(repository, markRegistryStub{}, publisher)
+
+	repository.rows["mark-1"] = domain.ShippingMark{
+		ID:        "mark-1",
+		OrderID:   "order-1",
+		CarrierID: "manual",
+		Status:    domain.MarkStatusGenerated,
+	}
+
+	voided, err := service.Void(context.Background(), "mark-1", "cancel")
+	if err != nil {
+		t.Fatalf("Void() error = %v", err)
+	}
+	if voided.Status != domain.MarkStatusVoided {
+		t.Fatalf("voided status = %q", voided.Status)
+	}
+	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicMarkVoided {
+		t.Fatalf("missing void event")
+	}
+}
+
+// TestMaterialize verifies that Materialize captures a snapshot, calls the provider, updates status to CREATED, and publishes the generated event.
+func TestMaterialize(t *testing.T) {
+	repository := newMarkRepositoryStub()
+	publisher := &publisherStub{}
+	service := NewService(repository, markRegistryStub{provider: markProviderStub{}}, publisher)
+
+	mark := domain.ShippingMark{
+		ID:        "mark-draft-1",
+		OrderID:   "order-1",
+		CarrierID: "manual",
+		Status:    domain.MarkStatusQuoted,
+		Sender:    domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient: domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:     []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+	}
+	repository.rows[mark.ID] = mark
+
+	if err := service.Materialize(context.Background(), &mark); err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+	if mark.Status != domain.MarkStatusCreated {
+		t.Fatalf("mark status after materialize = %q", mark.Status)
+	}
+	if mark.DraftSnapshot == "" {
+		t.Fatal("DraftSnapshot not set")
+	}
+	if mark.TrackingNumber == "" {
+		t.Fatal("TrackingNumber not set by provider")
+	}
+	persisted, _ := repository.GetByID(context.Background(), mark.ID)
+	if persisted.Status != domain.MarkStatusCreated {
+		t.Fatalf("persisted status = %q", persisted.Status)
+	}
+	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicMarkGenerated {
+		t.Fatalf("missing mark generated event")
+	}
+}

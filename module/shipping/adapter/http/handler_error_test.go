@@ -48,10 +48,10 @@ func (dispatchServiceStub) Get(ctx context.Context, id string) (*domain.Dispatch
 func (dispatchServiceStub) List(ctx context.Context, query dispatchservice.ListQuery) ([]domain.DispatchBatch, int64, error) {
 	return nil, 0, nil
 }
-func (dispatchServiceStub) AddMarks(ctx context.Context, command dispatchservice.AddMarksCommand) (*domain.DispatchBatch, error) {
-	return &domain.DispatchBatch{}, nil
+func (dispatchServiceStub) DraftMark(ctx context.Context, command dispatchservice.DraftMarkCommand) (*domain.ShippingMark, error) {
+	return &domain.ShippingMark{}, nil
 }
-func (dispatchServiceStub) RemoveMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {
+func (dispatchServiceStub) RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {
 	return &domain.DispatchBatch{}, nil
 }
 func (dispatchServiceStub) Close(ctx context.Context, batchID string) (*domain.DispatchBatch, error) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -149,20 +150,14 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]domain.ShippingM
 	})
 }
 
-// Void voids one previously generated shipping mark.
+// Void voids one shipping mark with a local status change only.
+// No carrier API call is made; carrier-level void must be handled out-of-band when the carrier supports it.
 func (s *Service) Void(ctx context.Context, id string, reason string) (*domain.ShippingMark, error) {
-	if s == nil || s.repository == nil || s.registry == nil {
-		return nil, domain.ErrCarrierNotSupported
+	if s == nil || s.repository == nil {
+		return nil, domain.ErrNotFound
 	}
 	mark, err := s.repository.GetByID(ctx, strings.TrimSpace(id))
 	if err != nil {
-		return nil, err
-	}
-	provider, exists := s.registry.CarrierProvider(mark.CarrierID)
-	if !exists || provider == nil {
-		return nil, domain.ErrCarrierNotSupported
-	}
-	if err := provider.VoidMark(ctx, mark.TrackingNumber); err != nil {
 		return nil, err
 	}
 	mark.Status = domain.MarkStatusVoided
@@ -173,6 +168,46 @@ func (s *Service) Void(ctx context.Context, id string, reason string) (*domain.S
 	s.publish(ctx, markevent.BuildMarkVoided(*mark, strings.TrimSpace(reason)))
 
 	return mark, nil
+}
+
+// Materialize submits one QUOTED draft mark to the carrier and updates its status to CREATED or FAILED.
+// A JSON snapshot of the mark fields is captured before submission and stored in DraftSnapshot.
+func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) error {
+	if s == nil || s.repository == nil || s.registry == nil {
+		return domain.ErrCarrierNotSupported
+	}
+	provider, exists := s.registry.CarrierProvider(mark.CarrierID)
+	if !exists || provider == nil {
+		return domain.ErrCarrierNotSupported
+	}
+	snapshot, _ := json.Marshal(mark)
+	mark.DraftSnapshot = string(snapshot)
+	if provider.Carrier().RequiresBalanceCheck {
+		if err := provider.CheckBalance(ctx); err != nil {
+			mark.Status = domain.MarkStatusFailed
+			mark.UpdatedAt = time.Now().UTC()
+			_ = s.repository.Update(ctx, mark)
+			s.publish(ctx, markevent.BuildMarkFailed(*mark, domain.ErrInsufficientBalance.Error()))
+
+			return domain.ErrInsufficientBalance
+		}
+	}
+	if err := provider.GenerateMark(ctx, mark); err != nil {
+		mark.Status = domain.MarkStatusFailed
+		mark.UpdatedAt = time.Now().UTC()
+		_ = s.repository.Update(ctx, mark)
+		s.publish(ctx, markevent.BuildMarkFailed(*mark, err.Error()))
+
+		return err
+	}
+	mark.Status = domain.MarkStatusCreated
+	mark.UpdatedAt = time.Now().UTC()
+	if err := s.repository.Update(ctx, mark); err != nil {
+		return err
+	}
+	s.publish(ctx, markevent.BuildMarkGenerated(*mark))
+
+	return nil
 }
 
 // publish publishes one integration event and suppresses publication errors.

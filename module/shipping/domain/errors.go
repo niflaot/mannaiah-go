@@ -25,6 +25,8 @@ var (
 	ErrBatchCarrierMismatch = errors.New("shipping batch carrier mismatch")
 	// ErrBatchMarkStatusMismatch is returned when one mark is not generated before assignment.
 	ErrBatchMarkStatusMismatch = errors.New("shipping batch mark status mismatch")
+	// ErrMarkNotDraft is returned when a non-QUOTED mark is operated on as a draft.
+	ErrMarkNotDraft = errors.New("shipping mark is not a draft")
 	// ErrNotFound is returned when one shipping resource does not exist.
 	ErrNotFound = errors.New("shipping resource not found")
 )

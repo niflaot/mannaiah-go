@@ -98,8 +98,8 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postBatchMarks == nil || postBatchMarks.RequestBody == nil {
 		t.Fatalf("expected /shipping/batches/{id}/marks POST request body")
 	}
-	if postBatchMarks.Responses == nil || postBatchMarks.Responses.Value("200") == nil {
-		t.Fatalf("expected /shipping/batches/{id}/marks POST 200 response")
+	if postBatchMarks.Responses == nil || postBatchMarks.Responses.Value("201") == nil {
+		t.Fatalf("expected /shipping/batches/{id}/marks POST 201 response")
 	}
 
 	patchVoid := paths.Find("/shipping/marks/{id}/void").Patch

@@ -12,6 +12,12 @@ import (
 	"mannaiah/module/shipping/port"
 )
 
+// MarkMaterializer defines carrier-submission behavior invoked at batch close.
+type MarkMaterializer interface {
+	// Materialize submits one QUOTED draft mark to the carrier and updates its status.
+	Materialize(ctx context.Context, mark *domain.ShippingMark) error
+}
+
 // CreateBatchCommand defines dispatch batch creation input values.
 type CreateBatchCommand struct {
 	// CarrierID defines batch carrier identifier values.
@@ -20,12 +26,30 @@ type CreateBatchCommand struct {
 	CreatedBy string
 }
 
-// AddMarksCommand defines mark assignment input values.
-type AddMarksCommand struct {
-	// BatchID defines batch identifier values.
+// DraftMarkCommand defines draft mark creation input values.
+type DraftMarkCommand struct {
+	// BatchID defines the target batch identifier.
 	BatchID string
-	// MarkIDs defines mark identifier values.
-	MarkIDs []string
+	// QuotationID defines the optional quotation reference attached to this draft.
+	QuotationID string
+	// QuotedFreightCost defines the freight cost snapshot from the quotation.
+	QuotedFreightCost float64
+	// OrderID defines order identifier values.
+	OrderID string
+	// Sender defines sender address values.
+	Sender domain.Address
+	// Recipient defines recipient address values.
+	Recipient domain.Address
+	// Units defines shipment package units.
+	Units []domain.PackageUnit
+	// DeclaredValue defines declared shipment value amounts.
+	DeclaredValue float64
+	// PaymentForm defines payment arrangement values.
+	PaymentForm string
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64
+	// Observations defines optional observation values.
+	Observations string
 }
 
 // ListQuery defines dispatch batch listing query values.
@@ -48,11 +72,18 @@ type Service struct {
 	markRepository port.ShippingMarkRepository
 	// publisher defines integration event publisher dependencies.
 	publisher port.IntegrationEventPublisher
+	// materializer defines optional carrier-submission dependencies used at batch close.
+	materializer MarkMaterializer
 }
 
 // NewService creates dispatch batch services.
-func NewService(batchRepository port.DispatchBatchRepository, markRepository port.ShippingMarkRepository, publisher port.IntegrationEventPublisher) *Service {
-	return &Service{batchRepository: batchRepository, markRepository: markRepository, publisher: publisher}
+func NewService(batchRepository port.DispatchBatchRepository, markRepository port.ShippingMarkRepository, publisher port.IntegrationEventPublisher, materializers ...MarkMaterializer) *Service {
+	var materializer MarkMaterializer
+	if len(materializers) > 0 {
+		materializer = materializers[0]
+	}
+
+	return &Service{batchRepository: batchRepository, markRepository: markRepository, publisher: publisher, materializer: materializer}
 }
 
 // Create creates one dispatch batch.
@@ -101,8 +132,8 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]domain.DispatchB
 	})
 }
 
-// AddMarks assigns one or more marks to one open dispatch batch.
-func (s *Service) AddMarks(ctx context.Context, command AddMarksCommand) (*domain.DispatchBatch, error) {
+// DraftMark creates one QUOTED draft mark and assigns it to an open batch.
+func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*domain.ShippingMark, error) {
 	if s == nil || s.batchRepository == nil || s.markRepository == nil {
 		return nil, domain.ErrInvalidID
 	}
@@ -113,50 +144,89 @@ func (s *Service) AddMarks(ctx context.Context, command AddMarksCommand) (*domai
 	if batch.Status != domain.BatchStatusOpen {
 		return nil, domain.ErrBatchClosed
 	}
-	for _, markID := range command.MarkIDs {
-		trimmedMarkID := strings.TrimSpace(markID)
-		if trimmedMarkID == "" {
-			continue
-		}
-		mark, markErr := s.markRepository.GetByID(ctx, trimmedMarkID)
-		if markErr != nil {
-			return nil, markErr
-		}
-		if mark.Status != domain.MarkStatusGenerated {
-			return nil, domain.ErrBatchMarkStatusMismatch
-		}
-		if !strings.EqualFold(strings.TrimSpace(mark.CarrierID), strings.TrimSpace(batch.CarrierID)) {
-			return nil, domain.ErrBatchCarrierMismatch
-		}
-		if err := s.batchRepository.AddMark(ctx, batch.ID, mark.ID); err != nil {
-			return nil, err
-		}
+	var quotationID *string
+	if trimmed := strings.TrimSpace(command.QuotationID); trimmed != "" {
+		quotationID = &trimmed
+	}
+	batchID := batch.ID
+	mark := domain.ShippingMark{
+		ID:                      uuid.NewString(),
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		CarrierID:               batch.CarrierID,
+		Status:                  domain.MarkStatusQuoted,
+		Sender:                  command.Sender,
+		Recipient:               command.Recipient,
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(command.PaymentForm),
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		Observations:            strings.TrimSpace(command.Observations),
+		DispatchBatchID:         &batchID,
+		QuotationID:             quotationID,
+		QuotedFreightCost:       command.QuotedFreightCost,
+		CreatedAt:               time.Now().UTC(),
+		UpdatedAt:               time.Now().UTC(),
+	}.Normalize()
+	if err := mark.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.markRepository.Create(ctx, &mark); err != nil {
+		return nil, err
+	}
+	if err := s.batchRepository.AddMark(ctx, batch.ID, mark.ID); err != nil {
+		return nil, err
 	}
 
-	return s.batchRepository.GetByID(ctx, batch.ID)
+	return &mark, nil
 }
 
-// RemoveMark removes one mark from one open dispatch batch.
-func (s *Service) RemoveMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {
-	if s == nil || s.batchRepository == nil {
+// RemoveDraftMark removes one QUOTED draft mark from a batch and sets it to REMOVED.
+func (s *Service) RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {
+	if s == nil || s.batchRepository == nil || s.markRepository == nil {
 		return nil, domain.ErrInvalidID
 	}
-	if err := s.batchRepository.RemoveMark(ctx, strings.TrimSpace(batchID), strings.TrimSpace(markID)); err != nil {
+	mark, err := s.markRepository.GetByID(ctx, strings.TrimSpace(markID))
+	if err != nil {
+		return nil, err
+	}
+	if mark.Status != domain.MarkStatusQuoted {
+		return nil, domain.ErrMarkNotDraft
+	}
+	mark.Status = domain.MarkStatusRemoved
+	mark.DispatchBatchID = nil
+	mark.UpdatedAt = time.Now().UTC()
+	if err := s.markRepository.Update(ctx, mark); err != nil {
+		return nil, err
+	}
+	if err := s.batchRepository.RemoveMark(ctx, strings.TrimSpace(batchID), mark.ID); err != nil {
 		return nil, err
 	}
 
 	return s.batchRepository.GetByID(ctx, strings.TrimSpace(batchID))
 }
 
-// Close closes one dispatch batch and emits a batch-closed event.
+// Close materializes all QUOTED marks in the batch then closes it.
 func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBatch, error) {
 	if s == nil || s.batchRepository == nil {
 		return nil, domain.ErrInvalidID
 	}
-	if err := s.batchRepository.Close(ctx, strings.TrimSpace(batchID)); err != nil {
+	trimmedID := strings.TrimSpace(batchID)
+	if s.materializer != nil {
+		marks, err := s.markRepository.ListByBatchID(ctx, trimmedID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range marks {
+			if marks[i].Status != domain.MarkStatusQuoted {
+				continue
+			}
+			_ = s.materializer.Materialize(ctx, &marks[i])
+		}
+	}
+	if err := s.batchRepository.Close(ctx, trimmedID); err != nil {
 		return nil, err
 	}
-	batch, err := s.batchRepository.GetByID(ctx, strings.TrimSpace(batchID))
+	batch, err := s.batchRepository.GetByID(ctx, trimmedID)
 	if err != nil {
 		return nil, err
 	}

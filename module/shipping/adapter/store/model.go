@@ -34,6 +34,9 @@ type shippingMarkModel struct {
 	CollectOnDeliveryChargedAmount float64                 `gorm:"column:collect_on_delivery_charged_amount;type:decimal(15,2)"`
 	Observations                   string                  `gorm:"column:observations;type:text"`
 	DispatchBatchID                *string                 `gorm:"column:dispatch_batch_id;type:varchar(64);index"`
+	QuotationID                    *string                 `gorm:"column:quotation_id;type:varchar(64)"`
+	QuotedFreightCost              float64                 `gorm:"column:quoted_freight_cost;type:decimal(15,2)"`
+	DraftSnapshot                  string                  `gorm:"column:draft_snapshot;type:text"`
 	CreatedAt                      time.Time               `gorm:"column:created_at"`
 	UpdatedAt                      time.Time               `gorm:"column:updated_at"`
 	Units                          []shippingMarkUnitModel `gorm:"foreignKey:ShippingMarkID;references:ID"`
