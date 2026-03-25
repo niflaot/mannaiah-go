@@ -12,6 +12,7 @@ type shippingMarkModel struct {
 	DocumentType                   *string                 `gorm:"column:document_type;type:varchar(10)"`
 	DocumentRef                    *string                 `gorm:"column:document_ref;type:text"`
 	SenderName                     string                  `gorm:"column:sender_name;type:varchar(255)"`
+	SenderLegalName                string                  `gorm:"column:sender_legal_name;type:varchar(255)"`
 	SenderID                       string                  `gorm:"column:sender_id;type:varchar(50)"`
 	SenderIDType                   string                  `gorm:"column:sender_id_type;type:varchar(10)"`
 	SenderAddress                  string                  `gorm:"column:sender_address;type:varchar(500)"`
@@ -19,6 +20,7 @@ type shippingMarkModel struct {
 	SenderPhone                    string                  `gorm:"column:sender_phone;type:varchar(50)"`
 	SenderEmail                    string                  `gorm:"column:sender_email;type:varchar(255)"`
 	RecipientName                  string                  `gorm:"column:recipient_name;type:varchar(255)"`
+	RecipientLegalName             string                  `gorm:"column:recipient_legal_name;type:varchar(255)"`
 	RecipientID                    string                  `gorm:"column:recipient_id;type:varchar(50)"`
 	RecipientIDType                string                  `gorm:"column:recipient_id_type;type:varchar(10)"`
 	RecipientAddress               string                  `gorm:"column:recipient_address;type:varchar(500)"`

@@ -6,6 +6,9 @@ import "strings"
 type Address struct {
 	// Name defines receiver/sender display-name values.
 	Name string `json:"name"`
+	// LegalName defines the legal/company name for business recipients (razonsocial).
+	// When provided, it is sent as the company name to the carrier instead of Name.
+	LegalName string `json:"legalName,omitempty"`
 	// ID defines receiver/sender identification values.
 	ID string `json:"id"`
 	// IDType defines identification-type values.
@@ -24,6 +27,7 @@ type Address struct {
 func (a Address) Normalize() Address {
 	return Address{
 		Name:        strings.TrimSpace(a.Name),
+		LegalName:   strings.TrimSpace(a.LegalName),
 		ID:          strings.TrimSpace(a.ID),
 		IDType:      strings.TrimSpace(a.IDType),
 		AddressLine: strings.TrimSpace(a.AddressLine),
