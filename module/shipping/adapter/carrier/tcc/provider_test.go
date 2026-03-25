@@ -110,8 +110,15 @@ func TestProviderLifecycle(t *testing.T) {
 	if dispatchRequest.DestCityCode != "76001000" {
 		t.Fatalf("dispatchRequest.DestCityCode = %q", dispatchRequest.DestCityCode)
 	}
+	// No quoted freight cost on this mark so codCollectAmount = chargedAmount - 0 = 104000.
 	if dispatchRequest.CollectOnDeliveryAmount != "104000" {
 		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q", dispatchRequest.CollectOnDeliveryAmount)
+	}
+	if dispatchRequest.TotalProductValue != "104000" {
+		t.Fatalf("dispatchRequest.TotalProductValue = %q", dispatchRequest.TotalProductValue)
+	}
+	if dispatchRequest.PaymentForm != "2" {
+		t.Fatalf("dispatchRequest.PaymentForm = %q, want \"2\" for COD", dispatchRequest.PaymentForm)
 	}
 	if mark.CollectOnDeliveryChargedAmount != 104000 {
 		t.Fatalf("mark.CollectOnDeliveryChargedAmount = %v", mark.CollectOnDeliveryChargedAmount)
@@ -179,6 +186,65 @@ func TestProviderGrabardespacho7RealFieldNames(t *testing.T) {
 	}
 	if mark.Status != domain.MarkStatusGenerated {
 		t.Fatalf("mark.Status = %q", mark.Status)
+	}
+}
+
+// TestProviderCODNetAmount verifies that when QuotedFreightCost is set the net COD
+// amount sent to TCC equals chargedAmount - freightCost, formapago is "2", and
+// totalvalorproducto equals the net amount.
+func TestProviderCODNetAmount(t *testing.T) {
+	var dispatchRequest DispatchRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/grabardespacho7":
+			if err := json.NewDecoder(request.Body).Decode(&dispatchRequest); err != nil {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(writer).Encode(map[string]any{"remesa": "2001", "respuesta": "0", "mensaje": "OK", "urlguia": "https://carrier/guide/2001"})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		CODFeePercent:       4,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:                      "mark-cod",
+		OrderID:                 "order-cod",
+		CarrierID:               "tcc",
+		Sender:                  domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:               domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:                   []domain.PackageUnit{{Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		CollectOnDeliveryAmount: 150000,
+		QuotedFreightCost:       25000,
+		ShipmentMode:            domain.ShipmentModeParcel,
+	}
+	if err := provider.GenerateMark(context.Background(), mark); err != nil {
+		t.Fatalf("GenerateMark() error = %v", err)
+	}
+	// chargedAmount = 150000 * 1.04 = 156000; netCOD = 156000 - 25000 = 131000
+	if dispatchRequest.PaymentForm != "2" {
+		t.Fatalf("dispatchRequest.PaymentForm = %q, want \"2\"", dispatchRequest.PaymentForm)
+	}
+	if dispatchRequest.CollectOnDeliveryAmount != "131000" {
+		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q, want \"131000\"", dispatchRequest.CollectOnDeliveryAmount)
+	}
+	if dispatchRequest.TotalProductValue != "131000" {
+		t.Fatalf("dispatchRequest.TotalProductValue = %q, want \"131000\"", dispatchRequest.TotalProductValue)
 	}
 }
 

@@ -166,6 +166,21 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 			InnerUnits:     "0",
 		})
 	}
+	// TODO(rework): TCC COD payment form logic.
+	// TCC requires formapago=2 when collecting cash on delivery, and expects the
+	// courier to collect both the freight cost AND the COD amount from the recipient.
+	// Since we want the recipient to pay only the COD total (not freight + COD), we
+	// subtract the quoted freight cost from the charged COD amount so that TCC
+	// collects (freight + netCOD) == (freight + (codCharged - freight)) == codCharged.
+	// Example: COD $150 000, freight quote $25 000 → netCOD = $125 000 sent to TCC;
+	// courier collects $25 000 + $125 000 = $150 000 (the original COD total).
+	// When COD is not active, formapago uses the configured value and both amounts are 0.
+	paymentForm := strconv.Itoa(p.cfg.PaymentForm)
+	codCollectAmount := 0.0
+	if collectOnDeliveryChargedAmount > 0 {
+		paymentForm = "2"
+		codCollectAmount = max(collectOnDeliveryChargedAmount-resolved.QuotedFreightCost, 0)
+	}
 	request := DispatchRequest{
 		RelationNumber:          "",
 		RelationDateTime:        "",
@@ -205,18 +220,18 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		RecipientNeighborhood:   "",
 		TotalWeight:             FormatFloatString(resolved.TotalWeight),
 		TotalVolumeWeight:       FormatFloatString(resolved.TotalVolumetricWeight),
-		PaymentForm:             strconv.Itoa(p.cfg.PaymentForm),
-		CollectOnDeliveryAmount: FormatFloatString(collectOnDeliveryChargedAmount),
+		PaymentForm:             paymentForm,
+		CollectOnDeliveryAmount: FormatFloatString(codCollectAmount),
 		Observations:            resolved.Observations,
 		DeliverWarehouse:        "",
 		PickupWarehouse:         "",
 		CostCenter:              "",
-		TotalProductValue:       FormatFloatString(resolved.DeclaredValue),
+		TotalProductValue:       FormatFloatString(codCollectAmount),
 		GenerateDocuments:       "true",
 		GenerateBinaries:        "false",
 		Units:                   units,
-		ServiceType:        "",
-		ReferenceDocuments: []DispatchDocument{},
+		ServiceType:             "",
+		ReferenceDocuments:      []DispatchDocument{},
 	}
 	response, err := p.client.Dispatch(ctx, request)
 	if err != nil {
