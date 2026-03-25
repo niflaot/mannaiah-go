@@ -368,25 +368,25 @@ func (r DispatchResponse) ResolveResultMessage() string {
 	return strings.TrimSpace(r.Mensaje)
 }
 
-// BuildTrackURL resolves the preferred TCC tracking URL from response fields.
+// BuildTrackURL resolves the preferred TCC label/document URL from response fields.
+// Fields are checked in priority order; non-URL values (plain IDs, empty strings) are skipped.
 func (r DispatchResponse) BuildTrackURL() string {
-	if strings.TrimSpace(r.ShipmentLabelURL) != "" {
-		return strings.TrimSpace(r.ShipmentLabelURL)
+	candidates := []string{
+		r.ShipmentLabelURL,
+		r.TrackingURL,
+		r.LabelURL,
+		r.ShipmentRelation,
+		r.ShipmentDocURL,
+		r.InvoiceURL,
 	}
-	if strings.TrimSpace(r.ShipmentDocURL) != "" {
-		return strings.TrimSpace(r.ShipmentDocURL)
-	}
-	if strings.TrimSpace(r.ShipmentRelation) != "" {
-		return strings.TrimSpace(r.ShipmentRelation)
-	}
-	if strings.TrimSpace(r.TrackingURL) != "" {
-		return strings.TrimSpace(r.TrackingURL)
-	}
-	if strings.TrimSpace(r.LabelURL) != "" {
-		return strings.TrimSpace(r.LabelURL)
+	for _, c := range candidates {
+		trimmed := strings.TrimSpace(c)
+		if strings.HasPrefix(trimmed, "http") {
+			return trimmed
+		}
 	}
 
-	return strings.TrimSpace(r.InvoiceURL)
+	return ""
 }
 
 // ParseResultCode parses TCC result-code values.
