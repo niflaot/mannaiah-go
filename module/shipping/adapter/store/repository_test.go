@@ -75,10 +75,7 @@ func TestRepositories(t *testing.T) {
 		CarrierID:             "manual",
 		OriginCityCode:        "11001000",
 		DestCityCode:          "76001000",
-		FullFreightCost:       10000,
-		DiscountPercent:       10,
-		DiscountedFreightCost: 9000,
-		FreightCost:           9000,
+		FreightCost: 9000,
 		EstimatedDays:         2,
 		CurrencyCode:          "COP",
 		ExpiresAt:             time.Now().UTC().Add(time.Hour),
@@ -94,7 +91,7 @@ func TestRepositories(t *testing.T) {
 	if len(quotations) != 1 {
 		t.Fatalf("quotation count = %d", len(quotations))
 	}
-	if quotations[0].FullFreightCost != 10000 || quotations[0].DiscountedFreightCost != 9000 || quotations[0].DiscountPercent != 10 {
+	if quotations[0].FreightCost != 9000 {
 		t.Fatalf("unexpected quotation values = %#v", quotations[0])
 	}
 }

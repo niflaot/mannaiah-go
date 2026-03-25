@@ -129,35 +129,19 @@ func mapBatchModel(row dispatchBatchModel, markIDs []string) domain.DispatchBatc
 }
 
 func mapQuotationRecord(row quotationModel) port.QuotationRecord {
-	fullFreightCost := row.FullFreightCost
-	if fullFreightCost <= 0 {
-		fullFreightCost = row.FreightCost
-	}
-	discountedFreightCost := row.DiscountedCost
-	if discountedFreightCost <= 0 {
-		discountedFreightCost = row.FreightCost
-	}
-	freightCost := row.FreightCost
-	if freightCost <= 0 {
-		freightCost = discountedFreightCost
-	}
-
 	return port.QuotationRecord{
-		ID:                    row.ID,
-		OrderID:               row.OrderID,
-		CarrierID:             row.CarrierID,
-		OriginCityCode:        row.OriginCityCode,
-		DestCityCode:          row.DestCityCode,
-		FullFreightCost:       fullFreightCost,
-		DiscountPercent:       row.DiscountPercent,
-		DiscountedFreightCost: discountedFreightCost,
-		FreightCost:           freightCost,
-		EstimatedDays:         row.EstimatedDays,
-		CurrencyCode:          row.CurrencyCode,
-		ExpiresAt:             row.ExpiresAt.UTC(),
-		RequestSnapshot:       row.RequestSnapshot,
-		RawResponse:           row.RawResponse,
-		CreatedAt:             row.CreatedAt.UTC(),
+		ID:              row.ID,
+		OrderID:         row.OrderID,
+		CarrierID:       row.CarrierID,
+		OriginCityCode:  row.OriginCityCode,
+		DestCityCode:    row.DestCityCode,
+		FreightCost:     row.FreightCost,
+		EstimatedDays:   row.EstimatedDays,
+		CurrencyCode:    row.CurrencyCode,
+		ExpiresAt:       row.ExpiresAt.UTC(),
+		RequestSnapshot: row.RequestSnapshot,
+		RawResponse:     row.RawResponse,
+		CreatedAt:       row.CreatedAt.UTC(),
 	}
 }
 
@@ -168,9 +152,6 @@ func mapQuotationModel(record port.QuotationRecord) quotationModel {
 		CarrierID:       record.CarrierID,
 		OriginCityCode:  record.OriginCityCode,
 		DestCityCode:    record.DestCityCode,
-		FullFreightCost: record.FullFreightCost,
-		DiscountPercent: record.DiscountPercent,
-		DiscountedCost:  record.DiscountedFreightCost,
 		FreightCost:     record.FreightCost,
 		EstimatedDays:   record.EstimatedDays,
 		CurrencyCode:    record.CurrencyCode,

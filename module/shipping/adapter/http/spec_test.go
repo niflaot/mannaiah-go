@@ -42,14 +42,8 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postQuotationSchema == nil || postQuotationSchema.Value == nil {
 		t.Fatalf("expected /shipping/quotations POST 201 schema object")
 	}
-	if postQuotationSchema.Value.Properties["fullFreightCost"] == nil {
-		t.Fatalf("expected fullFreightCost in quotation response schema")
-	}
-	if postQuotationSchema.Value.Properties["discountedFreightCost"] == nil {
-		t.Fatalf("expected discountedFreightCost in quotation response schema")
-	}
-	if postQuotationSchema.Value.Properties["discountPercent"] == nil {
-		t.Fatalf("expected discountPercent in quotation response schema")
+	if postQuotationSchema.Value.Properties["freightCost"] == nil {
+		t.Fatalf("expected freightCost in quotation response schema")
 	}
 	if postQuotationSchema.Value.Properties["collectOnDeliveryAmount"] == nil {
 		t.Fatalf("expected collectOnDeliveryAmount in quotation response schema")

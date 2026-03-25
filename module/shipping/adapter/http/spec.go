@@ -372,9 +372,6 @@ func quotationResultSchema() *openapi3.Schema {
 		WithProperty("carrierId", openapi3.NewStringSchema()).
 		WithProperty("originCityCode", openapi3.NewStringSchema()).
 		WithProperty("destCityCode", openapi3.NewStringSchema()).
-		WithProperty("fullFreightCost", openapi3.NewFloat64Schema()).
-		WithProperty("discountPercent", openapi3.NewFloat64Schema()).
-		WithProperty("discountedFreightCost", openapi3.NewFloat64Schema()).
 		WithProperty("freightCost", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryFeePercent", openapi3.NewFloat64Schema()).
@@ -402,9 +399,6 @@ func quotationRecordSchema() *openapi3.Schema {
 		WithProperty("CarrierID", openapi3.NewStringSchema()).
 		WithProperty("OriginCityCode", openapi3.NewStringSchema()).
 		WithProperty("DestCityCode", openapi3.NewStringSchema()).
-		WithProperty("FullFreightCost", openapi3.NewFloat64Schema()).
-		WithProperty("DiscountPercent", openapi3.NewFloat64Schema()).
-		WithProperty("DiscountedFreightCost", openapi3.NewFloat64Schema()).
 		WithProperty("FreightCost", openapi3.NewFloat64Schema()).
 		WithProperty("EstimatedDays", openapi3.NewIntegerSchema()).
 		WithProperty("CurrencyCode", openapi3.NewStringSchema()).

@@ -43,13 +43,7 @@ type QuotationRecord struct {
 	OriginCityCode string
 	// DestCityCode defines destination city-code values.
 	DestCityCode string
-	// FullFreightCost defines carrier-reported freight-cost values before discount.
-	FullFreightCost float64
-	// DiscountPercent defines applied freight discount percentage values.
-	DiscountPercent float64
-	// DiscountedFreightCost defines discounted freight-cost values.
-	DiscountedFreightCost float64
-	// FreightCost defines discounted freight-cost values for backward compatibility.
+	// FreightCost defines carrier-reported freight-cost values.
 	FreightCost float64
 	// EstimatedDays defines estimated delivery-day values.
 	EstimatedDays int

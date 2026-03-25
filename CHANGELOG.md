@@ -78,6 +78,11 @@ Keep newest entries on top. Add one section per version.
   - Background cleanup goroutine (1h interval) purges expired quotation rows automatically.
   - `QuotationRepository.DeleteExpired` port method and store implementation added.
 - Shipping: batch-close materialization errors are now logged (`mark_id`, `order_id`, `error`) via zap instead of being silently discarded.
+- Shipping quotation: freight discount removed.
+  - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` env var removed; prices are used as-is from the carrier.
+  - `fullFreightCost`, `discountPercent`, `discountedFreightCost` removed from `QuotationResult`, `QuotationRecord`, quotation response schema, and quotation list schema.
+  - `full_freight_cost`, `discount_percent`, `discounted_freight_cost` columns dropped from `shipping_quotations`; migration `000031_shipping_quotation_remove_discount` (MySQL + SQLite).
+  - `normalizeDiscountPercent` and `applyDiscount` helpers removed from quotation service.
 - Shipping TCC: per-mode account numbers + configurable unit declaration.
   - `SHIPPING_TCC_ACCOUNT_NUMBER` split into `SHIPPING_TCC_PARCEL_ACCOUNT_NUMBER` and `SHIPPING_TCC_EXPRESS_ACCOUNT_NUMBER`; TCC `cuentaremitente` is now selected per shipment mode at both quotation and dispatch time.
   - `SHIPPING_TCC_DECLARATION` env var added as default `dicecontener` (unit contents description); per-unit `description` field takes precedence when provided.

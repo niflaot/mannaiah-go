@@ -75,9 +75,6 @@ func TestProviderLifecycle(t *testing.T) {
 	if quote.FreightCost <= 0 {
 		t.Fatalf("invalid quote = %#v", quote)
 	}
-	if quote.FullFreightCost != quote.FreightCost {
-		t.Fatalf("quote.FullFreightCost = %v, quote.FreightCost = %v", quote.FullFreightCost, quote.FreightCost)
-	}
 	if quote.CollectOnDeliveryAmount != 100000 {
 		t.Fatalf("quote.CollectOnDeliveryAmount = %v", quote.CollectOnDeliveryAmount)
 	}

@@ -15,8 +15,6 @@ import (
 
 // Config defines quotation service behavior configuration values.
 type Config struct {
-	// DiscountPercent defines the freight discount percentage applied to quotation results.
-	DiscountPercent float64
 	// ExpirationTTLHours defines how many hours a stored quotation is valid before it expires.
 	// Zero or negative values default to 24 hours.
 	ExpirationTTLHours float64
@@ -63,7 +61,6 @@ func NewService(repository port.QuotationRepository, registry port.ProviderRegis
 		repository: repository,
 		registry:   registry,
 		cfg: Config{
-			DiscountPercent:    normalizeDiscountPercent(cfg.DiscountPercent),
 			ExpirationTTLHours: ttl,
 		},
 	}
@@ -126,16 +123,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	if result.ExpiresAt.IsZero() {
 		result.ExpiresAt = result.CreatedAt.Add(time.Duration(s.cfg.ExpirationTTLHours * float64(time.Hour)))
 	}
-	fullFreightCost := normalizeMoney(result.FullFreightCost)
-	if fullFreightCost <= 0 {
-		fullFreightCost = normalizeMoney(result.FreightCost)
-	}
-	discountPercent := normalizeDiscountPercent(s.cfg.DiscountPercent)
-	discountedFreightCost := applyDiscount(fullFreightCost, discountPercent)
-	result.FullFreightCost = fullFreightCost
-	result.DiscountPercent = discountPercent
-	result.DiscountedFreightCost = discountedFreightCost
-	result.FreightCost = discountedFreightCost
+	result.FreightCost = normalizeMoney(result.FreightCost)
 	result.CollectOnDeliveryAmount = normalizeMoney(request.CollectOnDeliveryAmount)
 	result.CollectOnDeliveryFeePercent = normalizeMoney(result.CollectOnDeliveryFeePercent)
 	if result.CollectOnDeliveryAmount <= 0 {
@@ -156,21 +144,18 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	if s.repository != nil {
 		snapshot, _ := json.Marshal(request)
 		record := port.QuotationRecord{
-			ID:                    result.ID,
-			OrderID:               result.OrderID,
-			CarrierID:             result.CarrierID,
-			OriginCityCode:        result.OriginCityCode,
-			DestCityCode:          result.DestCityCode,
-			FullFreightCost:       result.FullFreightCost,
-			DiscountPercent:       result.DiscountPercent,
-			DiscountedFreightCost: result.DiscountedFreightCost,
-			FreightCost:           result.FreightCost,
-			EstimatedDays:         result.EstimatedDays,
-			CurrencyCode:          result.CurrencyCode,
-			ExpiresAt:             result.ExpiresAt,
-			RequestSnapshot:       string(snapshot),
-			RawResponse:           result.RawResponse,
-			CreatedAt:             result.CreatedAt,
+			ID:              result.ID,
+			OrderID:         result.OrderID,
+			CarrierID:       result.CarrierID,
+			OriginCityCode:  result.OriginCityCode,
+			DestCityCode:    result.DestCityCode,
+			FreightCost:     result.FreightCost,
+			EstimatedDays:   result.EstimatedDays,
+			CurrencyCode:    result.CurrencyCode,
+			ExpiresAt:       result.ExpiresAt,
+			RequestSnapshot: string(snapshot),
+			RawResponse:     result.RawResponse,
+			CreatedAt:       result.CreatedAt,
 		}
 		if err := s.repository.Create(ctx, record); err != nil {
 			return nil, err
@@ -198,17 +183,6 @@ func (s *Service) ListByOrderID(ctx context.Context, orderID string) ([]port.Quo
 	return s.repository.ListByOrderID(ctx, strings.TrimSpace(orderID))
 }
 
-func normalizeDiscountPercent(value float64) float64 {
-	if value < 0 {
-		return 0
-	}
-	if value > 100 {
-		return 100
-	}
-
-	return normalizeMoney(value)
-}
-
 func normalizeMoney(value float64) float64 {
 	if value < 0 {
 		value = 0
@@ -217,21 +191,9 @@ func normalizeMoney(value float64) float64 {
 	return math.Round(value*100) / 100
 }
 
-func applyDiscount(value float64, discountPercent float64) float64 {
-	normalizedValue := normalizeMoney(value)
-	normalizedDiscount := normalizeDiscountPercent(discountPercent)
-	if normalizedDiscount <= 0 {
-		return normalizedValue
-	}
-
-	factor := 1 - (normalizedDiscount / 100)
-
-	return normalizeMoney(normalizedValue * factor)
-}
-
 func applySurcharge(value float64, percent float64) float64 {
 	normalizedValue := normalizeMoney(value)
-	normalizedPercent := normalizeDiscountPercent(percent)
+	normalizedPercent := normalizeMoney(percent)
 	if normalizedPercent <= 0 {
 		return normalizedValue
 	}

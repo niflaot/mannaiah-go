@@ -102,7 +102,6 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	registry := shippingcarrier.NewRegistry(providers, trackingProviders)
 	publisher := resolvePublisher(publishers)
 	quotationSvc := quotationservice.NewService(quotationRepository, registry, quotationservice.Config{
-		DiscountPercent:    cfg.Quotation.DiscountPercent,
 		ExpirationTTLHours: cfg.Quotation.ExpirationTTLHours,
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)

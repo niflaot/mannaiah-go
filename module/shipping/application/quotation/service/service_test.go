@@ -95,7 +95,7 @@ func (quotationRegistryStub) Carriers() []domain.Carrier {
 // TestQuote verifies quotation orchestration behavior.
 func TestQuote(t *testing.T) {
 	repository := &quotationRepositoryStub{}
-	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{DiscountPercent: 10})
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{})
 
 	result, err := service.Quote(context.Background(), QuoteCommand{
 		OrderID:                 "order-1",
@@ -110,17 +110,8 @@ func TestQuote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Quote() error = %v", err)
 	}
-	if result == nil || result.FreightCost <= 0 {
+	if result == nil || result.FreightCost != 12000 {
 		t.Fatalf("unexpected result = %#v", result)
-	}
-	if result.FullFreightCost != 12000 {
-		t.Fatalf("result.FullFreightCost = %v, want %v", result.FullFreightCost, 12000.0)
-	}
-	if result.DiscountedFreightCost != 10800 {
-		t.Fatalf("result.DiscountedFreightCost = %v, want %v", result.DiscountedFreightCost, 10800.0)
-	}
-	if result.DiscountPercent != 10 {
-		t.Fatalf("result.DiscountPercent = %v, want %v", result.DiscountPercent, 10.0)
 	}
 	if result.CollectOnDeliveryAmount != 100000 {
 		t.Fatalf("result.CollectOnDeliveryAmount = %v, want %v", result.CollectOnDeliveryAmount, 100000.0)
@@ -134,15 +125,15 @@ func TestQuote(t *testing.T) {
 	if len(repository.rows) != 1 {
 		t.Fatalf("stored rows = %d, want 1", len(repository.rows))
 	}
-	if repository.rows[0].DiscountedFreightCost != 10800 {
-		t.Fatalf("stored discounted freight = %v, want %v", repository.rows[0].DiscountedFreightCost, 10800.0)
+	if repository.rows[0].FreightCost != 12000 {
+		t.Fatalf("stored freight cost = %v, want 12000", repository.rows[0].FreightCost)
 	}
 }
 
 // TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields verifies COD fee fallback behavior when providers omit COD fee fields.
 func TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields(t *testing.T) {
 	repository := &quotationRepositoryStub{}
-	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{DiscountPercent: 0})
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{})
 
 	result, err := service.Quote(context.Background(), QuoteCommand{
 		OrderID:                 "order-2",
@@ -207,19 +198,6 @@ func TestPurgeExpired(t *testing.T) {
 	}
 	if len(repository.rows) != 2 {
 		t.Fatalf("remaining rows = %d, want 2", len(repository.rows))
-	}
-}
-
-// TestNormalizeDiscountPercent verifies discount normalization behavior.
-func TestNormalizeDiscountPercent(t *testing.T) {
-	if got := normalizeDiscountPercent(-10); got != 0 {
-		t.Fatalf("normalizeDiscountPercent(-10) = %v", got)
-	}
-	if got := normalizeDiscountPercent(100.123); got != 100 {
-		t.Fatalf("normalizeDiscountPercent(100.123) = %v", got)
-	}
-	if got := normalizeDiscountPercent(12.345); got != 12.35 {
-		t.Fatalf("normalizeDiscountPercent(12.345) = %v", got)
 	}
 }
 
