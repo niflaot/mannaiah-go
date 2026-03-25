@@ -1,6 +1,7 @@
 package tcc
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -331,6 +332,8 @@ func max(value float64, minimum float64) float64 {
 }
 
 // BuildShipmentNumber parses response shipment number from possible field variants.
+// As a last resort it extracts the "ti" query parameter from urlguia, which TCC
+// encodes as https://somos.tcc.com.co/Informesdsp?opc=1&ti=REMESA_NUMBER.
 func (r DispatchResponse) BuildShipmentNumber() string {
 	if strings.TrimSpace(r.Remesa) != "" {
 		return strings.TrimSpace(r.Remesa)
@@ -345,6 +348,13 @@ func (r DispatchResponse) BuildShipmentNumber() string {
 	}
 	if strings.TrimSpace(r.DispatchID) != "" {
 		return strings.TrimSpace(r.DispatchID)
+	}
+	if trimmed := strings.TrimSpace(r.TrackingURL); trimmed != "" {
+		if u, err := url.Parse(trimmed); err == nil {
+			if ti := strings.TrimSpace(u.Query().Get("ti")); ti != "" {
+				return ti
+			}
+		}
 	}
 
 	return ""

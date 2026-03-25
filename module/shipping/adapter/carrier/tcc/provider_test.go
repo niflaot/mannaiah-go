@@ -182,6 +182,56 @@ func TestProviderGrabardespacho7RealFieldNames(t *testing.T) {
 	}
 }
 
+// TestProviderGrabardespacho7URLFallback verifies that the tracking number is extracted
+// from the urlguia "ti" query parameter when no explicit remesa field is returned.
+func TestProviderGrabardespacho7URLFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/grabardespacho7":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"respuesta": "0",
+				"mensaje":   "Se ha grabado con exito la remesa y la unidad",
+				"urlguia":   "https://somos.tcc.com.co/Informesdsp?opc=1&ti=615097792",
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:           "mark-url-fallback",
+		OrderID:      "order-url-fallback",
+		CarrierID:    "tcc",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	}
+	if err := provider.GenerateMark(context.Background(), mark); err != nil {
+		t.Fatalf("GenerateMark() error = %v", err)
+	}
+	if mark.TrackingNumber != "615097792" {
+		t.Fatalf("mark.TrackingNumber = %q, want %q", mark.TrackingNumber, "615097792")
+	}
+	if mark.DocumentRef != "https://somos.tcc.com.co/Informesdsp?opc=1&ti=615097792" {
+		t.Fatalf("mark.DocumentRef = %q", mark.DocumentRef)
+	}
+}
+
 // TestCalculateCollectOnDeliveryChargedAmount verifies COD fee behavior.
 func TestCalculateCollectOnDeliveryChargedAmount(t *testing.T) {
 	if got := calculateCollectOnDeliveryChargedAmount(100000, 4); got != 104000 {
