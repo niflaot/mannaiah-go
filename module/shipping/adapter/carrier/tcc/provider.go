@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"mannaiah/module/shipping/domain"
 )
 
@@ -102,7 +104,14 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 		return nil, err
 	}
 	if ParseResultCode(response.ResultCode) != 0 {
-		return nil, fmt.Errorf("tcc quotation rejected: %s", strings.TrimSpace(response.ResultMessage))
+		msg := strings.TrimSpace(response.ResultMessage)
+		zap.L().Error("tcc quotation rejected",
+			zap.String("result_code", response.ResultCode),
+			zap.String("result_message", msg),
+			zap.String("origin_city", request.OriginCityCode),
+			zap.String("dest_city", request.DestCityCode),
+		)
+		return nil, fmt.Errorf("tcc quotation rejected: %s", msg)
 	}
 	result := response.ToDomain(p.CarrierID(), request)
 	collectOnDeliveryAmount := max(request.Normalize().CollectOnDeliveryAmount, 0)
@@ -214,7 +223,16 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		return err
 	}
 	if ParseResultCode(response.ResultCode) != 0 {
-		return fmt.Errorf("tcc dispatch rejected: %s", strings.TrimSpace(response.ResultMessage))
+		msg := strings.TrimSpace(response.ResultMessage)
+		zap.L().Error("tcc dispatch rejected",
+			zap.String("result_code", response.ResultCode),
+			zap.String("result_message", msg),
+			zap.String("order_id", resolved.OrderID),
+			zap.String("mark_id", resolved.ID),
+			zap.String("origin_city", NormalizeCityCode(sender.CityCode)),
+			zap.String("dest_city", NormalizeCityCode(recipient.CityCode)),
+		)
+		return fmt.Errorf("tcc dispatch rejected: %s", msg)
 	}
 	tracking := response.BuildShipmentNumber()
 	if tracking == "" {
@@ -267,7 +285,13 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 		return nil, err
 	}
 	if ParseResultCode(response.Result.Code) != 0 {
-		return nil, fmt.Errorf("tcc tracking rejected: %s", strings.TrimSpace(response.Result.Message))
+		msg := strings.TrimSpace(response.Result.Message)
+		zap.L().Error("tcc tracking rejected",
+			zap.String("result_code", response.Result.Code),
+			zap.String("result_message", msg),
+			zap.String("tracking_number", trimmedTracking),
+		)
+		return nil, fmt.Errorf("tcc tracking rejected: %s", msg)
 	}
 	if len(response.Remittances) == 0 {
 		return nil, fmt.Errorf("tcc tracking returned no remittance data")

@@ -131,6 +131,7 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
+	zap.ReplaceGlobals(logger)
 	defer func() {
 		_ = logger.Sync()
 	}()

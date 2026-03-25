@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -112,24 +114,59 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("AccessToken", c.accessToken)
 
+	start := time.Now()
 	response, err := c.httpClient.Do(request)
 	if err != nil {
+		zap.L().Error("tcc http request failed",
+			zap.String("path", path),
+			zap.Duration("latency", time.Since(start)),
+			zap.Error(err),
+		)
 		return fmt.Errorf("request tcc endpoint %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 5*1024*1024))
 	if err != nil {
+		zap.L().Error("tcc response read failed",
+			zap.String("path", path),
+			zap.Int("status", response.StatusCode),
+			zap.Duration("latency", time.Since(start)),
+			zap.Error(err),
+		)
 		return fmt.Errorf("read tcc response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
+		zap.L().Error("tcc http error",
+			zap.String("path", path),
+			zap.Int("status", response.StatusCode),
+			zap.Duration("latency", time.Since(start)),
+			zap.String("response_body", strings.TrimSpace(string(responseBody))),
+		)
 		return fmt.Errorf("tcc endpoint %s returned status %d: %s", path, response.StatusCode, strings.TrimSpace(string(responseBody)))
 	}
 	if len(responseBody) == 0 {
+		zap.L().Error("tcc empty response",
+			zap.String("path", path),
+			zap.Int("status", response.StatusCode),
+			zap.Duration("latency", time.Since(start)),
+		)
 		return fmt.Errorf("tcc endpoint %s returned an empty response", path)
 	}
 	if err := json.Unmarshal(responseBody, out); err != nil {
+		zap.L().Error("tcc response decode failed",
+			zap.String("path", path),
+			zap.Int("status", response.StatusCode),
+			zap.Duration("latency", time.Since(start)),
+			zap.String("response_body", strings.TrimSpace(string(responseBody))),
+			zap.Error(err),
+		)
 		return fmt.Errorf("decode tcc response: %w", err)
 	}
+	zap.L().Info("tcc api call",
+		zap.String("path", path),
+		zap.Int("status", response.StatusCode),
+		zap.Duration("latency", time.Since(start)),
+	)
 
 	return nil
 }
