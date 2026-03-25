@@ -126,6 +126,62 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 }
 
+// TestProviderGrabardespacho7RealFieldNames verifies that the provider correctly reads
+// the real grabardespacho7 production response field names ("remesa", "respuesta", "mensaje").
+func TestProviderGrabardespacho7RealFieldNames(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/grabardespacho7":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesa":      "615093378",
+				"respuesta":   "0",
+				"mensaje":     "Se ha grabado con exito la remesa y la unidad",
+				"urlrotulos":  "https://carrier/labels/615093378",
+				"urlremesa":   " 60050612",
+				"urlrelacionenvio": "https://carrier/relation/615093378",
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:           "mark-real",
+		OrderID:      "order-real",
+		CarrierID:    "tcc",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	}
+	if err := provider.GenerateMark(context.Background(), mark); err != nil {
+		t.Fatalf("GenerateMark() error = %v", err)
+	}
+	if mark.TrackingNumber != "615093378" {
+		t.Fatalf("mark.TrackingNumber = %q, want %q", mark.TrackingNumber, "615093378")
+	}
+	if mark.DocumentRef == "" {
+		t.Fatalf("mark.DocumentRef is empty")
+	}
+	if mark.Status != domain.MarkStatusGenerated {
+		t.Fatalf("mark.Status = %q", mark.Status)
+	}
+}
+
 // TestCalculateCollectOnDeliveryChargedAmount verifies COD fee behavior.
 func TestCalculateCollectOnDeliveryChargedAmount(t *testing.T) {
 	if got := calculateCollectOnDeliveryChargedAmount(100000, 4); got != 104000 {

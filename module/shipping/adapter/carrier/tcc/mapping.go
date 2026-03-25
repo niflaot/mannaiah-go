@@ -132,9 +132,18 @@ type DispatchDocument struct {
 
 // DispatchResponse defines TCC dispatch response payload values.
 type DispatchResponse struct {
-	ResultCode       string                     `json:"codigoresultado"`
-	ResultMessage    string                     `json:"mensajeresultado"`
-	ShipmentNumber   string                     `json:"numeroremesa"`
+	// ResultCode defines dispatch result-code values (grabardespacho8 field name).
+	ResultCode string `json:"codigoresultado"`
+	// Respuesta defines dispatch result-code values (grabardespacho7 field name).
+	Respuesta string `json:"respuesta"`
+	// ResultMessage defines dispatch result-message values (grabardespacho8 field name).
+	ResultMessage string `json:"mensajeresultado"`
+	// Mensaje defines dispatch result-message values (grabardespacho7 field name).
+	Mensaje string `json:"mensaje"`
+	// ShipmentNumber defines remittance number values (grabardespacho8 field name).
+	ShipmentNumber string `json:"numeroremesa"`
+	// Remesa defines remittance number values (grabardespacho7 field name).
+	Remesa           string                     `json:"remesa"`
 	TrackingURL      string                     `json:"urlguia"`
 	LabelURL         string                     `json:"urlrotulo"`
 	InvoiceURL       string                     `json:"urlfactura"`
@@ -323,6 +332,9 @@ func max(value float64, minimum float64) float64 {
 
 // BuildShipmentNumber parses response shipment number from possible field variants.
 func (r DispatchResponse) BuildShipmentNumber() string {
+	if strings.TrimSpace(r.Remesa) != "" {
+		return strings.TrimSpace(r.Remesa)
+	}
 	for _, remittance := range r.Remittances {
 		if strings.TrimSpace(remittance.ShipmentNumber) != "" {
 			return strings.TrimSpace(remittance.ShipmentNumber)
@@ -336,6 +348,24 @@ func (r DispatchResponse) BuildShipmentNumber() string {
 	}
 
 	return ""
+}
+
+// ResolveResultCode returns the effective result code from either field variant.
+func (r DispatchResponse) ResolveResultCode() string {
+	if strings.TrimSpace(r.ResultCode) != "" {
+		return strings.TrimSpace(r.ResultCode)
+	}
+
+	return strings.TrimSpace(r.Respuesta)
+}
+
+// ResolveResultMessage returns the effective result message from either field variant.
+func (r DispatchResponse) ResolveResultMessage() string {
+	if strings.TrimSpace(r.ResultMessage) != "" {
+		return strings.TrimSpace(r.ResultMessage)
+	}
+
+	return strings.TrimSpace(r.Mensaje)
 }
 
 // BuildTrackURL resolves the preferred TCC tracking URL from response fields.

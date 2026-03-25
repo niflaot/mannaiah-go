@@ -226,14 +226,14 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	if err != nil {
 		return err
 	}
-	if ParseResultCode(response.ResultCode) != 0 {
-		msg := strings.TrimSpace(response.ResultMessage)
+	if ParseResultCode(response.ResolveResultCode()) != 0 {
+		msg := response.ResolveResultMessage()
 		remittanceMsg := ""
 		if len(response.Remittances) > 0 {
 			remittanceMsg = response.Remittances[0].ResultMessage
 		}
 		zap.L().Error("tcc dispatch rejected",
-			zap.String("result_code", response.ResultCode),
+			zap.String("result_code", response.ResolveResultCode()),
 			zap.String("result_message", msg),
 			zap.String("remittance_message", remittanceMsg),
 			zap.String("order_id", resolved.OrderID),
@@ -248,7 +248,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	}
 	tracking := response.BuildShipmentNumber()
 	if tracking == "" {
-		tracking = response.ResultMessage
+		tracking = response.ResolveResultMessage()
 	}
 	mark.TrackingNumber = strings.TrimSpace(tracking)
 	mark.DocumentType = domain.MarkDocumentLink
