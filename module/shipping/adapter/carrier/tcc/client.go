@@ -114,6 +114,10 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("AccessToken", c.accessToken)
 
+	zap.L().Debug("tcc api request",
+		zap.String("path", path),
+		zap.String("request_body", strings.TrimSpace(string(body))),
+	)
 	start := time.Now()
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -166,6 +170,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 		zap.String("path", path),
 		zap.Int("status", response.StatusCode),
 		zap.Duration("latency", time.Since(start)),
+		zap.String("response_body", strings.TrimSpace(string(responseBody))),
 	)
 
 	return nil

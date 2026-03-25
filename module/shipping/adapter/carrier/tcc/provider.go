@@ -224,14 +224,22 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	}
 	if ParseResultCode(response.ResultCode) != 0 {
 		msg := strings.TrimSpace(response.ResultMessage)
+		remittanceMsg := ""
+		if len(response.Remittances) > 0 {
+			remittanceMsg = response.Remittances[0].ResultMessage
+		}
 		zap.L().Error("tcc dispatch rejected",
 			zap.String("result_code", response.ResultCode),
 			zap.String("result_message", msg),
+			zap.String("remittance_message", remittanceMsg),
 			zap.String("order_id", resolved.OrderID),
 			zap.String("mark_id", resolved.ID),
 			zap.String("origin_city", NormalizeCityCode(sender.CityCode)),
 			zap.String("dest_city", NormalizeCityCode(recipient.CityCode)),
 		)
+		if msg == "" && remittanceMsg != "" {
+			msg = remittanceMsg
+		}
 		return fmt.Errorf("tcc dispatch rejected: %s", msg)
 	}
 	tracking := response.BuildShipmentNumber()

@@ -362,8 +362,15 @@ func (r DispatchResponse) BuildTrackURL() string {
 }
 
 // ParseResultCode parses TCC result-code values.
+// An empty code is treated as 0 (success); TCC returns HTTP 200 with no
+// top-level codigoresultado when the dispatch succeeds and puts per-remittance
+// results in the Remittances array.
 func ParseResultCode(code string) int {
-	parsed, err := strconv.Atoi(strings.TrimSpace(code))
+	trimmed := strings.TrimSpace(code)
+	if trimmed == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(trimmed)
 	if err != nil {
 		return -1
 	}
