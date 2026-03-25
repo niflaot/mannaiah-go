@@ -136,6 +136,9 @@ func TestGenerateAndVoid(t *testing.T) {
 	if created.CollectOnDeliveryAmount != 100000 || created.CollectOnDeliveryChargedAmount != 100000 {
 		t.Fatalf("created COD values = %#v", created)
 	}
+	if created.FailureReason != "" {
+		t.Fatalf("created.FailureReason = %q, want empty", created.FailureReason)
+	}
 	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicMarkGenerated {
 		t.Fatalf("unexpected generated event = %#v", publisher.events)
 	}

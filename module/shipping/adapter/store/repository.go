@@ -201,6 +201,7 @@ func (r *MarkRepository) Update(ctx context.Context, mark *domain.ShippingMark) 
 			"quoted_freight_cost":   row.QuotedFreightCost,
 			"draft_snapshot":        row.DraftSnapshot,
 			"shipment_mode":         row.ShipmentMode,
+			"failure_reason":        row.FailureReason,
 			"updated_at":            row.UpdatedAt,
 		})
 		if result.Error != nil {
@@ -436,6 +437,16 @@ func (r *QuotationRepository) Create(ctx context.Context, record port.QuotationR
 	}
 
 	return nil
+}
+
+// DeleteExpired deletes all quotation records whose expiration timestamp is in the past.
+func (r *QuotationRepository) DeleteExpired(ctx context.Context) (int64, error) {
+	result := r.db.WithContext(ctx).Where("expires_at > '0001-01-01 00:00:00' AND expires_at <= ?", time.Now().UTC()).Delete(&quotationModel{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("delete expired quotations: %w", result.Error)
+	}
+
+	return result.RowsAffected, nil
 }
 
 // ListByOrderID lists quotation records by order identifier.

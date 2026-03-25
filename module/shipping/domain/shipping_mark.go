@@ -93,6 +93,8 @@ type ShippingMark struct {
 	ShipmentMode ShipmentMode `json:"shipmentMode"`
 	// DraftSnapshot defines a JSON snapshot of all mark fields captured before carrier submission.
 	DraftSnapshot string `json:"draftSnapshot,omitempty"`
+	// FailureReason defines the error message recorded when the mark transitions to FAILED status.
+	FailureReason string `json:"failureReason,omitempty"`
 	// CreatedAt defines row creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines row update timestamps.
@@ -168,6 +170,7 @@ func (m ShippingMark) Normalize() ShippingMark {
 		QuotedFreightCost:              round2(quotedFreightCost),
 		ShipmentMode:                   m.ShipmentMode,
 		DraftSnapshot:                  m.DraftSnapshot,
+		FailureReason:                  strings.TrimSpace(m.FailureReason),
 		CreatedAt:                      m.CreatedAt,
 		UpdatedAt:                      m.UpdatedAt,
 	}

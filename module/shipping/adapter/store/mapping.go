@@ -49,6 +49,7 @@ func mapMarkModel(row shippingMarkModel) domain.ShippingMark {
 		QuotedFreightCost:              row.QuotedFreightCost,
 		DraftSnapshot:                  row.DraftSnapshot,
 		ShipmentMode:                   domain.ShipmentMode(row.ShipmentMode),
+		FailureReason:                  row.FailureReason,
 		CreatedAt:                      row.CreatedAt.UTC(),
 		UpdatedAt:                      row.UpdatedAt.UTC(),
 	}
@@ -91,6 +92,7 @@ func mapMarkDomain(mark domain.ShippingMark) shippingMarkModel {
 		QuotedFreightCost:              normalized.QuotedFreightCost,
 		DraftSnapshot:                  normalized.DraftSnapshot,
 		ShipmentMode:                   string(normalized.ShipmentMode),
+		FailureReason:                  normalized.FailureReason,
 		CreatedAt:                      normalized.CreatedAt.UTC(),
 		UpdatedAt:                      normalized.UpdatedAt.UTC(),
 	}

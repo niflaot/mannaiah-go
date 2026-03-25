@@ -23,6 +23,39 @@ func (s *quotationRepositoryStub) ListByOrderID(ctx context.Context, orderID str
 	return s.rows, nil
 }
 
+func (s *quotationRepositoryStub) DeleteExpired(ctx context.Context) (int64, error) {
+	now := time.Now()
+	kept := s.rows[:0]
+	var deleted int64
+	for _, r := range s.rows {
+		if !r.ExpiresAt.IsZero() && r.ExpiresAt.Before(now) {
+			deleted++
+		} else {
+			kept = append(kept, r)
+		}
+	}
+	s.rows = kept
+
+	return deleted, nil
+}
+
+// quotationProviderNoExpiry returns a quotation result with a zero ExpiresAt to test TTL fallback.
+type quotationProviderNoExpiry struct{}
+
+func (quotationProviderNoExpiry) CarrierID() string { return "manual" }
+func (quotationProviderNoExpiry) Carrier() domain.Carrier {
+	return domain.Carrier{ID: "manual", Name: "Manual", Type: domain.CarrierTypeManual, Active: true}
+}
+func (quotationProviderNoExpiry) Quote(ctx context.Context, request domain.QuotationRequest) (*domain.QuotationResult, error) {
+	return &domain.QuotationResult{CarrierID: request.CarrierID, OrderID: request.OrderID, FreightCost: 5000, EstimatedDays: 1, CurrencyCode: "COP"}, nil
+}
+func (quotationProviderNoExpiry) GenerateMark(ctx context.Context, mark *domain.ShippingMark) error {
+	return nil
+}
+func (quotationProviderNoExpiry) VoidMark(ctx context.Context, trackingNumber string) error { return nil }
+func (quotationProviderNoExpiry) CheckBalance(ctx context.Context) error                    { return nil }
+func (quotationProviderNoExpiry) SupportsQuotation() bool                                   { return true }
+
 type quotationProviderStub struct{}
 
 func (quotationProviderStub) CarrierID() string { return "manual" }
@@ -132,6 +165,48 @@ func TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields(t *testing.T) {
 	}
 	if result.CollectOnDeliveryChargedAmount != 100000 {
 		t.Fatalf("result.CollectOnDeliveryChargedAmount = %v, want 100000", result.CollectOnDeliveryChargedAmount)
+	}
+}
+
+// TestQuoteExpiresAtSetFromTTL verifies ExpiresAt is set from TTL when the provider returns zero.
+func TestQuoteExpiresAtSetFromTTL(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderNoExpiry{}}, Config{ExpirationTTLHours: 2})
+
+	before := time.Now()
+	result, err := service.Quote(context.Background(), QuoteCommand{
+		OrderID: "order-ttl", CarrierID: "manual",
+		OriginCityCode: "11001000", DestCityCode: "76001000",
+		ShipmentMode: domain.ShipmentModeParcel,
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+	})
+	if err != nil {
+		t.Fatalf("Quote() error = %v", err)
+	}
+	minExpiry := before.Add(time.Hour)
+	if result.ExpiresAt.Before(minExpiry) {
+		t.Fatalf("ExpiresAt = %v, want >= %v (2h from now)", result.ExpiresAt, minExpiry)
+	}
+}
+
+// TestPurgeExpired verifies expired quotations are removed by PurgeExpired.
+func TestPurgeExpired(t *testing.T) {
+	repository := &quotationRepositoryStub{rows: []port.QuotationRecord{
+		{ID: "q-expired", ExpiresAt: time.Now().Add(-time.Hour)},
+		{ID: "q-valid", ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "q-no-expiry"},
+	}}
+	service := NewService(repository, quotationRegistryStub{}, Config{})
+
+	deleted, err := service.PurgeExpired(context.Background())
+	if err != nil {
+		t.Fatalf("PurgeExpired() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("PurgeExpired() deleted = %d, want 1", deleted)
+	}
+	if len(repository.rows) != 2 {
+		t.Fatalf("remaining rows = %d, want 2", len(repository.rows))
 	}
 }
 

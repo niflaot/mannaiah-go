@@ -359,6 +359,9 @@ func run(ctx context.Context, envFile string) error {
 	if err := shippingModule.Load(runtime); err != nil {
 		return fmt.Errorf("load shipping module: %w", err)
 	}
+	if err := shippingModule.Start(ctx); err != nil {
+		return fmt.Errorf("start shipping module: %w", err)
+	}
 
 	var assetsScheduler corecron.Scheduler
 	if assetsCfg.JPGWorkerEnabled {

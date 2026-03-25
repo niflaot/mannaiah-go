@@ -549,6 +549,7 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
 		WithProperty("draftSnapshot", openapi3.NewStringSchema()).
 		WithProperty("shipmentMode", shipmentModeSchema()).
+		WithProperty("failureReason", openapi3.NewStringSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
 }

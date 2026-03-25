@@ -105,4 +105,6 @@ type QuotationRepository interface {
 	Create(ctx context.Context, record QuotationRecord) error
 	// ListByOrderID lists quotation records by order identifier.
 	ListByOrderID(ctx context.Context, orderID string) ([]QuotationRecord, error)
+	// DeleteExpired deletes all quotation records whose expiration timestamp is in the past.
+	DeleteExpired(ctx context.Context) (int64, error)
 }

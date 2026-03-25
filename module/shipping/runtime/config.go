@@ -18,6 +18,8 @@ type Config struct {
 type QuotationConfig struct {
 	// DiscountPercent defines the freight discount percentage applied to carrier quotations.
 	DiscountPercent float64 `mapstructure:"SHIPPING_QUOTATION_DISCOUNT_PERCENT" default:"0"`
+	// ExpirationTTLHours defines how many hours stored quotations remain valid before expiring.
+	ExpirationTTLHours float64 `mapstructure:"SHIPPING_QUOTATION_TTL_HOURS" default:"24"`
 }
 
 // TCCConfig defines TCC carrier configuration values.

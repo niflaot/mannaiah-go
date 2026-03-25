@@ -70,6 +70,14 @@ Keep newest entries on top. Add one section per version.
   - `shipment_mode VARCHAR(16) NOT NULL DEFAULT 'parcel'` column added to `shipping_marks`; migration `000029_shipping_mark_shipment_mode` (MySQL + SQLite).
   - OpenAPI spec updated: `shipmentMode` enum (`parcel`/`express`) added to quotation request, mark request, draft mark request, and `shippingMark` response schemas.
 - Docker DNS: added `dns: [8.8.8.8, 1.1.1.1]` to `docker-compose.yml` mannaiah service to ensure Go's pure-Go DNS resolver can reach TCC's Oracle WAAS endpoint (`somos.tcc.com.co`).
+- Shipping: mark `failureReason` field added — carrier error message is now persisted on marks that transition to `FAILED` status (both standalone `Generate` and batch-close `Materialize` paths). Exposed in `ShippingMark` response and OpenAPI spec.
+  - Migration `000030_shipping_mark_failure_reason` (MySQL + SQLite): `failure_reason TEXT NOT NULL DEFAULT ''` on `shipping_marks`.
+- Shipping: quotation expiration enforcement added.
+  - `SHIPPING_QUOTATION_TTL_HOURS` env var (default: `24`) controls how long quotations remain valid.
+  - `ExpiresAt` is now always set at quote time when the provider does not supply one.
+  - Background cleanup goroutine (1h interval) purges expired quotation rows automatically.
+  - `QuotationRepository.DeleteExpired` port method and store implementation added.
+- Shipping: batch-close materialization errors are now logged (`mark_id`, `order_id`, `error`) via zap instead of being silently discarded.
 - Shipping: `GET /shipping/orders/{orderID}/dispatch` utility endpoint added to check order dispatch provisioning status.
   - Returns `orderId`, `provisioned` (bool), `markId`, `batchId`, `status` for the highest-priority active mark of the order.
   - Priority: `QUOTED` > `CREATED` > `GENERATED`; `VOIDED`, `REMOVED`, `FAILED`, `PENDING` marks are excluded.

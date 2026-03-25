@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	dispatchevent "mannaiah/module/shipping/application/dispatch/event"
 	"mannaiah/module/shipping/domain"
@@ -223,7 +224,9 @@ func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBa
 			if marks[i].Status != domain.MarkStatusQuoted {
 				continue
 			}
-			_ = s.materializer.Materialize(ctx, &marks[i])
+			if err := s.materializer.Materialize(ctx, &marks[i]); err != nil {
+				zap.L().Error("mark materialization failed", zap.String("batch_id", trimmedID), zap.String("mark_id", marks[i].ID), zap.String("order_id", marks[i].OrderID), zap.Error(err))
+			}
 		}
 	}
 	if err := s.batchRepository.Close(ctx, trimmedID); err != nil {

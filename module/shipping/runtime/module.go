@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	corehttp "mannaiah/module/core/http"
@@ -99,7 +100,8 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	registry := shippingcarrier.NewRegistry(providers, trackingProviders)
 	publisher := resolvePublisher(publishers)
 	quotationSvc := quotationservice.NewService(quotationRepository, registry, quotationservice.Config{
-		DiscountPercent: cfg.Quotation.DiscountPercent,
+		DiscountPercent:    cfg.Quotation.DiscountPercent,
+		ExpirationTTLHours: cfg.Quotation.ExpirationTTLHours,
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
@@ -192,6 +194,33 @@ func (m *Module) Load(loader Loader) error {
 	if err := loader.AddOpenAPISpec(m.OpenAPISpec()); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// Start begins background maintenance tasks for the shipping module.
+// The cleanup goroutine terminates when ctx is cancelled.
+func (m *Module) Start(ctx context.Context) error {
+	if m == nil || m.quotationService == nil {
+		return nil
+	}
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				deleted, err := m.quotationService.PurgeExpired(ctx)
+				if err != nil {
+					zap.L().Error("quotation purge failed", zap.Error(err))
+				} else if deleted > 0 {
+					zap.L().Info("purged expired quotations", zap.Int64("count", deleted))
+				}
+			}
+		}
+	}()
 
 	return nil
 }

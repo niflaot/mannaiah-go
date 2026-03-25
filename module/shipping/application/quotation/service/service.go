@@ -17,6 +17,9 @@ import (
 type Config struct {
 	// DiscountPercent defines the freight discount percentage applied to quotation results.
 	DiscountPercent float64
+	// ExpirationTTLHours defines how many hours a stored quotation is valid before it expires.
+	// Zero or negative values default to 24 hours.
+	ExpirationTTLHours float64
 }
 
 // QuoteCommand defines quotation command input values.
@@ -51,11 +54,17 @@ type Service struct {
 
 // NewService creates quotation services.
 func NewService(repository port.QuotationRepository, registry port.ProviderRegistry, cfg Config) *Service {
+	ttl := cfg.ExpirationTTLHours
+	if ttl <= 0 {
+		ttl = 24
+	}
+
 	return &Service{
 		repository: repository,
 		registry:   registry,
 		cfg: Config{
-			DiscountPercent: normalizeDiscountPercent(cfg.DiscountPercent),
+			DiscountPercent:    normalizeDiscountPercent(cfg.DiscountPercent),
+			ExpirationTTLHours: ttl,
 		},
 	}
 }
@@ -114,6 +123,9 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	if strings.TrimSpace(result.CurrencyCode) == "" {
 		result.CurrencyCode = "COP"
 	}
+	if result.ExpiresAt.IsZero() {
+		result.ExpiresAt = result.CreatedAt.Add(time.Duration(s.cfg.ExpirationTTLHours * float64(time.Hour)))
+	}
 	fullFreightCost := normalizeMoney(result.FullFreightCost)
 	if fullFreightCost <= 0 {
 		fullFreightCost = normalizeMoney(result.FreightCost)
@@ -166,6 +178,15 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	}
 
 	return result, nil
+}
+
+// PurgeExpired deletes all expired quotation records and returns the number of deleted rows.
+func (s *Service) PurgeExpired(ctx context.Context) (int64, error) {
+	if s == nil || s.repository == nil {
+		return 0, nil
+	}
+
+	return s.repository.DeleteExpired(ctx)
 }
 
 // ListByOrderID lists quotation history rows by order identifier.
