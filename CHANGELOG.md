@@ -78,6 +78,17 @@ Keep newest entries on top. Add one section per version.
   - Background cleanup goroutine (1h interval) purges expired quotation rows automatically.
   - `QuotationRepository.DeleteExpired` port method and store implementation added.
 - Shipping: batch-close materialization errors are now logged (`mark_id`, `order_id`, `error`) via zap instead of being silently discarded.
+- Shipping TCC: per-mode account numbers + configurable unit declaration.
+  - `SHIPPING_TCC_ACCOUNT_NUMBER` split into `SHIPPING_TCC_PARCEL_ACCOUNT_NUMBER` and `SHIPPING_TCC_EXPRESS_ACCOUNT_NUMBER`; TCC `cuentaremitente` is now selected per shipment mode at both quotation and dispatch time.
+  - `SHIPPING_TCC_DECLARATION` env var added as default `dicecontener` (unit contents description); per-unit `description` field takes precedence when provided.
+- Shipping TCC: structured logging added to all API calls.
+  - Request body logged at debug level before each outbound call.
+  - HTTP errors, read failures, decode failures, empty responses, and carrier rejections all emit structured `zap.Error` events with path, status, latency, and body.
+  - Success path logs at info with status and latency.
+  - `zap.ReplaceGlobals(logger)` wired in `main.go` so global logger is live at startup.
+- Shipping TCC: `ParseResultCode("")` now returns 0 (success) — TCC returns HTTP 200 with empty `codigoresultado` on successful dispatch; was incorrectly treated as rejection.
+- Shipping TCC: dispatch rejection error now falls back to `remesas[0].mensajeresultado` when top-level `mensajeresultado` is empty.
+- Shipping batch: fixed 404 on `POST /shipping/batches/{id}/marks` caused by MySQL returning `RowsAffected=0` when `AddMark` tried to UPDATE `dispatch_batch_id` to its already-set value; mark is now created without `dispatch_batch_id` so the update performs a real NULL→value transition.
 - Shipping: `GET /shipping/orders/{orderID}/dispatch` utility endpoint added to check order dispatch provisioning status.
   - Returns `orderId`, `provisioned` (bool), `markId`, `batchId`, `status` for the highest-priority active mark of the order.
   - Priority: `QUOTED` > `CREATED` > `GENERATED`; `VOIDED`, `REMOVED`, `FAILED`, `PENDING` marks are excluded.

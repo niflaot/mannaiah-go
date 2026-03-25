@@ -47,9 +47,10 @@ func TestProviderLifecycle(t *testing.T) {
 		Enabled:         true,
 		IsSandbox:       true,
 		BaseURLOverride: server.URL,
-		AccessToken:     "token",
-		AccountNumber:   "7000880",
-		PaymentForm:     1,
+		AccessToken:          "token",
+		ParcelAccountNumber:  "7000880",
+		ExpressAccountNumber: "7000880",
+		PaymentForm:          1,
 		CODFeePercent:   4,
 		Sender:          domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
 	})

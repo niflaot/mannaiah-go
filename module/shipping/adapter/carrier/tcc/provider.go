@@ -23,8 +23,12 @@ type ProviderConfig struct {
 	BaseURLOverride string
 	// AccessToken defines TCC access-token values.
 	AccessToken string
-	// AccountNumber defines sender account-number values.
-	AccountNumber string
+	// ParcelAccountNumber defines sender account-number used for parcel (standard) shipments.
+	ParcelAccountNumber string
+	// ExpressAccountNumber defines sender account-number used for express shipments.
+	ExpressAccountNumber string
+	// Declaration defines the default unit contents description (dicecontener) when none is provided.
+	Declaration string
 	// Sender defines fallback sender address values.
 	Sender domain.Address
 	// PaymentForm defines TCC payment-form values.
@@ -98,7 +102,7 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 	if err := request.Validate(); err != nil {
 		return nil, err
 	}
-	payload := BuildQuoteRequest(p.cfg.AccountNumber, request)
+	payload := BuildQuoteRequest(p.resolveAccountNumber(request.ShipmentMode), request)
 	response, err := p.client.Quote(ctx, payload)
 	if err != nil {
 		return nil, err
@@ -149,7 +153,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 			UnitType:       "TIPO_UND_PAQ",
 			PackageType:    "",
 			PackageClass:   fallback(normalized.PackageType, "CLEM_CAJA"),
-			Contains:       normalized.Description,
+			Contains:       fallback(normalized.Description, p.cfg.Declaration),
 			RealWeightKG:   FormatFloatString(max(normalized.Dimensions.RealWeightKG, 1)),
 			DepthCM:        FormatFloatString(normalized.Dimensions.DepthCM),
 			HeightCM:       FormatFloatString(normalized.Dimensions.HeightCM),
@@ -169,7 +173,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		BusinessUnit:            strconv.Itoa(mapShipmentMode(mark.ShipmentMode)),
 		ShipmentNumber:          "",
 		DispatchDate:            time.Now().UTC().Format("2006-01-02"),
-		SenderAccount:           strings.TrimSpace(p.cfg.AccountNumber),
+		SenderAccount:           p.resolveAccountNumber(mark.ShipmentMode),
 		SenderIDType:            sender.IDType,
 		SenderID:                sender.ID,
 		SenderBranch:            "",
@@ -379,6 +383,14 @@ func normalizePercent(value float64) float64 {
 	}
 
 	return math.Round(value*100) / 100
+}
+
+func (p *Provider) resolveAccountNumber(mode domain.ShipmentMode) string {
+	if mode == domain.ShipmentModeExpress {
+		return strings.TrimSpace(p.cfg.ExpressAccountNumber)
+	}
+
+	return strings.TrimSpace(p.cfg.ParcelAccountNumber)
 }
 
 func calculateCollectOnDeliveryChargedAmount(amount float64, feePercent float64) float64 {

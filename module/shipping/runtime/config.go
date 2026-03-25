@@ -32,8 +32,12 @@ type TCCConfig struct {
 	SandboxAccessToken string `mapstructure:"SHIPPING_TCC_SANDBOX_ACCESS_TOKEN" default:""`
 	// ProductionAccessToken defines TCC production access-token values.
 	ProductionAccessToken string `mapstructure:"SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN" default:""`
-	// AccountNumber defines TCC account number values.
-	AccountNumber string `mapstructure:"SHIPPING_TCC_ACCOUNT_NUMBER" default:""`
+	// ParcelAccountNumber defines TCC account number used for parcel (standard) shipments.
+	ParcelAccountNumber string `mapstructure:"SHIPPING_TCC_PARCEL_ACCOUNT_NUMBER" default:""`
+	// ExpressAccountNumber defines TCC account number used for express shipments.
+	ExpressAccountNumber string `mapstructure:"SHIPPING_TCC_EXPRESS_ACCOUNT_NUMBER" default:""`
+	// Declaration defines the default contents description sent as dicecontener for each unit.
+	Declaration string `mapstructure:"SHIPPING_TCC_DECLARATION" default:""`
 	// PaymentForm defines TCC payment-form values.
 	PaymentForm int `mapstructure:"SHIPPING_TCC_PAYMENT_FORM" default:"1"`
 	// CODFeePercent defines COD fee percentage applied to collected values.
