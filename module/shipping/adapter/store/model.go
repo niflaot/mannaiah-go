@@ -38,7 +38,7 @@ type shippingMarkModel struct {
 	QuotedFreightCost              float64                 `gorm:"column:quoted_freight_cost;type:decimal(15,2)"`
 	DraftSnapshot                  string                  `gorm:"column:draft_snapshot;type:text"`
 	ShipmentMode                   string                  `gorm:"column:shipment_mode;type:varchar(16)"`
-	FailureReason                  string                  `gorm:"column:failure_reason;type:text"`
+	FailureReason                  string                  `gorm:"column:failure_reason;type:text;default:null"`
 	CreatedAt                      time.Time               `gorm:"column:created_at"`
 	UpdatedAt                      time.Time               `gorm:"column:updated_at"`
 	Units                          []shippingMarkUnitModel `gorm:"foreignKey:ShippingMarkID;references:ID"`
