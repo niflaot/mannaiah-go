@@ -10,7 +10,8 @@ import (
 )
 
 type dispatchBatchRepositoryStub struct {
-	batches map[string]domain.DispatchBatch
+	batches   map[string]domain.DispatchBatch
+	markStore *dispatchMarkRepositoryStub
 }
 
 func newDispatchBatchRepositoryStub() *dispatchBatchRepositoryStub {
@@ -45,6 +46,12 @@ func (s *dispatchBatchRepositoryStub) AddMark(ctx context.Context, batchID strin
 	row := s.batches[batchID]
 	row.MarkIDs = append(row.MarkIDs, markID)
 	s.batches[batchID] = row
+	if s.markStore != nil {
+		if mark, exists := s.markStore.marks[markID]; exists {
+			mark.DispatchBatchID = &batchID
+			s.markStore.marks[markID] = mark
+		}
+	}
 
 	return nil
 }
@@ -166,6 +173,7 @@ func TestCreateBatch(t *testing.T) {
 func TestDraftMarkAndClose(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()
 	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
 	publisher := &dispatchPublisherStub{}
 	materializer := &materializerStub{repository: markRepository}
 	service := NewService(batchRepository, markRepository, publisher, materializer)

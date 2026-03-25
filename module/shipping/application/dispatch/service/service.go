@@ -165,7 +165,6 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 		ShipmentMode:            command.ShipmentMode,
 		Observations:            strings.TrimSpace(command.Observations),
-		DispatchBatchID:         &batchID,
 		QuotationID:             quotationID,
 		QuotedFreightCost:       command.QuotedFreightCost,
 		CreatedAt:               time.Now().UTC(),
@@ -177,9 +176,10 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 	if err := s.markRepository.Create(ctx, &mark); err != nil {
 		return nil, err
 	}
-	if err := s.batchRepository.AddMark(ctx, batch.ID, mark.ID); err != nil {
+	if err := s.batchRepository.AddMark(ctx, batchID, mark.ID); err != nil {
 		return nil, err
 	}
+	mark.DispatchBatchID = &batchID
 
 	return &mark, nil
 }
