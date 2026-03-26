@@ -176,10 +176,10 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	// courier collects $25 000 + $125 000 = $150 000 (the original COD total).
 	// When COD is not active, formapago uses the configured value and both amounts are 0.
 	paymentForm := strconv.Itoa(p.cfg.PaymentForm)
-	codCollectAmount := 0.0
+	codCollectStr := ""
 	if collectOnDeliveryChargedAmount > 0 {
 		paymentForm = "2"
-		codCollectAmount = max(collectOnDeliveryChargedAmount-resolved.QuotedFreightCost, 0)
+		codCollectStr = FormatFloatString(max(collectOnDeliveryChargedAmount-resolved.QuotedFreightCost, 0))
 	}
 	request := DispatchRequest{
 		RelationNumber:          "",
@@ -221,12 +221,12 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		TotalWeight:             FormatFloatString(resolved.TotalWeight),
 		TotalVolumeWeight:       FormatFloatString(resolved.TotalVolumetricWeight),
 		PaymentForm:             paymentForm,
-		CollectOnDeliveryAmount: FormatFloatString(codCollectAmount),
+		CollectOnDeliveryAmount: codCollectStr,
 		Observations:            resolved.Observations,
 		DeliverWarehouse:        "",
 		PickupWarehouse:         "",
 		CostCenter:              "",
-		TotalProductValue:       FormatFloatString(codCollectAmount),
+		TotalProductValue:       codCollectStr,
 		GenerateDocuments:       "true",
 		GenerateBinaries:        "false",
 		Units:                   units,
