@@ -44,15 +44,15 @@ func TestProviderLifecycle(t *testing.T) {
 	defer server.Close()
 
 	provider, err := NewProvider(ProviderConfig{
-		Enabled:         true,
-		IsSandbox:       true,
-		BaseURLOverride: server.URL,
+		Enabled:              true,
+		IsSandbox:            true,
+		BaseURLOverride:      server.URL,
 		AccessToken:          "token",
 		ParcelAccountNumber:  "7000880",
 		ExpressAccountNumber: "7000880",
 		PaymentForm:          1,
-		CODFeePercent:   4,
-		Sender:          domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		CODFeePercent:        4,
+		Sender:               domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
 	})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
@@ -110,17 +110,18 @@ func TestProviderLifecycle(t *testing.T) {
 	if dispatchRequest.DestCityCode != "76001000" {
 		t.Fatalf("dispatchRequest.DestCityCode = %q", dispatchRequest.DestCityCode)
 	}
-	// No quoted freight cost on this mark so codCollectAmount = chargedAmount - 0 = 104000.
-	if dispatchRequest.CollectOnDeliveryAmount != "104000" {
+	// No quoted freight cost and no pre-computed charged amount: provider config fee is NOT
+	// re-applied at generate time, so codCollectAmount = CollectOnDeliveryAmount - 0 = 100000.
+	if dispatchRequest.CollectOnDeliveryAmount != "100000" {
 		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q", dispatchRequest.CollectOnDeliveryAmount)
 	}
-	if dispatchRequest.TotalProductValue != "104000" {
+	if dispatchRequest.TotalProductValue != "100000" {
 		t.Fatalf("dispatchRequest.TotalProductValue = %q", dispatchRequest.TotalProductValue)
 	}
 	if dispatchRequest.PaymentForm != "2" {
 		t.Fatalf("dispatchRequest.PaymentForm = %q, want \"2\" for COD", dispatchRequest.PaymentForm)
 	}
-	if mark.CollectOnDeliveryChargedAmount != 104000 {
+	if mark.CollectOnDeliveryChargedAmount != 100000 {
 		t.Fatalf("mark.CollectOnDeliveryChargedAmount = %v", mark.CollectOnDeliveryChargedAmount)
 	}
 
@@ -140,11 +141,11 @@ func TestProviderGrabardespacho7RealFieldNames(t *testing.T) {
 		switch request.URL.Path {
 		case "/api/clientes/remesas/grabardespacho7":
 			_ = json.NewEncoder(writer).Encode(map[string]any{
-				"remesa":      "615093378",
-				"respuesta":   "0",
-				"mensaje":     "Se ha grabado con exito la remesa y la unidad",
-				"urlrotulos":  "https://carrier/labels/615093378",
-				"urlremesa":   " 60050612",
+				"remesa":           "615093378",
+				"respuesta":        "0",
+				"mensaje":          "Se ha grabado con exito la remesa y la unidad",
+				"urlrotulos":       "https://carrier/labels/615093378",
+				"urlremesa":        " 60050612",
 				"urlrelacionenvio": "https://carrier/relation/615093378",
 			})
 		default:
