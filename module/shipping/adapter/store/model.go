@@ -11,6 +11,8 @@ type shippingMarkModel struct {
 	Status                         string                  `gorm:"column:status;type:varchar(50)"`
 	DocumentType                   *string                 `gorm:"column:document_type;type:varchar(10)"`
 	DocumentRef                    *string                 `gorm:"column:document_ref;type:text"`
+	ManifestType                   *string                 `gorm:"column:manifest_type;type:varchar(10)"`
+	ManifestRef                    *string                 `gorm:"column:manifest_ref;type:text"`
 	SenderName                     string                  `gorm:"column:sender_name;type:varchar(255)"`
 	SenderLegalName                string                  `gorm:"column:sender_legal_name;type:varchar(255)"`
 	SenderID                       string                  `gorm:"column:sender_id;type:varchar(50)"`

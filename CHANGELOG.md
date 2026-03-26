@@ -53,6 +53,18 @@ A new release image is accepted only if all are true:
 Keep newest entries on top. Add one section per version.
 
 ### [v1.0.0] - 2026-03-26
+- Shipping marks: carrier manifest persistence added without breaking batch close on missing manifest.
+  - `ShippingMark` now stores both artifact pairs:
+    - mark document: `documentType` / `documentRef`
+    - shipping manifest: `manifestType` / `manifestRef`
+  - TCC adapter mapping updated:
+    - main mark document URL resolved from label/guide fields (`urlrotulos`/`urlguia`) and is now required for success.
+    - manifest URL resolved from `urlrelacionenvio` and is optional (missing manifest does not fail mark materialization).
+  - Store mapping and update paths now persist manifest fields.
+  - OpenAPI schema for shipping marks updated to expose `manifestType` and `manifestRef`.
+  - Migration `000033_shipping_mark_manifest` added (MySQL + SQLite): `manifest_type`, `manifest_ref` on `shipping_marks`.
+
+### [v1.0.0] - 2026-03-26
 - Email API: recipient-delivery listing endpoint added.
   - `GET /email/deliveries?email=<recipient_email>` returns all deliveries sent to the provided email, ordered by newest first.
   - Email service/repository contracts and store implementation updated for recipient-email filtering.

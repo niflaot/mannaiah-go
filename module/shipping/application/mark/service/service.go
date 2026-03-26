@@ -42,6 +42,10 @@ type GenerateCommand struct {
 	DocumentType domain.MarkDocumentType
 	// DocumentRef defines optional manual document reference values.
 	DocumentRef string
+	// ManifestType defines optional manual manifest document-type values.
+	ManifestType domain.MarkDocumentType
+	// ManifestRef defines optional manual manifest document reference values.
+	ManifestRef string
 }
 
 // ListQuery defines mark listing query values.
@@ -88,6 +92,8 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 		Status:                  domain.MarkStatusPending,
 		DocumentType:            command.DocumentType,
 		DocumentRef:             strings.TrimSpace(command.DocumentRef),
+		ManifestType:            command.ManifestType,
+		ManifestRef:             strings.TrimSpace(command.ManifestRef),
 		TrackingNumber:          strings.TrimSpace(command.TrackingNumber),
 		Sender:                  command.Sender,
 		Recipient:               command.Recipient,

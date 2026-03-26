@@ -61,6 +61,10 @@ type ShippingMark struct {
 	DocumentType MarkDocumentType `json:"documentType,omitempty"`
 	// DocumentRef defines mark document-reference values.
 	DocumentRef string `json:"documentRef,omitempty"`
+	// ManifestType defines shipping manifest document-type values.
+	ManifestType MarkDocumentType `json:"manifestType,omitempty"`
+	// ManifestRef defines shipping manifest document-reference values.
+	ManifestRef string `json:"manifestRef,omitempty"`
 	// Sender defines sender address details.
 	Sender Address `json:"sender"`
 	// Recipient defines recipient address details.
@@ -154,6 +158,8 @@ func (m ShippingMark) Normalize() ShippingMark {
 		Status:                         m.Status,
 		DocumentType:                   m.DocumentType,
 		DocumentRef:                    strings.TrimSpace(m.DocumentRef),
+		ManifestType:                   m.ManifestType,
+		ManifestRef:                    strings.TrimSpace(m.ManifestRef),
 		Sender:                         m.Sender.Normalize(),
 		Recipient:                      m.Recipient.Normalize(),
 		Units:                          units,

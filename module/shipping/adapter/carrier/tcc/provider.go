@@ -263,9 +263,21 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	if tracking == "" {
 		tracking = response.ResolveResultMessage()
 	}
+	markDocumentURL := response.BuildMarkDocumentURL()
+	if strings.TrimSpace(markDocumentURL) == "" {
+		return fmt.Errorf("tcc dispatch rejected: shipping mark document URL is missing")
+	}
+	manifestURL := response.BuildManifestURL()
+
 	mark.TrackingNumber = strings.TrimSpace(tracking)
 	mark.DocumentType = domain.MarkDocumentLink
-	mark.DocumentRef = response.BuildTrackURL()
+	mark.DocumentRef = markDocumentURL
+	mark.ManifestType = ""
+	mark.ManifestRef = ""
+	if strings.TrimSpace(manifestURL) != "" {
+		mark.ManifestType = domain.MarkDocumentLink
+		mark.ManifestRef = manifestURL
+	}
 	mark.Status = domain.MarkStatusGenerated
 	mark.TotalWeight = resolved.TotalWeight
 	mark.TotalVolumetricWeight = resolved.TotalVolumetricWeight

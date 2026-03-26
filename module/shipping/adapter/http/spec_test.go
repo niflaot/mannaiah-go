@@ -85,6 +85,12 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postMarkSchema.Value.Properties["collectOnDeliveryFeePercent"] == nil {
 		t.Fatalf("expected collectOnDeliveryFeePercent in mark response schema")
 	}
+	if postMarkSchema.Value.Properties["manifestType"] == nil {
+		t.Fatalf("expected manifestType in mark response schema")
+	}
+	if postMarkSchema.Value.Properties["manifestRef"] == nil {
+		t.Fatalf("expected manifestRef in mark response schema")
+	}
 
 	postBatch := paths.Find("/shipping/batches").Post
 	if postBatch == nil || postBatch.RequestBody == nil {

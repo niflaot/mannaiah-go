@@ -30,6 +30,10 @@ func TestRepositories(t *testing.T) {
 		OrderID:                        "order-1",
 		CarrierID:                      "manual",
 		Status:                         domain.MarkStatusGenerated,
+		DocumentType:                   domain.MarkDocumentLink,
+		DocumentRef:                    "https://carrier/labels/mark-1",
+		ManifestType:                   domain.MarkDocumentLink,
+		ManifestRef:                    "https://carrier/manifest/batch-1",
 		Sender:                         domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
 		Recipient:                      domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
 		Units:                          []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
@@ -49,6 +53,12 @@ func TestRepositories(t *testing.T) {
 	}
 	if loadedMark.CollectOnDeliveryAmount != 100000 || loadedMark.CollectOnDeliveryChargedAmount != 104000 || loadedMark.CollectOnDeliveryFeePercent != 4 {
 		t.Fatalf("loaded COD values = %#v", loadedMark)
+	}
+	if loadedMark.DocumentRef != "https://carrier/labels/mark-1" {
+		t.Fatalf("loadedMark.DocumentRef = %q, want mark document URL", loadedMark.DocumentRef)
+	}
+	if loadedMark.ManifestRef != "https://carrier/manifest/batch-1" {
+		t.Fatalf("loadedMark.ManifestRef = %q, want manifest URL", loadedMark.ManifestRef)
 	}
 
 	batch := domain.DispatchBatch{ID: "batch-1", CarrierID: "manual", Status: domain.BatchStatusOpen, CreatedBy: "user-123", CreatedAt: time.Now().UTC()}
@@ -70,17 +80,17 @@ func TestRepositories(t *testing.T) {
 	}
 
 	if err := quotationRepository.Create(context.Background(), port.QuotationRecord{
-		ID:                    "quote-1",
-		OrderID:               "order-1",
-		CarrierID:             "manual",
-		OriginCityCode:        "11001000",
-		DestCityCode:          "76001000",
-		FreightCost: 9000,
-		EstimatedDays:         2,
-		CurrencyCode:          "COP",
-		ExpiresAt:             time.Now().UTC().Add(time.Hour),
-		RequestSnapshot:       "{}",
-		CreatedAt:             time.Now().UTC(),
+		ID:              "quote-1",
+		OrderID:         "order-1",
+		CarrierID:       "manual",
+		OriginCityCode:  "11001000",
+		DestCityCode:    "76001000",
+		FreightCost:     9000,
+		EstimatedDays:   2,
+		CurrencyCode:    "COP",
+		ExpiresAt:       time.Now().UTC().Add(time.Hour),
+		RequestSnapshot: "{}",
+		CreatedAt:       time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("Create(quotation) error = %v", err)
 	}

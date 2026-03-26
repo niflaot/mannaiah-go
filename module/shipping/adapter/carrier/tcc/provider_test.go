@@ -104,6 +104,9 @@ func TestProviderLifecycle(t *testing.T) {
 	if mark.TrackingNumber == "" || mark.Status != domain.MarkStatusGenerated {
 		t.Fatalf("unexpected mark = %#v", mark)
 	}
+	if mark.ManifestRef != "" {
+		t.Fatalf("mark.ManifestRef = %q, want empty for response without manifest URL", mark.ManifestRef)
+	}
 	if dispatchRequest.OriginCityCode != "11001000" {
 		t.Fatalf("dispatchRequest.OriginCityCode = %q", dispatchRequest.OriginCityCode)
 	}
@@ -185,8 +188,111 @@ func TestProviderGrabardespacho7RealFieldNames(t *testing.T) {
 	if mark.DocumentRef == "" {
 		t.Fatalf("mark.DocumentRef is empty")
 	}
+	if mark.DocumentRef != "https://carrier/labels/615093378" {
+		t.Fatalf("mark.DocumentRef = %q, want label URL", mark.DocumentRef)
+	}
+	if mark.ManifestType != domain.MarkDocumentLink {
+		t.Fatalf("mark.ManifestType = %q, want %q", mark.ManifestType, domain.MarkDocumentLink)
+	}
+	if mark.ManifestRef != "https://carrier/relation/615093378" {
+		t.Fatalf("mark.ManifestRef = %q, want manifest URL", mark.ManifestRef)
+	}
 	if mark.Status != domain.MarkStatusGenerated {
 		t.Fatalf("mark.Status = %q", mark.Status)
+	}
+}
+
+// TestProviderGrabardespacho7WithoutManifestDoesNotFail verifies dispatch success when manifest URL is absent.
+func TestProviderGrabardespacho7WithoutManifestDoesNotFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/grabardespacho7":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesa":     "615093379",
+				"respuesta":  "0",
+				"mensaje":    "Se ha grabado con exito la remesa y la unidad",
+				"urlrotulos": "https://carrier/labels/615093379",
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:           "mark-no-manifest",
+		OrderID:      "order-no-manifest",
+		CarrierID:    "tcc",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	}
+	if err := provider.GenerateMark(context.Background(), mark); err != nil {
+		t.Fatalf("GenerateMark() error = %v", err)
+	}
+	if mark.ManifestType != "" {
+		t.Fatalf("mark.ManifestType = %q, want empty", mark.ManifestType)
+	}
+	if mark.ManifestRef != "" {
+		t.Fatalf("mark.ManifestRef = %q, want empty", mark.ManifestRef)
+	}
+}
+
+// TestProviderGrabardespacho7MissingDocumentFails verifies dispatch failure when main mark document URL is absent.
+func TestProviderGrabardespacho7MissingDocumentFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/grabardespacho7":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesa":           "615093380",
+				"respuesta":        "0",
+				"mensaje":          "Se ha grabado con exito la remesa y la unidad",
+				"urlrelacionenvio": "https://carrier/relation/615093380",
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:           "mark-missing-doc",
+		OrderID:      "order-missing-doc",
+		CarrierID:    "tcc",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	}
+	if err := provider.GenerateMark(context.Background(), mark); err == nil {
+		t.Fatalf("GenerateMark() error = nil, want non-nil when mark document URL is absent")
 	}
 }
 

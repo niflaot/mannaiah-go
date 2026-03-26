@@ -440,6 +440,8 @@ func markRequestSchema() *openapi3.Schema {
 		WithProperty("trackingNumber", openapi3.NewStringSchema()).
 		WithProperty("documentType", openapi3.NewStringSchema()).
 		WithProperty("documentRef", openapi3.NewStringSchema()).
+		WithProperty("manifestType", openapi3.NewStringSchema()).
+		WithProperty("manifestRef", openapi3.NewStringSchema()).
 		WithProperty("shipmentMode", shipmentModeSchema())
 	schema.Required = []string{"orderId", "carrierId", "sender", "recipient", "units", "shipmentMode"}
 
@@ -544,6 +546,8 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("status", openapi3.NewStringSchema()).
 		WithProperty("documentType", openapi3.NewStringSchema()).
 		WithProperty("documentRef", openapi3.NewStringSchema()).
+		WithProperty("manifestType", openapi3.NewStringSchema()).
+		WithProperty("manifestRef", openapi3.NewStringSchema()).
 		WithProperty("sender", addressSchema()).
 		WithProperty("recipient", addressSchema()).
 		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).

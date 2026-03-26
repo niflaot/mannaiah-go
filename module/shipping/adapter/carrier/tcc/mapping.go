@@ -257,15 +257,15 @@ func (r QuoteResponse) ToDomain(carrierID string, request domain.QuotationReques
 	normalized := request.Normalize()
 
 	return &domain.QuotationResult{
-		CarrierID:             strings.TrimSpace(carrierID),
-		OrderID:               normalized.OrderID,
-		OriginCityCode:        normalized.OriginCityCode,
-		DestCityCode:          normalized.DestCityCode,
-		FreightCost: r.Total.DispatchTotal,
-		EstimatedDays:         1,
-		CurrencyCode:          "COP",
-		ExpiresAt:             time.Now().UTC().Add(60 * time.Second),
-		RawResponse:           r.ResultMessage,
+		CarrierID:      strings.TrimSpace(carrierID),
+		OrderID:        normalized.OrderID,
+		OriginCityCode: normalized.OriginCityCode,
+		DestCityCode:   normalized.DestCityCode,
+		FreightCost:    r.Total.DispatchTotal,
+		EstimatedDays:  1,
+		CurrencyCode:   "COP",
+		ExpiresAt:      time.Now().UTC().Add(60 * time.Second),
+		RawResponse:    r.ResultMessage,
 	}
 }
 
@@ -378,14 +378,13 @@ func (r DispatchResponse) ResolveResultMessage() string {
 	return strings.TrimSpace(r.Mensaje)
 }
 
-// BuildTrackURL resolves the preferred TCC label/document URL from response fields.
+// BuildMarkDocumentURL resolves the preferred TCC shipping-mark URL from response fields.
 // Fields are checked in priority order; non-URL values (plain IDs, empty strings) are skipped.
-func (r DispatchResponse) BuildTrackURL() string {
+func (r DispatchResponse) BuildMarkDocumentURL() string {
 	candidates := []string{
 		r.ShipmentLabelURL,
 		r.TrackingURL,
 		r.LabelURL,
-		r.ShipmentRelation,
 		r.ShipmentDocURL,
 		r.InvoiceURL,
 	}
@@ -397,6 +396,22 @@ func (r DispatchResponse) BuildTrackURL() string {
 	}
 
 	return ""
+}
+
+// BuildManifestURL resolves the preferred TCC shipping-manifest URL from response fields.
+func (r DispatchResponse) BuildManifestURL() string {
+	trimmed := strings.TrimSpace(r.ShipmentRelation)
+	if strings.HasPrefix(trimmed, "http") {
+		return trimmed
+	}
+
+	return ""
+}
+
+// BuildTrackURL resolves the preferred TCC shipping-mark URL from response fields.
+// Deprecated: use BuildMarkDocumentURL instead.
+func (r DispatchResponse) BuildTrackURL() string {
+	return r.BuildMarkDocumentURL()
 }
 
 // ParseResultCode parses TCC result-code values.

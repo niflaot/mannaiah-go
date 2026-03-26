@@ -8,6 +8,7 @@
 - Carrier adapter registry (`tcc`, `manual`).
 - Shipping quotation orchestration with audit persistence.
 - Shipping mark generation and void flows.
+- Carrier artifact persistence for both shipping mark documents and shipping manifests.
 - Dispatch batch grouping (create/add/remove/close).
 - Homogenized tracking API.
 - Integration event publication for mark/batch/tracking lifecycle updates.
@@ -63,6 +64,8 @@
   - `collectOnDeliveryAmount` (requested amount)
   - `collectOnDeliveryFeePercent` (carrier-applied fee percent)
   - `collectOnDeliveryChargedAmount` (amount sent to carrier)
+  - `documentType` / `documentRef` (shipping mark artifact)
+  - `manifestType` / `manifestRef` (shipping manifest artifact when provided by carrier)
 - Quotation create requests also accept `collectOnDeliveryAmount`.
 - Quotation responses expose:
   - `collectOnDeliveryAmount` (requested amount)

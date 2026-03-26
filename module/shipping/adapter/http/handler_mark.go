@@ -56,6 +56,10 @@ type markRequest struct {
 	DocumentType domain.MarkDocumentType `json:"documentType"`
 	// DocumentRef defines optional manual document reference values.
 	DocumentRef string `json:"documentRef"`
+	// ManifestType defines optional manual manifest document-type values.
+	ManifestType domain.MarkDocumentType `json:"manifestType"`
+	// ManifestRef defines optional manual manifest document reference values.
+	ManifestRef string `json:"manifestRef"`
 	// ShipmentMode defines the delivery mode for this mark (parcel or express).
 	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
 }
@@ -130,6 +134,8 @@ func (h *Handler) createMark(ctx corehttp.Context) error {
 		TrackingNumber:          strings.TrimSpace(request.TrackingNumber),
 		DocumentType:            request.DocumentType,
 		DocumentRef:             strings.TrimSpace(request.DocumentRef),
+		ManifestType:            request.ManifestType,
+		ManifestRef:             strings.TrimSpace(request.ManifestRef),
 	})
 	if err != nil {
 		return h.mapError(err)
