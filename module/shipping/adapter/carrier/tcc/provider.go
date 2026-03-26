@@ -144,8 +144,8 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	}
 	recipient := resolved.Recipient.Normalize()
 	collectOnDeliveryAmount := max(resolved.CollectOnDeliveryAmount, 0)
-	collectOnDeliveryFeePercent := normalizePercent(p.cfg.CODFeePercent)
-	collectOnDeliveryChargedAmount := calculateCollectOnDeliveryChargedAmount(collectOnDeliveryAmount, collectOnDeliveryFeePercent)
+	collectOnDeliveryFeePercent := normalizePercent(resolved.CollectOnDeliveryFeePercent)
+	collectOnDeliveryChargedAmount := max(resolved.CollectOnDeliveryChargedAmount, collectOnDeliveryAmount)
 	units := make([]DispatchUnit, 0, len(resolved.Units))
 	for _, unit := range resolved.Units {
 		normalized := unit.Normalize()
@@ -170,8 +170,10 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	// TCC requires formapago=2 when collecting cash on delivery, and expects the
 	// courier to collect both the freight cost AND the COD amount from the recipient.
 	// Since we want the recipient to pay only the COD total (not freight + COD), we
-	// subtract the quoted freight cost from the charged COD amount so that TCC
+	// subtract the quoted freight cost from the mark's stored chargedAmount so that TCC
 	// collects (freight + netCOD) == (freight + (codCharged - freight)) == codCharged.
+	// collectOnDeliveryChargedAmount is taken from the mark's stored field (set at draft/quote
+	// time); the provider config CODFeePercent is NOT re-applied here to avoid double-charging.
 	// Example: COD $150 000, freight quote $25 000 → netCOD = $125 000 sent to TCC;
 	// courier collects $25 000 + $125 000 = $150 000 (the original COD total).
 	// When COD is not active, formapago uses the configured value and both amounts are 0.
