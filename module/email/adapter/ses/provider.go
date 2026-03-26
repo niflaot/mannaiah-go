@@ -28,6 +28,9 @@ type Config struct {
 	Region string
 	// Sender defines SES sender email values.
 	Sender string
+	// SenderName defines the display name shown alongside the sender address (e.g. "Flock").
+	// When set, the From header becomes "SenderName <Sender>".
+	SenderName string
 	// AccessKeyID defines static AWS access key values.
 	AccessKeyID string
 	// SecretAccessKey defines static AWS secret key values.
@@ -77,7 +80,11 @@ func NewProvider(ctx context.Context, cfg Config) (*Provider, error) {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	return &Provider{client: sesv2.NewFromConfig(awsCfg), sender: sender}, nil
+	from := sender
+	if name := strings.TrimSpace(cfg.SenderName); name != "" {
+		from = fmt.Sprintf("%s <%s>", name, sender)
+	}
+	return &Provider{client: sesv2.NewFromConfig(awsCfg), sender: from}, nil
 }
 
 // Send submits one email request and returns provider message ids.

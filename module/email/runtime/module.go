@@ -55,6 +55,7 @@ func New(cfg Config, db *gorm.DB) (*Module, error) {
 		sesProvider, providerErr := ses.NewProvider(context.Background(), ses.Config{
 			Region:          region,
 			Sender:          sender,
+			SenderName:      strings.TrimSpace(cfg.SESFromName),
 			AccessKeyID:     strings.TrimSpace(cfg.SESAccessKeyID),
 			SecretAccessKey: strings.TrimSpace(cfg.SESSecretAccessKey),
 		})

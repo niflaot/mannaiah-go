@@ -14,6 +14,8 @@ type Config struct {
 	SESSecretAccessKey string `mapstructure:"EMAIL_SES_SECRET_ACCESS_KEY" default:""`
 	// SESFromAddress defines SES sender address values.
 	SESFromAddress string `mapstructure:"EMAIL_SES_FROM_ADDRESS" default:""`
+	// SESFromName defines the display name shown alongside the sender address (e.g. "Flock").
+	SESFromName string `mapstructure:"EMAIL_SES_FROM_NAME" default:""`
 	// SESConfigurationSet defines SES configuration set values.
 	SESConfigurationSet string `mapstructure:"EMAIL_SES_CONFIGURATION_SET" default:""`
 	// SESMaxSendRate defines SES maximum send-rate values per second.
