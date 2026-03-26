@@ -60,6 +60,11 @@ func (s *markRepositoryStub) Update(ctx context.Context, mark *domain.ShippingMa
 
 	return nil
 }
+func (s *markRepositoryStub) Delete(ctx context.Context, id string) error {
+	delete(s.rows, id)
+
+	return nil
+}
 func (s *markRepositoryStub) List(ctx context.Context, query port.MarkListQuery) ([]domain.ShippingMark, int64, error) {
 	rows := make([]domain.ShippingMark, 0, len(s.rows))
 	for _, row := range s.rows {

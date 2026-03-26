@@ -184,7 +184,8 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 	return &mark, nil
 }
 
-// RemoveDraftMark removes one QUOTED draft mark from a batch and sets it to REMOVED.
+// RemoveDraftMark permanently deletes one QUOTED draft mark from a batch.
+// Only marks in QUOTED status may be deleted; marks in any other status are rejected.
 func (s *Service) RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {
 	if s == nil || s.batchRepository == nil || s.markRepository == nil {
 		return nil, domain.ErrInvalidID
@@ -196,13 +197,7 @@ func (s *Service) RemoveDraftMark(ctx context.Context, batchID string, markID st
 	if mark.Status != domain.MarkStatusQuoted {
 		return nil, domain.ErrMarkNotDraft
 	}
-	mark.Status = domain.MarkStatusRemoved
-	mark.DispatchBatchID = nil
-	mark.UpdatedAt = time.Now().UTC()
-	if err := s.markRepository.Update(ctx, mark); err != nil {
-		return nil, err
-	}
-	if err := s.batchRepository.RemoveMark(ctx, strings.TrimSpace(batchID), mark.ID); err != nil {
+	if err := s.markRepository.Delete(ctx, mark.ID); err != nil {
 		return nil, err
 	}
 

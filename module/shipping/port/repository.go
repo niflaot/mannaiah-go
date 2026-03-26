@@ -73,6 +73,8 @@ type ShippingMarkRepository interface {
 	ListByBatchID(ctx context.Context, batchID string) ([]domain.ShippingMark, error)
 	// Update updates one shipping mark.
 	Update(ctx context.Context, mark *domain.ShippingMark) error
+	// Delete permanently deletes one shipping mark and its units by identifier.
+	Delete(ctx context.Context, id string) error
 	// List lists marks using pagination and filters.
 	List(ctx context.Context, query MarkListQuery) ([]domain.ShippingMark, int64, error)
 }

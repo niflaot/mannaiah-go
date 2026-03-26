@@ -29,6 +29,15 @@ func (s *dispatchBatchRepositoryStub) GetByID(ctx context.Context, id string) (*
 		return nil, domain.ErrNotFound
 	}
 	copy := row
+	if s.markStore != nil {
+		markIDs := make([]string, 0)
+		for _, m := range s.markStore.marks {
+			if m.DispatchBatchID != nil && *m.DispatchBatchID == id {
+				markIDs = append(markIDs, m.ID)
+			}
+		}
+		copy.MarkIDs = markIDs
+	}
 
 	return &copy, nil
 }
@@ -117,6 +126,11 @@ func (s *dispatchMarkRepositoryStub) ListByBatchID(ctx context.Context, batchID 
 }
 func (s *dispatchMarkRepositoryStub) Update(ctx context.Context, mark *domain.ShippingMark) error {
 	s.marks[mark.ID] = *mark
+
+	return nil
+}
+func (s *dispatchMarkRepositoryStub) Delete(ctx context.Context, id string) error {
+	delete(s.marks, id)
 
 	return nil
 }
@@ -222,10 +236,11 @@ func TestDraftMarkAndClose(t *testing.T) {
 	}
 }
 
-// TestRemoveDraftMark verifies that a QUOTED draft mark can be removed from a batch.
+// TestRemoveDraftMark verifies that a QUOTED draft mark is permanently deleted from the store.
 func TestRemoveDraftMark(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()
 	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
 	publisher := &dispatchPublisherStub{}
 	service := NewService(batchRepository, markRepository, publisher)
 
@@ -246,9 +261,9 @@ func TestRemoveDraftMark(t *testing.T) {
 	if len(updated.MarkIDs) != 0 {
 		t.Fatalf("batch mark ids after remove = %v", updated.MarkIDs)
 	}
-	persisted, _ := markRepository.GetByID(context.Background(), mark.ID)
-	if persisted.Status != domain.MarkStatusRemoved {
-		t.Fatalf("mark status after remove = %q", persisted.Status)
+	_, err = markRepository.GetByID(context.Background(), mark.ID)
+	if err == nil {
+		t.Fatal("expected mark to be permanently deleted but GetByID returned no error")
 	}
 }
 

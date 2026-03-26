@@ -228,6 +228,29 @@ func (r *MarkRepository) Update(ctx context.Context, mark *domain.ShippingMark) 
 	})
 }
 
+// Delete permanently deletes one shipping mark and its units by identifier.
+func (r *MarkRepository) Delete(ctx context.Context, id string) error {
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return domain.ErrInvalidID
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("shipping_mark_id = ?", trimmedID).Delete(&shippingMarkUnitModel{}).Error; err != nil {
+			return fmt.Errorf("delete shipping mark units: %w", err)
+		}
+		result := tx.Where("id = ?", trimmedID).Delete(&shippingMarkModel{})
+		if result.Error != nil {
+			return fmt.Errorf("delete shipping mark: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return domain.ErrNotFound
+		}
+
+		return nil
+	})
+}
+
 // List lists marks using pagination and filters.
 func (r *MarkRepository) List(ctx context.Context, query port.MarkListQuery) ([]domain.ShippingMark, int64, error) {
 	page := query.Page
