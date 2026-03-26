@@ -15,6 +15,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/quotations", &openapi3.PathItem{Post: quotationCreateOperation(), Get: quotationListOperation()}),
 		openapi3.WithPath("/shipping/marks", &openapi3.PathItem{Post: markCreateOperation(), Get: markListOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}", &openapi3.PathItem{Get: markGetOperation()}),
+		openapi3.WithPath("/shipping/marks/{id}/related", &openapi3.PathItem{Get: markRelatedOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}/void", &openapi3.PathItem{Patch: markVoidOperation()}),
 		openapi3.WithPath("/shipping/batches", &openapi3.PathItem{Post: batchCreateOperation(), Get: batchListOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}", &openapi3.PathItem{Get: batchGetOperation()}),
@@ -192,6 +193,22 @@ func markVoidOperation() *openapi3.Operation {
 		RequestBody: jsonRequestBody(voidMarkRequestSchema(), false),
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Shipping mark voided.", shippingMarkSchema())),
+		),
+	}
+}
+
+// markRelatedOperation defines the OpenAPI operation for related-mark listing.
+func markRelatedOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_listRelatedMarks",
+		Summary:     "List related shipping marks",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Shipping mark identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, jsonResponse("Related shipping marks.", markListResponseSchema())),
 		),
 	}
 }

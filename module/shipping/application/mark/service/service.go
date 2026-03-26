@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
@@ -152,6 +153,59 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]domain.ShippingM
 		Page:    query.Page,
 		Limit:   query.Limit,
 	})
+}
+
+// Related resolves shipping marks related to one mark identifier.
+// Related marks are those that share the same order id or dispatch batch id.
+// The target mark itself is excluded from the output.
+func (s *Service) Related(ctx context.Context, id string) ([]domain.ShippingMark, error) {
+	if s == nil || s.repository == nil {
+		return []domain.ShippingMark{}, nil
+	}
+
+	target, err := s.repository.GetByID(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+
+	related := map[string]domain.ShippingMark{}
+	appendRows := func(rows []domain.ShippingMark) {
+		for _, row := range rows {
+			trimmedRowID := strings.TrimSpace(row.ID)
+			if trimmedRowID == "" || trimmedRowID == strings.TrimSpace(target.ID) {
+				continue
+			}
+			related[trimmedRowID] = row
+		}
+	}
+
+	orderRows, orderErr := s.repository.ListByOrderID(ctx, strings.TrimSpace(target.OrderID))
+	if orderErr != nil {
+		return nil, orderErr
+	}
+	appendRows(orderRows)
+
+	if target.DispatchBatchID != nil && strings.TrimSpace(*target.DispatchBatchID) != "" {
+		batchRows, batchErr := s.repository.ListByBatchID(ctx, strings.TrimSpace(*target.DispatchBatchID))
+		if batchErr != nil {
+			return nil, batchErr
+		}
+		appendRows(batchRows)
+	}
+
+	result := make([]domain.ShippingMark, 0, len(related))
+	for _, row := range related {
+		result = append(result, row)
+	}
+	sort.SliceStable(result, func(i int, j int) bool {
+		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
+			return strings.ToLower(strings.TrimSpace(result[i].ID)) > strings.ToLower(strings.TrimSpace(result[j].ID))
+		}
+
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+
+	return result, nil
 }
 
 // DispatchQuery defines order dispatch provisioning check query values.

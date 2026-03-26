@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	markevent "mannaiah/module/shipping/application/mark/event"
 	"mannaiah/module/shipping/domain"
@@ -53,7 +55,14 @@ func (s *markRepositoryStub) ListByOrderID(ctx context.Context, orderID string) 
 	return result, nil
 }
 func (s *markRepositoryStub) ListByBatchID(ctx context.Context, batchID string) ([]domain.ShippingMark, error) {
-	return nil, nil
+	var result []domain.ShippingMark
+	for _, row := range s.rows {
+		if row.DispatchBatchID != nil && strings.TrimSpace(*row.DispatchBatchID) == strings.TrimSpace(batchID) {
+			result = append(result, row)
+		}
+	}
+
+	return result, nil
 }
 func (s *markRepositoryStub) Update(ctx context.Context, mark *domain.ShippingMark) error {
 	s.rows[mark.ID] = *mark
@@ -256,5 +265,58 @@ func TestMaterialize(t *testing.T) {
 	}
 	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicMarkGenerated {
 		t.Fatalf("missing mark generated event")
+	}
+}
+
+// TestRelated verifies related-mark resolution by shared order and batch values.
+func TestRelated(t *testing.T) {
+	repository := newMarkRepositoryStub()
+	service := NewService(repository, markRegistryStub{}, &publisherStub{})
+
+	batchID := "batch-1"
+	now := time.Now().UTC()
+	repository.rows["mark-target"] = domain.ShippingMark{
+		ID:              "mark-target",
+		OrderID:         "order-1",
+		CarrierID:       "manual",
+		Status:          domain.MarkStatusCreated,
+		DispatchBatchID: &batchID,
+		CreatedAt:       now,
+	}
+	repository.rows["mark-order"] = domain.ShippingMark{
+		ID:        "mark-order",
+		OrderID:   "order-1",
+		CarrierID: "manual",
+		Status:    domain.MarkStatusCreated,
+		CreatedAt: now.Add(-1 * time.Minute),
+	}
+	repository.rows["mark-batch"] = domain.ShippingMark{
+		ID:              "mark-batch",
+		OrderID:         "order-2",
+		CarrierID:       "manual",
+		Status:          domain.MarkStatusCreated,
+		DispatchBatchID: &batchID,
+		CreatedAt:       now.Add(-2 * time.Minute),
+	}
+	repository.rows["mark-other"] = domain.ShippingMark{
+		ID:        "mark-other",
+		OrderID:   "order-3",
+		CarrierID: "manual",
+		Status:    domain.MarkStatusCreated,
+		CreatedAt: now.Add(-3 * time.Minute),
+	}
+
+	rows, err := service.Related(context.Background(), "mark-target")
+	if err != nil {
+		t.Fatalf("Related() error = %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want %d", len(rows), 2)
+	}
+	if rows[0].ID != "mark-order" {
+		t.Fatalf("rows[0].ID = %q, want %q", rows[0].ID, "mark-order")
+	}
+	if rows[1].ID != "mark-batch" {
+		t.Fatalf("rows[1].ID = %q, want %q", rows[1].ID, "mark-batch")
 	}
 }

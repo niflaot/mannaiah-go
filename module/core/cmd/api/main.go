@@ -328,6 +328,10 @@ func run(ctx context.Context, envFile string) error {
 	if err := emailModule.Load(runtime); err != nil {
 		return fmt.Errorf("load email module: %w", err)
 	}
+	shippingEmailTemplateRenderer, err := newShippingTemplateRenderer()
+	if err != nil {
+		return fmt.Errorf("initialize shipping transactional template renderer: %w", err)
+	}
 
 	campaignModule, err := campaign.New(
 		campaignCfg,
@@ -495,6 +499,36 @@ func run(ctx context.Context, envFile string) error {
 		defer cancel()
 		_ = wooModule.Stop(stopCtx)
 	}()
+	if err := registerShippingMarkOrderCompletionConsumer(
+		messaging.Registrar(),
+		ordersModule.Service(),
+		logger,
+	); err != nil {
+		return fmt.Errorf("register shipping mark order completion consumer: %w", err)
+	}
+	if err := registerShippingMarkTransactionalEmailConsumer(
+		messaging.Registrar(),
+		shippingEmailConsumerDependencies{
+			marks:      shippingModule.MarkService(),
+			carriers:   shippingModule.CarrierService(),
+			orders:     ordersModule.Service(),
+			contacts:   contactsModule.Service(),
+			products:   productsModule.Service(),
+			variations: productsModule.VariationService(),
+			emails:     emailModule.Service(),
+			assetResolver: analyticsAssetURLResolver{
+				assetService: assetsModule.Service(),
+				assetBaseURL: resolveMarketingAssetBaseURL(
+					falabellaCfg.ProductImageBaseURL,
+					buildStorageBucketBaseURL(storageCfg.Endpoint, storageCfg.BucketName),
+				),
+			},
+			templateRenderer: shippingEmailTemplateRenderer,
+		},
+		logger,
+	); err != nil {
+		return fmt.Errorf("register shipping mark transactional email consumer: %w", err)
+	}
 
 	runtime.ExposeOpenAPI("/openapi.json")
 	runtime.ExposeOpenAPIUI("/docs", "/openapi.json", "Mannaiah API Docs")

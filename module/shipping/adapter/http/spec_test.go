@@ -17,6 +17,9 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/orders/{orderID}/dispatch") == nil {
 		t.Fatalf("missing /shipping/orders/{orderID}/dispatch path")
 	}
+	if paths.Find("/shipping/marks/{id}/related") == nil {
+		t.Fatalf("missing /shipping/marks/{id}/related path")
+	}
 }
 
 // TestShippingOperationsExposeSchemas verifies shipping operations expose request/response schemas.
@@ -105,6 +108,14 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	}
 	if patchVoid.Responses == nil || patchVoid.Responses.Value("200") == nil {
 		t.Fatalf("expected /shipping/marks/{id}/void PATCH 200 response")
+	}
+	getRelated := paths.Find("/shipping/marks/{id}/related").Get
+	if getRelated == nil || getRelated.Responses == nil || getRelated.Responses.Value("200") == nil {
+		t.Fatalf("expected /shipping/marks/{id}/related GET 200 response")
+	}
+	getRelatedResponse := getRelated.Responses.Value("200")
+	if getRelatedResponse.Value == nil || getRelatedResponse.Value.Content.Get("application/json") == nil {
+		t.Fatalf("expected /shipping/marks/{id}/related GET 200 JSON schema")
 	}
 
 	getTracking := paths.Find("/shipping/tracking/{trackingNumber}").Get

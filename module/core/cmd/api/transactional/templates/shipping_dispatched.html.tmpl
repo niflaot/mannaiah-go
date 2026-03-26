@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tu pedido fue despachado</title>
+</head>
+<body style="margin:0;padding:0;background-color:#242424;font-family:Manrope,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#242424;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:#f8f8f8;">
+          <tr>
+            <td style="padding:28px 40px 18px 40px;">
+              <p style="margin:0;font-size:16px;line-height:22px;font-weight:700;color:#333333;">Identificador de pedido</p>
+              <p style="margin:0;font-size:16px;line-height:22px;font-weight:400;color:#333333;"># {{ .ShippingNumber }}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <h1 style="margin:0;font-size:24px;line-height:30px;color:#333333;">Hola {{ .FirstName }},</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <p style="margin:0;font-size:16px;line-height:24px;color:#333333;">Queremos contarte que hemos despachado tu pedido y a partir de este momento se encuentra en manos de la transportadora <strong>{{ .CarrierName }}</strong> con numero de guia #<strong>{{ .TrackingNumber }}</strong>.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <p style="margin:0;font-size:16px;line-height:24px;color:#333333;">A partir de este momento no se pueden realizar modificaciones a los datos de entrega de tu pedido.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <p style="margin:0;font-size:16px;line-height:24px;color:#333333;">Puedes hacer seguimiento a tu pedido utilizando el siguiente link:</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 40px 24px 40px;">
+              <a href="{{ .TrackingURL }}" target="_blank" style="display:inline-block;padding:12px 18px;background:#f3f3f3;font-size:15px;font-weight:700;color:#333333;text-decoration:none;">RASTREAR PEDIDO</a>
+            </td>
+          </tr>
+
+          {{ if .Items }}
+          {{ range .Items }}
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f0f0;">
+                <tr>
+                  <td width="110" valign="top" style="padding:18px 10px 18px 18px;">
+                    {{ if .ImageURL }}
+                    <img src="{{ .ImageURL }}" alt="{{ .ProductName }}" width="90" style="display:block;width:90px;height:128px;object-fit:cover;border:0;" />
+                    {{ else }}
+                    <div style="width:90px;height:128px;background:#dddddd;font-size:11px;color:#666666;line-height:128px;text-align:center;">Sin imagen</div>
+                    {{ end }}
+                  </td>
+                  <td valign="top" style="padding:18px 18px 18px 10px;">
+                    <p style="margin:0 0 8px 0;font-size:14px;line-height:16px;font-weight:700;color:#1a1a1a;">{{ .ProductName }}</p>
+                    <p style="margin:0 0 8px 0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;">{{ .SKU }} - {{ .Variation }}</p>
+                    <p style="margin:0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;border-top:1px solid #cccccc;padding-top:10px;">CANTIDAD: {{ .Quantity }}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          {{ end }}
+          {{ end }}
+
+          <tr>
+            <td style="padding:16px 40px 24px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f0f0;">
+                <tr>
+                  <td valign="top" width="50%" style="padding:16px;">
+                    <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:#1a1a1a;">Direccion de facturacion</p>
+                    <p style="margin:0;font-size:12px;line-height:20px;font-weight:500;color:#242424;">{{ .Billing.Name }}<br />{{ .Billing.Address1 }}<br />{{ .Billing.Address2 }}<br />{{ .Billing.City }}, {{ .Billing.Department }}</p>
+                    <p style="margin:12px 0 8px 0;font-size:14px;font-weight:700;color:#1a1a1a;">Metodo de pago</p>
+                    <p style="margin:0;font-size:12px;line-height:20px;font-weight:500;color:#242424;">{{ .PaymentMethod }}</p>
+                  </td>
+                  <td valign="top" width="50%" style="padding:16px;">
+                    <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:#1a1a1a;">Direccion de entrega</p>
+                    <p style="margin:0;font-size:12px;line-height:20px;font-weight:500;color:#242424;">{{ .Shipping.Name }}<br />{{ .Shipping.Address1 }}<br />{{ .Shipping.Address2 }}<br />{{ .Shipping.City }}, {{ .Shipping.Department }}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px 40px;background:#242424;text-align:center;">
+              <p style="margin:0 0 14px 0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;font-size:18px;line-height:22px;font-weight:800;color:#757575;">Necesitas ayuda con tu pedido?</p>
+              <a href="{{ .HelpURL }}" target="_blank" style="display:inline-block;padding:10px 16px;background:#f3f3f3;font-size:14px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;">ESCRIBENOS A WHATSAPP</a>
+              <p style="margin:18px 0 0 0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;font-size:12px;line-height:20px;color:#888888;">GRUPO COCCO SAS - Calle 18 Sur # 24D - 46. Esto es un correo electronico automatico, no recibiras respuesta al responderlo.</p>
+              <p style="margin:6px 0 0 0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;font-size:12px;line-height:20px;color:#ffffff;"><a href="https://www.flockstore.co/terminos-condiciones/" target="_blank" style="color:#ffffff;text-decoration:none;font-weight:700;">Terminos y Condiciones</a></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

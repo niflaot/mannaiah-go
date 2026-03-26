@@ -99,6 +99,7 @@ func mapMainstreamCommand(payload ordersport.OrderEventPayload) port.MainstreamO
 
 	command := port.MainstreamOrderUpdateCommand{
 		Identifier:      strings.TrimSpace(payload.Identifier),
+		Status:          mapMainstreamStatus(firstNonEmptyStatus(payload.LatestStatus.Status, payload.CurrentStatus)),
 		ShippingCharges: charges,
 		Items:           items,
 	}
@@ -112,6 +113,36 @@ func mapMainstreamCommand(payload ordersport.OrderEventPayload) port.MainstreamO
 	}
 
 	return command
+}
+
+// firstNonEmptyStatus resolves the first non-empty status value.
+func firstNonEmptyStatus(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return ""
+}
+
+// mapMainstreamStatus maps order-domain/mainstream status values to WooCommerce status values.
+func mapMainstreamStatus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "created", "processing":
+		return "processing"
+	case "pending", "pending-payment":
+		return "pending"
+	case "hold", "on_hold", "on-hold":
+		return "on-hold"
+	case "completed", "complete":
+		return "completed"
+	case "cancelled", "canceled", "failed":
+		return "cancelled"
+	default:
+		return ""
+	}
 }
 
 // isWooRealm reports whether realm values target WooCommerce integration.

@@ -39,6 +39,9 @@ func (markServiceStub) Void(ctx context.Context, id string, reason string) (*dom
 func (markServiceStub) QueryDispatch(ctx context.Context, query markservice.DispatchQuery) (*markservice.DispatchResult, error) {
 	return &markservice.DispatchResult{}, nil
 }
+func (markServiceStub) Related(ctx context.Context, id string) ([]domain.ShippingMark, error) {
+	return nil, nil
+}
 
 type dispatchServiceStub struct{}
 

@@ -68,8 +68,12 @@ func TestHandleOrderEventMapsCommand(t *testing.T) {
 	}
 
 	err = service.HandleOrderEvent(context.Background(), ordersport.OrderEventPayload{
-		Identifier: "1001",
-		Realm:      "woocommerce",
+		Identifier:    "1001",
+		Realm:         "woocommerce",
+		CurrentStatus: "CREATED",
+		LatestStatus: ordersport.OrderEventStatus{
+			Status: "COMPLETED",
+		},
 		Items: []ordersport.OrderEventItem{
 			{SKU: "SKU-1", AlternateName: "Item Name", Quantity: 2, Value: 20},
 		},
@@ -88,6 +92,9 @@ func TestHandleOrderEventMapsCommand(t *testing.T) {
 	}
 	if destination.command.Identifier != "1001" {
 		t.Fatalf("command.Identifier = %q, want %q", destination.command.Identifier, "1001")
+	}
+	if destination.command.Status != "completed" {
+		t.Fatalf("command.Status = %q, want %q", destination.command.Status, "completed")
 	}
 	if len(destination.command.Items) != 1 || destination.command.Items[0].SKU != "SKU-1" {
 		t.Fatalf("command.Items = %+v, want one SKU-1 row", destination.command.Items)
@@ -126,5 +133,26 @@ func TestIsWooNumericIdentifier(t *testing.T) {
 	}
 	if isWooNumericIdentifier("0") {
 		t.Fatalf("isWooNumericIdentifier(0) = true, want false")
+	}
+}
+
+// TestMapMainstreamStatus verifies order status mapping behavior for mainstream updates.
+func TestMapMainstreamStatus(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: "CREATED", want: "processing"},
+		{input: "PENDING", want: "pending"},
+		{input: "HOLD", want: "on-hold"},
+		{input: "COMPLETED", want: "completed"},
+		{input: "CANCELLED", want: "cancelled"},
+		{input: "UNKNOWN", want: ""},
+	}
+
+	for _, tc := range cases {
+		if got := mapMainstreamStatus(tc.input); got != tc.want {
+			t.Fatalf("mapMainstreamStatus(%q) = %q, want %q", tc.input, got, tc.want)
+		}
 	}
 }

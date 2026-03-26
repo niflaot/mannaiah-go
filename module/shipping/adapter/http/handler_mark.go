@@ -164,6 +164,21 @@ func (h *Handler) listMarks(ctx corehttp.Context) error {
 	return ctx.Status(200).JSON(markListResponse{Data: rows, Total: total, Page: page, Limit: limit})
 }
 
+// listRelatedMarks handles shipping mark related-list requests.
+func (h *Handler) listRelatedMarks(ctx corehttp.Context) error {
+	rows, err := h.marks.Related(ctx.Context(), strings.TrimSpace(ctx.Params("id")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(markListResponse{
+		Data:  rows,
+		Total: int64(len(rows)),
+		Page:  1,
+		Limit: len(rows),
+	})
+}
+
 // voidMark handles mark void requests.
 func (h *Handler) voidMark(ctx corehttp.Context) error {
 	request := voidMarkRequest{}

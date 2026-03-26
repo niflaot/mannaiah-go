@@ -29,7 +29,7 @@
   - `(*shipping.Module).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /shipping/quotations`, `GET /shipping/quotations`
-  - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
+  - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
   - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`
   - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`

@@ -154,6 +154,9 @@ func TestUpdateOrderFromMainstreamUsesRawPayload(t *testing.T) {
 				if err := json.Unmarshal(body, &payload); err != nil {
 					t.Fatalf("json.Unmarshal() error = %v", err)
 				}
+				if payload["status"] != "completed" {
+					t.Fatalf("payload.status = %v, want %q", payload["status"], "completed")
+				}
 
 				lineItems, _ := payload["line_items"].([]any)
 				if len(lineItems) != 1 {
@@ -210,6 +213,7 @@ func TestUpdateOrderFromMainstreamUsesRawPayload(t *testing.T) {
 
 	err := client.UpdateOrderFromMainstream(context.Background(), port.MainstreamOrderUpdateCommand{
 		Identifier: "1023650",
+		Status:     "COMPLETED",
 		Items: []port.OrderSyncItem{
 			{SKU: "SKU-1", Quantity: 2, Value: 120000},
 			{Name: "Quota", Quantity: 1, Value: 15000},
@@ -329,6 +333,26 @@ func TestMapLineItemsForRawUpdateRemovesStaleRows(t *testing.T) {
 	}
 	if rows[1]["quantity"] != 0 {
 		t.Fatalf("rows[1].quantity = %v, want %d", rows[1]["quantity"], 0)
+	}
+}
+
+// TestNormalizeWooStatus verifies mainstream status normalization for WooCommerce updates.
+func TestNormalizeWooStatus(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: "COMPLETED", want: "completed"},
+		{input: "created", want: "processing"},
+		{input: "on_hold", want: "on-hold"},
+		{input: "on-hold", want: "on-hold"},
+		{input: "", want: ""},
+	}
+
+	for _, tc := range cases {
+		if got := normalizeWooStatus(tc.input); got != tc.want {
+			t.Fatalf("normalizeWooStatus(%q) = %q, want %q", tc.input, got, tc.want)
+		}
 	}
 }
 

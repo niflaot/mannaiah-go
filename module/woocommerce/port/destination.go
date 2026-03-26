@@ -6,6 +6,8 @@ import "context"
 type MainstreamOrderUpdateCommand struct {
 	// Identifier defines external WooCommerce order identifiers.
 	Identifier string
+	// Status defines optional WooCommerce status values (for example, processing/completed).
+	Status string
 	// ShippingAddress defines explicit shipping-address values.
 	ShippingAddress *OrderSyncShippingAddress
 	// ShippingCharges defines shipping charge values.

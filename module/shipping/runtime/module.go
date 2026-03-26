@@ -51,6 +51,14 @@ type Module struct {
 	carrierService *carrierService
 }
 
+// CarrierService defines carrier listing/lookup behavior exposed for integration consumers.
+type CarrierService interface {
+	// List returns configured carriers.
+	List(ctx context.Context) ([]domain.Carrier, error)
+	// Get returns one configured carrier by identifier.
+	Get(ctx context.Context, id string) (*domain.Carrier, error)
+}
+
 // carrierService defines carrier listing behavior.
 type carrierService struct {
 	// registry defines provider registry dependencies.
@@ -177,6 +185,15 @@ func (m *Module) TrackingService() *trackingservice.Service {
 	}
 
 	return m.trackingService
+}
+
+// CarrierService returns carrier listing dependencies.
+func (m *Module) CarrierService() CarrierService {
+	if m == nil {
+		return nil
+	}
+
+	return m.carrierService
 }
 
 // OpenAPISpec returns shipping-module OpenAPI documentation.

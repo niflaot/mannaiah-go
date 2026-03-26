@@ -50,6 +50,8 @@ type MarkService interface {
 	Void(ctx context.Context, id string, reason string) (*domain.ShippingMark, error)
 	// QueryDispatch resolves the dispatch provisioning status for one order.
 	QueryDispatch(ctx context.Context, query markservice.DispatchQuery) (*markservice.DispatchResult, error)
+	// Related resolves related shipping marks by mark identifier.
+	Related(ctx context.Context, id string) ([]domain.ShippingMark, error)
 }
 
 // DispatchService defines dispatch batch behavior required by HTTP handlers.
@@ -127,6 +129,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/shipping/quotations", h.protect("marketing:manage", h.listQuotations))
 	router.Post("/shipping/marks", h.protect("marketing:manage", h.createMark))
 	router.Get("/shipping/marks/:id", h.protect("marketing:manage", h.getMark))
+	router.Get("/shipping/marks/:id/related", h.protect("marketing:manage", h.listRelatedMarks))
 	router.Get("/shipping/marks", h.protect("marketing:manage", h.listMarks))
 	router.Patch("/shipping/marks/:id/void", h.protect("marketing:manage", h.voidMark))
 	router.Get("/shipping/orders/:orderID/dispatch", h.protect("marketing:manage", h.getOrderDispatch))

@@ -61,6 +61,10 @@ func (c *Client) toUpdateOrderRawRequest(ctx context.Context, orderID int, comma
 
 	request := map[string]any{}
 
+	if status := normalizeWooStatus(command.Status); status != "" {
+		request["status"] = status
+	}
+
 	mappedLineItems := mapLineItemsForRawUpdate(lineItems, state.LineItems)
 	if len(mappedLineItems) > 0 {
 		request["line_items"] = mappedLineItems
@@ -94,6 +98,19 @@ func (c *Client) toUpdateOrderRawRequest(ctx context.Context, orderID int, comma
 	}
 
 	return request, nil
+}
+
+// normalizeWooStatus normalizes mainstream status values for WooCommerce update payloads.
+func normalizeWooStatus(value string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	switch trimmed {
+	case "created":
+		return "processing"
+	case "on_hold":
+		return "on-hold"
+	default:
+		return trimmed
+	}
 }
 
 // resolveOrderItemsForUpdate resolves line-item and fee-line payload values.

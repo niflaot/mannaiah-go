@@ -115,7 +115,7 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("create woo-realm order and trigger order created integration event")
-	status, _ = harness.DoJSONRequest(t, http.MethodPost, "/orders", ordersManageToken, []byte(`{
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/orders", ordersManageToken, []byte(`{
 		"identifier":"`+orderIdentifier+`",
 		"realm":"woocommerce",
 		"contactId":"`+contactID+`",
@@ -125,6 +125,10 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 	}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
+	}
+	orderID, _ := payload["id"].(string)
+	if orderID == "" {
+		t.Fatalf("expected order id")
 	}
 
 	harness.tracer.Step("assert woo update payload was received")
@@ -140,6 +144,27 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected woo update request")
+	}
+
+	harness.tracer.Step("update order status to completed and trigger order-status integration event")
+	status, _ = harness.DoJSONRequest(t, http.MethodPatch, "/orders/"+orderID+"/status", ordersManageToken, []byte(`{
+		"status":"COMPLETED",
+		"author":"shipping",
+		"description":"completed after shipping mark generation",
+		"source":"shipping_mark_generated"
+	}`))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+
+	harness.tracer.Step("assert woo completion update payload was received")
+	select {
+	case completionPayload := <-updatePayloads:
+		if completionPayload["status"] != "completed" {
+			t.Fatalf("completion payload.status = %v, want %q", completionPayload["status"], "completed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected woo completion update request")
 	}
 
 	harness.tracer.Step("publish woocommerce-origin order event and assert loop prevention")
@@ -158,10 +183,10 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 		t.Fatalf("messaging.Publisher().Publish() error = %v", err)
 	}
 	time.Sleep(250 * time.Millisecond)
-	if atomic.LoadInt32(&updateCount) != 1 {
-		t.Fatalf("updateCount = %d, want %d", atomic.LoadInt32(&updateCount), 1)
+	if atomic.LoadInt32(&updateCount) != 2 {
+		t.Fatalf("updateCount = %d, want %d", atomic.LoadInt32(&updateCount), 2)
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(6)
+	harness.tracer.AssertStepCount(8)
 }

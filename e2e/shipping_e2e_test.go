@@ -84,6 +84,49 @@ func TestShippingManualFlowE2E(t *testing.T) {
 		t.Fatalf("payload.status = %v, want %q", payload["status"], "GENERATED")
 	}
 
+	harness.tracer.Step("create second manual shipping mark for same order")
+	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/marks", manageToken, []byte(`{
+	  "orderId":"order-shipping-1",
+	  "carrierId":"manual",
+	  "sender":{"name":"Flock","id":"901599500","idType":"NIT","addressLine":"Sender street 123","cityCode":"11001000","phone":"3000000000","email":"contacto@flockstore.co"},
+	  "recipient":{"name":"Marylu","id":"83395cf06d6837104f19a7c9a99a2517","idType":"CC","addressLine":"Recipient street 456","cityCode":"76001000","phone":"3110000000","email":"coccostoreco@gmail.com"},
+	  "paymentForm":"1",
+	  "declaredValue":147000,
+	  "shipmentMode":"parcel",
+	  "units":[{"description":"totebag","packageType":"CAJA","dimensions":{"heightCm":18,"widthCm":16,"depthCm":10,"realWeightKg":1.2}}]
+	}`))
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
+	}
+	secondMarkID, _ := payload["id"].(string)
+	if secondMarkID == "" {
+		t.Fatalf("expected related mark id")
+	}
+
+	harness.tracer.Step("list related marks for first mark")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/shipping/marks/"+markID+"/related", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	relatedRows, ok := payload["data"].([]any)
+	if !ok || len(relatedRows) == 0 {
+		t.Fatalf("payload.data = %v, want at least one related mark", payload["data"])
+	}
+	foundSecond := false
+	for _, row := range relatedRows {
+		entity, _ := row.(map[string]any)
+		if entity["id"] == secondMarkID {
+			foundSecond = true
+			break
+		}
+	}
+	if !foundSecond {
+		t.Fatalf("related mark list should include second mark id %q, got %v", secondMarkID, relatedRows)
+	}
+	if payload["total"] == nil {
+		t.Fatalf("payload.total should be present")
+	}
+
 	harness.tracer.Step("create dispatch batch")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/shipping/batches", manageToken, []byte(`{"name":"Dispatch 2026-03-22 #1","carrierId":"manual"}`))
 	if status != http.StatusCreated {
@@ -150,5 +193,5 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(11)
+	harness.tracer.AssertStepCount(13)
 }

@@ -52,6 +52,25 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.0.0] - 2026-03-25
+- Shipping API: related-marks endpoint added.
+  - `GET /shipping/marks/{id}/related` returns marks related by `orderId` and/or `dispatchBatchId` (excluding self), sorted by newest first.
+  - Shipping HTTP adapter, service, OpenAPI path/spec, and tests updated.
+- Shipping event integration: mark-generated order auto-completion added in core runtime.
+  - New consumer on `shipping.v1.mark.generated` resolves `orderId` and appends `COMPLETED` status with source `shipping_mark_generated`.
+  - Completion update flows through existing order integration events (`orders.v1.status.updated`) to keep downstream consumers decoupled.
+- WooCommerce mainstream update path: status propagation added.
+  - `MainstreamOrderUpdateCommand` now includes `status`.
+  - Woo adapter raw update payload now sets Woo order `status` when provided.
+  - Mapping added from mainstream/domain statuses to Woo statuses (`created->processing`, `hold->on-hold`, `completed->completed`, etc.).
+  - Unit and e2e coverage extended to verify completed-status propagation.
+- Transactional shipping email flow added on shipping-mark generation.
+  - New embedded template folder: `module/core/cmd/api/transactional/templates/`.
+  - New template: `shipping_dispatched.html.tmpl`, rendered with the same Go-template renderer used for campaign templates.
+  - New core consumer listens to `shipping.v1.mark.generated` and sends a transactional email with idempotency key `shipping_mark_dispatched:<markId>`.
+  - Template data includes shipping number, public order number, carrier/tracking values, tracking CTA (`https://rastreo.flockstore.co`), WhatsApp help CTA, billing/shipping fallbacks, payment method, and ordered items.
+  - Product image selection prefers default-realm gallery assets and variation-specific images when SKU/variation mapping is available.
+
 ### [v1.0.0] - 2026-03-24
 - Shipping quotation: discounted freight-cost fields added to quotation result.
   - `fullFreightCost`, `discountPercent`, `discountedFreightCost` added to `QuotationResult` and `port.QuotationRecord`.
