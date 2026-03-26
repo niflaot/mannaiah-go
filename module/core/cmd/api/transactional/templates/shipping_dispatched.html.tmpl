@@ -81,7 +81,7 @@
                 <!-- ── Body paragraphs ── -->
                 <tr>
                   <td colspan="2" style="padding:0 0 16px 0;">
-                    <p style="margin:0;font-size:15px;line-height:24px;color:#555555;" class="txt-body">Queremos contarte que hemos despachado tu pedido y a partir de este momento se encuentra en manos de la transportadora <strong style="color:#333333;" class="txt-main">{{ .CarrierName }}</strong> con numero de guia #<strong style="color:#333333;" class="txt-main">{{ .TrackingNumber }}</strong>.</p>
+                    <p style="margin:0;font-size:15px;line-height:24px;color:#555555;" class="txt-body">Queremos contarte que hemos despachado tu pedido y, a partir de este momento, se encuentra en manos de la transportadora <strong style="color:#333333;" class="txt-main">{{ .CarrierName }}</strong>, con número de guía #<strong style="color:#333333;" class="txt-main">{{ .TrackingNumber }}</strong>.</p>
                   </td>
                 </tr>
                 <tr>
@@ -91,7 +91,7 @@
                 </tr>
                 <tr>
                   <td colspan="2" style="padding:0 0 14px 0;">
-                    <p style="margin:0;font-size:15px;line-height:24px;color:#555555;" class="txt-body">Puedes hacer seguimiento a tu pedido utilizando el siguiente link:</p>
+                    <p style="margin:0;font-size:15px;line-height:24px;color:#555555;" class="txt-body">Puedes hacer seguimiento a tu pedido utilizando el siguiente enlace:</p>
                   </td>
                 </tr>
 
@@ -146,19 +146,19 @@
                         <!-- Billing + payment -->
                         <td class="addr-col-l" valign="top" width="50%"
                             style="padding:28px 24px 28px 28px;box-sizing:border-box;">
-                          <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Direccion de facturacion</p>
+                          <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de facturación</p>
                           <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;font-weight:500;color:#555555;" class="txt-body">
                             {{ .Billing.Name }}<br />
                             {{ .Billing.Address1 }}{{ if .Billing.Address2 }}<br />{{ .Billing.Address2 }}{{ end }}<br />
                             {{ .Billing.City }}, {{ .Billing.Department }}
                           </p>
-                          <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Metodo de pago</p>
+                          <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Método de pago</p>
                           <p style="margin:0;font-size:12px;line-height:20px;font-weight:500;color:#555555;" class="txt-body">{{ .PaymentMethod }}</p>
                         </td>
                         <!-- Shipping address -->
                         <td class="addr-col-r" valign="top" width="50%"
                             style="padding:28px 28px 28px 24px;box-sizing:border-box;border-left:1px solid #e0e0e0;">
-                          <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Direccion de entrega</p>
+                          <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de entrega</p>
                           <p style="margin:0;font-size:12px;line-height:20px;font-weight:500;color:#555555;" class="txt-body">
                             {{ .Shipping.Name }}<br />
                             {{ .Shipping.Address1 }}{{ if .Shipping.Address2 }}<br />{{ .Shipping.Address2 }}{{ end }}<br />
@@ -181,13 +181,13 @@
               (readable on dark bg, also survives if Gmail mobile strips the bg).
             -->
             <td class="bg-footer" style="padding:32px 50px;background-color:#242424;text-align:center;">
-              <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">Necesitas ayuda con tu pedido?</p>
+              <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">¿Necesitas ayuda con tu pedido?</p>
               <a href="{{ .HelpURL }}" target="_blank" class="btn-wp"
-                 style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ESCRIBENOS A WHATSAPP</a>
-              <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">GRUPO COCCO SAS - Calle 18 Sur # 24D - 46. Esto es un correo electronico automatico, no recibiras respuesta al responderlo.</p>
+                 style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ESCRÍBENOS A WHATSAPP</a>
+              <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">GRUPO COCCO SAS - Calle 18 Sur # 24D - 46. Esto es un correo electrónico automático; no recibirás respuesta al responderlo.</p>
               <p style="margin:8px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;">
                 <a href="https://www.flockstore.co/terminos-condiciones/" target="_blank"
-                   style="color:#aaaaaa;text-decoration:none;font-weight:700;">Terminos y Condiciones</a>
+                   style="color:#aaaaaa;text-decoration:none;font-weight:700;">Términos y Condiciones</a>
               </p>
             </td>
           </tr>

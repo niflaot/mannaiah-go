@@ -111,7 +111,7 @@ func buildShippingDispatchedTemplateData(
 		HelpURL:        buildShippingHelpURL(firstNonEmpty(meta.OrderNumber, order.ID)),
 		Billing:        billingAddress,
 		Shipping:       shippingAddress,
-		PaymentMethod:  firstNonEmpty(order.PaymentMethod, "No especificado"),
+		PaymentMethod:  strings.ToUpper(firstNonEmpty(order.PaymentMethod, "NO ESPECIFICADO")),
 		Items:          buildShippingDispatchedItems(ctx, deps, order.Items),
 	}
 }
