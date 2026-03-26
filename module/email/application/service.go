@@ -76,6 +76,8 @@ type Service interface {
 	HandleWebhook(ctx context.Context, command WebhookCommand) error
 	// Get retrieves one delivery by id.
 	Get(ctx context.Context, deliveryID string) (*domain.Delivery, error)
+	// ListByEmail retrieves deliveries sent to one recipient email.
+	ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error)
 	// TrackOpen records an open event for a delivery identified by deliveryID.
 	TrackOpen(ctx context.Context, deliveryID string) error
 }
@@ -318,6 +320,21 @@ func (s *EmailService) Get(ctx context.Context, deliveryID string) (*domain.Deli
 	}
 
 	return delivery, nil
+}
+
+// ListByEmail retrieves deliveries sent to one recipient email.
+func (s *EmailService) ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error) {
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	if normalizedEmail == "" {
+		return nil, domain.ErrInvalidEmail
+	}
+
+	deliveries, err := s.repository.ListByEmail(ctx, normalizedEmail)
+	if err != nil {
+		return nil, fmt.Errorf("list deliveries by email: %w", err)
+	}
+
+	return deliveries, nil
 }
 
 // TrackOpen records an open event for a delivery identified by deliveryID.

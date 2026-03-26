@@ -188,6 +188,24 @@ func (r *Repository) GetByProviderMessageID(ctx context.Context, providerMessage
 	return mapDelivery(row), nil
 }
 
+// ListByEmail retrieves all deliveries sent to one recipient email.
+func (r *Repository) ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error) {
+	rows := make([]deliveryModel, 0)
+	if err := r.db.WithContext(ctx).
+		Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(email))).
+		Order("created_at DESC, id DESC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list deliveries by email: %w", err)
+	}
+
+	result := make([]*domain.Delivery, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, mapDelivery(row))
+	}
+
+	return result, nil
+}
+
 // ListByCampaignID retrieves paginated delivery rows for a campaign by idempotency key prefix.
 func (r *Repository) ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]*domain.Delivery, int64, error) {
 	if page <= 0 {

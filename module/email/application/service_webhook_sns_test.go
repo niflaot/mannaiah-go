@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -124,6 +125,31 @@ func (s *snsWebhookRepositoryStub) GetByProviderMessageID(ctx context.Context, p
 	copy := *delivery
 
 	return &copy, nil
+}
+
+// ListByEmail retrieves in-memory delivery rows by recipient email ordered by created time descending.
+func (s *snsWebhookRepositoryStub) ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	rows := make([]*domain.Delivery, 0)
+	for _, delivery := range s.deliveriesByID {
+		if strings.ToLower(strings.TrimSpace(delivery.Email)) == normalizedEmail {
+			copy := *delivery
+			rows = append(rows, &copy)
+		}
+	}
+
+	sort.Slice(rows, func(i int, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID > rows[j].ID
+		}
+
+		return rows[i].CreatedAt.After(rows[j].CreatedAt)
+	})
+
+	return rows, nil
 }
 
 // ListByCampaignID returns empty rows for this test stub.

@@ -7,5 +7,6 @@ Implements send, SNS webhook status update, and complaint/bounce handling use-ca
   - `NewService(repository, provider, membershipStamper...)`
   - `(*EmailService).Send(...)`
   - `(*EmailService).HandleWebhook(...)`
+  - `(*EmailService).ListByEmail(...)`
 - Endpoints: none.
 - Events: none.

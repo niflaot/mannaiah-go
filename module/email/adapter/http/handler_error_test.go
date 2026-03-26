@@ -27,6 +27,11 @@ func (handlerErrorServiceStub) Get(ctx context.Context, deliveryID string) (*dom
 	return &domain.Delivery{}, nil
 }
 
+// ListByEmail returns empty rows for handler error mapping tests.
+func (handlerErrorServiceStub) ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error) {
+	return []*domain.Delivery{}, nil
+}
+
 // TrackOpen returns nil for handler error mapping tests.
 func (handlerErrorServiceStub) TrackOpen(ctx context.Context, deliveryID string) error {
 	return nil

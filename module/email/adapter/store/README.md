@@ -8,5 +8,6 @@ GORM repository for email deliveries and status history.
   - `(*Repository).CreateDelivery(...)`
   - `(*Repository).UpdateDeliveryStatus(...)`
   - `(*Repository).AddStatusEntry(...)`
+  - `(*Repository).ListByEmail(...)`
 - Endpoints: none.
 - Events: none.

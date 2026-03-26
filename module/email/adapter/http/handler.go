@@ -37,6 +37,8 @@ type Service interface {
 	HandleWebhook(ctx context.Context, command application.WebhookCommand) error
 	// Get retrieves one delivery by id.
 	Get(ctx context.Context, deliveryID string) (*domain.Delivery, error)
+	// ListByEmail retrieves deliveries sent to one recipient email.
+	ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error)
 	// TrackOpen records an open event for a delivery identified by deliveryID.
 	TrackOpen(ctx context.Context, deliveryID string) error
 }
@@ -133,6 +135,7 @@ var transparentGIF = []byte{
 // RegisterRoutes registers email routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/email/send", h.protect("marketing:manage", h.send))
+	router.Get("/email/deliveries", h.protect("marketing:manage", h.deliveriesByEmail))
 	router.Get("/email/deliveries/:id", h.protect("marketing:manage", h.delivery))
 	router.Post("/email/webhooks/ses", h.webhook)
 	router.Get("/email/track/open/:id", h.trackOpen)
@@ -283,6 +286,16 @@ func (h *Handler) delivery(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(delivery)
+}
+
+// deliveriesByEmail handles delivery-list lookup requests by recipient email.
+func (h *Handler) deliveriesByEmail(ctx corehttp.Context) error {
+	deliveries, err := h.service.ListByEmail(ctx.Context(), strings.TrimSpace(ctx.Query("email")))
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(deliveries)
 }
 
 // trackOpen handles open-tracking pixel requests. No authentication is required.

@@ -9,6 +9,7 @@ Defines provider, repository, membership-stamper, and SNS signature-verifier con
   - `Repository.UpdateDeliveryStatus(...)`
   - `Repository.AddStatusEntry(...)`
   - `Repository.CountStatusEntries(...)`
+  - `Repository.ListByEmail(...)`
   - `MembershipStamper.OptOutByEmail(...)`
   - `SNSMessageVerifier.Verify(...)`
 - Endpoints: none.

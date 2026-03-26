@@ -10,6 +10,7 @@ Composition root for email module wiring and OpenAPI registration.
   - `(*Module).SetMembershipStamper(...)`
 - Endpoints:
   - `POST /email/send`
+  - `GET /email/deliveries?email=<recipient_email>`
   - `GET /email/deliveries/:id`
   - `POST /email/webhooks/ses` (public SNS endpoint, signature-verified)
 - Events: none.

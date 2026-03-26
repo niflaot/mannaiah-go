@@ -24,6 +24,7 @@ func OpenAPISpec() *openapi3.T {
 		},
 		Paths: openapi3.NewPaths(
 			openapi3.WithPath("/email/send", &openapi3.PathItem{Post: sendOperation()}),
+			openapi3.WithPath("/email/deliveries", &openapi3.PathItem{Get: deliveriesByEmailOperation()}),
 			openapi3.WithPath("/email/deliveries/{id}", &openapi3.PathItem{Get: deliveryOperation()}),
 			openapi3.WithPath("/email/webhooks/ses", &openapi3.PathItem{Post: webhookOperation()}),
 			openapi3.WithPath("/email/track/open/{id}", &openapi3.PathItem{Get: trackOpenOperation()}),
@@ -44,6 +45,23 @@ func sendOperation() *openapi3.Operation {
 		Security:    bearerSecurityRequirements(),
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(202, responseWithDescription("Email accepted.")),
+		),
+	}
+}
+
+// deliveriesByEmailOperation defines the OpenAPI operation for recipient delivery lookup requests.
+func deliveriesByEmailOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "EmailController_deliveriesByEmail",
+		Summary:     "List email deliveries by recipient email",
+		Tags:        []string{emailTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			{Value: &openapi3.Parameter{Name: "email", In: "query", Required: true, Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()}}},
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Recipient email deliveries.")),
+			openapi3.WithStatus(400, responseWithDescription("Invalid email value.")),
 		),
 	}
 }

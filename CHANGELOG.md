@@ -52,6 +52,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.0.0] - 2026-03-26
+- Email API: recipient-delivery listing endpoint added.
+  - `GET /email/deliveries?email=<recipient_email>` returns all deliveries sent to the provided email, ordered by newest first.
+  - Email service/repository contracts and store implementation updated for recipient-email filtering.
+  - Email HTTP adapter, OpenAPI path/spec, and unit test coverage updated.
+
 ### [v1.0.0] - 2026-03-25
 - Shipping API: related-marks endpoint added.
   - `GET /shipping/marks/{id}/related` returns marks related by `orderId` and/or `dispatchBatchId` (excluding self), sorted by newest first.
