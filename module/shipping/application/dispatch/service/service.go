@@ -77,6 +77,8 @@ type Service struct {
 	publisher port.IntegrationEventPublisher
 	// materializer defines optional carrier-submission dependencies used at batch close.
 	materializer MarkMaterializer
+	// manifestDocuments defines on-demand batch manifest document generation dependencies.
+	manifestDocuments *batchManifestDocumentBuilder
 }
 
 // NewService creates dispatch batch services.
@@ -86,7 +88,13 @@ func NewService(batchRepository port.DispatchBatchRepository, markRepository por
 		materializer = materializers[0]
 	}
 
-	return &Service{batchRepository: batchRepository, markRepository: markRepository, publisher: publisher, materializer: materializer}
+	return &Service{
+		batchRepository:   batchRepository,
+		markRepository:    markRepository,
+		publisher:         publisher,
+		materializer:      materializer,
+		manifestDocuments: newBatchManifestDocumentBuilder(),
+	}
 }
 
 // Create creates one dispatch batch.
@@ -227,6 +235,7 @@ func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBa
 	if err := s.batchRepository.Close(ctx, trimmedID); err != nil {
 		return nil, err
 	}
+	s.invalidateBatchManifestDocumentCache(trimmedID)
 	batch, err := s.batchRepository.GetByID(ctx, trimmedID)
 	if err != nil {
 		return nil, err

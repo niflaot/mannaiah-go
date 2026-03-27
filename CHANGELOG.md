@@ -53,6 +53,17 @@ A new release image is accepted only if all are true:
 Keep newest entries on top. Add one section per version.
 
 ### [v1.0.0] - 2026-03-26
+- Shipping batches: merged manifest print document added.
+  - New endpoint: `GET /shipping/batches/{id}/manifest-document`.
+  - Document is generated on-demand for closed batches and cached in-memory for `5` minutes.
+  - Output is `application/pdf` in letter format with:
+    - cover summary page (logo + batch metadata: id, generation timestamp, carrier, quantity)
+    - detail table headers: `tracking number`, `recipient`, `order #`, `city`, `items`
+    - merged carrier manifest PDF pages appended after the cover page.
+  - Manifest fetch failures are handled per-document (skipped with warning) without failing full output.
+  - Optional order-summary resolver wired from core composition root to use order public identifiers and item labels in cover rows.
+
+### [v1.0.0] - 2026-03-26
 - Shipping marks: carrier manifest persistence added without breaking batch close on missing manifest.
   - `ShippingMark` now stores both artifact pairs:
     - mark document: `documentType` / `documentRef`

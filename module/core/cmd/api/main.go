@@ -464,6 +464,9 @@ func run(ctx context.Context, envFile string) error {
 	if err := ordersModule.Load(runtime); err != nil {
 		return fmt.Errorf("load orders module: %w", err)
 	}
+	shippingModule.DispatchService().SetBatchManifestOrderSummaryResolver(shippingBatchManifestOrderSummaryAdapter{
+		orders: ordersModule.Service(),
+	})
 
 	var wooScheduler corecron.Scheduler
 	if wooCfg.SyncContacts || wooCfg.SyncOrders {

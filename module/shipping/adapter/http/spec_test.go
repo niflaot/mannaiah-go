@@ -14,6 +14,9 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/batches/{id}/close") == nil {
 		t.Fatalf("missing /shipping/batches/{id}/close path")
 	}
+	if paths.Find("/shipping/batches/{id}/manifest-document") == nil {
+		t.Fatalf("missing /shipping/batches/{id}/manifest-document path")
+	}
 	if paths.Find("/shipping/orders/{orderID}/dispatch") == nil {
 		t.Fatalf("missing /shipping/orders/{orderID}/dispatch path")
 	}
@@ -131,5 +134,14 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	getTrackingResponse := getTracking.Responses.Value("200")
 	if getTrackingResponse.Value == nil || getTrackingResponse.Value.Content.Get("application/json") == nil {
 		t.Fatalf("expected /shipping/tracking/{trackingNumber} GET 200 JSON schema")
+	}
+
+	getBatchManifestDocument := paths.Find("/shipping/batches/{id}/manifest-document").Get
+	if getBatchManifestDocument == nil || getBatchManifestDocument.Responses == nil || getBatchManifestDocument.Responses.Value("200") == nil {
+		t.Fatalf("expected /shipping/batches/{id}/manifest-document GET 200 response")
+	}
+	getBatchManifestDocumentResponse := getBatchManifestDocument.Responses.Value("200")
+	if getBatchManifestDocumentResponse.Value == nil || getBatchManifestDocumentResponse.Value.Content.Get("application/pdf") == nil {
+		t.Fatalf("expected /shipping/batches/{id}/manifest-document GET 200 application/pdf response")
 	}
 }

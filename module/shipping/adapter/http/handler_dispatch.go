@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"strings"
 
 	corehttp "mannaiah/module/core/http"
@@ -162,4 +163,19 @@ func (h *Handler) closeBatch(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(batch)
+}
+
+// batchManifestDocument handles merged batch manifest document downloads.
+func (h *Handler) batchManifestDocument(ctx corehttp.Context) error {
+	batchID := strings.TrimSpace(ctx.Params("id"))
+	payload, err := h.batches.ManifestDocument(ctx.Context(), batchID)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	ctx.SetHeader("Content-Type", "application/pdf")
+	ctx.SetHeader("Content-Disposition", fmt.Sprintf("inline; filename=\"batch-%s-manifests.pdf\"", batchID))
+	ctx.SetHeader("Cache-Control", "private, max-age=300")
+
+	return ctx.Status(200).SendBytes(payload)
 }

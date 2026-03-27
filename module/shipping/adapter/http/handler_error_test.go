@@ -63,6 +63,9 @@ func (dispatchServiceStub) RemoveDraftMark(ctx context.Context, batchID string, 
 func (dispatchServiceStub) Close(ctx context.Context, batchID string) (*domain.DispatchBatch, error) {
 	return &domain.DispatchBatch{}, nil
 }
+func (dispatchServiceStub) ManifestDocument(ctx context.Context, batchID string) ([]byte, error) {
+	return []byte("%PDF"), nil
+}
 
 type trackingServiceStub struct{}
 
@@ -90,6 +93,7 @@ func TestMapError(t *testing.T) {
 	}{
 		{err: domain.ErrCarrierNotSupported, statusCode: 400, code: "carrier_not_supported"},
 		{err: domain.ErrBatchClosed, statusCode: 409, code: "batch_closed"},
+		{err: domain.ErrInvalidBatchStatus, statusCode: 409, code: "batch_status_invalid"},
 		{err: domain.ErrNotFound, statusCode: 404, code: "shipping_resource_not_found"},
 		{err: errors.New("boom"), statusCode: 500, code: "internal_server_error"},
 	}

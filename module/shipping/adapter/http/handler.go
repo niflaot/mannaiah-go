@@ -68,6 +68,8 @@ type DispatchService interface {
 	RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error)
 	// Close closes one dispatch batch.
 	Close(ctx context.Context, batchID string) (*domain.DispatchBatch, error)
+	// ManifestDocument builds one merged manifest PDF document for a closed batch.
+	ManifestDocument(ctx context.Context, batchID string) ([]byte, error)
 }
 
 // TrackingService defines tracking behavior required by HTTP handlers.
@@ -139,6 +141,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/batches/:id/marks", h.protect("marketing:manage", h.addBatchMark))
 	router.Delete("/shipping/batches/:id/marks/:markID", h.protect("marketing:manage", h.removeBatchMark))
 	router.Patch("/shipping/batches/:id/close", h.protect("marketing:manage", h.closeBatch))
+	router.Get("/shipping/batches/:id/manifest-document", h.protect("marketing:manage", h.batchManifestDocument))
 	router.Get("/shipping/tracking/:trackingNumber", h.protect("marketing:manage", h.getTracking))
 	router.Get("/shipping/carriers", h.protect("marketing:manage", h.listCarriers))
 	router.Get("/shipping/carriers/:id", h.protect("marketing:manage", h.getCarrier))
@@ -187,6 +190,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, domain.ErrBatchClosed) {
 		return corehttp.NewAppError(409, "batch_closed", err)
+	}
+	if errors.Is(err, domain.ErrInvalidBatchStatus) {
+		return corehttp.NewAppError(409, "batch_status_invalid", err)
 	}
 	if errors.Is(err, domain.ErrBatchCarrierMismatch) {
 		return corehttp.NewAppError(409, "batch_carrier_mismatch", err)

@@ -22,6 +22,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/batches/{id}/marks", &openapi3.PathItem{Post: batchAddMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Delete: batchRemoveMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
+		openapi3.WithPath("/shipping/batches/{id}/manifest-document", &openapi3.PathItem{Get: batchManifestDocumentOperation()}),
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
 		openapi3.WithPath("/shipping/carriers", &openapi3.PathItem{Get: carrierListOperation()}),
 		openapi3.WithPath("/shipping/carriers/{id}", &openapi3.PathItem{Get: carrierGetOperation()}),
@@ -65,6 +66,13 @@ func jsonRequestBody(schema *openapi3.Schema, required bool) *openapi3.RequestBo
 func jsonResponse(description string, schema *openapi3.Schema) *openapi3.ResponseRef {
 	return &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription(description).WithContent(openapi3.Content{
 		"application/json": &openapi3.MediaType{Schema: schemaRef(schema)},
+	})}
+}
+
+// binaryPDFResponse builds one binary PDF response descriptor.
+func binaryPDFResponse(description string) *openapi3.ResponseRef {
+	return &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription(description).WithContent(openapi3.Content{
+		"application/pdf": &openapi3.MediaType{},
 	})}
 }
 
@@ -308,6 +316,22 @@ func batchCloseOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Dispatch batch closed.", dispatchBatchSchema())),
+		),
+	}
+}
+
+// batchManifestDocumentOperation defines the OpenAPI operation for merged batch manifest documents.
+func batchManifestDocumentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getBatchManifestDocument",
+		Summary:     "Get merged batch manifest PDF document",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Dispatch batch identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, binaryPDFResponse("Merged batch manifest PDF document.")),
 		),
 	}
 }

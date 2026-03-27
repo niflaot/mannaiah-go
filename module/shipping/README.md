@@ -10,6 +10,7 @@
 - Shipping mark generation and void flows.
 - Carrier artifact persistence for both shipping mark documents and shipping manifests.
 - Dispatch batch grouping (create/add/remove/close).
+- On-demand merged batch manifest PDF generation (cover summary page + carrier manifest pages) with 5-minute in-memory cache.
 - Homogenized tracking API.
 - Integration event publication for mark/batch/tracking lifecycle updates.
 
@@ -31,7 +32,7 @@
 - Endpoints:
   - `POST /shipping/quotations`, `GET /shipping/quotations`
   - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
-  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`
+  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
   - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
 - Events:
