@@ -32,6 +32,11 @@ func (affinityStoreTestStub) GetProfile(_ context.Context, _ string, _ int, _ fl
 	return &analyticsdomain.AffinityProfile{}, nil
 }
 
+// GetPurchasedProductIDs returns no purchased product IDs.
+func (affinityStoreTestStub) GetPurchasedProductIDs(_ context.Context, _ string, _ int) ([]string, error) {
+	return nil, nil
+}
+
 // RefreshTagMV is a no-op for tests.
 func (affinityStoreTestStub) RefreshTagMV(_ context.Context) error { return nil }
 

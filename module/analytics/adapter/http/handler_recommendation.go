@@ -58,6 +58,7 @@ func (h *RecommendationHandler) RegisterRoutes(router corehttp.Router) {
 //   - excludeTags          (optional) comma-separated exclude-tag filter values
 //   - minPrice             (optional) minimum product price filter
 //   - maxPrice             (optional) maximum product price filter
+//   - excludePurchased     (optional) "true" to exclude products already purchased by the contact
 //   - realm                (optional) display realm, default "default"
 //   - limit                (optional) max results [1,10], default 3
 //   - affinity             (optional) "true" to enable contact-affinity filtering
@@ -81,24 +82,25 @@ func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 	useAffinity := strings.EqualFold(strings.TrimSpace(ctx.Query("affinity")), "true")
 
 	query := domain.RecommendationQuery{
-		BaseTag:             baseTag,
-		BaseTags:            baseTags,
-		BaseTagMode:         strings.TrimSpace(ctx.Query("baseTagMode")),
-		UseContactAffinity:  useAffinity,
-		AffinityMinScorePct: queryFloat64(ctx, "minScore", 0),
-		CategoryID:          strings.TrimSpace(ctx.Query("categoryId")),
-		CategoryIDs:         splitCommaSeparated(ctx.Query("categoryIds")),
-		ExcludeCategoryIDs:  splitCommaSeparated(ctx.Query("excludeCategoryIds")),
-		IncludeTags:         splitCommaSeparated(ctx.Query("includeTags")),
-		ExcludeTags:         splitCommaSeparated(ctx.Query("excludeTags")),
-		MinPrice:            queryOptionalFloat64(ctx, "minPrice"),
-		MaxPrice:            queryOptionalFloat64(ctx, "maxPrice"),
-		Realm:               strings.TrimSpace(ctx.Query("realm")),
-		Limit:               queryInt(ctx, "limit", 3),
-		PinnedProductIDs:    pinnedIDs,
-		ExcludeProductIDs:   excludeIDs,
-		FilterVariationIDs:  splitCommaSeparated(ctx.Query("filterVariationIds")),
-		PreferVariationIDs:  splitCommaSeparated(ctx.Query("preferVariationIds")),
+		BaseTag:                  baseTag,
+		BaseTags:                 baseTags,
+		BaseTagMode:              strings.TrimSpace(ctx.Query("baseTagMode")),
+		UseContactAffinity:       useAffinity,
+		AffinityMinScorePct:      queryFloat64(ctx, "minScore", 0),
+		CategoryID:               strings.TrimSpace(ctx.Query("categoryId")),
+		CategoryIDs:              splitCommaSeparated(ctx.Query("categoryIds")),
+		ExcludeCategoryIDs:       splitCommaSeparated(ctx.Query("excludeCategoryIds")),
+		IncludeTags:              splitCommaSeparated(ctx.Query("includeTags")),
+		ExcludeTags:              splitCommaSeparated(ctx.Query("excludeTags")),
+		MinPrice:                 queryOptionalFloat64(ctx, "minPrice"),
+		MaxPrice:                 queryOptionalFloat64(ctx, "maxPrice"),
+		ExcludePurchasedProducts: strings.EqualFold(strings.TrimSpace(ctx.Query("excludePurchased")), "true"),
+		Realm:                    strings.TrimSpace(ctx.Query("realm")),
+		Limit:                    queryInt(ctx, "limit", 3),
+		PinnedProductIDs:         pinnedIDs,
+		ExcludeProductIDs:        excludeIDs,
+		FilterVariationIDs:       splitCommaSeparated(ctx.Query("filterVariationIds")),
+		PreferVariationIDs:       splitCommaSeparated(ctx.Query("preferVariationIds")),
 	}
 
 	products, err := h.service.Recommend(ctx.Context(), contactID, query)

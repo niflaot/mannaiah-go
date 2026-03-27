@@ -23,6 +23,9 @@ func TestStoreAdapterAffinity_NilSafe(t *testing.T) {
 	if profile == nil {
 		t.Errorf("GetProfile(nil client) returned nil")
 	}
+	if _, err := s.GetPurchasedProductIDs(t.Context(), "c-1", 100); err != nil {
+		t.Errorf("GetPurchasedProductIDs(nil client) error = %v", err)
+	}
 }
 
 // TestStoreAdapterAffinity_RefreshNilSafe verifies that refresh methods are nil-safe.

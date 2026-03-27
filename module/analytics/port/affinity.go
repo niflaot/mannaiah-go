@@ -16,6 +16,8 @@ type AffinityStore interface {
 	GetVariationAffinity(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.VariationAffinity, error)
 	// GetProfile assembles a full affinity profile for one contact.
 	GetProfile(ctx context.Context, contactID string, limit int, minScore float64) (*domain.AffinityProfile, error)
+	// GetPurchasedProductIDs returns unique purchased product identifiers for one contact.
+	GetPurchasedProductIDs(ctx context.Context, contactID string, limit int) ([]string, error)
 	// RefreshTagMV truncates and repopulates the tag_affinity_mv table.
 	RefreshTagMV(ctx context.Context) error
 	// RefreshCategoryMV truncates and repopulates the category_affinity_mv table.

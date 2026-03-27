@@ -11,13 +11,14 @@ import (
 
 // mockAffinityStore is a test double for port.AffinityStore.
 type mockAffinityStore struct {
-	getTagFn         func(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.TagAffinity, error)
-	getCategoryFn    func(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.CategoryAffinity, error)
-	getVariationFn   func(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.VariationAffinity, error)
-	getProfileFn     func(ctx context.Context, contactID string, limit int, minScore float64) (*domain.AffinityProfile, error)
-	refreshTagFn     func(ctx context.Context) error
-	refreshCatFn     func(ctx context.Context) error
-	refreshVarFn     func(ctx context.Context) error
+	getTagFn       func(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.TagAffinity, error)
+	getCategoryFn  func(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.CategoryAffinity, error)
+	getVariationFn func(ctx context.Context, contactID string, limit int, minScore float64) ([]domain.VariationAffinity, error)
+	getProfileFn   func(ctx context.Context, contactID string, limit int, minScore float64) (*domain.AffinityProfile, error)
+	getPurchasedFn func(ctx context.Context, contactID string, limit int) ([]string, error)
+	refreshTagFn   func(ctx context.Context) error
+	refreshCatFn   func(ctx context.Context) error
+	refreshVarFn   func(ctx context.Context) error
 }
 
 func (m *mockAffinityStore) GetTagAffinity(ctx context.Context, id string, l int, s float64) ([]domain.TagAffinity, error) {
@@ -31,6 +32,12 @@ func (m *mockAffinityStore) GetVariationAffinity(ctx context.Context, id string,
 }
 func (m *mockAffinityStore) GetProfile(ctx context.Context, id string, l int, s float64) (*domain.AffinityProfile, error) {
 	return m.getProfileFn(ctx, id, l, s)
+}
+func (m *mockAffinityStore) GetPurchasedProductIDs(ctx context.Context, id string, l int) ([]string, error) {
+	if m.getPurchasedFn == nil {
+		return nil, nil
+	}
+	return m.getPurchasedFn(ctx, id, l)
 }
 func (m *mockAffinityStore) RefreshTagMV(ctx context.Context) error      { return m.refreshTagFn(ctx) }
 func (m *mockAffinityStore) RefreshCategoryMV(ctx context.Context) error { return m.refreshCatFn(ctx) }

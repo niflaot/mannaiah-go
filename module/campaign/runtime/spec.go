@@ -267,6 +267,7 @@ func campaignProductBlockSchema() *openapi3.Schema {
 		WithProperty("excludeTags", excludeTagsSchema).
 		WithProperty("minPrice", openapi3.NewFloat64Schema()).
 		WithProperty("maxPrice", openapi3.NewFloat64Schema()).
+		WithProperty("excludePurchasedProducts", openapi3.NewBoolSchema()).
 		WithProperty("realm", openapi3.NewStringSchema()).
 		WithProperty("limit", openapi3.NewInt64Schema()).
 		WithProperty("pinnedProductIds", pinnedProductsSchema).

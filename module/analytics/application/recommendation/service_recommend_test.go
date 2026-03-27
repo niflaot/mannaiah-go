@@ -31,6 +31,49 @@ func (affinityStoreStub) GetProfile(_ context.Context, _ string, _ int, _ float6
 	return &domain.AffinityProfile{}, nil
 }
 
+// GetPurchasedProductIDs returns no purchased product IDs.
+func (affinityStoreStub) GetPurchasedProductIDs(_ context.Context, _ string, _ int) ([]string, error) {
+	return nil, nil
+}
+
+type affinityStorePurchasedStub struct {
+	purchasedProductIDs []string
+}
+
+// GetTagAffinity returns empty affinity rows.
+func (s affinityStorePurchasedStub) GetTagAffinity(_ context.Context, _ string, _ int, _ float64) ([]domain.TagAffinity, error) {
+	return nil, nil
+}
+
+// GetCategoryAffinity returns empty affinity rows.
+func (s affinityStorePurchasedStub) GetCategoryAffinity(_ context.Context, _ string, _ int, _ float64) ([]domain.CategoryAffinity, error) {
+	return nil, nil
+}
+
+// GetVariationAffinity returns empty affinity rows.
+func (s affinityStorePurchasedStub) GetVariationAffinity(_ context.Context, _ string, _ int, _ float64) ([]domain.VariationAffinity, error) {
+	return nil, nil
+}
+
+// GetProfile returns an empty affinity profile.
+func (s affinityStorePurchasedStub) GetProfile(_ context.Context, _ string, _ int, _ float64) (*domain.AffinityProfile, error) {
+	return &domain.AffinityProfile{}, nil
+}
+
+// GetPurchasedProductIDs returns predefined purchased product IDs.
+func (s affinityStorePurchasedStub) GetPurchasedProductIDs(_ context.Context, _ string, _ int) ([]string, error) {
+	return append([]string(nil), s.purchasedProductIDs...), nil
+}
+
+// RefreshTagMV is a no-op for tests.
+func (s affinityStorePurchasedStub) RefreshTagMV(_ context.Context) error { return nil }
+
+// RefreshCategoryMV is a no-op for tests.
+func (s affinityStorePurchasedStub) RefreshCategoryMV(_ context.Context) error { return nil }
+
+// RefreshVariationMV is a no-op for tests.
+func (s affinityStorePurchasedStub) RefreshVariationMV(_ context.Context) error { return nil }
+
 // RefreshTagMV is a no-op for tests.
 func (affinityStoreStub) RefreshTagMV(_ context.Context) error { return nil }
 
@@ -446,5 +489,67 @@ func TestRecommendFiltersByDefaultRealmDatasheetPrice(t *testing.T) {
 	}
 	if results[0].ID != "p-2" || results[1].ID != "p-3" {
 		t.Fatalf("results IDs = [%s, %s], want [p-2, p-3]", results[0].ID, results[1].ID)
+	}
+}
+
+// TestRecommendExcludePurchasedProducts verifies purchased products are excluded from dynamic and pinned recommendations.
+func TestRecommendExcludePurchasedProducts(t *testing.T) {
+	t.Parallel()
+
+	price110 := 110000.0
+	price160 := 160000.0
+	catalog := &catalogStoreStub{
+		entriesByID: map[string]port.ProductCatalogEntry{
+			"p-1": {
+				ID: "p-1",
+				Datasheets: []port.ProductDatasheetEntry{{
+					Realm: "default",
+					Name:  "Purchased Backpack",
+					Price: &price160,
+				}},
+			},
+		},
+		entries: []port.ProductCatalogEntry{
+			{
+				ID: "p-1",
+				Datasheets: []port.ProductDatasheetEntry{{
+					Realm: "default",
+					Name:  "Purchased Backpack",
+					Price: &price160,
+				}},
+			},
+			{
+				ID: "p-2",
+				Datasheets: []port.ProductDatasheetEntry{{
+					Realm: "default",
+					Name:  "Fresh Backpack",
+					Price: &price110,
+				}},
+			},
+		},
+	}
+	svc, err := NewService(
+		affinityStorePurchasedStub{purchasedProductIDs: []string{"p-1"}},
+		correlationStoreStub{},
+		catalog,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	results, err := svc.Recommend(context.Background(), "contact-1", domain.RecommendationQuery{
+		BaseTags:                 []string{"tier-1"},
+		Limit:                    3,
+		PinnedProductIDs:         []string{"p-1"},
+		ExcludePurchasedProducts: true,
+	})
+	if err != nil {
+		t.Fatalf("Recommend() error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].ID != "p-2" {
+		t.Fatalf("results[0].ID = %q, want %q", results[0].ID, "p-2")
 	}
 }

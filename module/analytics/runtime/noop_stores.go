@@ -49,6 +49,10 @@ func (n *noopAffinityStore) GetProfile(_ context.Context, contactID string, _ in
 	return &domain.AffinityProfile{ContactID: contactID}, nil
 }
 
+func (n *noopAffinityStore) GetPurchasedProductIDs(_ context.Context, _ string, _ int) ([]string, error) {
+	return nil, nil
+}
+
 func (n *noopAffinityStore) RefreshTagMV(_ context.Context) error       { return nil }
 func (n *noopAffinityStore) RefreshCategoryMV(_ context.Context) error  { return nil }
 func (n *noopAffinityStore) RefreshVariationMV(_ context.Context) error { return nil }

@@ -54,6 +54,7 @@ func TestOpenAPISpec(t *testing.T) {
 		"excludeTags",
 		"minPrice",
 		"maxPrice",
+		"excludePurchasedProducts",
 	}
 	for _, property := range requiredProperties {
 		if blockSchemaRef.Value.Properties[property] == nil {

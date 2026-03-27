@@ -56,25 +56,26 @@ type Handler struct {
 
 // productBlockRequest defines a product recommendation block in create/update requests.
 type productBlockRequest struct {
-	ID                  string   `json:"id"`
-	BaseTag             string   `json:"baseTag"`
-	BaseTags            []string `json:"baseTags"`
-	BaseTagMode         string   `json:"baseTagMode"`
-	UseAffinity         bool     `json:"useAffinity"`
-	AffinityMinScorePct float64  `json:"affinityMinScorePct"`
-	CategoryID          string   `json:"categoryId"`
-	CategoryIDs         []string `json:"categoryIds"`
-	ExcludeCategoryIDs  []string `json:"excludeCategoryIds"`
-	IncludeTags         []string `json:"includeTags"`
-	ExcludeTags         []string `json:"excludeTags"`
-	MinPrice            *float64 `json:"minPrice"`
-	MaxPrice            *float64 `json:"maxPrice"`
-	Realm               string   `json:"realm"`
-	Limit               int      `json:"limit"`
-	PinnedProductIDs    []string `json:"pinnedProductIds"`
-	ExcludeProductIDs   []string `json:"excludeProductIds"`
-	FilterVariationIDs  []string `json:"filterVariationIds"`
-	PreferVariationIDs  []string `json:"preferVariationIds"`
+	ID                       string   `json:"id"`
+	BaseTag                  string   `json:"baseTag"`
+	BaseTags                 []string `json:"baseTags"`
+	BaseTagMode              string   `json:"baseTagMode"`
+	UseAffinity              bool     `json:"useAffinity"`
+	AffinityMinScorePct      float64  `json:"affinityMinScorePct"`
+	CategoryID               string   `json:"categoryId"`
+	CategoryIDs              []string `json:"categoryIds"`
+	ExcludeCategoryIDs       []string `json:"excludeCategoryIds"`
+	IncludeTags              []string `json:"includeTags"`
+	ExcludeTags              []string `json:"excludeTags"`
+	MinPrice                 *float64 `json:"minPrice"`
+	MaxPrice                 *float64 `json:"maxPrice"`
+	ExcludePurchasedProducts bool     `json:"excludePurchasedProducts"`
+	Realm                    string   `json:"realm"`
+	Limit                    int      `json:"limit"`
+	PinnedProductIDs         []string `json:"pinnedProductIds"`
+	ExcludeProductIDs        []string `json:"excludeProductIds"`
+	FilterVariationIDs       []string `json:"filterVariationIds"`
+	PreferVariationIDs       []string `json:"preferVariationIds"`
 }
 
 // createRequest defines create request payload values.
@@ -279,25 +280,26 @@ func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
 	blocks := make([]domain.ProductBlock, 0, len(reqs))
 	for _, r := range reqs {
 		blocks = append(blocks, domain.ProductBlock{
-			ID:                  r.ID,
-			BaseTag:             r.BaseTag,
-			BaseTags:            r.BaseTags,
-			BaseTagMode:         r.BaseTagMode,
-			UseAffinity:         r.UseAffinity,
-			AffinityMinScorePct: r.AffinityMinScorePct,
-			CategoryID:          r.CategoryID,
-			CategoryIDs:         r.CategoryIDs,
-			ExcludeCategoryIDs:  r.ExcludeCategoryIDs,
-			IncludeTags:         r.IncludeTags,
-			ExcludeTags:         r.ExcludeTags,
-			MinPrice:            r.MinPrice,
-			MaxPrice:            r.MaxPrice,
-			Realm:               r.Realm,
-			Limit:               r.Limit,
-			PinnedProductIDs:    r.PinnedProductIDs,
-			ExcludeProductIDs:   r.ExcludeProductIDs,
-			FilterVariationIDs:  r.FilterVariationIDs,
-			PreferVariationIDs:  r.PreferVariationIDs,
+			ID:                       r.ID,
+			BaseTag:                  r.BaseTag,
+			BaseTags:                 r.BaseTags,
+			BaseTagMode:              r.BaseTagMode,
+			UseAffinity:              r.UseAffinity,
+			AffinityMinScorePct:      r.AffinityMinScorePct,
+			CategoryID:               r.CategoryID,
+			CategoryIDs:              r.CategoryIDs,
+			ExcludeCategoryIDs:       r.ExcludeCategoryIDs,
+			IncludeTags:              r.IncludeTags,
+			ExcludeTags:              r.ExcludeTags,
+			MinPrice:                 r.MinPrice,
+			MaxPrice:                 r.MaxPrice,
+			ExcludePurchasedProducts: r.ExcludePurchasedProducts,
+			Realm:                    r.Realm,
+			Limit:                    r.Limit,
+			PinnedProductIDs:         r.PinnedProductIDs,
+			ExcludeProductIDs:        r.ExcludeProductIDs,
+			FilterVariationIDs:       r.FilterVariationIDs,
+			PreferVariationIDs:       r.PreferVariationIDs,
 		})
 	}
 	return blocks

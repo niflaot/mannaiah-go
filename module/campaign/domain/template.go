@@ -34,6 +34,8 @@ type ProductBlock struct {
 	MinPrice *float64 `json:"minPrice,omitempty"`
 	// MaxPrice optionally restricts dynamic candidates to products with price <= maxPrice.
 	MaxPrice *float64 `json:"maxPrice,omitempty"`
+	// ExcludePurchasedProducts removes products already purchased by the contact when true.
+	ExcludePurchasedProducts bool `json:"excludePurchasedProducts"`
 	// Realm identifies which product datasheet and gallery to use for name and image resolution.
 	Realm string `json:"realm"`
 	// Limit is the maximum number of products to return (clamped to [1, 10]).

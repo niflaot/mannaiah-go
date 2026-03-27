@@ -91,9 +91,23 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 	query.Normalize()
 	pinnedSelections := parseScopedProductSelections(query.PinnedProductIDs)
 	excludeSelections := parseScopedProductSelections(query.ExcludeProductIDs)
+	purchasedSet := map[string]struct{}{}
 
 	if len(query.BaseTags) == 0 && len(pinnedSelections.ProductIDs) == 0 {
 		return nil, ErrEmptyBaseTag
+	}
+	if query.ExcludePurchasedProducts && strings.TrimSpace(contactID) != "" {
+		purchasedProductIDs, err := s.affinityStore.GetPurchasedProductIDs(ctx, contactID, 2000)
+		if err != nil {
+			return nil, err
+		}
+		for _, productID := range purchasedProductIDs {
+			normalizedProductID := strings.TrimSpace(productID)
+			if normalizedProductID == "" {
+				continue
+			}
+			purchasedSet[normalizedProductID] = struct{}{}
+		}
 	}
 
 	// Step 1: load pinned products.
@@ -104,10 +118,23 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		if err != nil {
 			return nil, err
 		}
+		if len(purchasedSet) > 0 {
+			filteredPinnedEntries := make([]port.ProductCatalogEntry, 0, len(pinnedEntries))
+			for _, pinnedEntry := range pinnedEntries {
+				if _, exists := purchasedSet[pinnedEntry.ID]; exists {
+					continue
+				}
+				filteredPinnedEntries = append(filteredPinnedEntries, pinnedEntry)
+			}
+			pinnedEntries = filteredPinnedEntries
+		}
 	}
 
 	// Step 2: build unified exclusion set (pinned IDs + explicit exclude IDs).
-	excludeSet := make(map[string]struct{}, len(excludeSelections.PlainProductIDs)+len(pinnedEntries))
+	excludeSet := make(map[string]struct{}, len(excludeSelections.PlainProductIDs)+len(pinnedEntries)+len(purchasedSet))
+	for productID := range purchasedSet {
+		excludeSet[productID] = struct{}{}
+	}
 	for _, id := range excludeSelections.PlainProductIDs {
 		excludeSet[id] = struct{}{}
 	}

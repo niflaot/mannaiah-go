@@ -56,6 +56,9 @@ func getRecommendationsOperation() *openapi3.Operation {
 			{Value: openapi3.NewQueryParameter("maxPrice").
 				WithDescription("Optional maximum product price filter.").
 				WithSchema(openapi3.NewFloat64Schema())},
+			{Value: openapi3.NewQueryParameter("excludePurchased").
+				WithDescription("Set to \"true\" to exclude products already purchased by the contact.").
+				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("realm").
 				WithDescription("Display realm for name and image resolution (default: \"default\").").
 				WithSchema(openapi3.NewStringSchema())},

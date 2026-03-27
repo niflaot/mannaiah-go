@@ -157,6 +157,52 @@ func (s *StoreAdapter) GetProfile(ctx context.Context, contactID string, limit i
 	}, nil
 }
 
+// GetPurchasedProductIDs returns unique purchased product identifiers for one contact.
+func (s *StoreAdapter) GetPurchasedProductIDs(ctx context.Context, contactID string, limit int) ([]string, error) {
+	if s == nil || s.client == nil || s.client.db == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 2000
+	}
+
+	query := `SELECT product_id
+		FROM order_items_fact oi FINAL
+		WHERE oi.contact_id = ?
+		  AND oi.product_id != ''
+		GROUP BY product_id
+		ORDER BY max(oi.order_created_at) DESC
+		LIMIT ?`
+	rows, err := s.client.db.QueryContext(ctx, query, strings.TrimSpace(contactID), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query purchased product ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make([]string, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	for rows.Next() {
+		var productID string
+		if scanErr := rows.Scan(&productID); scanErr != nil {
+			return nil, fmt.Errorf("scan purchased product id row: %w", scanErr)
+		}
+		productID = strings.TrimSpace(productID)
+		if productID == "" {
+			continue
+		}
+		if _, exists := seen[productID]; exists {
+			continue
+		}
+		seen[productID] = struct{}{}
+		result = append(result, productID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate purchased product id rows: %w", err)
+	}
+
+	return result, nil
+}
+
 // RefreshTagMV truncates and repopulates the tag_affinity_mv table.
 func (s *StoreAdapter) RefreshTagMV(ctx context.Context) error {
 	if s == nil || s.client == nil || s.client.db == nil {

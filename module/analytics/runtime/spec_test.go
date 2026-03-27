@@ -85,6 +85,7 @@ func TestOpenAPISpec(t *testing.T) {
 		"excludeTags",
 		"minPrice",
 		"maxPrice",
+		"excludePurchased",
 	}
 	for _, key := range requiredQueryParams {
 		if strings.TrimSpace(queryParams[key]) == "" {

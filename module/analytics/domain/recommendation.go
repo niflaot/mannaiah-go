@@ -41,6 +41,8 @@ type RecommendationQuery struct {
 	MinPrice *float64
 	// MaxPrice defines optional maximum product price filtering.
 	MaxPrice *float64
+	// ExcludePurchasedProducts removes products already purchased by the contact when true.
+	ExcludePurchasedProducts bool
 	// Realm identifies which product datasheet and gallery to use for name and image resolution.
 	// Defaults to "default" when empty.
 	Realm string
