@@ -1,0 +1,14 @@
+{
+  "title": "RESUMEN DE MANIFIESTOS DEL LOTE",
+  "batchIDLabel": "Lote",
+  "generatedLabel": "Generado",
+  "carrierLabel": "Transportadora",
+  "quantityLabel": "Cantidad",
+  "trackingNumberHeader": "NÚMERO DE GUÍA",
+  "recipientHeader": "DESTINATARIO",
+  "orderNumberHeader": "PEDIDO #",
+  "cityHeader": "CIUDAD",
+  "itemsHeader": "ARTÍCULOS",
+  "itemBulletPrefix": "- ",
+  "emptyValueFallback": "-"
+}

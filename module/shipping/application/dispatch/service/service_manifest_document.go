@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"go.uber.org/zap"
 
+	corecache "mannaiah/module/core/cache"
 	"mannaiah/module/shipping/domain"
 )
 
@@ -26,6 +28,8 @@ const (
 	defaultBatchManifestHTTPTimeout = 20 * time.Second
 	// maxBatchManifestDownloadBytes defines the maximum download size for one manifest PDF payload.
 	maxBatchManifestDownloadBytes = 20 * 1024 * 1024
+	// defaultBatchManifestCacheKeyPrefix defines Redis cache-key prefixes for merged manifest documents.
+	defaultBatchManifestCacheKeyPrefix = "shipping:batch_manifest_document:"
 )
 
 // BatchManifestOrderSummary defines order metadata rendered in one batch manifest cover row.
@@ -58,12 +62,18 @@ type batchManifestDocumentBuilder struct {
 	cache map[string]batchManifestDocumentCacheEntry
 	// cacheTTL defines cache expiration windows.
 	cacheTTL time.Duration
+	// cacheStore defines optional external cache dependencies (Redis).
+	cacheStore corecache.Store
+	// cacheKeyPrefix defines cache-key prefixes for external cache entries.
+	cacheKeyPrefix string
 	// logoURL defines cover-logo URL values.
 	logoURL string
 	// httpClient defines outbound HTTP client dependencies.
 	httpClient *http.Client
 	// orderSummaryResolver defines optional order summary lookup dependencies.
 	orderSummaryResolver BatchManifestOrderSummaryResolver
+	// coverTemplate defines visual strings and labels rendered in the summary cover.
+	coverTemplate batchManifestCoverTemplate
 }
 
 // batchManifestCoverMeta defines batch metadata rendered in cover-page headers.
@@ -88,17 +98,19 @@ type batchManifestCoverRow struct {
 	OrderNumber string
 	// City defines destination-city values.
 	City string
-	// Items defines small item-list text values.
-	Items string
+	// Items defines row item-list values.
+	Items []string
 }
 
 // newBatchManifestDocumentBuilder creates default batch manifest document builder dependencies.
 func newBatchManifestDocumentBuilder() *batchManifestDocumentBuilder {
 	return &batchManifestDocumentBuilder{
-		cache:      map[string]batchManifestDocumentCacheEntry{},
-		cacheTTL:   defaultBatchManifestCacheTTL,
-		logoURL:    defaultBatchManifestLogoURL,
-		httpClient: &http.Client{Timeout: defaultBatchManifestHTTPTimeout},
+		cache:          map[string]batchManifestDocumentCacheEntry{},
+		cacheTTL:       defaultBatchManifestCacheTTL,
+		cacheKeyPrefix: defaultBatchManifestCacheKeyPrefix,
+		logoURL:        defaultBatchManifestLogoURL,
+		httpClient:     &http.Client{Timeout: defaultBatchManifestHTTPTimeout},
+		coverTemplate:  loadDefaultBatchManifestCoverTemplate(),
 	}
 }
 
@@ -111,7 +123,7 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 	if trimmedBatchID == "" {
 		return nil, domain.ErrInvalidID
 	}
-	if payload, ok := s.getCachedBatchManifestDocument(trimmedBatchID); ok {
+	if payload, ok := s.getCachedBatchManifestDocument(ctx, trimmedBatchID); ok {
 		return payload, nil
 	}
 
@@ -158,7 +170,7 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 		merged = append([]byte(nil), output.Bytes()...)
 	}
 
-	s.cacheBatchManifestDocument(trimmedBatchID, merged)
+	s.cacheBatchManifestDocument(ctx, trimmedBatchID, merged)
 
 	return append([]byte(nil), merged...), nil
 }
@@ -197,6 +209,14 @@ func (s *Service) SetBatchManifestDocumentCacheTTL(ttl time.Duration) {
 	s.manifestDocuments.cacheTTL = ttl
 }
 
+// SetBatchManifestDocumentCacheStore configures external cache dependencies used by merged-document cache.
+func (s *Service) SetBatchManifestDocumentCacheStore(store corecache.Store) {
+	if s == nil || s.manifestDocuments == nil {
+		return
+	}
+	s.manifestDocuments.cacheStore = store
+}
+
 // SetBatchManifestDocumentHTTPClient configures outbound HTTP client dependencies used by logo/manifest downloads.
 func (s *Service) SetBatchManifestDocumentHTTPClient(client *http.Client) {
 	if s == nil || s.manifestDocuments == nil || client == nil {
@@ -206,7 +226,7 @@ func (s *Service) SetBatchManifestDocumentHTTPClient(client *http.Client) {
 }
 
 // invalidateBatchManifestDocumentCache removes one cached merged-document entry.
-func (s *Service) invalidateBatchManifestDocumentCache(batchID string) {
+func (s *Service) invalidateBatchManifestDocumentCache(ctx context.Context, batchID string) {
 	if s == nil || s.manifestDocuments == nil {
 		return
 	}
@@ -218,14 +238,28 @@ func (s *Service) invalidateBatchManifestDocumentCache(batchID string) {
 	m.cacheMutex.Lock()
 	delete(m.cache, trimmedBatchID)
 	m.cacheMutex.Unlock()
+	if m.cacheStore != nil {
+		if _, err := m.cacheStore.Delete(ctx, m.batchManifestCacheKey(trimmedBatchID)); err != nil {
+			zap.L().Warn("batch manifest cache delete failed", zap.String("batch_id", trimmedBatchID), zap.Error(err))
+		}
+	}
 }
 
 // getCachedBatchManifestDocument resolves one cached merged-document payload when not expired.
-func (s *Service) getCachedBatchManifestDocument(batchID string) ([]byte, bool) {
+func (s *Service) getCachedBatchManifestDocument(ctx context.Context, batchID string) ([]byte, bool) {
 	if s == nil || s.manifestDocuments == nil {
 		return nil, false
 	}
 	m := s.manifestDocuments
+	if m.cacheStore != nil {
+		cachedBase64, err := m.cacheStore.Get(ctx, m.batchManifestCacheKey(batchID))
+		if err == nil {
+			payload, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(cachedBase64))
+			if decodeErr == nil && len(payload) > 0 {
+				return payload, true
+			}
+		}
+	}
 	m.cacheMutex.Lock()
 	defer m.cacheMutex.Unlock()
 	entry, exists := m.cache[batchID]
@@ -240,11 +274,19 @@ func (s *Service) getCachedBatchManifestDocument(batchID string) ([]byte, bool) 
 }
 
 // cacheBatchManifestDocument stores one merged-document payload with cache TTL.
-func (s *Service) cacheBatchManifestDocument(batchID string, payload []byte) {
+func (s *Service) cacheBatchManifestDocument(ctx context.Context, batchID string, payload []byte) {
 	if s == nil || s.manifestDocuments == nil {
 		return
 	}
+	if len(payload) == 0 {
+		return
+	}
 	m := s.manifestDocuments
+	if m.cacheStore != nil {
+		if err := m.cacheStore.Set(ctx, m.batchManifestCacheKey(batchID), base64.StdEncoding.EncodeToString(payload), m.cacheTTL); err != nil {
+			zap.L().Warn("batch manifest cache set failed", zap.String("batch_id", batchID), zap.Error(err))
+		}
+	}
 	m.cacheMutex.Lock()
 	m.cache[batchID] = batchManifestDocumentCacheEntry{
 		Body:      append([]byte(nil), payload...),
@@ -266,7 +308,7 @@ func (s *Service) resolveBatchManifestCoverRows(ctx context.Context, marks []dom
 			RecipientName:  firstNonEmpty(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName), "-"),
 			OrderNumber:    orderNumber,
 			City:           firstNonEmpty(strings.TrimSpace(mark.Recipient.CityCode), "-"),
-			Items:          strings.Join(items, ", "),
+			Items:          items,
 		})
 		manifestURL := strings.TrimSpace(mark.ManifestRef)
 		if mark.ManifestType != domain.MarkDocumentLink || manifestURL == "" {
@@ -340,6 +382,14 @@ func fallbackBatchManifestItems(mark domain.ShippingMark) []string {
 		}
 	}
 	return normalizeBatchManifestItems(rows)
+}
+
+// batchManifestCacheKey resolves normalized external cache keys for one batch identifier.
+func (m *batchManifestDocumentBuilder) batchManifestCacheKey(batchID string) string {
+	if m == nil {
+		return strings.TrimSpace(batchID)
+	}
+	return strings.TrimSpace(m.cacheKeyPrefix) + strings.TrimSpace(batchID)
 }
 
 // downloadManifestPDF fetches one manifest PDF payload from an external URL.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 
+	corecache "mannaiah/module/core/cache"
 	"mannaiah/module/shipping/domain"
 )
 
@@ -21,6 +23,96 @@ type batchManifestOrderSummaryResolverStub struct {
 	// summaries defines order summary fixtures by order id.
 	summaries map[string]BatchManifestOrderSummary
 }
+
+// batchManifestCacheStoreStub defines in-memory cache-store behavior for redis-cache integration tests.
+type batchManifestCacheStoreStub struct {
+	// mu guards map/counter access.
+	mu sync.Mutex
+	// values defines cached payload values.
+	values map[string]string
+	// getCalls counts cache get calls.
+	getCalls int
+	// setCalls counts cache set calls.
+	setCalls int
+}
+
+// Ping is a no-op for tests.
+func (s *batchManifestCacheStoreStub) Ping(ctx context.Context) error { return nil }
+
+// Get resolves one cache value by key.
+func (s *batchManifestCacheStoreStub) Get(ctx context.Context, key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.getCalls++
+	value, exists := s.values[key]
+	if !exists {
+		return "", errors.New("not found")
+	}
+
+	return value, nil
+}
+
+// Set stores one cache value by key.
+func (s *batchManifestCacheStoreStub) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	s.values[key] = value
+	s.setCalls++
+
+	return nil
+}
+
+// Delete removes one cache key.
+func (s *batchManifestCacheStoreStub) Delete(ctx context.Context, key string) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.values[key]; !exists {
+		return 0, nil
+	}
+	delete(s.values, key)
+
+	return 1, nil
+}
+
+// Keys resolves cache keys matching one suffix-wildcard pattern.
+func (s *batchManifestCacheStoreStub) Keys(ctx context.Context, pattern string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := make([]string, 0, len(s.values))
+	prefix := strings.TrimSuffix(pattern, "*")
+	for key := range s.values {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+
+	return keys, nil
+}
+
+// GetByPattern resolves key-value entries matching one suffix-wildcard pattern.
+func (s *batchManifestCacheStoreStub) GetByPattern(ctx context.Context, pattern string) (map[string]string, error) {
+	keys, err := s.Keys(ctx, pattern)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows := make(map[string]string, len(keys))
+	for _, key := range keys {
+		rows[key] = s.values[key]
+	}
+
+	return rows, nil
+}
+
+// Close is a no-op for tests.
+func (s *batchManifestCacheStoreStub) Close() error { return nil }
+
+var _ corecache.Store = (*batchManifestCacheStoreStub)(nil)
 
 // ResolveBatchManifestOrderSummary resolves one order summary fixture by order id.
 func (s batchManifestOrderSummaryResolverStub) ResolveBatchManifestOrderSummary(ctx context.Context, orderID string) (*BatchManifestOrderSummary, error) {
@@ -39,6 +131,8 @@ func TestManifestDocumentBuildsMergedPDFAndCaches(t *testing.T) {
 	batchRepository.markStore = markRepository
 	service := NewService(batchRepository, markRepository, nil)
 	service.SetBatchManifestDocumentCacheTTL(5 * time.Minute)
+	cacheStore := &batchManifestCacheStoreStub{values: map[string]string{}}
+	service.SetBatchManifestDocumentCacheStore(cacheStore)
 	service.SetBatchManifestOrderSummaryResolver(batchManifestOrderSummaryResolverStub{summaries: map[string]BatchManifestOrderSummary{
 		"order-1": {OrderNumber: "601205", Items: []string{"MORRAL AXEL", "NECESER"}},
 		"order-2": {OrderNumber: "601206", Items: []string{"MORRAL NEO"}},
@@ -119,6 +213,12 @@ func TestManifestDocumentBuildsMergedPDFAndCaches(t *testing.T) {
 	if len(firstPayload) == 0 || !strings.HasPrefix(string(firstPayload), "%PDF") {
 		t.Fatalf("ManifestDocument(first) returned non-pdf payload")
 	}
+	if cacheStore.setCalls == 0 {
+		t.Fatalf("expected external cache set calls after first manifest generation")
+	}
+	service.manifestDocuments.cacheMutex.Lock()
+	service.manifestDocuments.cache = map[string]batchManifestDocumentCacheEntry{}
+	service.manifestDocuments.cacheMutex.Unlock()
 
 	secondPayload, err := service.ManifestDocument(context.Background(), batchID)
 	if err != nil {
@@ -138,6 +238,9 @@ func TestManifestDocumentBuildsMergedPDFAndCaches(t *testing.T) {
 	}
 	if got := manifestHits["/logo.png"]; got != 1 {
 		t.Fatalf("logo hits = %d, want 1", got)
+	}
+	if cacheStore.getCalls == 0 {
+		t.Fatalf("expected external cache get calls on second manifest request")
 	}
 }
 

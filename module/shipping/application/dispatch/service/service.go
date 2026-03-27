@@ -235,7 +235,7 @@ func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBa
 	if err := s.batchRepository.Close(ctx, trimmedID); err != nil {
 		return nil, err
 	}
-	s.invalidateBatchManifestDocumentCache(trimmedID)
+	s.invalidateBatchManifestDocumentCache(ctx, trimmedID)
 	batch, err := s.batchRepository.GetByID(ctx, trimmedID)
 	if err != nil {
 		return nil, err

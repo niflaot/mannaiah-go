@@ -114,6 +114,10 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
+	dispatchSvc.SetBatchManifestDocumentCacheTTL(time.Duration(cfg.BatchManifestCacheTTLSeconds) * time.Second)
+	if err := dispatchSvc.SetBatchManifestDocumentCoverTemplateFromFile(cfg.BatchManifestTemplatePath); err != nil {
+		return nil, fmt.Errorf("configure batch manifest cover template: %w", err)
+	}
 	trackingSvc := trackingservice.NewService(registry, publisher)
 	carrierSvc := &carrierService{registry: registry}
 

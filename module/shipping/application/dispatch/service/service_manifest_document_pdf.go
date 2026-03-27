@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jung-kurt/gofpdf"
+	"golang.org/x/text/encoding/charmap"
 )
 
 const (
@@ -21,11 +22,11 @@ const (
 	batchManifestMarginMM = 10.0
 	// batchManifestRowHeightMM defines table row-height values in millimeters.
 	batchManifestRowHeightMM = 7.0
+	// batchManifestItemsLineHeightMM defines item-list line-height values in millimeters.
+	batchManifestItemsLineHeightMM = 4.0
 )
 
 var (
-	// batchManifestTableHeaders defines rendered summary table headers.
-	batchManifestTableHeaders = []string{"TRACKING NUMBER", "RECIPIENT", "ORDER #", "CITY", "ITEMS"}
 	// batchManifestTableColumnWidths defines rendered summary table column widths.
 	batchManifestTableColumnWidths = []float64{32, 44, 24, 22, 73}
 )
@@ -47,11 +48,12 @@ func (s *Service) buildBatchManifestCoverPDF(ctx context.Context, meta batchMani
 	s.drawBatchManifestTableHeader(pdf)
 
 	for _, row := range rows {
-		if pdf.GetY()+batchManifestRowHeightMM > batchManifestPageHeightMM-batchManifestMarginMM {
+		rowHeight := s.batchManifestTableRowHeight(pdf, row)
+		if pdf.GetY()+rowHeight > batchManifestPageHeightMM-batchManifestMarginMM {
 			pdf.AddPage()
 			s.drawBatchManifestTableHeader(pdf)
 		}
-		s.drawBatchManifestTableRow(pdf, row)
+		s.drawBatchManifestTableRow(pdf, row, rowHeight)
 	}
 
 	var output bytes.Buffer
@@ -67,9 +69,10 @@ func (s *Service) drawBatchManifestCoverHeader(ctx context.Context, pdf *gofpdf.
 	if pdf == nil {
 		return
 	}
+	template := s.resolveBatchManifestCoverTemplate()
 	logoY := batchManifestMarginMM
-	logoX := batchManifestMarginMM
 	logoWidth := 28.0
+	logoX := batchManifestPageWidthMM - batchManifestMarginMM - logoWidth
 
 	if logoBytes, imageType, err := s.downloadBatchManifestLogo(ctx); err == nil && len(logoBytes) > 0 {
 		imageName := "batch_manifest_logo"
@@ -78,20 +81,21 @@ func (s *Service) drawBatchManifestCoverHeader(ctx context.Context, pdf *gofpdf.
 		pdf.ImageOptions(imageName, logoX, logoY, logoWidth, 0, false, opts, 0, "")
 	}
 
-	headerX := logoX + logoWidth + 6
+	headerX := batchManifestMarginMM
+	headerWidth := logoX - headerX - 6
 	pdf.SetXY(headerX, batchManifestMarginMM)
 	pdf.SetFont("Arial", "B", 11)
-	pdf.CellFormat(130, 6, "MANIFEST BATCH SUMMARY", "", 1, "L", false, 0, "")
+	pdf.CellFormat(headerWidth, 6, encodeBatchManifestText(template.Title), "", 1, "L", false, 0, "")
 
 	pdf.SetX(headerX)
 	pdf.SetFont("Arial", "", 9)
-	pdf.CellFormat(130, 5, fmt.Sprintf("Batch ID: %s", sanitizeBatchManifestValue(meta.BatchID, "-")), "", 1, "L", false, 0, "")
+	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.BatchIDLabel, sanitizeBatchManifestValue(meta.BatchID, template.EmptyValueFallback))), "", 1, "L", false, 0, "")
 	pdf.SetX(headerX)
-	pdf.CellFormat(130, 5, fmt.Sprintf("Generated: %s", meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC")), "", 1, "L", false, 0, "")
+	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.GeneratedLabel, meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC"))), "", 1, "L", false, 0, "")
 	pdf.SetX(headerX)
-	pdf.CellFormat(130, 5, fmt.Sprintf("Carrier: %s", sanitizeBatchManifestValue(meta.CarrierID, "-")), "", 1, "L", false, 0, "")
+	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.CarrierLabel, sanitizeBatchManifestValue(meta.CarrierID, template.EmptyValueFallback))), "", 1, "L", false, 0, "")
 	pdf.SetX(headerX)
-	pdf.CellFormat(130, 5, fmt.Sprintf("Quantity: %d", maxBatchManifestQuantity(meta.Quantity)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %d", template.QuantityLabel, maxBatchManifestQuantity(meta.Quantity))), "", 1, "L", false, 0, "")
 
 	pdf.SetY(42)
 }
@@ -101,26 +105,40 @@ func (s *Service) drawBatchManifestTableHeader(pdf *gofpdf.Fpdf) {
 	if pdf == nil {
 		return
 	}
+	template := s.resolveBatchManifestCoverTemplate()
+	headers := []string{
+		template.TrackingNumberHeader,
+		template.RecipientHeader,
+		template.OrderNumberHeader,
+		template.CityHeader,
+		template.ItemsHeader,
+	}
 	pdf.SetFont("Arial", "B", 8)
 	pdf.SetFillColor(240, 240, 240)
-	for index, header := range batchManifestTableHeaders {
-		pdf.CellFormat(batchManifestTableColumnWidths[index], batchManifestRowHeightMM, header, "1", 0, "L", true, 0, "")
+	for index, header := range headers {
+		pdf.CellFormat(batchManifestTableColumnWidths[index], batchManifestRowHeightMM, encodeBatchManifestText(header), "1", 0, "L", true, 0, "")
 	}
 	pdf.Ln(-1)
 }
 
 // drawBatchManifestTableRow draws one summary table row.
-func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestCoverRow) {
+func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestCoverRow, rowHeight float64) {
 	if pdf == nil {
 		return
 	}
+	template := s.resolveBatchManifestCoverTemplate()
+	itemCellText := formatBatchManifestItemsAsList(row.Items, template.ItemBulletPrefix, template.EmptyValueFallback)
+	startX, startY := pdf.GetX(), pdf.GetY()
+
 	pdf.SetFont("Arial", "", 8)
-	pdf.CellFormat(batchManifestTableColumnWidths[0], batchManifestRowHeightMM, truncateBatchManifestValue(row.TrackingNumber, 24), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(batchManifestTableColumnWidths[1], batchManifestRowHeightMM, truncateBatchManifestValue(row.RecipientName, 30), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(batchManifestTableColumnWidths[2], batchManifestRowHeightMM, truncateBatchManifestValue(row.OrderNumber, 16), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(batchManifestTableColumnWidths[3], batchManifestRowHeightMM, truncateBatchManifestValue(row.City, 14), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(batchManifestTableColumnWidths[4], batchManifestRowHeightMM, truncateBatchManifestValue(row.Items, 58), "1", 0, "L", false, 0, "")
-	pdf.Ln(-1)
+	pdf.CellFormat(batchManifestTableColumnWidths[0], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.TrackingNumber, 24, template.EmptyValueFallback)), "1", 0, "L", false, 0, "")
+	pdf.CellFormat(batchManifestTableColumnWidths[1], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.RecipientName, 30, template.EmptyValueFallback)), "1", 0, "L", false, 0, "")
+	pdf.CellFormat(batchManifestTableColumnWidths[2], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.OrderNumber, 16, template.EmptyValueFallback)), "1", 0, "L", false, 0, "")
+	pdf.CellFormat(batchManifestTableColumnWidths[3], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.City, 14, template.EmptyValueFallback)), "1", 0, "L", false, 0, "")
+
+	pdf.SetXY(startX+sumBatchManifestColumnWidths(4), startY)
+	pdf.MultiCell(batchManifestTableColumnWidths[4], batchManifestItemsLineHeightMM, encodeBatchManifestText(itemCellText), "1", "L", false)
+	pdf.SetXY(startX, startY+rowHeight)
 }
 
 // downloadBatchManifestLogo downloads one cover-logo image and resolves image type values for gofpdf.
@@ -171,10 +189,10 @@ func resolveBatchManifestImageType(rawURL string) string {
 }
 
 // truncateBatchManifestValue truncates long table values for compact cover rows.
-func truncateBatchManifestValue(value string, maxLength int) string {
+func truncateBatchManifestValue(value string, maxLength int, fallback string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "-"
+		return fallback
 	}
 	if maxLength <= 0 || len(trimmed) <= maxLength {
 		return trimmed
@@ -203,4 +221,81 @@ func maxBatchManifestQuantity(value int) int {
 		return 0
 	}
 	return value
+}
+
+// resolveBatchManifestCoverTemplate resolves active cover template values with default fallback.
+func (s *Service) resolveBatchManifestCoverTemplate() batchManifestCoverTemplate {
+	if s == nil || s.manifestDocuments == nil {
+		return loadDefaultBatchManifestCoverTemplate()
+	}
+	template := s.manifestDocuments.coverTemplate
+	if err := template.validate(); err != nil {
+		return loadDefaultBatchManifestCoverTemplate()
+	}
+
+	return template
+}
+
+// formatBatchManifestItemsAsList converts row items to a compact unordered-list text block.
+func formatBatchManifestItemsAsList(items []string, bulletPrefix string, fallback string) string {
+	normalizedItems := normalizeBatchManifestItems(items)
+	if len(normalizedItems) == 0 {
+		return fallback
+	}
+	trimmedPrefix := strings.TrimSpace(bulletPrefix)
+	if trimmedPrefix == "" {
+		trimmedPrefix = "-"
+	}
+	rows := make([]string, 0, len(normalizedItems))
+	for _, item := range normalizedItems {
+		rows = append(rows, trimmedPrefix+" "+item)
+	}
+
+	return strings.Join(rows, "\n")
+}
+
+// batchManifestTableRowHeight resolves dynamic row height values based on rendered items.
+func (s *Service) batchManifestTableRowHeight(pdf *gofpdf.Fpdf, row batchManifestCoverRow) float64 {
+	if pdf == nil {
+		return batchManifestRowHeightMM
+	}
+	template := s.resolveBatchManifestCoverTemplate()
+	itemText := encodeBatchManifestText(formatBatchManifestItemsAsList(row.Items, template.ItemBulletPrefix, template.EmptyValueFallback))
+	pdf.SetFont("Arial", "", 8)
+	lineCount := len(pdf.SplitLines([]byte(itemText), batchManifestTableColumnWidths[4]))
+	if lineCount < 1 {
+		lineCount = 1
+	}
+	height := float64(lineCount) * batchManifestItemsLineHeightMM
+	if height < batchManifestRowHeightMM {
+		return batchManifestRowHeightMM
+	}
+
+	return height
+}
+
+// sumBatchManifestColumnWidths sums column widths up to endColumn index.
+func sumBatchManifestColumnWidths(endColumn int) float64 {
+	if endColumn <= 0 {
+		return 0
+	}
+	if endColumn > len(batchManifestTableColumnWidths) {
+		endColumn = len(batchManifestTableColumnWidths)
+	}
+	total := 0.0
+	for i := 0; i < endColumn; i++ {
+		total += batchManifestTableColumnWidths[i]
+	}
+
+	return total
+}
+
+// encodeBatchManifestText encodes UTF-8 text to Windows-1252 for core PDF fonts.
+func encodeBatchManifestText(value string) string {
+	encoded, err := charmap.Windows1252.NewEncoder().String(value)
+	if err != nil {
+		return value
+	}
+
+	return encoded
 }

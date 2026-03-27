@@ -6,6 +6,10 @@ type Config struct {
 	Enabled bool `mapstructure:"SHIPPING_ENABLED" default:"true"`
 	// TrackingCacheTTLSeconds defines tracking cache TTL values in seconds.
 	TrackingCacheTTLSeconds int `mapstructure:"SHIPPING_TRACKING_CACHE_TTL_SECONDS" default:"300"`
+	// BatchManifestCacheTTLSeconds defines merged manifest-document cache TTL values in seconds.
+	BatchManifestCacheTTLSeconds int `mapstructure:"SHIPPING_BATCH_MANIFEST_CACHE_TTL_SECONDS" default:"300"`
+	// BatchManifestTemplatePath defines optional JSON template file path for manifest cover rendering.
+	BatchManifestTemplatePath string `mapstructure:"SHIPPING_BATCH_MANIFEST_TEMPLATE_PATH" default:""`
 	// Quotation defines quotation behavior configuration values.
 	Quotation QuotationConfig `mapstructure:",squash"`
 	// TCC defines TCC carrier configuration values.

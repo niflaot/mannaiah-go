@@ -10,7 +10,8 @@
 - Shipping mark generation and void flows.
 - Carrier artifact persistence for both shipping mark documents and shipping manifests.
 - Dispatch batch grouping (create/add/remove/close).
-- On-demand merged batch manifest PDF generation (cover summary page + carrier manifest pages) with 5-minute in-memory cache.
+- On-demand merged batch manifest PDF generation (cover summary page + carrier manifest pages) with 5-minute cache (Redis when configured + in-memory fallback).
+- JSON-based batch-manifest cover template for editable labels/headers without code changes.
 - Homogenized tracking API.
 - Integration event publication for mark/batch/tracking lifecycle updates.
 
@@ -50,6 +51,11 @@
 - `SHIPPING_TCC_SANDBOX_ACCESS_TOKEN` is used for sandbox requests.
 - `SHIPPING_TCC_PRODUCTION_ACCESS_TOKEN` is used for production requests.
 - `SHIPPING_TCC_COD_FEE_PERCENT` adds a COD fee percent to requested collection amounts (`recaudoproducto`).
+
+## Batch Manifest Document
+- `SHIPPING_BATCH_MANIFEST_CACHE_TTL_SECONDS` controls merged manifest cache TTL (default `300`).
+- `SHIPPING_BATCH_MANIFEST_TEMPLATE_PATH` optionally points to a JSON template file for cover-page labels/headers.
+- Default template source: `application/dispatch/service/templates/batch_manifest_cover.es.json`.
 
 ## Quotation Discount
 - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` applies a global percentage discount to all carrier quotations.

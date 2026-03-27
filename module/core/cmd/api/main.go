@@ -36,6 +36,7 @@ import (
 	corelogger "mannaiah/module/core/logger"
 	coremsgplatform "mannaiah/module/core/messaging/platform"
 	corewatermill "mannaiah/module/core/messaging/watermill"
+	coreredis "mannaiah/module/core/redis"
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
@@ -101,6 +102,7 @@ func run(ctx context.Context, envFile string) error {
 	var syncRecordCfg syncrecord.Config
 	var shippingCfg shipping.Config
 	var telemetryCfg coretelemetry.Config
+	var redisCfg coreredis.Config
 
 	if err := coreconfig.Load(
 		envFile,
@@ -123,6 +125,7 @@ func run(ctx context.Context, envFile string) error {
 		&syncRecordCfg,
 		&shippingCfg,
 		&telemetryCfg,
+		&redisCfg,
 	); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
@@ -135,6 +138,22 @@ func run(ctx context.Context, envFile string) error {
 	defer func() {
 		_ = logger.Sync()
 	}()
+
+	var sharedRedisCacheStore *coreredis.Store
+	sharedRedisCacheStore, err = coreredis.New(redisCfg, logger)
+	if err != nil {
+		logger.Warn("redis cache disabled", zap.Error(err))
+		sharedRedisCacheStore = nil
+	} else {
+		if pingErr := sharedRedisCacheStore.Ping(ctx); pingErr != nil {
+			logger.Warn("redis cache ping failed; continuing with fail-open cache behavior", zap.Error(pingErr))
+		}
+		defer func() {
+			if closeErr := sharedRedisCacheStore.Close(); closeErr != nil {
+				logger.Warn("redis cache shutdown failed", zap.Error(closeErr))
+			}
+		}()
+	}
 
 	telemetryProvider, telemetryErr := coretelemetry.Init(ctx, telemetryCfg, logger)
 	if telemetryErr != nil {
@@ -360,6 +379,7 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("initialize shipping module: %w", err)
 	}
+	shippingModule.DispatchService().SetBatchManifestDocumentCacheStore(sharedRedisCacheStore)
 	shippingModule.SetAuthorizer(authModule)
 	if err := shippingModule.Load(runtime); err != nil {
 		return fmt.Errorf("load shipping module: %w", err)
