@@ -75,4 +75,7 @@ func TestOpenAPISpec(t *testing.T) {
 	if !strings.Contains(strings.ToLower(queryParams["categoryId"]), "slug") || !strings.Contains(strings.ToLower(queryParams["categoryId"]), "name") {
 		t.Errorf("categoryId description missing slug/name fallback details: %q", queryParams["categoryId"])
 	}
+	if !strings.Contains(strings.ToLower(queryParams["categoryId"]), "includechildren") {
+		t.Errorf("categoryId description missing includeChildren behavior: %q", queryParams["categoryId"])
+	}
 }

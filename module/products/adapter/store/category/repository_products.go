@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	productstore "mannaiah/module/products/adapter/store/product"
+	categorydomain "mannaiah/module/products/domain/category"
 	categoryport "mannaiah/module/products/port/category"
 )
 
@@ -15,20 +16,32 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 		return nil, err
 	}
 
-	categoryIDs := []string{cat.ID}
+	categories := []*categorydomain.Category{cat}
 	if cat.IncludeChildren {
 		descendants, err := r.collectDescendants(ctx, cat.ID)
 		if err != nil {
 			return nil, err
 		}
-		categoryIDs = append(categoryIDs, descendants...)
+		for _, descendantID := range descendants {
+			descendant, getErr := r.GetByID(ctx, descendantID)
+			if getErr != nil {
+				return nil, fmt.Errorf("load descendant category %s: %w", descendantID, getErr)
+			}
+			categories = append(categories, descendant)
+		}
 	}
 
-	hasFilters := len(cat.Filter.Tags) > 0 ||
-		cat.Filter.PriceRange != nil ||
-		len(cat.Filter.CategoryRefs) > 0
-	hasPinned := len(cat.ProductIDs) > 0
-	if !hasFilters && !hasPinned {
+	hasAnySource := false
+	for _, category := range categories {
+		if len(category.Filter.Tags) > 0 ||
+			category.Filter.PriceRange != nil ||
+			len(category.Filter.CategoryRefs) > 0 ||
+			len(category.ProductIDs) > 0 {
+			hasAnySource = true
+			break
+		}
+	}
+	if !hasAnySource {
 		page, pageSize := normalizePagination(q.Page, q.PageSize)
 
 		return &categoryport.ListProductsResult{
@@ -40,72 +53,9 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 	}
 
 	idSet := make(map[string]struct{})
-
-	for _, catID := range categoryIDs {
-		var rows []categoryProductRecord
-		if err := r.db.WithContext(ctx).Where("category_id = ?", catID).Find(&rows).Error; err != nil {
-			return nil, fmt.Errorf("load pinned products for category %s: %w", catID, err)
-		}
-		for _, row := range rows {
-			idSet[row.ProductID] = struct{}{}
-		}
-	}
-
-	if len(cat.Filter.Tags) > 0 {
-		var tagProductIDs []string
-		err := r.db.WithContext(ctx).
-			Table("product_tags").
-			Select("product_tags.product_id").
-			Joins("JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL").
-			Where("tags.name IN ?", cat.Filter.Tags).
-			Group("product_tags.product_id").
-			Pluck("product_id", &tagProductIDs).Error
-		if err != nil {
-			return nil, fmt.Errorf("filter products by tags: %w", err)
-		}
-
-		priceQuery := r.db.WithContext(ctx).Table("products").Select("id").Where("deleted_at IS NULL AND id IN ?", tagProductIDs)
-		if cat.Filter.PriceRange != nil {
-			if cat.Filter.PriceRange.Min != nil {
-				priceQuery = priceQuery.Where("price >= ?", *cat.Filter.PriceRange.Min)
-			}
-			if cat.Filter.PriceRange.Max != nil {
-				priceQuery = priceQuery.Where("price <= ?", *cat.Filter.PriceRange.Max)
-			}
-		}
-
-		var filteredIDs []string
-		if err := priceQuery.Pluck("id", &filteredIDs).Error; err != nil {
-			return nil, fmt.Errorf("apply price filter on tag results: %w", err)
-		}
-		for _, id := range filteredIDs {
-			idSet[id] = struct{}{}
-		}
-	} else if cat.Filter.PriceRange != nil {
-		priceQuery := r.db.WithContext(ctx).Table("products").Select("id").Where("deleted_at IS NULL")
-		if cat.Filter.PriceRange.Min != nil {
-			priceQuery = priceQuery.Where("price >= ?", *cat.Filter.PriceRange.Min)
-		}
-		if cat.Filter.PriceRange.Max != nil {
-			priceQuery = priceQuery.Where("price <= ?", *cat.Filter.PriceRange.Max)
-		}
-
-		var priceIDs []string
-		if err := priceQuery.Pluck("id", &priceIDs).Error; err != nil {
-			return nil, fmt.Errorf("filter products by price: %w", err)
-		}
-		for _, id := range priceIDs {
-			idSet[id] = struct{}{}
-		}
-	}
-
-	for _, refCatID := range cat.Filter.CategoryRefs {
-		var refRows []categoryProductRecord
-		if err := r.db.WithContext(ctx).Where("category_id = ?", refCatID).Find(&refRows).Error; err != nil {
-			return nil, fmt.Errorf("load ref category products: %w", err)
-		}
-		for _, row := range refRows {
-			idSet[row.ProductID] = struct{}{}
+	for _, category := range categories {
+		if err := r.collectCategoryScopedProductIDs(ctx, category, idSet); err != nil {
+			return nil, err
 		}
 	}
 
@@ -166,6 +116,77 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// collectCategoryScopedProductIDs resolves one category's product IDs from pinned and filter criteria.
+func (r *Repository) collectCategoryScopedProductIDs(ctx context.Context, cat *categorydomain.Category, idSet map[string]struct{}) error {
+	if cat == nil {
+		return nil
+	}
+
+	for _, productID := range cat.ProductIDs {
+		idSet[productID] = struct{}{}
+	}
+
+	if len(cat.Filter.Tags) > 0 {
+		var tagProductIDs []string
+		err := r.db.WithContext(ctx).
+			Table("product_tags").
+			Select("product_tags.product_id").
+			Joins("JOIN tags ON tags.id = product_tags.tag_id AND tags.deleted_at IS NULL").
+			Where("tags.name IN ?", cat.Filter.Tags).
+			Group("product_tags.product_id").
+			Pluck("product_id", &tagProductIDs).Error
+		if err != nil {
+			return fmt.Errorf("filter products by tags for category %s: %w", cat.ID, err)
+		}
+
+		priceQuery := r.db.WithContext(ctx).Table("products").Select("id").Where("deleted_at IS NULL AND id IN ?", tagProductIDs)
+		if cat.Filter.PriceRange != nil {
+			if cat.Filter.PriceRange.Min != nil {
+				priceQuery = priceQuery.Where("price >= ?", *cat.Filter.PriceRange.Min)
+			}
+			if cat.Filter.PriceRange.Max != nil {
+				priceQuery = priceQuery.Where("price <= ?", *cat.Filter.PriceRange.Max)
+			}
+		}
+
+		var filteredIDs []string
+		if err := priceQuery.Pluck("id", &filteredIDs).Error; err != nil {
+			return fmt.Errorf("apply price filter on tag results for category %s: %w", cat.ID, err)
+		}
+		for _, id := range filteredIDs {
+			idSet[id] = struct{}{}
+		}
+	} else if cat.Filter.PriceRange != nil {
+		priceQuery := r.db.WithContext(ctx).Table("products").Select("id").Where("deleted_at IS NULL")
+		if cat.Filter.PriceRange.Min != nil {
+			priceQuery = priceQuery.Where("price >= ?", *cat.Filter.PriceRange.Min)
+		}
+		if cat.Filter.PriceRange.Max != nil {
+			priceQuery = priceQuery.Where("price <= ?", *cat.Filter.PriceRange.Max)
+		}
+
+		var priceIDs []string
+		if err := priceQuery.Pluck("id", &priceIDs).Error; err != nil {
+			return fmt.Errorf("filter products by price for category %s: %w", cat.ID, err)
+		}
+		for _, id := range priceIDs {
+			idSet[id] = struct{}{}
+		}
+	}
+
+	for _, refCatID := range cat.Filter.CategoryRefs {
+		var refRows []categoryProductRecord
+		if err := r.db.WithContext(ctx).Where("category_id = ?", refCatID).Find(&refRows).Error; err != nil {
+			return fmt.Errorf("load ref category products for category %s: %w", cat.ID, err)
+		}
+		for _, row := range refRows {
+			idSet[row.ProductID] = struct{}{}
+		}
+	}
+
+	return nil
 }
 
 // collectDescendants collects all descendant category IDs recursively.

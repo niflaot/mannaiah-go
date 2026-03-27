@@ -9,6 +9,7 @@ import (
 	coredbmigration "mannaiah/module/core/database/migration"
 	categorystore "mannaiah/module/products/adapter/store/category"
 	productstore "mannaiah/module/products/adapter/store/product"
+	tagstore "mannaiah/module/products/adapter/store/tag"
 	categorydomain "mannaiah/module/products/domain/category"
 	productdomain "mannaiah/module/products/domain/product"
 	categoryport "mannaiah/module/products/port/category"
@@ -44,7 +45,9 @@ func newCategoryRepositoryForTest(t *testing.T) *categorystore.Repository {
 }
 
 // createTestProduct creates a product for use in category tests.
-func createTestProduct(t *testing.T, db interface{ DB() interface{ Close() error } }, sku string, price *float64, tags []string) string {
+func createTestProduct(t *testing.T, db interface {
+	DB() interface{ Close() error }
+}, sku string, price *float64, tags []string) string {
 	t.Helper()
 
 	return ""
@@ -320,6 +323,146 @@ func TestCategoryRepository_ListProducts_Pinned(t *testing.T) {
 	}
 	if len(result.Items) != 1 {
 		t.Fatalf("Items len = %d, want 1", len(result.Items))
+	}
+}
+
+// TestCategoryRepository_ListProducts_IncludeChildrenPinned verifies parent categories include child pinned products when includeChildren is enabled.
+func TestCategoryRepository_ListProducts_IncludeChildrenPinned(t *testing.T) {
+	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("coredb.Open() error = %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB() error = %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("coredbmigration.Apply() error = %v", err)
+	}
+
+	catRepo, err := categorystore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("categorystore.NewRepository() error = %v", err)
+	}
+	prodRepo, err := productstore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("productstore.NewRepository() error = %v", err)
+	}
+
+	ctx := context.Background()
+	product := &productdomain.Product{SKU: "CHILD-PINNED-1"}
+	if err := prodRepo.Create(ctx, product); err != nil {
+		t.Fatalf("product.Create() error = %v", err)
+	}
+
+	parent := &categorydomain.Category{
+		ID:              "parent-cat",
+		Slug:            "parent-cat",
+		Name:            "Parent Cat",
+		IncludeChildren: true,
+	}
+	if err := catRepo.Create(ctx, parent); err != nil {
+		t.Fatalf("Create(parent) error = %v", err)
+	}
+	parentID := parent.ID
+	child := &categorydomain.Category{
+		ID:         "child-cat",
+		Slug:       "child-cat",
+		Name:       "Child Cat",
+		ParentID:   &parentID,
+		ProductIDs: []string{product.ID},
+	}
+	if err := catRepo.Create(ctx, child); err != nil {
+		t.Fatalf("Create(child) error = %v", err)
+	}
+
+	result, err := catRepo.ListProducts(ctx, categoryport.ListProductsQuery{CategoryID: parent.ID, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListProducts() error = %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("Total = %d, want 1", result.Total)
+	}
+	if len(result.Items) != 1 || result.Items[0].ID != product.ID {
+		t.Fatalf("Items = %#v, want child pinned product %q", result.Items, product.ID)
+	}
+}
+
+// TestCategoryRepository_ListProducts_IncludeChildrenFilters verifies parent categories include child filter-resolved products when includeChildren is enabled.
+func TestCategoryRepository_ListProducts_IncludeChildrenFilters(t *testing.T) {
+	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("coredb.Open() error = %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB() error = %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("coredbmigration.Apply() error = %v", err)
+	}
+
+	catRepo, err := categorystore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("categorystore.NewRepository() error = %v", err)
+	}
+	prodRepo, err := productstore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("productstore.NewRepository() error = %v", err)
+	}
+	tagsRepo, err := tagstore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("tagstore.NewRepository() error = %v", err)
+	}
+
+	ctx := context.Background()
+	if err := tagsRepo.EnsureAll(ctx, []string{"morrales"}); err != nil {
+		t.Fatalf("tags.EnsureAll() error = %v", err)
+	}
+	product := &productdomain.Product{
+		SKU:  "CHILD-FILTER-1",
+		Tags: []string{"morrales"},
+	}
+	if err := prodRepo.Create(ctx, product); err != nil {
+		t.Fatalf("product.Create() error = %v", err)
+	}
+
+	parent := &categorydomain.Category{
+		ID:              "parent-filter-cat",
+		Slug:            "parent-filter-cat",
+		Name:            "Parent Filter Cat",
+		IncludeChildren: true,
+	}
+	if err := catRepo.Create(ctx, parent); err != nil {
+		t.Fatalf("Create(parent) error = %v", err)
+	}
+	parentID := parent.ID
+	child := &categorydomain.Category{
+		ID:       "child-filter-cat",
+		Slug:     "child-filter-cat",
+		Name:     "Child Filter Cat",
+		ParentID: &parentID,
+		Filter: categorydomain.Filter{
+			Tags: []string{"morrales"},
+		},
+	}
+	if err := catRepo.Create(ctx, child); err != nil {
+		t.Fatalf("Create(child) error = %v", err)
+	}
+
+	result, err := catRepo.ListProducts(ctx, categoryport.ListProductsQuery{CategoryID: parent.ID, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListProducts() error = %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("Total = %d, want 1", result.Total)
+	}
+	if len(result.Items) != 1 || result.Items[0].ID != product.ID {
+		t.Fatalf("Items = %#v, want child filter product %q", result.Items, product.ID)
 	}
 }
 

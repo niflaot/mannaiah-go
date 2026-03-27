@@ -43,4 +43,7 @@ func TestOpenAPISpec(t *testing.T) {
 	if !strings.Contains(categoryDescription, "slug") || !strings.Contains(categoryDescription, "name") {
 		t.Errorf("categoryId description missing slug/name fallback details: %q", categorySchema.Value.Description)
 	}
+	if !strings.Contains(categoryDescription, "includechildren") {
+		t.Errorf("categoryId description missing includeChildren behavior: %q", categorySchema.Value.Description)
+	}
 }

@@ -239,7 +239,7 @@ func campaignSchema() *openapi3.Schema {
 // campaignProductBlockSchema defines campaign product-block payload schema values.
 func campaignProductBlockSchema() *openapi3.Schema {
 	categoryIDSchema := openapi3.NewStringSchema()
-	categoryIDSchema.Description = "Optional category reference for dynamic candidates. Supports category id, slug, or name (case-insensitive)."
+	categoryIDSchema.Description = "Optional category reference for dynamic candidates. Supports category id, slug, or name (case-insensitive). When the resolved category has includeChildren enabled, descendant categories are included."
 	pinnedProductsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
 	pinnedProductsSchema.Description = "Pinned products. Token format supports plain <product_id> and scoped <product_id>|<variation_id>."
 	excludedProductsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"reflect"
+	"sort"
 	"testing"
 
 	"gorm.io/driver/sqlite"
@@ -25,7 +26,7 @@ func openProductCatalogTestDB(t *testing.T) *gorm.DB {
 		"CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT NOT NULL, deleted_at DATETIME NULL);",
 		"CREATE TABLE product_tags (product_id TEXT NOT NULL, tag_id INTEGER NOT NULL);",
 		"CREATE TABLE products (id TEXT PRIMARY KEY, deleted_at DATETIME NULL);",
-		"CREATE TABLE categories (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, deleted_at DATETIME NULL);",
+		"CREATE TABLE categories (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, parent_id TEXT NULL, include_children BOOLEAN NOT NULL DEFAULT 0, deleted_at DATETIME NULL);",
 		"CREATE TABLE category_products (category_id TEXT NOT NULL, product_id TEXT NOT NULL);",
 		"CREATE TABLE product_variation_links (product_id TEXT NOT NULL, variation_id TEXT NOT NULL);",
 	}
@@ -45,9 +46,13 @@ func seedProductCatalogCategoryFixtures(t *testing.T, db *gorm.DB) {
 	statements := []string{
 		"INSERT INTO tags (id, name, deleted_at) VALUES (1, 'tier-1', NULL);",
 		"INSERT INTO products (id, deleted_at) VALUES ('p-1', NULL);",
+		"INSERT INTO products (id, deleted_at) VALUES ('p-2', NULL);",
 		"INSERT INTO product_tags (product_id, tag_id) VALUES ('p-1', 1);",
-		"INSERT INTO categories (id, slug, name, deleted_at) VALUES ('cat-1', 'morrales', 'Morrales', NULL);",
+		"INSERT INTO product_tags (product_id, tag_id) VALUES ('p-2', 1);",
+		"INSERT INTO categories (id, slug, name, parent_id, include_children, deleted_at) VALUES ('cat-1', 'morrales', 'Morrales', NULL, 1, NULL);",
+		"INSERT INTO categories (id, slug, name, parent_id, include_children, deleted_at) VALUES ('cat-2', 'morrales-mini', 'Morrales Mini', 'cat-1', 0, NULL);",
 		"INSERT INTO category_products (category_id, product_id) VALUES ('cat-1', 'p-1');",
+		"INSERT INTO category_products (category_id, product_id) VALUES ('cat-2', 'p-2');",
 		"INSERT INTO category_products (category_id, product_id) VALUES ('legacy-cat', 'p-1');",
 	}
 	for _, stmt := range statements {
@@ -74,9 +79,9 @@ func TestResolveProductIDsSupportsCategoryIDSlugAndName(t *testing.T) {
 		categoryID string
 		want       []string
 	}{
-		{name: "by id", categoryID: "cat-1", want: []string{"p-1"}},
-		{name: "by slug", categoryID: "morrales", want: []string{"p-1"}},
-		{name: "by name", categoryID: "Morrales", want: []string{"p-1"}},
+		{name: "by id", categoryID: "cat-1", want: []string{"p-1", "p-2"}},
+		{name: "by slug", categoryID: "morrales", want: []string{"p-1", "p-2"}},
+		{name: "by name", categoryID: "Morrales", want: []string{"p-1", "p-2"}},
 	}
 
 	for _, tt := range tests {
@@ -86,6 +91,8 @@ func TestResolveProductIDsSupportsCategoryIDSlugAndName(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resolveProductIDs() error = %v", err)
 			}
+			sort.Strings(got)
+			sort.Strings(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("resolveProductIDs() = %#v, want %#v", got, tt.want)
 			}

@@ -36,7 +36,7 @@ func getRecommendationsOperation() *openapi3.Operation {
 				WithDescription("Controls how baseTags are matched: \"any\" (default) — products with at least one tag (union); \"all\" — products that carry every tag (intersection).").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("categoryId").
-				WithDescription("Restrict candidates to one product category reference (id, slug, or name; case-insensitive for name).").
+				WithDescription("Restrict candidates to one product category reference (id, slug, or name; case-insensitive for name). When the resolved category has includeChildren enabled, descendant categories are included.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("realm").
 				WithDescription("Display realm for name and image resolution (default: \"default\").").
