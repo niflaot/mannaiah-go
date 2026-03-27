@@ -184,6 +184,9 @@ func TestRegisterShippingMarkTransactionalEmailConsumer(t *testing.T) {
 	if handler == nil {
 		t.Fatalf("missing handler for %q", shippingport.TopicMarkGenerated)
 	}
+	if registrar.handlers[shippingport.TopicMarkVoided] == nil {
+		t.Fatalf("missing handler for %q", shippingport.TopicMarkVoided)
+	}
 	if err := handler(context.Background(), coremsgbus.Message{
 		Topic:   shippingport.TopicMarkGenerated,
 		Payload: []byte(`{"markId":"mark-1","orderId":"order-1"}`),
@@ -201,6 +204,58 @@ func TestRegisterShippingMarkTransactionalEmailConsumer(t *testing.T) {
 	}
 	if !strings.Contains(sender.command.HTMLBody, "https://wa.me/573104314990") {
 		t.Fatalf("HTMLBody should contain help URL")
+	}
+}
+
+// TestRegisterShippingMarkTransactionalEmailConsumerVoided verifies transactional shipping mark-voided email dispatch behavior.
+func TestRegisterShippingMarkTransactionalEmailConsumerVoided(t *testing.T) {
+	registrar := &shippingEmailRegistrarMock{}
+	renderer, err := newShippingTemplateRenderer()
+	if err != nil {
+		t.Fatalf("newShippingTemplateRenderer() error = %v", err)
+	}
+	sender := &shippingEmailSenderMock{}
+	deps := shippingEmailConsumerDependencies{
+		marks:    shippingEmailMarkServiceMock{mark: &shippingdomain.ShippingMark{ID: "mark-void-1", OrderID: "order-1", CarrierID: "tcc", TrackingNumber: "6039", DocumentRef: "DOC-1", Recipient: shippingdomain.Address{Email: "fallback@example.com"}}},
+		carriers: shippingEmailCarrierServiceMock{carrier: &shippingdomain.Carrier{ID: "tcc", Name: "TCC"}},
+		orders: shippingEmailOrderServiceMock{order: &ordersdomain.Order{
+			ID:            "order-1",
+			Identifier:    "601205",
+			ContactID:     "contact-1",
+			PaymentMethod: "contraentrega",
+			Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
+		}},
+		contacts:         shippingEmailContactServiceMock{contact: &contactdomain.Contact{ID: "contact-1", FirstName: "Juliana", LastName: "Villegas", Email: "juliana@example.com"}},
+		emails:           sender,
+		templateRenderer: renderer,
+	}
+	if err := registerShippingMarkTransactionalEmailConsumer(registrar, deps, nil); err != nil {
+		t.Fatalf("registerShippingMarkTransactionalEmailConsumer() error = %v", err)
+	}
+	handler := registrar.handlers[shippingport.TopicMarkVoided]
+	if handler == nil {
+		t.Fatalf("missing handler for %q", shippingport.TopicMarkVoided)
+	}
+	if err := handler(context.Background(), coremsgbus.Message{
+		Topic:   shippingport.TopicMarkVoided,
+		Payload: []byte(`{"markId":"mark-void-1","orderId":"order-1","trackingNumber":"6039"}`),
+	}); err != nil {
+		t.Fatalf("handler() error = %v", err)
+	}
+	if sender.command.Subject != "Actualizacion de envio de tu pedido #601205" {
+		t.Fatalf("sender.command.Subject = %q", sender.command.Subject)
+	}
+	if sender.command.IdempotencyKey != "shipping_mark_voided:mark-void-1" {
+		t.Fatalf("sender.command.IdempotencyKey = %q", sender.command.IdempotencyKey)
+	}
+	if strings.Contains(sender.command.HTMLBody, "RASTREAR PEDIDO") {
+		t.Fatalf("HTMLBody should not contain tracking button")
+	}
+	if !strings.Contains(sender.command.HTMLBody, "se generó una guía de envío para tu pedido") {
+		t.Fatalf("HTMLBody should include voided-guide content")
+	}
+	if !strings.Contains(sender.command.TextBody, "ha tenido que ser anulada") {
+		t.Fatalf("TextBody should include voided-guide content")
 	}
 }
 
@@ -223,6 +278,10 @@ func TestRegisterShippingMarkTransactionalEmailConsumerErrorPaths(t *testing.T) 
 		t.Fatalf("registerShippingMarkTransactionalEmailConsumer() error = %v", err)
 	}
 	handler := registrar.handlers[shippingport.TopicMarkGenerated]
+	voidedHandler := registrar.handlers[shippingport.TopicMarkVoided]
+	if voidedHandler == nil {
+		t.Fatalf("missing handler for %q", shippingport.TopicMarkVoided)
+	}
 	if err := handler(context.Background(), coremsgbus.Message{
 		Topic:   shippingport.TopicMarkGenerated,
 		Payload: []byte(`invalid`),
@@ -234,6 +293,12 @@ func TestRegisterShippingMarkTransactionalEmailConsumerErrorPaths(t *testing.T) 
 		Payload: []byte(`{"markId":"mark-1","orderId":"order-1"}`),
 	}); err != nil {
 		t.Fatalf("handler(duplicate idempotency) error = %v, want nil", err)
+	}
+	if err := voidedHandler(context.Background(), coremsgbus.Message{
+		Topic:   shippingport.TopicMarkVoided,
+		Payload: []byte(`{"markId":"mark-1","orderId":"order-1"}`),
+	}); err != nil {
+		t.Fatalf("voidedHandler(duplicate idempotency) error = %v, want nil", err)
 	}
 }
 

@@ -82,6 +82,10 @@ func TestRegisterShippingMarkOrderCompletionConsumer(t *testing.T) {
 	if handler == nil {
 		t.Fatalf("missing handler for %q", shippingport.TopicMarkGenerated)
 	}
+	voidedHandler := registrar.handlers[shippingport.TopicMarkVoided]
+	if voidedHandler == nil {
+		t.Fatalf("missing handler for %q", shippingport.TopicMarkVoided)
+	}
 
 	if err := handler(context.Background(), coremsgbus.Message{
 		Topic:   shippingport.TopicMarkGenerated,
@@ -95,6 +99,22 @@ func TestRegisterShippingMarkOrderCompletionConsumer(t *testing.T) {
 	if service.updated.Status != ordersdomain.StatusCompleted {
 		t.Fatalf("service.updated.Status = %q, want %q", service.updated.Status, ordersdomain.StatusCompleted)
 	}
+
+	if err := voidedHandler(context.Background(), coremsgbus.Message{
+		Topic:   shippingport.TopicMarkVoided,
+		Payload: []byte(`{"markId":"mark-1","orderId":"order-1","trackingNumber":"6039"}`),
+	}); err != nil {
+		t.Fatalf("voidedHandler() error = %v", err)
+	}
+	if service.updated.Status != ordersdomain.StatusCreated {
+		t.Fatalf("service.updated.Status = %q, want %q", service.updated.Status, ordersdomain.StatusCreated)
+	}
+	if service.updated.Source != "shipping_mark_voided" {
+		t.Fatalf("service.updated.Source = %q, want %q", service.updated.Source, "shipping_mark_voided")
+	}
+	if service.updated.Description != "order returned to created after shipping mark voided: 6039" {
+		t.Fatalf("service.updated.Description = %q", service.updated.Description)
+	}
 }
 
 // TestRegisterShippingMarkOrderCompletionConsumerNoopPaths verifies non-failing paths for already-completed and not-found orders.
@@ -107,6 +127,10 @@ func TestRegisterShippingMarkOrderCompletionConsumerNoopPaths(t *testing.T) {
 		t.Fatalf("registerShippingMarkOrderCompletionConsumer() error = %v", err)
 	}
 	handler := registrar.handlers[shippingport.TopicMarkGenerated]
+	voidedHandler := registrar.handlers[shippingport.TopicMarkVoided]
+	if voidedHandler == nil {
+		t.Fatalf("missing handler for %q", shippingport.TopicMarkVoided)
+	}
 	if err := handler(context.Background(), coremsgbus.Message{
 		Topic:   shippingport.TopicMarkGenerated,
 		Payload: []byte(`{"markId":"mark-1","orderId":"order-1"}`),
@@ -124,6 +148,12 @@ func TestRegisterShippingMarkOrderCompletionConsumerNoopPaths(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("handler() error = %v", err)
 	}
+	if err := voidedHandler(context.Background(), coremsgbus.Message{
+		Topic:   shippingport.TopicMarkVoided,
+		Payload: []byte(`{"markId":"mark-1","orderId":"order-1"}`),
+	}); err != nil {
+		t.Fatalf("voidedHandler() error = %v", err)
+	}
 }
 
 // TestRegisterShippingMarkOrderCompletionConsumerErrors verifies retriable and non-retriable error paths.
@@ -136,6 +166,10 @@ func TestRegisterShippingMarkOrderCompletionConsumerErrors(t *testing.T) {
 		t.Fatalf("registerShippingMarkOrderCompletionConsumer() error = %v", err)
 	}
 	handler := registrar.handlers[shippingport.TopicMarkGenerated]
+	voidedHandler := registrar.handlers[shippingport.TopicMarkVoided]
+	if voidedHandler == nil {
+		t.Fatalf("missing handler for %q", shippingport.TopicMarkVoided)
+	}
 
 	err := handler(context.Background(), coremsgbus.Message{
 		Topic:   shippingport.TopicMarkGenerated,
@@ -152,5 +186,14 @@ func TestRegisterShippingMarkOrderCompletionConsumerErrors(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("handler() error = nil, want non-nil")
+	}
+
+	service.updateErr = errors.New("db down")
+	err = voidedHandler(context.Background(), coremsgbus.Message{
+		Topic:   shippingport.TopicMarkVoided,
+		Payload: []byte(`{"markId":"mark-1","orderId":"order-1","trackingNumber":"6039"}`),
+	})
+	if err == nil {
+		t.Fatalf("voidedHandler() error = nil, want non-nil")
 	}
 }

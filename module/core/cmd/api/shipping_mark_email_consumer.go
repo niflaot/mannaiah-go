@@ -29,7 +29,7 @@ type shippingCarrierLookupService interface {
 	Get(ctx context.Context, id string) (*shippingdomain.Carrier, error)
 }
 
-// shippingEmailConsumerDependencies defines dependencies required by mark-generated shipping email consumers.
+// shippingEmailConsumerDependencies defines dependencies required by shipping mark transactional email consumers.
 type shippingEmailConsumerDependencies struct {
 	// marks defines shipping mark lookup dependencies.
 	marks shippingMarkLookupService
@@ -81,7 +81,7 @@ type shippingEmailSender interface {
 	Send(ctx context.Context, command emailapplication.SendCommand) (*emaildomain.Delivery, error)
 }
 
-// registerShippingMarkTransactionalEmailConsumer registers mark-generated handlers that send shipping transactional emails.
+// registerShippingMarkTransactionalEmailConsumer registers shipping-mark handlers that send transactional emails.
 func registerShippingMarkTransactionalEmailConsumer(
 	registrar coremsgbus.Registrar,
 	deps shippingEmailConsumerDependencies,
@@ -95,7 +95,7 @@ func registerShippingMarkTransactionalEmailConsumer(
 		logger = zap.NewNop()
 	}
 
-	return registrar.AddHandler(shippingport.TopicMarkGenerated, func(ctx context.Context, message coremsgbus.Message) error {
+	handleMarkGenerated := func(ctx context.Context, message coremsgbus.Message) error {
 		payload, err := decodeShippingMarkGeneratedPayload(message)
 		if err != nil {
 			logger.Warn("decode shipping mark generated payload failed for transactional email", zap.Error(err))
@@ -120,7 +120,40 @@ func registerShippingMarkTransactionalEmailConsumer(
 		}
 
 		return nil
-	})
+	}
+
+	handleMarkVoided := func(ctx context.Context, message coremsgbus.Message) error {
+		payload, err := decodeShippingMarkGeneratedPayload(message)
+		if err != nil {
+			logger.Warn("decode shipping mark voided payload failed for transactional email", zap.Error(err))
+			return err
+		}
+
+		command, buildErr := buildShippingMarkVoidedEmailCommand(ctx, deps, payload)
+		if buildErr != nil {
+			return buildErr
+		}
+		if command == nil {
+			return nil
+		}
+
+		if _, sendErr := deps.emails.Send(ctx, *command); sendErr != nil {
+			if isDuplicateEmailIdempotencyError(sendErr) {
+				logger.Info("skip duplicate transactional shipping mark voided email", zap.String("idempotency_key", strings.TrimSpace(command.IdempotencyKey)))
+				return nil
+			}
+
+			return fmt.Errorf("send transactional shipping mark voided email: %w", sendErr)
+		}
+
+		return nil
+	}
+
+	if err := registrar.AddHandler(shippingport.TopicMarkGenerated, handleMarkGenerated); err != nil {
+		return err
+	}
+
+	return registrar.AddHandler(shippingport.TopicMarkVoided, handleMarkVoided)
 }
 
 // buildShippingDispatchedEmailCommand builds one transactional shipping email send command.
@@ -169,6 +202,55 @@ func buildShippingDispatchedEmailCommand(
 		HTMLBody:       renderedHTML,
 		TextBody:       deps.templateRenderer.RenderText(templateData),
 		IdempotencyKey: "shipping_mark_dispatched:" + strings.TrimSpace(mark.ID),
+	}, nil
+}
+
+// buildShippingMarkVoidedEmailCommand builds one transactional voided shipping mark email send command.
+func buildShippingMarkVoidedEmailCommand(
+	ctx context.Context,
+	deps shippingEmailConsumerDependencies,
+	payload shippingMarkGeneratedPayload,
+) (*emailapplication.SendCommand, error) {
+	mark, err := deps.marks.Get(ctx, payload.MarkID)
+	if err != nil || mark == nil {
+		return nil, fmt.Errorf("load shipping mark for transactional voided email: %w", err)
+	}
+	order, err := deps.orders.Get(ctx, payload.OrderID)
+	if err != nil || order == nil {
+		return nil, fmt.Errorf("load order for transactional voided email: %w", err)
+	}
+	contact, err := deps.contacts.Get(ctx, strings.TrimSpace(order.ContactID))
+	if err != nil || contact == nil {
+		return nil, fmt.Errorf("load contact for transactional voided email: %w", err)
+	}
+
+	recipientEmail := firstNonEmpty(strings.TrimSpace(contact.Email), strings.TrimSpace(mark.Recipient.Email))
+	if recipientEmail == "" {
+		return nil, nil
+	}
+	trackingNumber := firstNonEmpty(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(payload.TrackingNumber), strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.ID))
+	shippingNumber := firstNonEmpty(strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(payload.DocumentRef), strings.TrimSpace(mark.ID))
+	orderNumber := firstNonEmpty(strings.TrimSpace(order.Identifier), strings.TrimSpace(order.ID))
+	carrierName := resolveCarrierName(ctx, deps.carriers, mark.CarrierID)
+
+	templateData := buildShippingDispatchedTemplateData(ctx, deps, *order, *contact, *mark, shippingDispatchedRenderMeta{
+		OrderNumber:    orderNumber,
+		CarrierName:    carrierName,
+		TrackingNumber: trackingNumber,
+		ShippingNumber: shippingNumber,
+	})
+	renderedHTML, renderErr := deps.templateRenderer.RenderVoidedHTML(templateData)
+	if renderErr != nil {
+		return nil, fmt.Errorf("render shipping mark voided transactional html template: %w", renderErr)
+	}
+
+	return &emailapplication.SendCommand{
+		ContactID:      strings.TrimSpace(contact.ID),
+		Email:          strings.TrimSpace(recipientEmail),
+		Subject:        "Actualizacion de envio de tu pedido #" + strings.TrimSpace(orderNumber),
+		HTMLBody:       renderedHTML,
+		TextBody:       deps.templateRenderer.RenderVoidedText(templateData),
+		IdempotencyKey: "shipping_mark_voided:" + strings.TrimSpace(mark.ID),
 	}, nil
 }
 
