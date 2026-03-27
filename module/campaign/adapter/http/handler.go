@@ -63,6 +63,12 @@ type productBlockRequest struct {
 	UseAffinity         bool     `json:"useAffinity"`
 	AffinityMinScorePct float64  `json:"affinityMinScorePct"`
 	CategoryID          string   `json:"categoryId"`
+	CategoryIDs         []string `json:"categoryIds"`
+	ExcludeCategoryIDs  []string `json:"excludeCategoryIds"`
+	IncludeTags         []string `json:"includeTags"`
+	ExcludeTags         []string `json:"excludeTags"`
+	MinPrice            *float64 `json:"minPrice"`
+	MaxPrice            *float64 `json:"maxPrice"`
 	Realm               string   `json:"realm"`
 	Limit               int      `json:"limit"`
 	PinnedProductIDs    []string `json:"pinnedProductIds"`
@@ -280,6 +286,12 @@ func mapProductBlockRequests(reqs []productBlockRequest) []domain.ProductBlock {
 			UseAffinity:         r.UseAffinity,
 			AffinityMinScorePct: r.AffinityMinScorePct,
 			CategoryID:          r.CategoryID,
+			CategoryIDs:         r.CategoryIDs,
+			ExcludeCategoryIDs:  r.ExcludeCategoryIDs,
+			IncludeTags:         r.IncludeTags,
+			ExcludeTags:         r.ExcludeTags,
+			MinPrice:            r.MinPrice,
+			MaxPrice:            r.MaxPrice,
 			Realm:               r.Realm,
 			Limit:               r.Limit,
 			PinnedProductIDs:    r.PinnedProductIDs,

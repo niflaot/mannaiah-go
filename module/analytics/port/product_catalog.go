@@ -57,11 +57,30 @@ type ProductCatalogStore interface {
 	// baseTagMode "any" returns products with at least one matching tag (union).
 	// baseTagMode "all" returns only products that carry every tag (intersection).
 	// When expandedTags is non-empty, only products sharing at least one expanded tag are returned.
-	// When categoryID is non-empty, results are restricted to that category.
+	// When categoryID/categoryIDs are non-empty, results are restricted to matching categories.
+	// ExcludeCategoryIDs removes products that belong to those categories.
+	// IncludeTags restricts results to products that carry at least one tag in the list.
+	// ExcludeTags removes products that carry at least one tag in the list.
+	// MinPrice/MaxPrice restricts results by product price when provided.
 	// When excludeIDs is non-empty, those product IDs are excluded.
 	// When filterVariationIDs is non-empty, only products with at least one matching variation are returned.
 	// Limit constrains the maximum number of returned entries.
-	GetProductsByBaseTags(ctx context.Context, baseTags []string, baseTagMode string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]ProductCatalogEntry, error)
+	GetProductsByBaseTags(
+		ctx context.Context,
+		baseTags []string,
+		baseTagMode string,
+		expandedTags []string,
+		categoryID string,
+		categoryIDs []string,
+		excludeCategoryIDs []string,
+		includeTags []string,
+		excludeTags []string,
+		minPrice *float64,
+		maxPrice *float64,
+		excludeIDs []string,
+		filterVariationIDs []string,
+		limit int,
+	) ([]ProductCatalogEntry, error)
 	// GetProductsByIDs returns active products for the given product IDs, preserving input order.
 	// When filterVariationIDs is non-empty, only products with at least one matching variation are returned.
 	GetProductsByIDs(ctx context.Context, ids []string, filterVariationIDs []string) ([]ProductCatalogEntry, error)

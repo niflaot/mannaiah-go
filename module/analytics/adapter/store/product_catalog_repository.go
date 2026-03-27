@@ -114,12 +114,42 @@ func NewProductCatalogRepository(db *gorm.DB) (*ProductCatalogRepository, error)
 
 // GetProductsByBaseTags returns active products filtered by one or more base tags.
 // baseTagMode "any" = union (product has at least one tag); "all" = intersection (product has every tag).
-func (r *ProductCatalogRepository) GetProductsByBaseTags(ctx context.Context, baseTags []string, baseTagMode string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]port.ProductCatalogEntry, error) {
+func (r *ProductCatalogRepository) GetProductsByBaseTags(
+	ctx context.Context,
+	baseTags []string,
+	baseTagMode string,
+	expandedTags []string,
+	categoryID string,
+	categoryIDs []string,
+	excludeCategoryIDs []string,
+	includeTags []string,
+	excludeTags []string,
+	minPrice *float64,
+	maxPrice *float64,
+	excludeIDs []string,
+	filterVariationIDs []string,
+	limit int,
+) ([]port.ProductCatalogEntry, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 
-	candidateIDs, err := r.resolveProductIDs(ctx, baseTags, baseTagMode, expandedTags, categoryID, excludeIDs, filterVariationIDs, limit*5)
+	candidateIDs, err := r.resolveProductIDs(
+		ctx,
+		baseTags,
+		baseTagMode,
+		expandedTags,
+		categoryID,
+		categoryIDs,
+		excludeCategoryIDs,
+		includeTags,
+		excludeTags,
+		minPrice,
+		maxPrice,
+		excludeIDs,
+		filterVariationIDs,
+		limit*5,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -490,10 +520,24 @@ func (r *ProductCatalogRepository) loadProductEntries(ctx context.Context, ids [
 	return entries, nil
 }
 
-// resolveProductIDs returns product IDs matching the base tag filter, optional expanded tags,
-// optional category, excluded IDs, and optional variation filter.
+// resolveProductIDs returns product IDs matching the base tag filter and optional recommendation filters.
 // baseTagMode "any" = union (product has at least one tag); "all" = intersection (product has every tag).
-func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTags []string, baseTagMode string, expandedTags []string, categoryID string, excludeIDs []string, filterVariationIDs []string, limit int) ([]string, error) {
+func (r *ProductCatalogRepository) resolveProductIDs(
+	ctx context.Context,
+	baseTags []string,
+	baseTagMode string,
+	expandedTags []string,
+	categoryID string,
+	categoryIDs []string,
+	excludeCategoryIDs []string,
+	includeTags []string,
+	excludeTags []string,
+	minPrice *float64,
+	maxPrice *float64,
+	excludeIDs []string,
+	filterVariationIDs []string,
+	limit int,
+) ([]string, error) {
 	// Resolve tag IDs for all requested base tags.
 	var baseTagIDs []int64
 	if err := r.db.WithContext(ctx).
@@ -569,24 +613,119 @@ func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTa
 		return nil, nil
 	}
 
-	// Filter by category if provided.
-	if categoryID != "" {
-		resolvedCategoryIDs, err := r.resolveCategoryIDs(ctx, categoryID)
+	// Filter by included categories if provided.
+	includeCategoryRefs := make([]string, 0, len(categoryIDs)+1)
+	includeCategoryRefs = append(includeCategoryRefs, categoryID)
+	includeCategoryRefs = append(includeCategoryRefs, categoryIDs...)
+	if len(includeCategoryRefs) > 0 {
+		resolvedIncludeCategoryIDs, err := r.resolveCategoryReferenceSet(ctx, includeCategoryRefs)
 		if err != nil {
 			return nil, err
 		}
-		if len(resolvedCategoryIDs) == 0 {
+		if len(resolvedIncludeCategoryIDs) > 0 {
+			var catProductIDs []string
+			if err := r.db.WithContext(ctx).
+				Table("category_products").
+				Select("DISTINCT product_id").
+				Where("category_id IN ? AND product_id IN ?", resolvedIncludeCategoryIDs, candidateIDs).
+				Pluck("product_id", &catProductIDs).Error; err != nil {
+				return nil, fmt.Errorf("filter products by categories: %w", err)
+			}
+			candidateIDs = catProductIDs
+		}
+	}
+
+	if len(candidateIDs) == 0 {
+		return nil, nil
+	}
+
+	// Filter by excluded categories if provided.
+	if len(excludeCategoryIDs) > 0 {
+		resolvedExcludeCategoryIDs, err := r.resolveCategoryReferenceSet(ctx, excludeCategoryIDs)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolvedExcludeCategoryIDs) > 0 {
+			var excludedCategoryProductIDs []string
+			if err := r.db.WithContext(ctx).
+				Table("category_products").
+				Select("DISTINCT product_id").
+				Where("category_id IN ? AND product_id IN ?", resolvedExcludeCategoryIDs, candidateIDs).
+				Pluck("product_id", &excludedCategoryProductIDs).Error; err != nil {
+				return nil, fmt.Errorf("exclude products by categories: %w", err)
+			}
+			candidateIDs = subtractStringIDs(candidateIDs, excludedCategoryProductIDs)
+		}
+	}
+
+	if len(candidateIDs) == 0 {
+		return nil, nil
+	}
+
+	// Filter by included tags if provided.
+	if len(includeTags) > 0 {
+		includeTagIDs, err := r.resolveTagIDs(ctx, includeTags)
+		if err != nil {
+			return nil, err
+		}
+		if len(includeTagIDs) == 0 {
 			return nil, nil
 		}
-		var catProductIDs []string
+		var includeTagProductIDs []string
 		if err := r.db.WithContext(ctx).
-			Table("category_products").
+			Table("product_tags").
 			Select("DISTINCT product_id").
-			Where("category_id IN ? AND product_id IN ?", resolvedCategoryIDs, candidateIDs).
-			Pluck("product_id", &catProductIDs).Error; err != nil {
-			return nil, fmt.Errorf("filter products by category: %w", err)
+			Where("tag_id IN ? AND product_id IN ?", includeTagIDs, candidateIDs).
+			Pluck("product_id", &includeTagProductIDs).Error; err != nil {
+			return nil, fmt.Errorf("filter products by include tags: %w", err)
 		}
-		candidateIDs = catProductIDs
+		candidateIDs = includeTagProductIDs
+	}
+
+	if len(candidateIDs) == 0 {
+		return nil, nil
+	}
+
+	// Filter by excluded tags if provided.
+	if len(excludeTags) > 0 {
+		excludeTagIDs, err := r.resolveTagIDs(ctx, excludeTags)
+		if err != nil {
+			return nil, err
+		}
+		if len(excludeTagIDs) > 0 {
+			var excludeTagProductIDs []string
+			if err := r.db.WithContext(ctx).
+				Table("product_tags").
+				Select("DISTINCT product_id").
+				Where("tag_id IN ? AND product_id IN ?", excludeTagIDs, candidateIDs).
+				Pluck("product_id", &excludeTagProductIDs).Error; err != nil {
+				return nil, fmt.Errorf("exclude products by tags: %w", err)
+			}
+			candidateIDs = subtractStringIDs(candidateIDs, excludeTagProductIDs)
+		}
+	}
+
+	if len(candidateIDs) == 0 {
+		return nil, nil
+	}
+
+	// Filter by price if provided.
+	if minPrice != nil || maxPrice != nil {
+		priceQuery := r.db.WithContext(ctx).
+			Table("products").
+			Select("id").
+			Where("id IN ? AND deleted_at IS NULL", candidateIDs)
+		if minPrice != nil {
+			priceQuery = priceQuery.Where("price >= ?", *minPrice)
+		}
+		if maxPrice != nil {
+			priceQuery = priceQuery.Where("price <= ?", *maxPrice)
+		}
+		var priceFilteredIDs []string
+		if err := priceQuery.Pluck("id", &priceFilteredIDs).Error; err != nil {
+			return nil, fmt.Errorf("filter products by price: %w", err)
+		}
+		candidateIDs = priceFilteredIDs
 	}
 
 	if len(candidateIDs) == 0 {
@@ -625,6 +764,94 @@ func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTa
 	}
 
 	return result, nil
+}
+
+// resolveTagIDs resolves canonical tag IDs from tag names.
+func (r *ProductCatalogRepository) resolveTagIDs(ctx context.Context, tags []string) ([]int64, error) {
+	if len(tags) == 0 {
+		return nil, nil
+	}
+
+	var tagIDs []int64
+	if err := r.db.WithContext(ctx).
+		Table("tags").
+		Select("id").
+		Where("name IN ? AND deleted_at IS NULL", tags).
+		Pluck("id", &tagIDs).Error; err != nil {
+		return nil, fmt.Errorf("resolve tag ids: %w", err)
+	}
+
+	return tagIDs, nil
+}
+
+// resolveCategoryReferenceSet resolves category references to normalized category IDs.
+func (r *ProductCatalogRepository) resolveCategoryReferenceSet(ctx context.Context, refs []string) ([]string, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+
+	result := make([]string, 0, len(refs))
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		resolvedRef := strings.TrimSpace(ref)
+		if resolvedRef == "" {
+			continue
+		}
+		resolvedCategoryIDs, err := r.resolveCategoryIDs(ctx, resolvedRef)
+		if err != nil {
+			return nil, err
+		}
+		for _, categoryID := range resolvedCategoryIDs {
+			normalizedCategoryID := strings.TrimSpace(categoryID)
+			if normalizedCategoryID == "" {
+				continue
+			}
+			if _, exists := seen[normalizedCategoryID]; exists {
+				continue
+			}
+			seen[normalizedCategoryID] = struct{}{}
+			result = append(result, normalizedCategoryID)
+		}
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result, nil
+}
+
+// subtractStringIDs removes excluded IDs preserving source order.
+func subtractStringIDs(source []string, excluded []string) []string {
+	if len(source) == 0 || len(excluded) == 0 {
+		return source
+	}
+	excludedSet := make(map[string]struct{}, len(excluded))
+	for _, id := range excluded {
+		normalized := strings.TrimSpace(id)
+		if normalized == "" {
+			continue
+		}
+		excludedSet[normalized] = struct{}{}
+	}
+	if len(excludedSet) == 0 {
+		return source
+	}
+	filtered := make([]string, 0, len(source))
+	for _, id := range source {
+		normalized := strings.TrimSpace(id)
+		if normalized == "" {
+			continue
+		}
+		if _, excluded := excludedSet[normalized]; excluded {
+			continue
+		}
+		filtered = append(filtered, normalized)
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	return filtered
 }
 
 // parsePrice attempts to parse a JSON-encoded attribute value as float64.

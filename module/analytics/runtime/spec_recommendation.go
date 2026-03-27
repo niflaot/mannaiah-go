@@ -38,6 +38,24 @@ func getRecommendationsOperation() *openapi3.Operation {
 			{Value: openapi3.NewQueryParameter("categoryId").
 				WithDescription("Restrict candidates to one product category reference (id, slug, or name; case-insensitive for name). When the resolved category has includeChildren enabled, descendant categories are included.").
 				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("categoryIds").
+				WithDescription("Comma-separated include-category references (id, slug, or name).").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("excludeCategoryIds").
+				WithDescription("Comma-separated exclude-category references (id, slug, or name). Products in these categories are removed.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("includeTags").
+				WithDescription("Comma-separated include-tag filter values. Product must contain at least one include tag.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("excludeTags").
+				WithDescription("Comma-separated exclude-tag filter values. Products containing any excluded tag are removed.").
+				WithSchema(openapi3.NewStringSchema())},
+			{Value: openapi3.NewQueryParameter("minPrice").
+				WithDescription("Optional minimum product price filter.").
+				WithSchema(openapi3.NewFloat64Schema())},
+			{Value: openapi3.NewQueryParameter("maxPrice").
+				WithDescription("Optional maximum product price filter.").
+				WithSchema(openapi3.NewFloat64Schema())},
 			{Value: openapi3.NewQueryParameter("realm").
 				WithDescription("Display realm for name and image resolution (default: \"default\").").
 				WithSchema(openapi3.NewStringSchema())},

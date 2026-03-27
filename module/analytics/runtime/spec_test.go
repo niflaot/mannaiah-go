@@ -78,4 +78,17 @@ func TestOpenAPISpec(t *testing.T) {
 	if !strings.Contains(strings.ToLower(queryParams["categoryId"]), "includechildren") {
 		t.Errorf("categoryId description missing includeChildren behavior: %q", queryParams["categoryId"])
 	}
+	requiredQueryParams := []string{
+		"categoryIds",
+		"excludeCategoryIds",
+		"includeTags",
+		"excludeTags",
+		"minPrice",
+		"maxPrice",
+	}
+	for _, key := range requiredQueryParams {
+		if strings.TrimSpace(queryParams[key]) == "" {
+			t.Errorf("missing or empty recommendation query parameter description for %q", key)
+		}
+	}
 }

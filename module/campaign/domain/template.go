@@ -20,7 +20,20 @@ type ProductBlock struct {
 	// AffinityMinScorePct is the minimum relative affinity score threshold in [0, 100].
 	AffinityMinScorePct float64 `json:"affinityMinScorePct"`
 	// CategoryID optionally restricts dynamic candidates to one product category identifier.
+	// Backward compatible shorthand for CategoryIDs.
 	CategoryID string `json:"categoryId"`
+	// CategoryIDs optionally restricts dynamic candidates to one or more product category identifiers/references.
+	CategoryIDs []string `json:"categoryIds,omitempty"`
+	// ExcludeCategoryIDs optionally removes dynamic candidates that belong to one or more categories.
+	ExcludeCategoryIDs []string `json:"excludeCategoryIds,omitempty"`
+	// IncludeTags optionally restricts dynamic candidates to products carrying at least one included tag.
+	IncludeTags []string `json:"includeTags,omitempty"`
+	// ExcludeTags optionally removes dynamic candidates carrying at least one excluded tag.
+	ExcludeTags []string `json:"excludeTags,omitempty"`
+	// MinPrice optionally restricts dynamic candidates to products with price >= minPrice.
+	MinPrice *float64 `json:"minPrice,omitempty"`
+	// MaxPrice optionally restricts dynamic candidates to products with price <= maxPrice.
+	MaxPrice *float64 `json:"maxPrice,omitempty"`
 	// Realm identifies which product datasheet and gallery to use for name and image resolution.
 	Realm string `json:"realm"`
 	// Limit is the maximum number of products to return (clamped to [1, 10]).

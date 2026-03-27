@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 const (
 	// BaseTagModeAny returns products that carry at least one of the specified base tags (union).
 	// This is the default when BaseTagMode is empty.
@@ -27,6 +29,18 @@ type RecommendationQuery struct {
 	AffinityMinScorePct float64
 	// CategoryID optionally restricts candidates to one product category identifier.
 	CategoryID string
+	// CategoryIDs optionally restrict candidates to one or more product category identifiers/references.
+	CategoryIDs []string
+	// ExcludeCategoryIDs removes candidates that belong to one or more categories.
+	ExcludeCategoryIDs []string
+	// IncludeTags restricts candidates to products carrying at least one of these tags.
+	IncludeTags []string
+	// ExcludeTags removes candidates carrying at least one of these tags.
+	ExcludeTags []string
+	// MinPrice defines optional minimum product price filtering.
+	MinPrice *float64
+	// MaxPrice defines optional maximum product price filtering.
+	MaxPrice *float64
 	// Realm identifies which product datasheet and gallery to use for name and image resolution.
 	// Defaults to "default" when empty.
 	Realm string
@@ -59,6 +73,9 @@ func (q *RecommendationQuery) Normalize() {
 		return
 	}
 
+	q.BaseTag = strings.TrimSpace(q.BaseTag)
+	q.CategoryID = strings.TrimSpace(q.CategoryID)
+
 	// Merge BaseTag into BaseTags for unified processing.
 	if q.BaseTag != "" {
 		found := false
@@ -85,6 +102,11 @@ func (q *RecommendationQuery) Normalize() {
 		}
 		q.BaseTags = deduped
 	}
+	q.BaseTags = normalizeUniqueStrings(q.BaseTags)
+	q.CategoryIDs = normalizeUniqueStrings(append([]string{q.CategoryID}, q.CategoryIDs...))
+	q.ExcludeCategoryIDs = normalizeUniqueStrings(q.ExcludeCategoryIDs)
+	q.IncludeTags = normalizeUniqueStrings(q.IncludeTags)
+	q.ExcludeTags = normalizeUniqueStrings(q.ExcludeTags)
 
 	if q.BaseTagMode != BaseTagModeAll {
 		q.BaseTagMode = BaseTagModeAny
@@ -99,6 +121,37 @@ func (q *RecommendationQuery) Normalize() {
 	if q.Limit > 10 {
 		q.Limit = 10
 	}
+	if q.MinPrice != nil && q.MaxPrice != nil && *q.MinPrice > *q.MaxPrice {
+		minValue := *q.MaxPrice
+		maxValue := *q.MinPrice
+		q.MinPrice = &minValue
+		q.MaxPrice = &maxValue
+	}
+}
+
+// normalizeUniqueStrings trims, removes empties, and deduplicates preserving order.
+func normalizeUniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
 }
 
 // RecommendedProduct defines one product recommendation result.

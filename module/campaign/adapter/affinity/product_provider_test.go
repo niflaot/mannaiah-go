@@ -53,7 +53,22 @@ type catalogStoreTestStub struct {
 }
 
 // GetProductsByBaseTags returns predefined test entries.
-func (s catalogStoreTestStub) GetProductsByBaseTags(_ context.Context, _ []string, _ string, _ []string, _ string, _ []string, _ []string, _ int) ([]analyticsport.ProductCatalogEntry, error) {
+func (s catalogStoreTestStub) GetProductsByBaseTags(
+	_ context.Context,
+	_ []string,
+	_ string,
+	_ []string,
+	_ string,
+	_ []string,
+	_ []string,
+	_ []string,
+	_ []string,
+	_ *float64,
+	_ *float64,
+	_ []string,
+	_ []string,
+	_ int,
+) ([]analyticsport.ProductCatalogEntry, error) {
 	return s.entries, nil
 }
 

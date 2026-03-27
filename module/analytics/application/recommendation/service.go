@@ -159,7 +159,22 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		}
 
 		// Step 4: fetch and rank dynamic candidates.
-		candidates, err := s.catalogStore.GetProductsByBaseTags(ctx, query.BaseTags, query.BaseTagMode, expandedTags, query.CategoryID, excludeIDs, query.FilterVariationIDs, dynamicLimit*3)
+		candidates, err := s.catalogStore.GetProductsByBaseTags(
+			ctx,
+			query.BaseTags,
+			query.BaseTagMode,
+			expandedTags,
+			query.CategoryID,
+			query.CategoryIDs,
+			query.ExcludeCategoryIDs,
+			query.IncludeTags,
+			query.ExcludeTags,
+			query.MinPrice,
+			query.MaxPrice,
+			excludeIDs,
+			query.FilterVariationIDs,
+			dynamicLimit*3,
+		)
 		if err != nil {
 			return nil, err
 		}

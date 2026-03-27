@@ -52,6 +52,12 @@ func (h *RecommendationHandler) RegisterRoutes(router corehttp.Router) {
 //   - baseTags             comma-separated base tags (required unless pinnedIds is set)
 //   - baseTagMode          "any" (union, default) or "all" (intersection) for baseTags matching
 //   - categoryId           (optional) restrict to one category
+//   - categoryIds          (optional) comma-separated include category references
+//   - excludeCategoryIds   (optional) comma-separated exclude category references
+//   - includeTags          (optional) comma-separated include-tag filter values (OR semantics)
+//   - excludeTags          (optional) comma-separated exclude-tag filter values
+//   - minPrice             (optional) minimum product price filter
+//   - maxPrice             (optional) maximum product price filter
 //   - realm                (optional) display realm, default "default"
 //   - limit                (optional) max results [1,10], default 3
 //   - affinity             (optional) "true" to enable contact-affinity filtering
@@ -81,6 +87,12 @@ func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 		UseContactAffinity:  useAffinity,
 		AffinityMinScorePct: queryFloat64(ctx, "minScore", 0),
 		CategoryID:          strings.TrimSpace(ctx.Query("categoryId")),
+		CategoryIDs:         splitCommaSeparated(ctx.Query("categoryIds")),
+		ExcludeCategoryIDs:  splitCommaSeparated(ctx.Query("excludeCategoryIds")),
+		IncludeTags:         splitCommaSeparated(ctx.Query("includeTags")),
+		ExcludeTags:         splitCommaSeparated(ctx.Query("excludeTags")),
+		MinPrice:            queryOptionalFloat64(ctx, "minPrice"),
+		MaxPrice:            queryOptionalFloat64(ctx, "maxPrice"),
 		Realm:               strings.TrimSpace(ctx.Query("realm")),
 		Limit:               queryInt(ctx, "limit", 3),
 		PinnedProductIDs:    pinnedIDs,
@@ -133,6 +145,20 @@ func splitCommaSeparated(raw string) []string {
 		return nil
 	}
 	return result
+}
+
+// queryOptionalFloat64 parses optional float64 query parameter values.
+func queryOptionalFloat64(ctx corehttp.Context, key string) *float64 {
+	value := strings.TrimSpace(ctx.Query(key))
+	if value == "" {
+		return nil
+	}
+	parsed := queryFloat64(ctx, key, -1)
+	if parsed < 0 {
+		return nil
+	}
+
+	return &parsed
 }
 
 // mapRecommendationError maps recommendation service errors to HTTP-layer app errors.

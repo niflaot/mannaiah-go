@@ -56,7 +56,22 @@ type catalogStoreStub struct {
 }
 
 // GetProductsByBaseTags returns predefined test entries.
-func (s *catalogStoreStub) GetProductsByBaseTags(_ context.Context, _ []string, _ string, _ []string, categoryID string, excludeIDs []string, _ []string, _ int) ([]port.ProductCatalogEntry, error) {
+func (s *catalogStoreStub) GetProductsByBaseTags(
+	_ context.Context,
+	_ []string,
+	_ string,
+	_ []string,
+	categoryID string,
+	_ []string,
+	_ []string,
+	_ []string,
+	_ []string,
+	_ *float64,
+	_ *float64,
+	excludeIDs []string,
+	_ []string,
+	_ int,
+) ([]port.ProductCatalogEntry, error) {
 	s.lastCategoryIDFilter = categoryID
 	if len(excludeIDs) == 0 {
 		return s.entries, nil

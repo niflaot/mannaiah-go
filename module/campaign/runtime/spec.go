@@ -240,6 +240,14 @@ func campaignSchema() *openapi3.Schema {
 func campaignProductBlockSchema() *openapi3.Schema {
 	categoryIDSchema := openapi3.NewStringSchema()
 	categoryIDSchema.Description = "Optional category reference for dynamic candidates. Supports category id, slug, or name (case-insensitive). When the resolved category has includeChildren enabled, descendant categories are included."
+	categoryIDsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
+	categoryIDsSchema.Description = "Optional include-category references. Supports category ids, slugs, or names."
+	excludeCategoryIDsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
+	excludeCategoryIDsSchema.Description = "Optional exclude-category references. Products belonging to these categories are excluded."
+	includeTagsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
+	includeTagsSchema.Description = "Optional include-tag filter. Product must contain at least one included tag."
+	excludeTagsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
+	excludeTagsSchema.Description = "Optional exclude-tag filter. Products containing any excluded tag are removed."
 	pinnedProductsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
 	pinnedProductsSchema.Description = "Pinned products. Token format supports plain <product_id> and scoped <product_id>|<variation_id>."
 	excludedProductsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
@@ -253,6 +261,12 @@ func campaignProductBlockSchema() *openapi3.Schema {
 		WithProperty("useAffinity", openapi3.NewBoolSchema()).
 		WithProperty("affinityMinScorePct", openapi3.NewFloat64Schema()).
 		WithProperty("categoryId", categoryIDSchema).
+		WithProperty("categoryIds", categoryIDsSchema).
+		WithProperty("excludeCategoryIds", excludeCategoryIDsSchema).
+		WithProperty("includeTags", includeTagsSchema).
+		WithProperty("excludeTags", excludeTagsSchema).
+		WithProperty("minPrice", openapi3.NewFloat64Schema()).
+		WithProperty("maxPrice", openapi3.NewFloat64Schema()).
 		WithProperty("realm", openapi3.NewStringSchema()).
 		WithProperty("limit", openapi3.NewInt64Schema()).
 		WithProperty("pinnedProductIds", pinnedProductsSchema).

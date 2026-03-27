@@ -46,4 +46,18 @@ func TestOpenAPISpec(t *testing.T) {
 	if !strings.Contains(categoryDescription, "includechildren") {
 		t.Errorf("categoryId description missing includeChildren behavior: %q", categorySchema.Value.Description)
 	}
+
+	requiredProperties := []string{
+		"categoryIds",
+		"excludeCategoryIds",
+		"includeTags",
+		"excludeTags",
+		"minPrice",
+		"maxPrice",
+	}
+	for _, property := range requiredProperties {
+		if blockSchemaRef.Value.Properties[property] == nil {
+			t.Errorf("missing CampaignProductBlock property %q", property)
+		}
+	}
 }
