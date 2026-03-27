@@ -1,6 +1,9 @@
 package runtime
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestOpenAPISpec verifies analytics OpenAPI spec completeness.
 func TestOpenAPISpec(t *testing.T) {
@@ -24,6 +27,7 @@ func TestOpenAPISpec(t *testing.T) {
 		"/analytics/affinity/contacts/{contactId}/categories",
 		"/analytics/affinity/contacts/{contactId}/variations",
 		"/analytics/affinity/refresh",
+		"/analytics/recommendations/contacts/{contactId}",
 	}
 	for _, path := range requiredPaths {
 		if spec.Paths.Find(path) == nil {
@@ -49,5 +53,26 @@ func TestOpenAPISpec(t *testing.T) {
 		if _, ok := spec.Components.Schemas[schema]; !ok {
 			t.Errorf("missing schema %q in OpenAPISpec components", schema)
 		}
+	}
+
+	path := spec.Paths.Find("/analytics/recommendations/contacts/{contactId}")
+	if path == nil || path.Get == nil {
+		t.Fatalf("missing GET operation for recommendations path")
+	}
+	queryParams := map[string]string{}
+	for _, parameterRef := range path.Get.Parameters {
+		if parameterRef == nil || parameterRef.Value == nil {
+			continue
+		}
+		queryParams[parameterRef.Value.Name] = parameterRef.Value.Description
+	}
+	if !strings.Contains(queryParams["pinnedIds"], "<product_id>|<variation_id>") {
+		t.Errorf("pinnedIds description missing scoped token format: %q", queryParams["pinnedIds"])
+	}
+	if !strings.Contains(queryParams["excludeIds"], "<product_id>|<variation_id>") {
+		t.Errorf("excludeIds description missing scoped token format: %q", queryParams["excludeIds"])
+	}
+	if !strings.Contains(strings.ToLower(queryParams["categoryId"]), "slug") || !strings.Contains(strings.ToLower(queryParams["categoryId"]), "name") {
+		t.Errorf("categoryId description missing slug/name fallback details: %q", queryParams["categoryId"])
 	}
 }

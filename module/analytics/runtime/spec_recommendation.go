@@ -36,7 +36,7 @@ func getRecommendationsOperation() *openapi3.Operation {
 				WithDescription("Controls how baseTags are matched: \"any\" (default) — products with at least one tag (union); \"all\" — products that carry every tag (intersection).").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("categoryId").
-				WithDescription("Restrict candidates to one product category identifier.").
+				WithDescription("Restrict candidates to one product category reference (id, slug, or name; case-insensitive for name).").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("realm").
 				WithDescription("Display realm for name and image resolution (default: \"default\").").
@@ -51,10 +51,10 @@ func getRecommendationsOperation() *openapi3.Operation {
 				WithDescription("Minimum affinity score percentile [0, 100] when affinity filtering is enabled (default: 0).").
 				WithSchema(openapi3.NewFloat64Schema())},
 			{Value: openapi3.NewQueryParameter("pinnedIds").
-				WithDescription("Comma-separated product IDs that are always returned first, bypassing base tag and affinity filters. baseTag/baseTags are optional when this is set.").
+				WithDescription("Comma-separated pinned product tokens. Supports plain <product_id> and scoped <product_id>|<variation_id> to force variation-specific URL/image resolution. baseTag/baseTags are optional when this is set.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("excludeIds").
-				WithDescription("Comma-separated product IDs that must never appear in results.").
+				WithDescription("Comma-separated exclusion tokens. Plain <product_id> removes the full product; scoped <product_id>|<variation_id> excludes only that variation from URL/image variation candidates.").
 				WithSchema(openapi3.NewStringSchema())},
 			{Value: openapi3.NewQueryParameter("filterVariationIds").
 				WithDescription("Comma-separated variation IDs; only products linked to at least one of these variations are returned.").

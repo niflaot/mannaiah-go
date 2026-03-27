@@ -28,8 +28,13 @@ type ProductBlock struct {
 	// PinnedProductIDs lists product IDs that are always included first in results,
 	// regardless of base tag or affinity. Pinned products are loaded by ID and
 	// prepended before any dynamically ranked candidates.
+	// Each token may also be scoped as "<product_id>|<variation_id>" to force one
+	// variation for URL/image resolution for that specific product.
 	PinnedProductIDs []string `json:"pinnedProductIds,omitempty"`
-	// ExcludeProductIDs lists product IDs that must never appear in results.
+	// ExcludeProductIDs lists products or scoped product variations to exclude.
+	// Plain "<product_id>" excludes the entire product.
+	// Scoped "<product_id>|<variation_id>" excludes only that variation token from
+	// URL/image variation candidate resolution.
 	ExcludeProductIDs []string `json:"excludeProductIds,omitempty"`
 	// FilterVariationIDs restricts candidates to products that carry at least one of
 	// these variation IDs. Optional — when empty, no variation filtering is applied.

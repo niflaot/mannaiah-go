@@ -571,11 +571,18 @@ func (r *ProductCatalogRepository) resolveProductIDs(ctx context.Context, baseTa
 
 	// Filter by category if provided.
 	if categoryID != "" {
+		resolvedCategoryIDs, err := r.resolveCategoryIDs(ctx, categoryID)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolvedCategoryIDs) == 0 {
+			return nil, nil
+		}
 		var catProductIDs []string
 		if err := r.db.WithContext(ctx).
 			Table("category_products").
-			Select("product_id").
-			Where("category_id = ? AND product_id IN ?", categoryID, candidateIDs).
+			Select("DISTINCT product_id").
+			Where("category_id IN ? AND product_id IN ?", resolvedCategoryIDs, candidateIDs).
 			Pluck("product_id", &catProductIDs).Error; err != nil {
 			return nil, fmt.Errorf("filter products by category: %w", err)
 		}

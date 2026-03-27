@@ -34,8 +34,13 @@ type RecommendationQuery struct {
 	Limit int
 	// PinnedProductIDs lists product IDs that are always included first in the result,
 	// regardless of base tag or affinity.
+	// Each token may also be scoped as "<product_id>|<variation_id>" to force one
+	// variation for URL/image resolution for that specific product.
 	PinnedProductIDs []string
-	// ExcludeProductIDs lists product IDs that must never appear in results.
+	// ExcludeProductIDs lists products or scoped product variations to exclude.
+	// Plain "<product_id>" excludes the entire product.
+	// Scoped "<product_id>|<variation_id>" excludes only that variation token from
+	// URL/image variation candidate resolution.
 	ExcludeProductIDs []string
 	// FilterVariationIDs restricts candidates to products that carry at least one of
 	// these variation IDs (e.g. only show products available in black).

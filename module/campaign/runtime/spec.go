@@ -238,6 +238,13 @@ func campaignSchema() *openapi3.Schema {
 
 // campaignProductBlockSchema defines campaign product-block payload schema values.
 func campaignProductBlockSchema() *openapi3.Schema {
+	categoryIDSchema := openapi3.NewStringSchema()
+	categoryIDSchema.Description = "Optional category reference for dynamic candidates. Supports category id, slug, or name (case-insensitive)."
+	pinnedProductsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
+	pinnedProductsSchema.Description = "Pinned products. Token format supports plain <product_id> and scoped <product_id>|<variation_id>."
+	excludedProductsSchema := openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())
+	excludedProductsSchema.Description = "Excluded products. Token format supports plain <product_id> and scoped <product_id>|<variation_id>."
+
 	return openapi3.NewObjectSchema().
 		WithProperty("id", openapi3.NewStringSchema()).
 		WithProperty("baseTag", openapi3.NewStringSchema()).
@@ -245,11 +252,11 @@ func campaignProductBlockSchema() *openapi3.Schema {
 		WithProperty("baseTagMode", openapi3.NewStringSchema().WithEnum("any", "all")).
 		WithProperty("useAffinity", openapi3.NewBoolSchema()).
 		WithProperty("affinityMinScorePct", openapi3.NewFloat64Schema()).
-		WithProperty("categoryId", openapi3.NewStringSchema()).
+		WithProperty("categoryId", categoryIDSchema).
 		WithProperty("realm", openapi3.NewStringSchema()).
 		WithProperty("limit", openapi3.NewInt64Schema()).
-		WithProperty("pinnedProductIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
-		WithProperty("excludeProductIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
+		WithProperty("pinnedProductIds", pinnedProductsSchema).
+		WithProperty("excludeProductIds", excludedProductsSchema).
 		WithProperty("filterVariationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema())).
 		WithProperty("preferVariationIds", openapi3.NewArraySchema().WithItems(openapi3.NewStringSchema()))
 }

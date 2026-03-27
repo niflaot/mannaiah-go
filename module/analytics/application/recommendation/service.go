@@ -89,24 +89,26 @@ func (s *RecommendationService) SetAssetResolver(resolver port.AssetURLResolver)
 //  6. For each product: resolve realm price and optional realm image — skip only when price is missing.
 func (s *RecommendationService) Recommend(ctx context.Context, contactID string, query domain.RecommendationQuery) ([]domain.RecommendedProduct, error) {
 	query.Normalize()
+	pinnedSelections := parseScopedProductSelections(query.PinnedProductIDs)
+	excludeSelections := parseScopedProductSelections(query.ExcludeProductIDs)
 
-	if len(query.BaseTags) == 0 && len(query.PinnedProductIDs) == 0 {
+	if len(query.BaseTags) == 0 && len(pinnedSelections.ProductIDs) == 0 {
 		return nil, ErrEmptyBaseTag
 	}
 
 	// Step 1: load pinned products.
 	var pinnedEntries []port.ProductCatalogEntry
-	if len(query.PinnedProductIDs) > 0 {
+	if len(pinnedSelections.ProductIDs) > 0 {
 		var err error
-		pinnedEntries, err = s.catalogStore.GetProductsByIDs(ctx, query.PinnedProductIDs, query.FilterVariationIDs)
+		pinnedEntries, err = s.catalogStore.GetProductsByIDs(ctx, pinnedSelections.ProductIDs, nil)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Step 2: build unified exclusion set (pinned IDs + explicit exclude IDs).
-	excludeSet := make(map[string]struct{}, len(query.ExcludeProductIDs)+len(pinnedEntries))
-	for _, id := range query.ExcludeProductIDs {
+	excludeSet := make(map[string]struct{}, len(excludeSelections.PlainProductIDs)+len(pinnedEntries))
+	for _, id := range excludeSelections.PlainProductIDs {
 		excludeSet[id] = struct{}{}
 	}
 	for _, e := range pinnedEntries {
@@ -187,12 +189,27 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 	// Step 6: resolve realm price and optional image; skip products missing price.
 	results := make([]domain.RecommendedProduct, 0, len(all))
 	for _, c := range all {
+		blockedVariationIDs := excludeSelections.ScopedVariationIDsByProduct[c.ID]
+		effectivePreferVariationIDs := query.PreferVariationIDs
+		if scopedVariationIDs := pinnedSelections.ScopedVariationIDsByProduct[c.ID]; len(scopedVariationIDs) > 0 {
+			effectivePreferVariationIDs = scopedVariationIDs
+		}
+		if len(blockedVariationIDs) > 0 {
+			effectivePreferVariationIDs = subtractVariationIDs(effectivePreferVariationIDs, blockedVariationIDs)
+		}
+		imageVariationCandidates := effectivePreferVariationIDs
+		if len(imageVariationCandidates) == 0 && len(blockedVariationIDs) > 0 {
+			imageVariationCandidates = subtractVariationIDs(c.VariationIDs, blockedVariationIDs)
+		}
 		price, hasPrice := resolveRealmPrice(c.Datasheets, query.Realm)
-		imageURL, _ := resolveRealmImage(ctx, c.Gallery, query.Realm, query.PreferVariationIDs, s.assetResolver)
+		imageURL, _ := resolveRealmImage(ctx, c.Gallery, query.Realm, imageVariationCandidates, s.assetResolver)
 		if !hasPrice {
 			continue
 		}
-		urlVariationCandidates := resolveURLVariationCandidates(c.VariationIDs, c.VariantSKUs, query.PreferVariationIDs, query.FilterVariationIDs)
+		urlVariationCandidates := resolveURLVariationCandidates(c.VariationIDs, c.VariantSKUs, effectivePreferVariationIDs, query.FilterVariationIDs)
+		if len(blockedVariationIDs) > 0 {
+			urlVariationCandidates = subtractVariationIDs(urlVariationCandidates, blockedVariationIDs)
+		}
 		results = append(results, domain.RecommendedProduct{
 			ID:       c.ID,
 			Name:     resolveDatasheetName(c.Datasheets, query.Realm),

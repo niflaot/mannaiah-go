@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"mannaiah/module/analytics/port"
@@ -153,5 +154,42 @@ func TestResolveGalleryImageURLFallback(t *testing.T) {
 	}, noopAssetResolver{})
 	if value != "https://cdn.example.com/asset-1.jpg" {
 		t.Fatalf("resolveGalleryImageURL() = %q, want metadata URL fallback", value)
+	}
+}
+
+// TestParseScopedProductSelections verifies scoped/plain product token parsing behavior.
+func TestParseScopedProductSelections(t *testing.T) {
+	t.Parallel()
+
+	selection := parseScopedProductSelections([]string{
+		"p-1",
+		"p-2|var-red",
+		"p-2|var-red",
+		"p-2|var-black",
+		"p-3:SKU-BLACK-S",
+		"",
+		"   ",
+	})
+	if !reflect.DeepEqual(selection.ProductIDs, []string{"p-1", "p-2", "p-3"}) {
+		t.Fatalf("ProductIDs = %#v, want %#v", selection.ProductIDs, []string{"p-1", "p-2", "p-3"})
+	}
+	if !reflect.DeepEqual(selection.PlainProductIDs, []string{"p-1"}) {
+		t.Fatalf("PlainProductIDs = %#v, want %#v", selection.PlainProductIDs, []string{"p-1"})
+	}
+	if !reflect.DeepEqual(selection.ScopedVariationIDsByProduct["p-2"], []string{"var-red", "var-black"}) {
+		t.Fatalf("ScopedVariationIDsByProduct[p-2] = %#v, want %#v", selection.ScopedVariationIDsByProduct["p-2"], []string{"var-red", "var-black"})
+	}
+	if !reflect.DeepEqual(selection.ScopedVariationIDsByProduct["p-3"], []string{"sku-black-s"}) {
+		t.Fatalf("ScopedVariationIDsByProduct[p-3] = %#v, want %#v", selection.ScopedVariationIDsByProduct["p-3"], []string{"sku-black-s"})
+	}
+}
+
+// TestSubtractVariationIDs verifies blocked variation IDs are removed from ordered candidates.
+func TestSubtractVariationIDs(t *testing.T) {
+	t.Parallel()
+
+	filtered := subtractVariationIDs([]string{"var-red", "var-black", "var-blue"}, []string{"VAR-BLACK", "var-red"})
+	if !reflect.DeepEqual(filtered, []string{"var-blue"}) {
+		t.Fatalf("subtractVariationIDs() = %#v, want %#v", filtered, []string{"var-blue"})
 	}
 }
