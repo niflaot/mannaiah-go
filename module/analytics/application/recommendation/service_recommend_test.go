@@ -53,6 +53,8 @@ type catalogStoreStub struct {
 	lastIDsQuery         []string
 	lastIDsVariationIDs  []string
 	lastCategoryIDFilter string
+	lastMinPriceFilter   *float64
+	lastMaxPriceFilter   *float64
 }
 
 // GetProductsByBaseTags returns predefined test entries.
@@ -66,13 +68,15 @@ func (s *catalogStoreStub) GetProductsByBaseTags(
 	_ []string,
 	_ []string,
 	_ []string,
-	_ *float64,
-	_ *float64,
+	minPrice *float64,
+	maxPrice *float64,
 	excludeIDs []string,
 	_ []string,
 	_ int,
 ) ([]port.ProductCatalogEntry, error) {
 	s.lastCategoryIDFilter = categoryID
+	s.lastMinPriceFilter = minPrice
+	s.lastMaxPriceFilter = maxPrice
 	if len(excludeIDs) == 0 {
 		return s.entries, nil
 	}
@@ -378,5 +382,69 @@ func TestRecommendPlainExcludeRemovesProduct(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("len(results) = %d, want 0", len(results))
+	}
+}
+
+// TestRecommendFiltersByDefaultRealmDatasheetPrice verifies min-price filtering uses datasheet realm price, not base product price.
+func TestRecommendFiltersByDefaultRealmDatasheetPrice(t *testing.T) {
+	t.Parallel()
+
+	price107 := 107000.0
+	price144 := 144000.0
+	price162 := 162000.0
+	catalog := &catalogStoreStub{
+		entries: []port.ProductCatalogEntry{
+			{
+				ID: "p-1",
+				Datasheets: []port.ProductDatasheetEntry{{
+					Realm: "default",
+					Name:  "Totepack Cora Aura",
+					Price: &price107,
+				}},
+			},
+			{
+				ID: "p-2",
+				Datasheets: []port.ProductDatasheetEntry{{
+					Realm: "default",
+					Name:  "Morral Dream Nubuk",
+					Price: &price162,
+				}},
+			},
+			{
+				ID: "p-3",
+				Datasheets: []port.ProductDatasheetEntry{{
+					Realm: "default",
+					Name:  "Morral Traveler Terra",
+					Price: &price144,
+				}},
+			},
+		},
+	}
+	svc, err := NewService(affinityStoreStub{}, correlationStoreStub{}, catalog)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	minPrice := 140000.0
+	results, err := svc.Recommend(context.Background(), "contact-1", domain.RecommendationQuery{
+		BaseTag:    "tier-1",
+		CategoryID: "morrales",
+		MinPrice:   &minPrice,
+		Limit:      4,
+	})
+	if err != nil {
+		t.Fatalf("Recommend() error = %v", err)
+	}
+	if catalog.lastCategoryIDFilter != "morrales" {
+		t.Fatalf("lastCategoryIDFilter = %q, want %q", catalog.lastCategoryIDFilter, "morrales")
+	}
+	if catalog.lastMinPriceFilter != nil || catalog.lastMaxPriceFilter != nil {
+		t.Fatalf("store price filters should be nil to avoid base-price filtering, got min=%v max=%v", catalog.lastMinPriceFilter, catalog.lastMaxPriceFilter)
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+	if results[0].ID != "p-2" || results[1].ID != "p-3" {
+		t.Fatalf("results IDs = [%s, %s], want [p-2, p-3]", results[0].ID, results[1].ID)
 	}
 }

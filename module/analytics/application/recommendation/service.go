@@ -159,6 +159,15 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 		}
 
 		// Step 4: fetch and rank dynamic candidates.
+		candidateFetchLimit := dynamicLimit * 3
+		if query.MinPrice != nil || query.MaxPrice != nil {
+			// Price filtering is applied on realm datasheet price after loading entries.
+			// Fetch a wider candidate set to avoid under-filling due to post-load filtering.
+			candidateFetchLimit = dynamicLimit * 10
+		}
+		if candidateFetchLimit < dynamicLimit {
+			candidateFetchLimit = dynamicLimit
+		}
 		candidates, err := s.catalogStore.GetProductsByBaseTags(
 			ctx,
 			query.BaseTags,
@@ -169,11 +178,11 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 			query.ExcludeCategoryIDs,
 			query.IncludeTags,
 			query.ExcludeTags,
-			query.MinPrice,
-			query.MaxPrice,
+			nil,
+			nil,
 			excludeIDs,
 			query.FilterVariationIDs,
-			dynamicLimit*3,
+			candidateFetchLimit,
 		)
 		if err != nil {
 			return nil, err
@@ -185,6 +194,7 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 					productAffinityScore(candidates[j].Tags, affinityScores)
 			})
 		}
+		candidates = filterByRealmPrice(candidates, query.Realm, query.MinPrice, query.MaxPrice)
 
 		if len(candidates) > dynamicLimit {
 			candidates = candidates[:dynamicLimit]
@@ -273,6 +283,30 @@ func resolveRealmPrice(datasheets []port.ProductDatasheetEntry, realm string) (f
 	}
 
 	return 0, false
+}
+
+// filterByRealmPrice applies optional min/max price bounds using realm datasheet prices.
+func filterByRealmPrice(entries []port.ProductCatalogEntry, realm string, minPrice *float64, maxPrice *float64) []port.ProductCatalogEntry {
+	if len(entries) == 0 || (minPrice == nil && maxPrice == nil) {
+		return entries
+	}
+
+	filtered := make([]port.ProductCatalogEntry, 0, len(entries))
+	for _, entry := range entries {
+		price, ok := resolveRealmPrice(entry.Datasheets, realm)
+		if !ok {
+			continue
+		}
+		if minPrice != nil && price < *minPrice {
+			continue
+		}
+		if maxPrice != nil && price > *maxPrice {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+
+	return filtered
 }
 
 // resolveRealmImage returns the URL of the best gallery image visible in the requested realm.
