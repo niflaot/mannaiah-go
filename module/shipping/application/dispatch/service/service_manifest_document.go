@@ -302,6 +302,9 @@ func (s *Service) resolveBatchManifestCoverRows(ctx context.Context, marks []dom
 	manifestURLs := make([]string, 0, len(marks))
 
 	for _, mark := range marks {
+		if !isBatchManifestMarkIncluded(mark) {
+			continue
+		}
 		orderNumber, items := s.resolveBatchManifestOrderSummary(ctx, mark)
 		rows = append(rows, batchManifestCoverRow{
 			TrackingNumber: firstNonEmpty(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.ID)),
@@ -324,6 +327,11 @@ func (s *Service) resolveBatchManifestCoverRows(ctx context.Context, marks []dom
 	sort.Strings(manifestURLs)
 
 	return rows, manifestURLs
+}
+
+// isBatchManifestMarkIncluded reports whether one mark should be rendered in merged batch manifest documents.
+func isBatchManifestMarkIncluded(mark domain.ShippingMark) bool {
+	return mark.Status != domain.MarkStatusFailed
 }
 
 // resolveBatchManifestOrderSummary resolves one row order-number and item labels with resolver fallback behavior.

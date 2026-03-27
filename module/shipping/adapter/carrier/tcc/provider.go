@@ -13,6 +13,11 @@ import (
 	"mannaiah/module/shipping/domain"
 )
 
+const (
+	// defaultDispatchUnitDeclaredValueCOP defines fallback declared-value amounts used when one dispatch unit has no value.
+	defaultDispatchUnitDeclaredValueCOP = 10000.0
+)
+
 // ProviderConfig defines TCC provider configuration values.
 type ProviderConfig struct {
 	// Enabled defines whether TCC provider wiring should be active.
@@ -147,8 +152,11 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	collectOnDeliveryFeePercent := normalizePercent(resolved.CollectOnDeliveryFeePercent)
 	collectOnDeliveryChargedAmount := max(resolved.CollectOnDeliveryChargedAmount, collectOnDeliveryAmount)
 	units := make([]DispatchUnit, 0, len(resolved.Units))
+	totalUnitsDeclaredValue := 0.0
 	for _, unit := range resolved.Units {
 		normalized := unit.Normalize()
+		unitDeclaredValue := normalizeDispatchDeclaredValue(normalized.Dimensions.DeclaredValueCOP)
+		totalUnitsDeclaredValue += unitDeclaredValue
 		units = append(units, DispatchUnit{
 			UnitType:       "TIPO_UND_PAQ",
 			PackageType:    "",
@@ -159,7 +167,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 			HeightCM:       FormatFloatString(normalized.Dimensions.HeightCM),
 			WidthCM:        FormatFloatString(normalized.Dimensions.WidthCM),
 			VolumeWeightKG: FormatFloatString(max(normalized.Dimensions.VolumetricWeightKG, 1)),
-			DeclaredValue:  FormatFloatString(max(normalized.Dimensions.DeclaredValueCOP, 0)),
+			DeclaredValue:  FormatFloatString(unitDeclaredValue),
 			Barcode:        "",
 			BagNumber:      "",
 			References:     "",
@@ -183,6 +191,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		paymentForm = "2"
 		codCollectStr = FormatFloatString(max(collectOnDeliveryChargedAmount-resolved.QuotedFreightCost, 0))
 	}
+	totalProductValue := resolveDispatchTotalProductValue(codCollectStr, totalUnitsDeclaredValue)
 	request := DispatchRequest{
 		RelationNumber:          "",
 		RelationDateTime:        "",
@@ -228,7 +237,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		DeliverWarehouse:        "",
 		PickupWarehouse:         "",
 		CostCenter:              "",
-		TotalProductValue:       codCollectStr,
+		TotalProductValue:       totalProductValue,
 		GenerateDocuments:       "true",
 		GenerateBinaries:        "false",
 		Units:                   units,
@@ -429,4 +438,25 @@ func calculateCollectOnDeliveryChargedAmount(amount float64, feePercent float64)
 	}
 
 	return math.Round((normalizedAmount*(1+(normalizedFee/100)))*100) / 100
+}
+
+// normalizeDispatchDeclaredValue applies fallback declared-value amounts for TCC dispatch requests.
+func normalizeDispatchDeclaredValue(value float64) float64 {
+	if value <= 0 {
+		return defaultDispatchUnitDeclaredValueCOP
+	}
+
+	return value
+}
+
+// resolveDispatchTotalProductValue resolves total merchandise-value payloads for TCC dispatch requests.
+func resolveDispatchTotalProductValue(codCollect string, unitsDeclaredValue float64) string {
+	trimmedCODCollect := strings.TrimSpace(codCollect)
+	if trimmedCODCollect != "" {
+		if value, err := strconv.ParseFloat(trimmedCODCollect, 64); err == nil && value > 0 {
+			return trimmedCODCollect
+		}
+	}
+
+	return FormatFloatString(normalizeDispatchDeclaredValue(unitsDeclaredValue))
 }

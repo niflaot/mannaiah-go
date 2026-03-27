@@ -419,6 +419,59 @@ func TestProviderCODNetAmountWithPreComputedFee(t *testing.T) {
 	}
 }
 
+// TestProviderDispatchDeclaredValueFallback verifies merchandise values default to 10000 when missing.
+func TestProviderDispatchDeclaredValueFallback(t *testing.T) {
+	var dispatchRequest DispatchRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/grabardespacho7":
+			if err := json.NewDecoder(request.Body).Decode(&dispatchRequest); err != nil {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(writer).Encode(map[string]any{"remesa": "3001", "respuesta": "0", "mensaje": "OK", "urlguia": "https://carrier/guide/3001"})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:           "mark-declared-value-fallback",
+		OrderID:      "order-declared-value-fallback",
+		CarrierID:    "tcc",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	}
+	if err := provider.GenerateMark(context.Background(), mark); err != nil {
+		t.Fatalf("GenerateMark() error = %v", err)
+	}
+	if len(dispatchRequest.Units) != 1 {
+		t.Fatalf("dispatchRequest.Units len = %d, want 1", len(dispatchRequest.Units))
+	}
+	if dispatchRequest.Units[0].DeclaredValue != "10000" {
+		t.Fatalf("dispatchRequest.Units[0].DeclaredValue = %q, want \"10000\"", dispatchRequest.Units[0].DeclaredValue)
+	}
+	if dispatchRequest.TotalProductValue != "10000" {
+		t.Fatalf("dispatchRequest.TotalProductValue = %q, want \"10000\"", dispatchRequest.TotalProductValue)
+	}
+}
+
 // TestProviderGrabardespacho7URLFallback verifies that the tracking number is extracted
 // from the urlguia "ti" query parameter when no explicit remesa field is returned.
 func TestProviderGrabardespacho7URLFallback(t *testing.T) {

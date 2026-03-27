@@ -264,6 +264,47 @@ func TestManifestDocumentRejectsOpenBatch(t *testing.T) {
 	}
 }
 
+// TestResolveBatchManifestCoverRowsSkipsFailedMarks verifies failed marks are excluded from manifest cover rows and merged URLs.
+func TestResolveBatchManifestCoverRowsSkipsFailedMarks(t *testing.T) {
+	service := NewService(newDispatchBatchRepositoryStub(), newDispatchMarkRepositoryStub(), nil)
+
+	rows, manifestURLs := service.resolveBatchManifestCoverRows(context.Background(), []domain.ShippingMark{
+		{
+			ID:             "mark-created",
+			OrderID:        "order-1",
+			Status:         domain.MarkStatusCreated,
+			TrackingNumber: "615100001",
+			ManifestType:   domain.MarkDocumentLink,
+			ManifestRef:    "https://carrier/manifests/1.pdf",
+			Recipient:      domain.Address{Name: "Recipient One", CityCode: "11001"},
+			Units:          []domain.PackageUnit{{Description: "MORRAL"}},
+		},
+		{
+			ID:             "mark-failed",
+			OrderID:        "order-2",
+			Status:         domain.MarkStatusFailed,
+			TrackingNumber: "615100002",
+			ManifestType:   domain.MarkDocumentLink,
+			ManifestRef:    "https://carrier/manifests/failed.pdf",
+			Recipient:      domain.Address{Name: "Recipient Two", CityCode: "76001"},
+			Units:          []domain.PackageUnit{{Description: "TOTE"}},
+		},
+	})
+
+	if len(rows) != 1 {
+		t.Fatalf("rows len = %d, want 1", len(rows))
+	}
+	if rows[0].TrackingNumber != "615100001" {
+		t.Fatalf("rows[0].TrackingNumber = %q, want 615100001", rows[0].TrackingNumber)
+	}
+	if len(manifestURLs) != 1 {
+		t.Fatalf("manifestURLs len = %d, want 1", len(manifestURLs))
+	}
+	if manifestURLs[0] != "https://carrier/manifests/1.pdf" {
+		t.Fatalf("manifestURLs[0] = %q, want https://carrier/manifests/1.pdf", manifestURLs[0])
+	}
+}
+
 // buildTestPDF creates one deterministic in-memory PDF payload for merge tests.
 func buildTestPDF(t *testing.T, value string) []byte {
 	t.Helper()
