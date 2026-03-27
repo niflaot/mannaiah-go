@@ -136,8 +136,11 @@ func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestC
 	pdf.CellFormat(batchManifestTableColumnWidths[2], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.OrderNumber, 16, template.EmptyValueFallback)), "1", 0, "L", false, 0, "")
 	pdf.CellFormat(batchManifestTableColumnWidths[3], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.City, 14, template.EmptyValueFallback)), "1", 0, "L", false, 0, "")
 
-	pdf.SetXY(startX+sumBatchManifestColumnWidths(4), startY)
-	pdf.MultiCell(batchManifestTableColumnWidths[4], batchManifestItemsLineHeightMM, encodeBatchManifestText(itemCellText), "1", "L", false)
+	itemCellX := startX + sumBatchManifestColumnWidths(4)
+	itemCellWidth := batchManifestTableColumnWidths[4]
+	pdf.Rect(itemCellX, startY, itemCellWidth, rowHeight, "D")
+	pdf.SetXY(itemCellX, startY)
+	pdf.MultiCell(itemCellWidth, batchManifestItemsLineHeightMM, encodeBatchManifestText(itemCellText), "", "L", false)
 	pdf.SetXY(startX, startY+rowHeight)
 }
 
