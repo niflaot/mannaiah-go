@@ -29,6 +29,8 @@ var (
 	ErrMarkNotDraft = errors.New("shipping mark is not a draft")
 	// ErrInvalidShipmentMode is returned when a shipment mode is not parcel or express.
 	ErrInvalidShipmentMode = errors.New("shipping shipment mode is invalid")
+	// ErrInvalidCityCode is returned when origin/destination city code values are rejected.
+	ErrInvalidCityCode = errors.New("shipping city code is invalid")
 	// ErrNotFound is returned when one shipping resource does not exist.
 	ErrNotFound = errors.New("shipping resource not found")
 	// ErrNoValidProducts is returned when no order products have the required shipping dimension attributes.

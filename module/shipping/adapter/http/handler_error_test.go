@@ -98,6 +98,7 @@ func TestMapError(t *testing.T) {
 		code       string
 	}{
 		{err: domain.ErrCarrierNotSupported, statusCode: 400, code: "carrier_not_supported"},
+		{err: domain.ErrInvalidCityCode, statusCode: 400, code: "invalid_city_code"},
 		{err: domain.ErrBatchClosed, statusCode: 409, code: "batch_closed"},
 		{err: domain.ErrInvalidBatchStatus, statusCode: 409, code: "batch_status_invalid"},
 		{err: domain.ErrNotFound, statusCode: 404, code: "shipping_resource_not_found"},

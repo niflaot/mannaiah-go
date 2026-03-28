@@ -16,8 +16,6 @@ const (
 	warningNoProducts = "NO_PRODUCTS"
 	// warningAllOverlapped is emitted when every product is flagged as overlapped.
 	warningAllOverlapped = "ALL_OVERLAPPED"
-	// warningInvalidCity is emitted when the carrier rejects the destination city code.
-	warningInvalidCity = "INVALID_CITY"
 
 	// maxOverlappedPerBox defines the maximum number of overlapped items that fit in one main box.
 	maxOverlappedPerBox = 3
@@ -69,12 +67,6 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 
 	units := packBoxes(candidates, &warnings)
 
-	// Auto-determine shipment mode: a single packed box uses express delivery; two or more use parcel.
-	shipmentMode := domain.ShipmentModeExpress
-	if len(units) > 1 {
-		shipmentMode = domain.ShipmentModeParcel
-	}
-
 	result, quoteErr := s.Quote(ctx, QuoteCommand{
 		OrderID:                 orderData.OrderID,
 		OrderIdentifier:         orderData.OrderIdentifier,
@@ -84,21 +76,8 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 		Units:                   units,
 		DeclaredValue:           orderData.TotalValue,
 		CollectOnDeliveryAmount: orderData.TotalValue,
-		ShipmentMode:            shipmentMode,
 	})
 	if quoteErr != nil {
-		if isCityError(quoteErr) {
-			warnings = append(warnings, domain.QuotationWarning{
-				Code:    warningInvalidCity,
-				Message: "destination city code was rejected by the carrier",
-			})
-			if result != nil {
-				result.Warnings = warnings
-			}
-
-			return result, nil
-		}
-
 		return nil, quoteErr
 	}
 

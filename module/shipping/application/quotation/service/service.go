@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -112,6 +113,9 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 
 	result, err := provider.Quote(ctx, request)
 	if err != nil {
+		if isCityError(err) {
+			return nil, fmt.Errorf("%w: %v", domain.ErrInvalidCityCode, err)
+		}
 		return nil, err
 	}
 	if result == nil {

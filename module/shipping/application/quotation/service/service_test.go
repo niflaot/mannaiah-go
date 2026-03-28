@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -121,6 +122,24 @@ func (s *quotationProviderCaptureStub) VoidMark(ctx context.Context, trackingNum
 func (s *quotationProviderCaptureStub) CheckBalance(ctx context.Context) error { return nil }
 func (s *quotationProviderCaptureStub) SupportsQuotation() bool                { return true }
 
+type quotationProviderCityErrorStub struct{}
+
+func (quotationProviderCityErrorStub) CarrierID() string { return "manual" }
+func (quotationProviderCityErrorStub) Carrier() domain.Carrier {
+	return domain.Carrier{ID: "manual", Name: "Manual", Type: domain.CarrierTypeManual, Active: true}
+}
+func (quotationProviderCityErrorStub) Quote(ctx context.Context, request domain.QuotationRequest) (*domain.QuotationResult, error) {
+	return nil, errors.New("tcc quotation rejected: Codigo de ciudad de origen esta incorrecto")
+}
+func (quotationProviderCityErrorStub) GenerateMark(ctx context.Context, mark *domain.ShippingMark) error {
+	return nil
+}
+func (quotationProviderCityErrorStub) VoidMark(ctx context.Context, trackingNumber string) error {
+	return nil
+}
+func (quotationProviderCityErrorStub) CheckBalance(ctx context.Context) error { return nil }
+func (quotationProviderCityErrorStub) SupportsQuotation() bool                { return true }
+
 type quotationRegistryStub struct {
 	provider port.CarrierProvider
 }
@@ -139,6 +158,31 @@ func (quotationRegistryStub) TrackingProvider(carrierID string) (port.TrackingPr
 
 func (quotationRegistryStub) Carriers() []domain.Carrier {
 	return nil
+}
+
+type orderSourceStub struct {
+	row *port.OrderQuotationData
+}
+
+func (s orderSourceStub) GetByIDOrIdentifier(ctx context.Context, identifier string) (*port.OrderQuotationData, error) {
+	return s.row, nil
+}
+
+type productSourceStub struct {
+	attrsBySKU map[string]port.ProductShippingAttributes
+}
+
+func (s productSourceStub) GetShippingAttributes(ctx context.Context, sku string) (*port.ProductShippingAttributes, error) {
+	row, exists := s.attrsBySKU[sku]
+	if !exists {
+		return nil, nil
+	}
+	copy := row
+	return &copy, nil
+}
+
+func (s productSourceStub) GetShippingAttributesByID(ctx context.Context, productID string) (*port.ProductShippingAttributes, error) {
+	return nil, nil
 }
 
 // TestQuote verifies quotation orchestration behavior.
@@ -289,6 +333,58 @@ func TestQuoteForcesParcelWhenMultipleUnits(t *testing.T) {
 	}
 	if provider.lastRequest.ShipmentMode != domain.ShipmentModeParcel {
 		t.Fatalf("provider.lastRequest.ShipmentMode = %q, want %q", provider.lastRequest.ShipmentMode, domain.ShipmentModeParcel)
+	}
+}
+
+// TestQuoteMapsCityValidationErrors verifies provider city-code errors map to ErrInvalidCityCode.
+func TestQuoteMapsCityValidationErrors(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderCityErrorStub{}}, Config{})
+
+	_, err := service.Quote(context.Background(), QuoteCommand{
+		OrderID:        "order-city",
+		CarrierID:      "manual",
+		OriginCityCode: "1024608",
+		DestCityCode:   "11001",
+		ShipmentMode:   domain.ShipmentModeExpress,
+		Units:          []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 1}}},
+	})
+	if !errors.Is(err, domain.ErrInvalidCityCode) {
+		t.Fatalf("Quote() error = %v, want ErrInvalidCityCode", err)
+	}
+}
+
+// TestQuoteFromOrderReturnsCityValidationErrors verifies order quotations surface invalid city as errors.
+func TestQuoteFromOrderReturnsCityValidationErrors(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderCityErrorStub{}}, Config{})
+	service.SetOrderSource(orderSourceStub{row: &port.OrderQuotationData{
+		OrderID:         "order-city",
+		OrderIdentifier: "1024554",
+		DestCityCode:    "11001",
+		TotalValue:      311000,
+		Items:           []port.OrderQuotationItem{{SKU: "7709738583238", Quantity: 2}},
+	}})
+	service.SetProductSource(productSourceStub{attrsBySKU: map[string]port.ProductShippingAttributes{
+		"7709738583238": {
+			SKU:        "7709738583238",
+			WeightKG:   1,
+			HeightCM:   5,
+			WidthCM:    40,
+			LengthCM:   30,
+			Price:      157000,
+			Overlapped: false,
+			Valid:      true,
+		},
+	}})
+
+	_, err := service.QuoteFromOrder(context.Background(), QuoteFromOrderCommand{
+		OrderIdentifier: "1024554",
+		CarrierID:       "manual",
+		OriginCityCode:  "1024608",
+	})
+	if !errors.Is(err, domain.ErrInvalidCityCode) {
+		t.Fatalf("QuoteFromOrder() error = %v, want ErrInvalidCityCode", err)
 	}
 }
 
