@@ -216,7 +216,7 @@ func packBoxes(candidates []packageCandidate, warnings *[]domain.QuotationWarnin
 
 	units := make([]domain.PackageUnit, 0, len(main))
 	for _, box := range main {
-		units = append(units, domain.PackageUnit{
+		unit := domain.PackageUnit{
 			Description: box.attrs.SKU,
 			PackageType: "CAJA",
 			Dimensions: domain.Dimensions{
@@ -226,7 +226,8 @@ func packBoxes(candidates []packageCandidate, warnings *[]domain.QuotationWarnin
 				RealWeightKG:     box.attrs.WeightKG,
 				DeclaredValueCOP: box.attrs.Price,
 			},
-		})
+		}
+		units = append(units, unit.Normalize())
 	}
 
 	return units

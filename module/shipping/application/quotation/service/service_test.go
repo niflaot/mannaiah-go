@@ -439,6 +439,9 @@ func TestOrderPackagingFromOrderPreviewsUnitsWithoutPersistence(t *testing.T) {
 	if len(result.Units) != 2 {
 		t.Fatalf("units = %d, want 2", len(result.Units))
 	}
+	if result.Units[0].Dimensions.VolumetricWeightKG != 2.4 {
+		t.Fatalf("units[0].dimensions.volumetricWeightKg = %v, want 2.4", result.Units[0].Dimensions.VolumetricWeightKG)
+	}
 	if result.ShipmentMode != domain.ShipmentModeParcel {
 		t.Fatalf("shipment mode = %q, want %q", result.ShipmentMode, domain.ShipmentModeParcel)
 	}
