@@ -107,8 +107,8 @@ func buildShippingDispatchedTemplateData(
 		CarrierName:    firstNonEmpty(meta.CarrierName, mark.CarrierID),
 		CarrierID:      strings.TrimSpace(mark.CarrierID),
 		TrackingNumber: firstNonEmpty(meta.TrackingNumber, mark.TrackingNumber, mark.DocumentRef, mark.ID),
-		TrackingURL:    buildShippingTrackingURL(firstNonEmpty(meta.TrackingNumber, mark.TrackingNumber, mark.DocumentRef, mark.ID), mark.CarrierID, firstNonEmpty(meta.OrderNumber, order.ID)),
-		HelpURL:        buildShippingHelpURL(firstNonEmpty(meta.OrderNumber, order.ID)),
+		TrackingURL:    resolveShippingTrackingURL(deps, mark, firstNonEmpty(meta.TrackingNumber, mark.TrackingNumber, mark.DocumentRef, mark.ID), firstNonEmpty(meta.OrderNumber, order.ID)),
+		HelpURL:        buildShippingHelpURL(deps.helpPhoneURL, firstNonEmpty(meta.OrderNumber, order.ID)),
 		Billing:        billingAddress,
 		Shipping:       shippingAddress,
 		PaymentMethod:  strings.ToUpper(firstNonEmpty(order.PaymentMethod, "NO ESPECIFICADO")),
@@ -314,8 +314,20 @@ func galleryVisibleInDefaultRealm(item productdomain.GalleryItem) bool {
 	return false
 }
 
+// resolveShippingTrackingURL returns the mark's custom tracking URL when set, otherwise builds one from the base URL.
+func resolveShippingTrackingURL(deps shippingEmailConsumerDependencies, mark shippingdomain.ShippingMark, trackingNumber string, orderNumber string) string {
+	if mark.CustomTrackingURL != nil && strings.TrimSpace(*mark.CustomTrackingURL) != "" {
+		return strings.TrimSpace(*mark.CustomTrackingURL)
+	}
+	return buildShippingTrackingURL(deps.trackingBaseURL, trackingNumber, mark.CarrierID, orderNumber)
+}
+
 // buildShippingTrackingURL builds the tracking call-to-action URL.
-func buildShippingTrackingURL(trackingNumber string, carrierID string, orderNumber string) string {
+func buildShippingTrackingURL(baseURL string, trackingNumber string, carrierID string, orderNumber string) string {
+	base := strings.TrimSpace(baseURL)
+	if base == "" {
+		base = "https://rastreo.flockstore.co"
+	}
 	values := url.Values{}
 	if strings.TrimSpace(trackingNumber) != "" {
 		values.Set("tracking", strings.TrimSpace(trackingNumber))
@@ -327,16 +339,20 @@ func buildShippingTrackingURL(trackingNumber string, carrierID string, orderNumb
 		values.Set("order", strings.TrimSpace(orderNumber))
 	}
 	if encoded := strings.TrimSpace(values.Encode()); encoded != "" {
-		return "https://rastreo.flockstore.co/?" + strings.ReplaceAll(encoded, "+", "%20")
+		return base + "/?" + strings.ReplaceAll(encoded, "+", "%20")
 	}
 
-	return "https://rastreo.flockstore.co"
+	return base
 }
 
 // buildShippingHelpURL builds the help call-to-action URL.
-func buildShippingHelpURL(orderNumber string) string {
+func buildShippingHelpURL(helpPhoneURL string, orderNumber string) string {
+	base := strings.TrimSpace(helpPhoneURL)
+	if base == "" {
+		base = "https://wa.me/573104314990"
+	}
 	message := "FLK. Solicito ayuda con mi pedido " + strings.TrimSpace(orderNumber) + ","
-	return "https://wa.me/573104314990?text=" + strings.ReplaceAll(url.QueryEscape(message), "+", "%20")
+	return base + "?text=" + strings.ReplaceAll(url.QueryEscape(message), "+", "%20")
 }
 
 // maxInt resolves max integer values.

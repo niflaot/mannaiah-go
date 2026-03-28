@@ -22,6 +22,9 @@ func NewProvider() *Provider {
 		Type:                 domain.CarrierTypeManual,
 		Active:               true,
 		RequiresBalanceCheck: false,
+		HasQuotation:         false,
+		HasManifestDocument:  false,
+		HasTracking:          false,
 	}}
 }
 

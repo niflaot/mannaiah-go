@@ -24,6 +24,12 @@ type Carrier struct {
 	Active bool `json:"active"`
 	// RequiresBalanceCheck defines whether mark generation requires pre-balance validation.
 	RequiresBalanceCheck bool `json:"requiresBalanceCheck"`
+	// HasQuotation defines whether the carrier supports freight quotation.
+	HasQuotation bool `json:"hasQuotation"`
+	// HasManifestDocument defines whether the carrier generates a carrier-specific manifest document.
+	HasManifestDocument bool `json:"hasManifestDocument"`
+	// HasTracking defines whether the carrier provides a tracking URL.
+	HasTracking bool `json:"hasTracking"`
 }
 
 // Validate validates carrier fields.

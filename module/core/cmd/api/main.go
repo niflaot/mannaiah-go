@@ -547,6 +547,8 @@ func run(ctx context.Context, envFile string) error {
 				),
 			},
 			templateRenderer: shippingEmailTemplateRenderer,
+			trackingBaseURL:  shippingCfg.TransactionalTrackingBaseURL,
+			helpPhoneURL:     shippingCfg.TransactionalHelpPhoneURL,
 		},
 		logger,
 	); err != nil {

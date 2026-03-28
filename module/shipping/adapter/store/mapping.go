@@ -52,6 +52,7 @@ func mapMarkModel(row shippingMarkModel) domain.ShippingMark {
 		DraftSnapshot:                  row.DraftSnapshot,
 		ShipmentMode:                   domain.ShipmentMode(row.ShipmentMode),
 		FailureReason:                  row.FailureReason,
+		CustomTrackingURL:              row.CustomTrackingURL,
 		CreatedAt:                      row.CreatedAt.UTC(),
 		UpdatedAt:                      row.UpdatedAt.UTC(),
 	}
@@ -99,6 +100,7 @@ func mapMarkDomain(mark domain.ShippingMark) shippingMarkModel {
 		DraftSnapshot:                  normalized.DraftSnapshot,
 		ShipmentMode:                   string(normalized.ShipmentMode),
 		FailureReason:                  normalized.FailureReason,
+		CustomTrackingURL:              normalized.CustomTrackingURL,
 		CreatedAt:                      normalized.CreatedAt.UTC(),
 		UpdatedAt:                      normalized.UpdatedAt.UTC(),
 	}

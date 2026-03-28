@@ -10,6 +10,10 @@ type Config struct {
 	BatchManifestCacheTTLSeconds int `mapstructure:"SHIPPING_BATCH_MANIFEST_CACHE_TTL_SECONDS" default:"300"`
 	// BatchManifestTemplatePath defines optional JSON template file path for manifest cover rendering.
 	BatchManifestTemplatePath string `mapstructure:"SHIPPING_BATCH_MANIFEST_TEMPLATE_PATH" default:""`
+	// TransactionalTrackingBaseURL defines the base URL for shipping tracking links in transactional emails.
+	TransactionalTrackingBaseURL string `mapstructure:"SHIPPING_TRANSACTIONAL_TRACKING_BASE_URL" default:"https://rastreo.flockstore.co"`
+	// TransactionalHelpPhoneURL defines the WhatsApp help URL for transactional shipping emails.
+	TransactionalHelpPhoneURL string `mapstructure:"SHIPPING_TRANSACTIONAL_HELP_PHONE_URL" default:"https://wa.me/573104314990"`
 	// Quotation defines quotation behavior configuration values.
 	Quotation QuotationConfig `mapstructure:",squash"`
 	// TCC defines TCC carrier configuration values.

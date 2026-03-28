@@ -165,11 +165,92 @@ This relative approach ensures that active and inactive buyers are compared fair
 
 ### Recommendations
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/analytics/recommendations/contacts/:contactId` | Personalized product recommendations |
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/analytics/recommendations/contacts/:contactId` | `marketing:manage` | Personalized product recommendations |
 
-Query parameters: `baseTags`, `baseTagMode`, `categoryId`, `categoryIds`, `excludeCategoryIds`, `includeTags`, `excludeTags`, `minPrice`, `maxPrice`, `excludePurchased`, `realm`, `limit`, `affinity`, `minScore`, `pinnedIds`, `excludeIds`, `filterVariationIds`, `preferVariationIds`.
+#### Path parameters
+
+| Parameter | Description |
+|---|---|
+| `contactId` | Contact identifier. Used to load affinity scores and (optionally) the purchased-product history. |
+
+#### Query parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `baseTags` | `string` (CSV) | — | **Required** (unless `pinnedIds` is set). Comma-separated product tags that define the candidate pool. |
+| `baseTag` | `string` | — | Deprecated single-tag alias. Merged into `baseTags` as the first entry. |
+| `baseTagMode` | `"any"` \| `"all"` | `"any"` | `"any"` — candidates carry at least one base tag (union). `"all"` — candidates carry every base tag (intersection). |
+| `affinity` | `bool` | `false` | When `true`, loads the contact's top-20 tag affinities from ClickHouse, expands them via `tag_correlations`, and adds the related tags to the candidate query. Candidates are then ranked by their accumulated affinity score. |
+| `minScore` | `float` [0–100] | `0` | Minimum **relative** affinity score percentile required for a tag to be considered during affinity expansion. `0` keeps all tags. |
+| `excludePurchased` | `bool` | `false` | When `true`, looks up all product IDs the contact has purchased (up to 2000) and excludes them from results. |
+| `limit` | `int` [1–10] | `3` | Maximum number of products returned. Values outside [1, 10] are clamped. |
+| `realm` | `string` | `"default"` | Selects which product datasheet to use for name, price, and gallery image resolution. Use the realm slug (e.g. `"falabella"`, `"default"`). Products with no datasheet for the requested realm are silently dropped. |
+| `seed` | `int64` | `0` | Non-zero value enables deterministic pseudo-random shuffling of equally-scored candidates. Produces repeatable but varied orderings — typical usage is `hash(campaignId + contactId)` for frontend/backend parity. |
+| `pinnedIds` | `string` (CSV) | — | Comma-separated product IDs always returned first, bypassing the base-tag filter and affinity ranking. Supports scoped syntax `<productId>\|<variationId>` to force a specific variation for URL/image resolution. |
+| `excludeIds` | `string` (CSV) | — | Comma-separated product IDs never returned. Supports scoped syntax `<productId>\|<variationId>` to block a specific variation from URL/image candidate selection without removing the whole product. |
+| `categoryId` | `string` | — | Restrict candidates to one category identifier. |
+| `categoryIds` | `string` (CSV) | — | Restrict candidates to multiple category identifiers (merged with `categoryId`). |
+| `excludeCategoryIds` | `string` (CSV) | — | Remove candidates that belong to any of these categories. |
+| `includeTags` | `string` (CSV) | — | Additional OR tag filter: candidates must carry at least one of these tags (applied after base-tag lookup). |
+| `excludeTags` | `string` (CSV) | — | Remove candidates carrying at least one of these tags. |
+| `minPrice` | `float` | — | Minimum price filter. Applied against the realm datasheet price. Products without a realm price are excluded. |
+| `maxPrice` | `float` | — | Maximum price filter. When both `minPrice` and `maxPrice` are set and `minPrice` > `maxPrice`, they are silently swapped. |
+| `filterVariationIds` | `string` (CSV) | — | Restrict candidates to products that carry at least one of these variation IDs (e.g. only show products available in black). |
+| `preferVariationIds` | `string` (CSV) | — | Bias gallery image selection toward images linked to these variation IDs (e.g. prefer the blue-variant photo). Falls back to the first realm-visible image when no match is found. |
+
+#### Response
+
+Returns a JSON array of `RecommendedProduct` objects (empty array `[]` when no candidates pass filters):
+
+```json
+[
+  {
+    "id": "abc123",
+    "name": "Mochila de Viaje 40L",
+    "price": 89900,
+    "imageUrl": "https://cdn.example.com/products/abc123.jpg",
+    "url": "https://store.example.com/products/mochila-40l?variant=black"
+  }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Product identifier. |
+| `name` | `string` | Display name from the matching realm datasheet. Falls back to the first available datasheet name if no realm match. |
+| `price` | `float64` | Price from the realm datasheet's price attribute. |
+| `imageUrl` | `string` | Public URL of the best matching gallery image. Prefers images linked to `preferVariationIds`; falls back to the first realm-visible image. Empty string when no image is available. |
+| `url` | `string` | Realm-scoped product detail URL, variation-scoped when possible. Omitted when no URL is resolvable. |
+
+#### Example requests
+
+Minimum viable — top 3 backpack products by affinity for contact `c_01`:
+```
+GET /analytics/recommendations/contacts/c_01?baseTags=backpack&affinity=true
+```
+
+Campaign widget — 5 products, exclude purchased, seed-stable, blue-variants preferred, falabella realm:
+```
+GET /analytics/recommendations/contacts/c_01
+  ?baseTags=backpack,travel
+  &affinity=true
+  &excludePurchased=true
+  &limit=5
+  &seed=87234
+  &realm=falabella
+  &preferVariationIds=var_blue,var_navy
+```
+
+Pinned product first (always show `prod_featured`), then affinity-ranked backpacks:
+```
+GET /analytics/recommendations/contacts/c_01
+  ?pinnedIds=prod_featured
+  &baseTags=backpack
+  &affinity=true
+  &limit=4
+```
 
 ## Materialized View Refresh
 

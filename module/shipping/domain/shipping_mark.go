@@ -99,6 +99,8 @@ type ShippingMark struct {
 	DraftSnapshot string `json:"draftSnapshot,omitempty"`
 	// FailureReason defines the error message recorded when the mark transitions to FAILED status.
 	FailureReason string `json:"failureReason,omitempty"`
+	// CustomTrackingURL defines an operator-provided tracking URL override for this mark.
+	CustomTrackingURL *string `json:"customTrackingUrl,omitempty"`
 	// CreatedAt defines row creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines row update timestamps.
@@ -177,6 +179,7 @@ func (m ShippingMark) Normalize() ShippingMark {
 		ShipmentMode:                   m.ShipmentMode,
 		DraftSnapshot:                  m.DraftSnapshot,
 		FailureReason:                  strings.TrimSpace(m.FailureReason),
+		CustomTrackingURL:              normalizeOptionalURL(m.CustomTrackingURL),
 		CreatedAt:                      m.CreatedAt,
 		UpdatedAt:                      m.UpdatedAt,
 	}
@@ -207,4 +210,16 @@ func (m ShippingMark) Validate() error {
 	}
 
 	return nil
+}
+
+// normalizeOptionalURL trims and nils an optional URL pointer when blank.
+func normalizeOptionalURL(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

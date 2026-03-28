@@ -62,6 +62,8 @@ type markRequest struct {
 	ManifestRef string `json:"manifestRef"`
 	// ShipmentMode defines the delivery mode for this mark (parcel or express).
 	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
+	// CustomTrackingURL defines an optional operator-provided tracking URL override for this mark.
+	CustomTrackingURL string `json:"customTrackingUrl"`
 }
 
 // markUnitRequest defines shipping-mark package-unit payload values.
@@ -136,6 +138,7 @@ func (h *Handler) createMark(ctx corehttp.Context) error {
 		DocumentRef:             strings.TrimSpace(request.DocumentRef),
 		ManifestType:            request.ManifestType,
 		ManifestRef:             strings.TrimSpace(request.ManifestRef),
+		CustomTrackingURL:       optionalString(strings.TrimSpace(request.CustomTrackingURL)),
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -196,4 +199,12 @@ func (h *Handler) voidMark(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(mark)
+}
+
+// optionalString returns a pointer to value when non-empty, or nil.
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }

@@ -30,4 +30,4 @@ go.work.sum
 plan/
 
 *.log
-playground.gomodule/core/api
+playground.go

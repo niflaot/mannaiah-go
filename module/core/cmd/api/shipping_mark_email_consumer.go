@@ -49,6 +49,10 @@ type shippingEmailConsumerDependencies struct {
 	assetResolver analyticsAssetURLResolver
 	// templateRenderer defines transactional template rendering dependencies.
 	templateRenderer *shippingTemplateRenderer
+	// trackingBaseURL defines the base URL for shipping tracking links in transactional emails.
+	trackingBaseURL string
+	// helpPhoneURL defines the WhatsApp help URL for transactional shipping emails.
+	helpPhoneURL string
 }
 
 // shippingEmailOrderService defines order lookup behavior required by shipping transactional email consumers.

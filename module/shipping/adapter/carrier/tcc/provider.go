@@ -86,6 +86,9 @@ func (p *Provider) Carrier() domain.Carrier {
 		Type:                 domain.CarrierTypeAPI,
 		Active:               true,
 		RequiresBalanceCheck: false,
+		HasQuotation:         true,
+		HasManifestDocument:  true,
+		HasTracking:          true,
 	}
 }
 

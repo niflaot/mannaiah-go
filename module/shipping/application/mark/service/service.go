@@ -46,6 +46,8 @@ type GenerateCommand struct {
 	ManifestType domain.MarkDocumentType
 	// ManifestRef defines optional manual manifest document reference values.
 	ManifestRef string
+	// CustomTrackingURL defines an optional operator-provided tracking URL override for this mark.
+	CustomTrackingURL *string
 }
 
 // ListQuery defines mark listing query values.
@@ -103,6 +105,7 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 		ShipmentMode:            command.ShipmentMode,
 		Observations:            strings.TrimSpace(command.Observations),
+		CustomTrackingURL:       command.CustomTrackingURL,
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),
 	}.Normalize()

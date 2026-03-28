@@ -43,6 +43,7 @@ type shippingMarkModel struct {
 	DraftSnapshot                  string                  `gorm:"column:draft_snapshot;type:text"`
 	ShipmentMode                   string                  `gorm:"column:shipment_mode;type:varchar(16)"`
 	FailureReason                  string                  `gorm:"column:failure_reason;type:text;default:null"`
+	CustomTrackingURL              *string                 `gorm:"column:custom_tracking_url;type:varchar(2048);default:null"`
 	CreatedAt                      time.Time               `gorm:"column:created_at"`
 	UpdatedAt                      time.Time               `gorm:"column:updated_at"`
 	Units                          []shippingMarkUnitModel `gorm:"foreignKey:ShippingMarkID;references:ID"`
