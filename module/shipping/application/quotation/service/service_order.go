@@ -66,7 +66,7 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 	}
 
 	if len(candidates) == 0 {
-		return nil, fmt.Errorf("no valid products for quotation: %w", domain.ErrInvalidID)
+		return nil, domain.ErrNoValidProducts
 	}
 
 	units := packBoxes(candidates, &warnings)

@@ -31,4 +31,6 @@ var (
 	ErrInvalidShipmentMode = errors.New("shipping shipment mode is invalid")
 	// ErrNotFound is returned when one shipping resource does not exist.
 	ErrNotFound = errors.New("shipping resource not found")
+	// ErrNoValidProducts is returned when no order products have the required shipping dimension attributes.
+	ErrNoValidProducts = errors.New("no valid products with shipping dimensions found")
 )

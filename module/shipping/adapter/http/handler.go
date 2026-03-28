@@ -182,6 +182,9 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidCarrierID) || errors.Is(err, domain.ErrInvalidShipmentMode) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
+	if errors.Is(err, domain.ErrNoValidProducts) {
+		return corehttp.NewAppError(400, "no_valid_products", err)
+	}
 	if errors.Is(err, domain.ErrCarrierNotSupported) {
 		return corehttp.NewAppError(400, "carrier_not_supported", err)
 	}
