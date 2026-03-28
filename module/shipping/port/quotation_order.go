@@ -25,7 +25,11 @@ type OrderQuotationData struct {
 // OrderQuotationItem defines one order line item relevant to quotation package building.
 type OrderQuotationItem struct {
 	// SKU defines the product SKU used to resolve shipping attributes.
+	// May be empty when the item was resolved by product name; use ProductID as fallback.
 	SKU string
+	// ProductID defines the resolved internal product identifier.
+	// Populated when the order item was matched by alternate name rather than SKU.
+	ProductID string
 	// Quantity defines the ordered quantity.
 	Quantity int
 }
@@ -34,6 +38,9 @@ type OrderQuotationItem struct {
 type OrderProductSource interface {
 	// GetShippingAttributes resolves shipping dimension and packing attributes for one SKU.
 	GetShippingAttributes(ctx context.Context, sku string) (*ProductShippingAttributes, error)
+	// GetShippingAttributesByID resolves shipping dimension and packing attributes by internal product ID.
+	// Used as fallback when an order item has no SKU but has a resolved ProductID.
+	GetShippingAttributesByID(ctx context.Context, productID string) (*ProductShippingAttributes, error)
 }
 
 // ProductShippingAttributes defines product physical attributes used for package building.

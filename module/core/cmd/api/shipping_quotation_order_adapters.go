@@ -22,6 +22,8 @@ type shippingOrderQuotationService interface {
 
 // shippingProductQuotationService defines product lookup behavior required by the shipping quotation product source adapter.
 type shippingProductQuotationService interface {
+	// Get retrieves a product by internal ID.
+	Get(ctx context.Context, id string) (*productdomain.Product, error)
 	// GetBySKU retrieves a product by product-level or variant-level SKU.
 	GetBySKU(ctx context.Context, sku string) (*productdomain.Product, error)
 }
@@ -71,13 +73,15 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 	items := make([]shippingport.OrderQuotationItem, 0, len(order.Items))
 	for _, item := range order.Items {
 		sku := strings.TrimSpace(item.SKU)
-		if sku == "" {
+		productID := strings.TrimSpace(item.ProductID)
+		if sku == "" && productID == "" {
 			continue
 		}
 		totalValue += item.Value * float64(item.Quantity)
 		items = append(items, shippingport.OrderQuotationItem{
-			SKU:      sku,
-			Quantity: item.Quantity,
+			SKU:       sku,
+			ProductID: productID,
+			Quantity:  item.Quantity,
 		})
 	}
 
@@ -105,21 +109,8 @@ type shippingProductQuotationSourceAdapter struct {
 	products shippingProductQuotationService
 }
 
-// GetShippingAttributes resolves shipping dimension and packing attributes for one SKU.
-func (a shippingProductQuotationSourceAdapter) GetShippingAttributes(ctx context.Context, sku string) (*shippingport.ProductShippingAttributes, error) {
-	if a.products == nil {
-		return nil, nil
-	}
-	trimmed := strings.TrimSpace(sku)
-	if trimmed == "" {
-		return nil, nil
-	}
-
-	product, err := a.products.GetBySKU(ctx, trimmed)
-	if err != nil || product == nil {
-		return nil, nil
-	}
-
+// extractProductShippingAttributes extracts shipping attributes from a resolved product's default-realm datasheet.
+func extractProductShippingAttributes(product *productdomain.Product, identifier string) *shippingport.ProductShippingAttributes {
 	var defaultAttrs map[string]any
 	for _, ds := range product.Datasheets {
 		if strings.EqualFold(strings.TrimSpace(ds.Realm), "default") {
@@ -128,7 +119,7 @@ func (a shippingProductQuotationSourceAdapter) GetShippingAttributes(ctx context
 		}
 	}
 	if defaultAttrs == nil {
-		return &shippingport.ProductShippingAttributes{SKU: trimmed, Valid: false}, nil
+		return &shippingport.ProductShippingAttributes{SKU: identifier, Valid: false}
 	}
 
 	weightKG := extractFloat(defaultAttrs, "pweight")
@@ -144,15 +135,51 @@ func (a shippingProductQuotationSourceAdapter) GetShippingAttributes(ctx context
 	}
 
 	return &shippingport.ProductShippingAttributes{
-		SKU:        trimmed,
+		SKU:        identifier,
 		WeightKG:   weightKG,
 		HeightCM:   heightCM,
 		WidthCM:    widthCM,
 		LengthCM:   lengthCM,
 		Price:      price,
 		Overlapped: overlapped,
-		Valid:       valid,
-	}, nil
+		Valid:      valid,
+	}
+}
+
+// GetShippingAttributes resolves shipping dimension and packing attributes for one SKU.
+func (a shippingProductQuotationSourceAdapter) GetShippingAttributes(ctx context.Context, sku string) (*shippingport.ProductShippingAttributes, error) {
+	if a.products == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(sku)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	product, err := a.products.GetBySKU(ctx, trimmed)
+	if err != nil || product == nil {
+		return nil, nil
+	}
+
+	return extractProductShippingAttributes(product, trimmed), nil
+}
+
+// GetShippingAttributesByID resolves shipping dimension and packing attributes by internal product ID.
+func (a shippingProductQuotationSourceAdapter) GetShippingAttributesByID(ctx context.Context, productID string) (*shippingport.ProductShippingAttributes, error) {
+	if a.products == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(productID)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	product, err := a.products.Get(ctx, trimmed)
+	if err != nil || product == nil {
+		return nil, nil
+	}
+
+	return extractProductShippingAttributes(product, trimmed), nil
 }
 
 // extractFloat reads a float64 attribute value from a map by key.

@@ -111,11 +111,18 @@ func (s *Service) buildCandidates(ctx context.Context, items []port.OrderQuotati
 
 	for _, item := range items {
 		sku := strings.TrimSpace(item.SKU)
-		if sku == "" {
-			continue
+		productID := strings.TrimSpace(item.ProductID)
+
+		var attrs *port.ProductShippingAttributes
+		var attrErr error
+
+		if sku != "" {
+			attrs, attrErr = s.productSource.GetShippingAttributes(ctx, sku)
+		}
+		if (attrs == nil || !attrs.Valid || attrErr != nil) && productID != "" {
+			attrs, attrErr = s.productSource.GetShippingAttributesByID(ctx, productID)
 		}
 
-		attrs, attrErr := s.productSource.GetShippingAttributes(ctx, sku)
 		if attrErr != nil || attrs == nil || !attrs.Valid {
 			continue
 		}
