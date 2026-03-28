@@ -85,13 +85,15 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 			Quantity:  item.Quantity,
 		})
 	}
+	collectOnDeliveryAmount := resolveOrderCollectOnDeliveryAmount(totalValue, order.PaymentMethod)
 
 	return &shippingport.OrderQuotationData{
-		OrderID:         order.ID,
-		OrderIdentifier: order.Identifier,
-		DestCityCode:    order.ShippingAddress.CityCode,
-		TotalValue:      totalValue,
-		Items:           items,
+		OrderID:                 order.ID,
+		OrderIdentifier:         order.Identifier,
+		DestCityCode:            order.ShippingAddress.CityCode,
+		TotalValue:              totalValue,
+		CollectOnDeliveryAmount: collectOnDeliveryAmount,
+		Items:                   items,
 	}, nil
 }
 
@@ -102,6 +104,33 @@ func isOrderNotFound(err error) bool {
 	}
 
 	return errors.Is(err, ordersport.ErrNotFound) || strings.Contains(strings.ToLower(err.Error()), "not found")
+}
+
+// resolveOrderCollectOnDeliveryAmount resolves COD amount from order totals and payment method.
+func resolveOrderCollectOnDeliveryAmount(totalValue float64, paymentMethod string) float64 {
+	if totalValue <= 0 {
+		return 0
+	}
+	if !isCashOnDeliveryPaymentMethod(paymentMethod) {
+		return 0
+	}
+
+	return totalValue
+}
+
+// isCashOnDeliveryPaymentMethod reports whether a payment method maps to COD semantics.
+func isCashOnDeliveryPaymentMethod(paymentMethod string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(paymentMethod))
+	if trimmed == "" {
+		return false
+	}
+	compacted := strings.NewReplacer("-", "", "_", "", " ", "").Replace(trimmed)
+	switch compacted {
+	case "cod", "cashondelivery", "payondelivery", "contraentrega", "contrareembolso":
+		return true
+	}
+
+	return strings.Contains(trimmed, "cash on delivery") || strings.Contains(trimmed, "pay on delivery") || strings.Contains(trimmed, "contra entrega")
 }
 
 // shippingProductQuotationSourceAdapter adapts the products service to the shipping OrderProductSource port.

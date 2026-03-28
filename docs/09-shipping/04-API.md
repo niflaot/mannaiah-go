@@ -79,7 +79,7 @@ Returns all non-expired quotations for a given order.
 ### Preview Order Packaging (No Carrier Call)
 
 ```
-POST /shippings/quotations/order-packaging
+POST /shipping/quotations/order-packaging
 ```
 
 ```json

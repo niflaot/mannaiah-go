@@ -14,7 +14,7 @@ func Paths() *openapi3.Paths {
 	return openapi3.NewPaths(
 		openapi3.WithPath("/shipping/quotations", &openapi3.PathItem{Post: quotationCreateOperation(), Get: quotationListOperation()}),
 		openapi3.WithPath("/shipping/quotations/order", &openapi3.PathItem{Post: quotationFromOrderOperation()}),
-		openapi3.WithPath("/shippings/quotations/order-packaging", &openapi3.PathItem{Post: quotationOrderPackagingOperation()}),
+		openapi3.WithPath("/shipping/quotations/order-packaging", &openapi3.PathItem{Post: quotationOrderPackagingOperation()}),
 		openapi3.WithPath("/shipping/quotations/order/{identifier}", &openapi3.PathItem{Get: getOrderQuotationOperation()}),
 		openapi3.WithPath("/shipping/marks", &openapi3.PathItem{Post: markCreateOperation(), Get: markListOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}", &openapi3.PathItem{Get: markGetOperation()}),

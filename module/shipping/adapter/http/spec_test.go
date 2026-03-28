@@ -26,8 +26,8 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/batches/marks") == nil {
 		t.Fatalf("missing /shipping/batches/marks path")
 	}
-	if paths.Find("/shippings/quotations/order-packaging") == nil {
-		t.Fatalf("missing /shippings/quotations/order-packaging path")
+	if paths.Find("/shipping/quotations/order-packaging") == nil {
+		t.Fatalf("missing /shipping/quotations/order-packaging path")
 	}
 }
 
@@ -87,20 +87,20 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 			t.Fatalf("expected /shipping/quotations/order POST %s error schema properties", status)
 		}
 	}
-	postOrderPackaging := paths.Find("/shippings/quotations/order-packaging").Post
+	postOrderPackaging := paths.Find("/shipping/quotations/order-packaging").Post
 	if postOrderPackaging == nil || postOrderPackaging.RequestBody == nil {
-		t.Fatalf("expected /shippings/quotations/order-packaging POST request body")
+		t.Fatalf("expected /shipping/quotations/order-packaging POST request body")
 	}
 	if postOrderPackaging.Responses == nil || postOrderPackaging.Responses.Value("200") == nil {
-		t.Fatalf("expected /shippings/quotations/order-packaging POST 200 response")
+		t.Fatalf("expected /shipping/quotations/order-packaging POST 200 response")
 	}
 	orderPackagingResponse := postOrderPackaging.Responses.Value("200")
 	if orderPackagingResponse == nil || orderPackagingResponse.Value == nil || orderPackagingResponse.Value.Content.Get("application/json") == nil {
-		t.Fatalf("expected /shippings/quotations/order-packaging POST 200 JSON schema")
+		t.Fatalf("expected /shipping/quotations/order-packaging POST 200 JSON schema")
 	}
 	orderPackagingSchema := orderPackagingResponse.Value.Content.Get("application/json").Schema
 	if orderPackagingSchema == nil || orderPackagingSchema.Value == nil {
-		t.Fatalf("expected /shippings/quotations/order-packaging POST 200 schema object")
+		t.Fatalf("expected /shipping/quotations/order-packaging POST 200 schema object")
 	}
 	if orderPackagingSchema.Value.Properties["units"] == nil {
 		t.Fatalf("expected units in order packaging response schema")

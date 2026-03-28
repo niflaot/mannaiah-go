@@ -138,7 +138,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/quotations", h.protect("shipping:quotations", h.createQuotation))
 	router.Get("/shipping/quotations", h.protect("shipping:quotations", h.listQuotations))
 	router.Post("/shipping/quotations/order", h.protect("shipping:quotations", h.quoteFromOrder))
-	router.Post("/shippings/quotations/order-packaging", h.protect("shipping:quotations", h.quoteOrderPackaging))
+	router.Post("/shipping/quotations/order-packaging", h.protect("shipping:quotations", h.quoteOrderPackaging))
 	router.Get("/shipping/quotations/order/:identifier", h.protect("shipping:quotations", h.getOrderQuotation))
 	router.Post("/shipping/marks", h.protect("shipping:generate", h.createMark))
 	router.Get("/shipping/marks/:id", h.protect("shipping:quotations", h.getMark))

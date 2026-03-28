@@ -18,6 +18,9 @@ type OrderQuotationData struct {
 	DestCityCode string
 	// TotalValue defines the monetary total of all order items (used as COD amount).
 	TotalValue float64
+	// CollectOnDeliveryAmount defines COD amount resolved from the order payment method.
+	// It must be zero when the order is not cash-on-delivery.
+	CollectOnDeliveryAmount float64
 	// Items defines the line items belonging to the order.
 	Items []OrderQuotationItem
 }

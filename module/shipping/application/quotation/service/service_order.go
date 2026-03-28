@@ -125,7 +125,7 @@ func (s *Service) OrderPackagingFromOrder(ctx context.Context, cmd QuoteFromOrde
 		DestCityCode:            orderData.DestCityCode,
 		Units:                   units,
 		DeclaredValue:           orderData.TotalValue,
-		CollectOnDeliveryAmount: orderData.TotalValue,
+		CollectOnDeliveryAmount: orderData.CollectOnDeliveryAmount,
 		ShipmentMode:            shipmentMode,
 		Warnings:                warnings,
 	}, nil

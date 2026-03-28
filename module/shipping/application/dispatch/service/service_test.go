@@ -264,6 +264,9 @@ func TestCreateBatchMarkDraft(t *testing.T) {
 	if mark.Status != domain.MarkStatusQuoted {
 		t.Fatalf("status = %q", mark.Status)
 	}
+	if mark.CollectOnDeliveryAmount != 0 {
+		t.Fatalf("collectOnDeliveryAmount = %v, want 0", mark.CollectOnDeliveryAmount)
+	}
 	if mark.DispatchBatchID == nil || *mark.DispatchBatchID != batch.ID {
 		t.Fatalf("dispatch batch id = %v", mark.DispatchBatchID)
 	}
@@ -302,6 +305,9 @@ func TestCreateBatchMarkDirectAllowsClosedBatch(t *testing.T) {
 	}
 	if mark.Status != domain.MarkStatusCreated {
 		t.Fatalf("status = %q", mark.Status)
+	}
+	if mark.CollectOnDeliveryAmount != 0 {
+		t.Fatalf("collectOnDeliveryAmount = %v, want 0", mark.CollectOnDeliveryAmount)
 	}
 	if mark.DispatchBatchID == nil || *mark.DispatchBatchID != batch.ID {
 		t.Fatalf("dispatch batch id = %v", mark.DispatchBatchID)
