@@ -230,6 +230,13 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 	if batch.Status != domain.BatchStatusOpen {
 		return nil, domain.ErrBatchClosed
 	}
+	existingMark, err := s.findExistingActiveMark(ctx, batch.ID, strings.TrimSpace(command.OrderID), strings.TrimSpace(command.QuotationID))
+	if err != nil {
+		return nil, err
+	}
+	if existingMark != nil {
+		return existingMark, nil
+	}
 	var quotationID *string
 	if trimmed := strings.TrimSpace(command.QuotationID); trimmed != "" {
 		quotationID = &trimmed
@@ -269,18 +276,47 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 
 // CreateBatchMark creates one batch mark as draft (quoted) or direct (materialized immediately).
 func (s *Service) CreateBatchMark(ctx context.Context, command CreateBatchMarkCommand) (*domain.ShippingMark, error) {
-	if strings.TrimSpace(command.BatchID) == "" {
+	trimmedBatchID := strings.TrimSpace(command.BatchID)
+	trimmedOrderID := strings.TrimSpace(command.OrderID)
+	trimmedQuotationID := strings.TrimSpace(command.QuotationID)
+	if trimmedBatchID == "" {
 		return nil, domain.ErrInvalidID
+	}
+	if trimmedOrderID == "" {
+		return nil, domain.ErrInvalidID
+	}
+	existingMark, err := s.findExistingActiveMark(ctx, trimmedBatchID, trimmedOrderID, trimmedQuotationID)
+	if err != nil {
+		return nil, err
+	}
+	if existingMark != nil {
+		if command.Direct && existingMark.Status == domain.MarkStatusQuoted && isMarkInBatch(*existingMark, trimmedBatchID) {
+			if s.materializer == nil {
+				return existingMark, nil
+			}
+			copy := *existingMark
+			if err := s.materializer.Materialize(ctx, &copy); err != nil {
+				return nil, err
+			}
+			persisted, loadErr := s.markRepository.GetByID(ctx, copy.ID)
+			if loadErr != nil {
+				return &copy, nil
+			}
+
+			return persisted, nil
+		}
+
+		return existingMark, nil
 	}
 	if command.Direct {
 		return s.createDirectBatchMark(ctx, command)
 	}
 
 	return s.DraftMark(ctx, DraftMarkCommand{
-		BatchID:                 strings.TrimSpace(command.BatchID),
-		QuotationID:             strings.TrimSpace(command.QuotationID),
+		BatchID:                 trimmedBatchID,
+		QuotationID:             trimmedQuotationID,
 		QuotedFreightCost:       command.QuotedFreightCost,
-		OrderID:                 strings.TrimSpace(command.OrderID),
+		OrderID:                 trimmedOrderID,
 		Sender:                  command.Sender,
 		Recipient:               command.Recipient,
 		Units:                   command.Units,
@@ -551,4 +587,119 @@ func maxZero(value float64) float64 {
 	}
 
 	return value
+}
+
+func isActiveMarkStatus(status domain.MarkStatus) bool {
+	switch status {
+	case domain.MarkStatusPending, domain.MarkStatusQuoted, domain.MarkStatusGenerated, domain.MarkStatusCreated:
+		return true
+	default:
+		return false
+	}
+}
+
+func markStatusPriority(status domain.MarkStatus) int {
+	switch status {
+	case domain.MarkStatusCreated:
+		return 4
+	case domain.MarkStatusGenerated:
+		return 3
+	case domain.MarkStatusQuoted:
+		return 2
+	case domain.MarkStatusPending:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func isMarkInBatch(mark domain.ShippingMark, batchID string) bool {
+	if mark.DispatchBatchID == nil {
+		return false
+	}
+
+	return strings.TrimSpace(*mark.DispatchBatchID) == strings.TrimSpace(batchID)
+}
+
+func (s *Service) findExistingActiveMark(ctx context.Context, batchID string, orderID string, quotationID string) (*domain.ShippingMark, error) {
+	if s == nil || s.markRepository == nil {
+		return nil, nil
+	}
+	trimmedOrderID := strings.TrimSpace(orderID)
+	if trimmedOrderID == "" {
+		return nil, nil
+	}
+	rows, err := s.markRepository.ListByOrderID(ctx, trimmedOrderID)
+	if err != nil {
+		return nil, err
+	}
+
+	var selected *domain.ShippingMark
+	trimmedBatchID := strings.TrimSpace(batchID)
+	trimmedQuotationID := strings.TrimSpace(quotationID)
+	for i := range rows {
+		current := rows[i]
+		if !isActiveMarkStatus(current.Status) {
+			continue
+		}
+		if trimmedQuotationID != "" {
+			currentQuotationID := ""
+			if current.QuotationID != nil {
+				currentQuotationID = strings.TrimSpace(*current.QuotationID)
+			}
+			if currentQuotationID != trimmedQuotationID {
+				continue
+			}
+		}
+		if selected == nil {
+			candidate := current
+			selected = &candidate
+			continue
+		}
+
+		selectedBatchMatch := isMarkInBatch(*selected, trimmedBatchID)
+		currentBatchMatch := isMarkInBatch(current, trimmedBatchID)
+		if currentBatchMatch && !selectedBatchMatch {
+			candidate := current
+			selected = &candidate
+			continue
+		}
+		if currentBatchMatch == selectedBatchMatch && markStatusPriority(current.Status) > markStatusPriority(selected.Status) {
+			candidate := current
+			selected = &candidate
+		}
+	}
+
+	if selected != nil {
+		return selected, nil
+	}
+
+	if trimmedQuotationID != "" {
+		return nil, nil
+	}
+
+	for i := range rows {
+		current := rows[i]
+		if !isActiveMarkStatus(current.Status) {
+			continue
+		}
+		if selected == nil {
+			candidate := current
+			selected = &candidate
+			continue
+		}
+		selectedBatchMatch := isMarkInBatch(*selected, trimmedBatchID)
+		currentBatchMatch := isMarkInBatch(current, trimmedBatchID)
+		if currentBatchMatch && !selectedBatchMatch {
+			candidate := current
+			selected = &candidate
+			continue
+		}
+		if currentBatchMatch == selectedBatchMatch && markStatusPriority(current.Status) > markStatusPriority(selected.Status) {
+			candidate := current
+			selected = &candidate
+		}
+	}
+
+	return selected, nil
 }

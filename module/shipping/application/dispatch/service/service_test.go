@@ -115,7 +115,14 @@ func (s *dispatchMarkRepositoryStub) GetByTrackingNumber(ctx context.Context, tr
 	return nil, domain.ErrNotFound
 }
 func (s *dispatchMarkRepositoryStub) ListByOrderID(ctx context.Context, orderID string) ([]domain.ShippingMark, error) {
-	return nil, nil
+	result := make([]domain.ShippingMark, 0)
+	for _, m := range s.marks {
+		if m.OrderID == orderID {
+			result = append(result, m)
+		}
+	}
+
+	return result, nil
 }
 func (s *dispatchMarkRepositoryStub) ListByBatchID(ctx context.Context, batchID string) ([]domain.ShippingMark, error) {
 	result := make([]domain.ShippingMark, 0)
@@ -453,6 +460,110 @@ func TestCreateBatchMarkFromQuotation(t *testing.T) {
 	}
 	if mark.Sender.CityCode != "11001" {
 		t.Fatalf("mark sender city = %q, want 11001", mark.Sender.CityCode)
+	}
+
+	duplicate, err := service.CreateBatchMarkFromQuotation(context.Background(), CreateBatchMarkFromQuotationCommand{
+		BatchID:     batch.ID,
+		QuotationID: "quote-1",
+		Direct:      false,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMarkFromQuotation(duplicate) error = %v", err)
+	}
+	if duplicate == nil || duplicate.ID != mark.ID {
+		t.Fatalf("duplicate mark id = %v, want existing mark id %q", duplicate, mark.ID)
+	}
+	if len(markRepository.marks) != 1 {
+		t.Fatalf("mark repository size = %d, want 1", len(markRepository.marks))
+	}
+}
+
+// TestCreateBatchMarkDirectOnExistingQuotedMaterializes verifies direct mode materializes the existing quoted mark instead of creating duplicates.
+func TestCreateBatchMarkDirectOnExistingQuotedMaterializes(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	quotationRepository := newDispatchQuotationRepositoryStub()
+	materializer := &materializerStub{repository: markRepository}
+	service := NewService(batchRepository, markRepository, nil, materializer)
+	service.SetQuotationRepository(quotationRepository)
+	service.SetDefaultSender(domain.Address{
+		Name:        "(FALKON)-GRUPO COCCO",
+		ID:          "901599500",
+		IDType:      "NIT",
+		AddressLine: "Calle 18 Sur 24D 46 P2",
+		CityCode:    "11001",
+		Phone:       "3057901484",
+		Email:       "coccostoreco@gmail.com",
+	})
+	service.SetOrderSource(dispatchOrderQuotationSourceStub{row: &port.OrderQuotationData{
+		OrderID:                 "order-2",
+		DestCityCode:            "76001000",
+		CollectOnDeliveryAmount: 0,
+		RecipientName:           "Cliente",
+	}})
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	snapshot, marshalErr := json.Marshal(domain.QuotationRequest{
+		OrderID:                 "order-2",
+		CarrierID:               "manual",
+		OriginCityCode:          "11001000",
+		DestCityCode:            "76001000",
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		DeclaredValue:           50000,
+		CollectOnDeliveryAmount: 0,
+		ShipmentMode:            domain.ShipmentModeExpress,
+	})
+	if marshalErr != nil {
+		t.Fatalf("marshal snapshot: %v", marshalErr)
+	}
+	quotationRepository.rows["quote-2"] = port.QuotationRecord{
+		ID:              "quote-2",
+		OrderID:         "order-2",
+		OrderIdentifier: "1024555",
+		CarrierID:       "manual",
+		OriginCityCode:  "11001000",
+		DestCityCode:    "76001000",
+		FreightCost:     15000,
+		Units:           []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		RequestSnapshot: base64.StdEncoding.EncodeToString(snapshot),
+		CreatedAt:       time.Now().UTC(),
+	}
+
+	quotedMark, err := service.CreateBatchMarkFromQuotation(context.Background(), CreateBatchMarkFromQuotationCommand{
+		BatchID:     batch.ID,
+		QuotationID: "quote-2",
+		Direct:      false,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMarkFromQuotation(quoted) error = %v", err)
+	}
+	if quotedMark.Status != domain.MarkStatusQuoted {
+		t.Fatalf("quoted mark status = %q, want QUOTED", quotedMark.Status)
+	}
+
+	materializedMark, err := service.CreateBatchMarkFromQuotation(context.Background(), CreateBatchMarkFromQuotationCommand{
+		BatchID:     batch.ID,
+		QuotationID: "quote-2",
+		Direct:      true,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMarkFromQuotation(direct) error = %v", err)
+	}
+	if materializedMark.ID != quotedMark.ID {
+		t.Fatalf("materialized mark id = %q, want existing mark id %q", materializedMark.ID, quotedMark.ID)
+	}
+	if materializedMark.Status != domain.MarkStatusCreated {
+		t.Fatalf("materialized mark status = %q, want CREATED", materializedMark.Status)
+	}
+	if materializer.calls != 1 {
+		t.Fatalf("materializer calls = %d, want 1", materializer.calls)
+	}
+	if len(markRepository.marks) != 1 {
+		t.Fatalf("mark repository size = %d, want 1", len(markRepository.marks))
 	}
 }
 
