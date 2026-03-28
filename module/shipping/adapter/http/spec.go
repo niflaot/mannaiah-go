@@ -356,7 +356,7 @@ func batchAddMarkOperation() *openapi3.Operation {
 	}
 }
 
-// batchCreateMarkOperation defines the OpenAPI operation for quoted/direct mark creation with explicit batch id in payload.
+// batchCreateMarkOperation defines the OpenAPI operation for quoted/direct mark creation from one quotation id.
 func batchCreateMarkOperation() *openapi3.Operation {
 	return &openapi3.Operation{
 		OperationID: "ShippingController_createBatchMark",
@@ -658,20 +658,10 @@ func draftMarkRequestSchema() *openapi3.Schema {
 // createBatchMarkRequestSchema defines schema for quoted/direct batch mark creation request payloads.
 func createBatchMarkRequestSchema() *openapi3.Schema {
 	schema := openapi3.NewObjectSchema().
-		WithProperty("batchId", openapi3.NewStringSchema()).
+		WithProperty("batch", openapi3.NewStringSchema()).
 		WithProperty("direct", openapi3.NewBoolSchema()).
-		WithProperty("quotationId", openapi3.NewStringSchema()).
-		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
-		WithProperty("orderId", openapi3.NewStringSchema()).
-		WithProperty("sender", addressSchema()).
-		WithProperty("recipient", addressSchema()).
-		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
-		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
-		WithProperty("paymentForm", openapi3.NewStringSchema()).
-		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
-		WithProperty("observations", openapi3.NewStringSchema()).
-		WithProperty("shipmentMode", shipmentModeSchema())
-	schema.Required = []string{"batchId", "orderId", "sender", "recipient", "units", "shipmentMode"}
+		WithProperty("quotationId", openapi3.NewStringSchema())
+	schema.Required = []string{"batch", "quotationId"}
 
 	return schema
 }

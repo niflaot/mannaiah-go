@@ -86,6 +86,11 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		})
 	}
 	collectOnDeliveryAmount := resolveOrderCollectOnDeliveryAmount(totalValue, order.PaymentMethod)
+	recipientAddressLine := strings.TrimSpace(strings.Join([]string{
+		strings.TrimSpace(order.ShippingAddress.Address),
+		strings.TrimSpace(order.ShippingAddress.Address2),
+	}, " "))
+	recipientAddressLine = strings.Join(strings.Fields(recipientAddressLine), " ")
 
 	return &shippingport.OrderQuotationData{
 		OrderID:                 order.ID,
@@ -93,6 +98,9 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		DestCityCode:            order.ShippingAddress.CityCode,
 		TotalValue:              totalValue,
 		CollectOnDeliveryAmount: collectOnDeliveryAmount,
+		RecipientName:           "Cliente",
+		RecipientAddressLine:    recipientAddressLine,
+		RecipientPhone:          strings.TrimSpace(order.ShippingAddress.Phone),
 		Items:                   items,
 	}, nil
 }

@@ -22,6 +22,17 @@ func (s *quotationRepositoryStub) Create(ctx context.Context, record port.Quotat
 	return nil
 }
 
+func (s *quotationRepositoryStub) GetByID(ctx context.Context, id string) (*port.QuotationRecord, error) {
+	for _, row := range s.rows {
+		if row.ID == id {
+			copy := row
+			return &copy, nil
+		}
+	}
+
+	return nil, domain.ErrNotFound
+}
+
 func (s *quotationRepositoryStub) ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error) {
 	return s.rows, nil
 }

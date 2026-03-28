@@ -70,6 +70,8 @@ type DispatchService interface {
 	List(ctx context.Context, query dispatchservice.ListQuery) ([]domain.DispatchBatch, int64, error)
 	// DraftMark creates one QUOTED draft mark and assigns it to an open batch.
 	DraftMark(ctx context.Context, command dispatchservice.DraftMarkCommand) (*domain.ShippingMark, error)
+	// CreateBatchMarkFromQuotation creates one batch mark from one quotation id.
+	CreateBatchMarkFromQuotation(ctx context.Context, command dispatchservice.CreateBatchMarkFromQuotationCommand) (*domain.ShippingMark, error)
 	// CreateBatchMark creates one batch mark as draft (quoted) or direct (materialized immediately).
 	CreateBatchMark(ctx context.Context, command dispatchservice.CreateBatchMarkCommand) (*domain.ShippingMark, error)
 	// RemoveDraftMark removes one QUOTED draft mark from a batch and sets it to REMOVED.

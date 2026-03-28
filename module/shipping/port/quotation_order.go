@@ -21,6 +21,18 @@ type OrderQuotationData struct {
 	// CollectOnDeliveryAmount defines COD amount resolved from the order payment method.
 	// It must be zero when the order is not cash-on-delivery.
 	CollectOnDeliveryAmount float64
+	// RecipientName defines recipient display-name values resolved from the order context.
+	RecipientName string
+	// RecipientID defines optional recipient identification values resolved from the order context.
+	RecipientID string
+	// RecipientIDType defines optional recipient identification-type values resolved from the order context.
+	RecipientIDType string
+	// RecipientAddressLine defines recipient address-line values resolved from the order shipping address.
+	RecipientAddressLine string
+	// RecipientPhone defines recipient phone values resolved from the order shipping address.
+	RecipientPhone string
+	// RecipientEmail defines optional recipient email values resolved from the order context.
+	RecipientEmail string
 	// Items defines the line items belonging to the order.
 	Items []OrderQuotationItem
 }

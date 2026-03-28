@@ -181,11 +181,14 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postCreateBatchMarkRequest == nil || postCreateBatchMarkRequest.Schema == nil || postCreateBatchMarkRequest.Schema.Value == nil {
 		t.Fatalf("expected /shipping/batches/marks POST JSON request schema")
 	}
-	if postCreateBatchMarkRequest.Schema.Value.Properties["batchId"] == nil {
-		t.Fatalf("expected batchId in /shipping/batches/marks POST request schema")
+	if postCreateBatchMarkRequest.Schema.Value.Properties["batch"] == nil {
+		t.Fatalf("expected batch in /shipping/batches/marks POST request schema")
 	}
 	if postCreateBatchMarkRequest.Schema.Value.Properties["direct"] == nil {
 		t.Fatalf("expected direct in /shipping/batches/marks POST request schema")
+	}
+	if postCreateBatchMarkRequest.Schema.Value.Properties["quotationId"] == nil {
+		t.Fatalf("expected quotationId in /shipping/batches/marks POST request schema")
 	}
 	if postCreateBatchMark.Responses == nil || postCreateBatchMark.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/batches/marks POST 201 response")

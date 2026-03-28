@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -85,6 +87,16 @@ type CreateBatchMarkCommand struct {
 	Observations string
 }
 
+// CreateBatchMarkFromQuotationCommand defines batch-mark creation values resolved from one quotation.
+type CreateBatchMarkFromQuotationCommand struct {
+	// BatchID defines the target batch identifier.
+	BatchID string
+	// QuotationID defines the quotation identifier used to seed mark values.
+	QuotationID string
+	// Direct defines whether the mark should be materialized immediately.
+	Direct bool
+}
+
 // ListQuery defines dispatch batch listing query values.
 type ListQuery struct {
 	// CarrierID filters rows by carrier identifier.
@@ -107,6 +119,10 @@ type Service struct {
 	publisher port.IntegrationEventPublisher
 	// materializer defines optional carrier-submission dependencies used at batch close.
 	materializer MarkMaterializer
+	// quotationRepository defines quotation lookup dependencies for quotation-seeded batch marks.
+	quotationRepository port.QuotationRepository
+	// orderSource defines optional order lookup dependencies used to enrich quotation-seeded recipient data.
+	orderSource port.OrderQuotationSource
 	// manifestDocuments defines on-demand batch manifest document generation dependencies.
 	manifestDocuments *batchManifestDocumentBuilder
 }
@@ -125,6 +141,24 @@ func NewService(batchRepository port.DispatchBatchRepository, markRepository por
 		materializer:      materializer,
 		manifestDocuments: newBatchManifestDocumentBuilder(),
 	}
+}
+
+// SetQuotationRepository configures quotation lookup dependencies used by quotation-seeded batch mark creation.
+func (s *Service) SetQuotationRepository(repository port.QuotationRepository) {
+	if s == nil {
+		return
+	}
+
+	s.quotationRepository = repository
+}
+
+// SetOrderSource configures optional order lookup dependencies used to enrich recipient fields.
+func (s *Service) SetOrderSource(source port.OrderQuotationSource) {
+	if s == nil {
+		return
+	}
+
+	s.orderSource = source
 }
 
 // Create creates one dispatch batch.
@@ -247,6 +281,97 @@ func (s *Service) CreateBatchMark(ctx context.Context, command CreateBatchMarkCo
 	})
 }
 
+// CreateBatchMarkFromQuotation creates one batch mark from stored quotation data.
+func (s *Service) CreateBatchMarkFromQuotation(ctx context.Context, command CreateBatchMarkFromQuotationCommand) (*domain.ShippingMark, error) {
+	trimmedBatchID := strings.TrimSpace(command.BatchID)
+	trimmedQuotationID := strings.TrimSpace(command.QuotationID)
+	if trimmedBatchID == "" || trimmedQuotationID == "" {
+		return nil, domain.ErrInvalidID
+	}
+	if s == nil || s.quotationRepository == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	record, err := s.quotationRepository.GetByID(ctx, trimmedQuotationID)
+	if err != nil {
+		return nil, err
+	}
+	if record == nil {
+		return nil, domain.ErrNotFound
+	}
+	requestSnapshot, err := decodeQuotationSnapshot(record.RequestSnapshot)
+	if err != nil {
+		return nil, err
+	}
+	units := record.Units
+	if len(units) == 0 {
+		units = requestSnapshot.Units
+	}
+	if len(units) == 0 {
+		return nil, domain.ErrInvalidID
+	}
+	shipmentMode := requestSnapshot.ShipmentMode
+	if shipmentMode != domain.ShipmentModeExpress && shipmentMode != domain.ShipmentModeParcel {
+		shipmentMode = resolveShipmentMode(units)
+	}
+	declaredValue := requestSnapshot.DeclaredValue
+	if declaredValue <= 0 {
+		declaredValue = resolveDeclaredValue(units)
+	}
+	collectOnDeliveryAmount := requestSnapshot.CollectOnDeliveryAmount
+	if collectOnDeliveryAmount < 0 {
+		collectOnDeliveryAmount = 0
+	}
+
+	orderID := strings.TrimSpace(record.OrderID)
+	if orderID == "" {
+		orderID = strings.TrimSpace(requestSnapshot.OrderID)
+	}
+	recipient := domain.Address{
+		Name:        "Cliente",
+		CityCode:    firstNonEmptyString(strings.TrimSpace(record.DestCityCode), strings.TrimSpace(requestSnapshot.DestCityCode)),
+		AddressLine: "",
+	}
+	lookupIdentifier := firstNonEmptyString(orderID, strings.TrimSpace(record.OrderIdentifier))
+	if s.orderSource != nil && lookupIdentifier != "" {
+		orderData, orderErr := s.orderSource.GetByIDOrIdentifier(ctx, lookupIdentifier)
+		if orderErr == nil && orderData != nil {
+			if orderID == "" {
+				orderID = strings.TrimSpace(orderData.OrderID)
+			}
+			recipient.Name = firstNonEmptyString(strings.TrimSpace(orderData.RecipientName), recipient.Name)
+			recipient.ID = strings.TrimSpace(orderData.RecipientID)
+			recipient.IDType = strings.TrimSpace(orderData.RecipientIDType)
+			recipient.AddressLine = strings.TrimSpace(orderData.RecipientAddressLine)
+			recipient.CityCode = firstNonEmptyString(strings.TrimSpace(orderData.DestCityCode), recipient.CityCode)
+			recipient.Phone = strings.TrimSpace(orderData.RecipientPhone)
+			recipient.Email = strings.TrimSpace(orderData.RecipientEmail)
+			if collectOnDeliveryAmount <= 0 {
+				collectOnDeliveryAmount = maxZero(orderData.CollectOnDeliveryAmount)
+			}
+		}
+	}
+	if orderID == "" {
+		return nil, domain.ErrInvalidID
+	}
+
+	return s.CreateBatchMark(ctx, CreateBatchMarkCommand{
+		BatchID:                 trimmedBatchID,
+		Direct:                  command.Direct,
+		QuotationID:             trimmedQuotationID,
+		QuotedFreightCost:       record.FreightCost,
+		OrderID:                 orderID,
+		Sender:                  domain.Address{},
+		Recipient:               recipient,
+		Units:                   units,
+		DeclaredValue:           declaredValue,
+		PaymentForm:             "",
+		CollectOnDeliveryAmount: collectOnDeliveryAmount,
+		ShipmentMode:            shipmentMode,
+		Observations:            "",
+	})
+}
+
 // createDirectBatchMark creates one mark in a batch and materializes it immediately, even when the batch is closed.
 func (s *Service) createDirectBatchMark(ctx context.Context, command CreateBatchMarkCommand) (*domain.ShippingMark, error) {
 	if s == nil || s.batchRepository == nil || s.markRepository == nil || s.materializer == nil {
@@ -359,4 +484,60 @@ func (s *Service) publish(ctx context.Context, event port.IntegrationEvent) {
 		return
 	}
 	_ = s.publisher.Publish(ctx, event)
+}
+
+func decodeQuotationSnapshot(payload string) (domain.QuotationRequest, error) {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return domain.QuotationRequest{}, nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(trimmed)
+	if err != nil {
+		return domain.QuotationRequest{}, err
+	}
+	request := domain.QuotationRequest{}
+	if err := json.Unmarshal(decoded, &request); err != nil {
+		return domain.QuotationRequest{}, err
+	}
+
+	return request.Normalize(), nil
+}
+
+func resolveShipmentMode(units []domain.PackageUnit) domain.ShipmentMode {
+	if len(units) <= 1 {
+		return domain.ShipmentModeExpress
+	}
+
+	return domain.ShipmentModeParcel
+}
+
+func resolveDeclaredValue(units []domain.PackageUnit) float64 {
+	total := 0.0
+	for _, unit := range units {
+		total += unit.Normalize().Dimensions.DeclaredValueCOP
+	}
+	if total < 0 {
+		return 0
+	}
+
+	return total
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return ""
+}
+
+func maxZero(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+
+	return value
 }

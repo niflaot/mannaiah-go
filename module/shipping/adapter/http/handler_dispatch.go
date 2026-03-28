@@ -41,34 +41,14 @@ type draftMarkRequest struct {
 	Observations string `json:"observations"`
 }
 
-// createBatchMarkRequest defines one payload for quoted/direct batch mark creation.
+// createBatchMarkRequest defines one payload for quoted/direct batch mark creation from one quotation id.
 type createBatchMarkRequest struct {
-	// BatchID defines the target batch identifier.
-	BatchID string `json:"batchId"`
+	// Batch defines the target batch identifier.
+	Batch string `json:"batch"`
 	// Direct defines whether the mark should be materialized immediately.
 	Direct bool `json:"direct"`
-	// QuotationID defines the optional quotation reference attached to this mark.
+	// QuotationID defines quotation reference values used to seed this mark.
 	QuotationID string `json:"quotationId"`
-	// QuotedFreightCost defines the freight cost snapshot from the quotation.
-	QuotedFreightCost float64 `json:"quotedFreightCost"`
-	// OrderID defines order identifier values.
-	OrderID string `json:"orderId"`
-	// Sender defines sender address values.
-	Sender domain.Address `json:"sender"`
-	// Recipient defines recipient address values.
-	Recipient domain.Address `json:"recipient"`
-	// Units defines package-unit values.
-	Units []draftMarkUnitRequest `json:"units"`
-	// DeclaredValue defines declared shipment value amounts.
-	DeclaredValue float64 `json:"declaredValue"`
-	// PaymentForm defines payment arrangement values.
-	PaymentForm string `json:"paymentForm"`
-	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
-	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
-	// ShipmentMode defines the delivery mode for this mark (parcel or express).
-	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
-	// Observations defines observation values.
-	Observations string `json:"observations"`
 }
 
 // draftMarkUnitRequest defines package-unit values within a draft mark request.
@@ -174,20 +154,10 @@ func (h *Handler) createBatchMark(ctx corehttp.Context) error {
 	if err := ctx.BodyParser(&request); err != nil {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
-	mark, err := h.batches.CreateBatchMark(ctx.Context(), dispatchservice.CreateBatchMarkCommand{
-		BatchID:                 strings.TrimSpace(request.BatchID),
-		Direct:                  request.Direct,
-		QuotationID:             strings.TrimSpace(request.QuotationID),
-		QuotedFreightCost:       request.QuotedFreightCost,
-		OrderID:                 strings.TrimSpace(request.OrderID),
-		Sender:                  request.Sender,
-		Recipient:               request.Recipient,
-		Units:                   mapDraftMarkUnits(request.Units),
-		DeclaredValue:           request.DeclaredValue,
-		PaymentForm:             strings.TrimSpace(request.PaymentForm),
-		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
-		ShipmentMode:            request.ShipmentMode,
-		Observations:            strings.TrimSpace(request.Observations),
+	mark, err := h.batches.CreateBatchMarkFromQuotation(ctx.Context(), dispatchservice.CreateBatchMarkFromQuotationCommand{
+		BatchID:     strings.TrimSpace(request.Batch),
+		QuotationID: strings.TrimSpace(request.QuotationID),
+		Direct:      request.Direct,
 	})
 	if err != nil {
 		return h.mapError(err)

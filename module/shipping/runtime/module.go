@@ -114,6 +114,7 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
+	dispatchSvc.SetQuotationRepository(quotationRepository)
 	dispatchSvc.SetBatchManifestDocumentCacheTTL(time.Duration(cfg.BatchManifestCacheTTLSeconds) * time.Second)
 	if err := dispatchSvc.SetBatchManifestDocumentCoverTemplateFromFile(cfg.BatchManifestTemplatePath); err != nil {
 		return nil, fmt.Errorf("configure batch manifest cover template: %w", err)
@@ -171,6 +172,9 @@ func (m *Module) SetQuotationOrderSource(source port.OrderQuotationSource) {
 	}
 
 	m.quotationService.SetOrderSource(source)
+	if m.dispatchService != nil {
+		m.dispatchService.SetOrderSource(source)
+	}
 }
 
 // SetQuotationProductSource configures the product shipping attribute source for box-packing.

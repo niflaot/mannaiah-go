@@ -113,6 +113,13 @@ func TestRepositories(t *testing.T) {
 	if quotations[0].Units[0].Description != "box" {
 		t.Fatalf("quotation unit description = %q, want box", quotations[0].Units[0].Description)
 	}
+	loadedQuotation, err := quotationRepository.GetByID(context.Background(), "quote-1")
+	if err != nil {
+		t.Fatalf("GetByID(quotation) error = %v", err)
+	}
+	if loadedQuotation == nil || loadedQuotation.ID != "quote-1" {
+		t.Fatalf("loaded quotation = %#v", loadedQuotation)
+	}
 }
 
 // TestQuotationRepositoryPreventsDuplicateActiveRows verifies duplicate quotation inserts are ignored while non-expired.

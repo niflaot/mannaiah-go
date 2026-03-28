@@ -66,6 +66,9 @@ func (dispatchServiceStub) List(ctx context.Context, query dispatchservice.ListQ
 func (dispatchServiceStub) DraftMark(ctx context.Context, command dispatchservice.DraftMarkCommand) (*domain.ShippingMark, error) {
 	return &domain.ShippingMark{}, nil
 }
+func (dispatchServiceStub) CreateBatchMarkFromQuotation(ctx context.Context, command dispatchservice.CreateBatchMarkFromQuotationCommand) (*domain.ShippingMark, error) {
+	return &domain.ShippingMark{}, nil
+}
 func (dispatchServiceStub) CreateBatchMark(ctx context.Context, command dispatchservice.CreateBatchMarkCommand) (*domain.ShippingMark, error) {
 	return &domain.ShippingMark{}, nil
 }

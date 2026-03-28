@@ -333,26 +333,16 @@ Creates a mark with `status = QUOTED` and `DispatchBatchID = batch.ID`.
 POST /shipping/batches/marks
 ```
 
-`batchId` is always required.
+`batch` and `quotationId` are always required.
 
 `direct=false` (default or omitted): creates a `QUOTED` draft mark and requires the batch to be open.  
 `direct=true`: creates and materializes the mark immediately and assigns it to the batch even when the batch is closed.
 
 ```json
 {
-  "batchId": "b-uuid",
+  "batch": "b-uuid",
   "direct": true,
-  "orderId": "order-uuid",
-  "shipmentMode": "parcel",
-  "sender": { "name": "Bodega", "addressLine": "Cra 1 #2-3", "cityCode": "11001" },
-  "recipient": { "name": "Juan", "addressLine": "Calle 4 #5-6", "cityCode": "05001" },
-  "units": [
-    {
-      "description": "SKU-1",
-      "packageType": "CAJA",
-      "dimensions": { "heightCm": 5, "widthCm": 25, "depthCm": 30, "realWeightKg": 1 }
-    }
-  ]
+  "quotationId": "q-uuid"
 }
 ```
 

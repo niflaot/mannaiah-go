@@ -107,7 +107,7 @@
 — Returns the auto-packed `units`, `declaredValue`, `collectOnDeliveryAmount`, `destCityCode`, and normalized `shipmentMode` (`express` for one unit, `parcel` for two or more) without calling carrier quotation APIs and without storing quotation rows.
 
 ## Batch Mark Creation Modes
-- `POST /shipping/batches/marks` accepts `batchId` (required) and `direct` (optional, default `false`).
+- `POST /shipping/batches/marks` accepts `batch` (required), `quotationId` (required), and `direct` (optional, default `false`).
 - `direct=false` (or omitted): creates a `QUOTED` draft mark in the target batch and requires the batch to be `OPEN`.
 - `direct=true`: creates and materializes the mark immediately and assigns it to the target batch even if the batch is `CLOSED`.
 

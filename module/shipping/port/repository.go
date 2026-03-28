@@ -103,6 +103,8 @@ type DispatchBatchRepository interface {
 type QuotationRepository interface {
 	// Create creates one quotation audit record.
 	Create(ctx context.Context, record QuotationRecord) error
+	// GetByID loads one quotation record by identifier.
+	GetByID(ctx context.Context, id string) (*QuotationRecord, error)
 	// ListByOrderID lists quotation records by order identifier.
 	ListByOrderID(ctx context.Context, orderID string) ([]QuotationRecord, error)
 	// GetLatestByOrderAndCarrier returns the most recent non-expired quotation for an order and carrier.

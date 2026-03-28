@@ -486,6 +486,23 @@ func (r *QuotationRepository) Create(ctx context.Context, record port.QuotationR
 	})
 }
 
+// GetByID loads one quotation record by identifier.
+func (r *QuotationRepository) GetByID(ctx context.Context, id string) (*port.QuotationRecord, error) {
+	row := quotationModel{}
+	err := r.db.WithContext(ctx).Preload("Units", func(db *gorm.DB) *gorm.DB {
+		return db.Order("unit_index ASC")
+	}).Where("id = ?", strings.TrimSpace(id)).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load quotation by id: %w", err)
+	}
+	record := mapQuotationRecord(row)
+
+	return &record, nil
+}
+
 // DeleteExpired deletes all quotation records whose expiration timestamp is in the past.
 func (r *QuotationRepository) DeleteExpired(ctx context.Context) (int64, error) {
 	var deleted int64

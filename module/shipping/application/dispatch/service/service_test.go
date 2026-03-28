@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -163,6 +165,48 @@ func (s *dispatchPublisherStub) Publish(ctx context.Context, event port.Integrat
 	s.events = append(s.events, event)
 
 	return nil
+}
+
+type dispatchQuotationRepositoryStub struct {
+	rows map[string]port.QuotationRecord
+}
+
+func newDispatchQuotationRepositoryStub() *dispatchQuotationRepositoryStub {
+	return &dispatchQuotationRepositoryStub{rows: map[string]port.QuotationRecord{}}
+}
+
+func (s *dispatchQuotationRepositoryStub) Create(ctx context.Context, record port.QuotationRecord) error {
+	s.rows[record.ID] = record
+	return nil
+}
+
+func (s *dispatchQuotationRepositoryStub) GetByID(ctx context.Context, id string) (*port.QuotationRecord, error) {
+	row, exists := s.rows[id]
+	if !exists {
+		return nil, domain.ErrNotFound
+	}
+	copy := row
+	return &copy, nil
+}
+
+func (s *dispatchQuotationRepositoryStub) ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error) {
+	return nil, nil
+}
+
+func (s *dispatchQuotationRepositoryStub) GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error) {
+	return nil, nil
+}
+
+func (s *dispatchQuotationRepositoryStub) DeleteExpired(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+type dispatchOrderQuotationSourceStub struct {
+	row *port.OrderQuotationData
+}
+
+func (s dispatchOrderQuotationSourceStub) GetByIDOrIdentifier(ctx context.Context, identifier string) (*port.OrderQuotationData, error) {
+	return s.row, nil
 }
 
 // TestCreateBatch verifies batch creation publishes the batch-created event.
@@ -328,6 +372,72 @@ func TestCreateBatchMarkRequiresBatchID(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrInvalidID) {
 		t.Fatalf("CreateBatchMark() error = %v", err)
+	}
+}
+
+// TestCreateBatchMarkFromQuotation verifies quotation-seeded batch mark creation uses quotation snapshot/order enrichment values.
+func TestCreateBatchMarkFromQuotation(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	quotationRepository := newDispatchQuotationRepositoryStub()
+	service := NewService(batchRepository, markRepository, nil)
+	service.SetQuotationRepository(quotationRepository)
+	service.SetOrderSource(dispatchOrderQuotationSourceStub{row: &port.OrderQuotationData{
+		OrderID:                 "order-1",
+		DestCityCode:            "76001000",
+		CollectOnDeliveryAmount: 0,
+		RecipientName:           "Cliente",
+		RecipientAddressLine:    "Calle 1 # 2-3",
+		RecipientPhone:          "3001234567",
+	}})
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	snapshot, marshalErr := json.Marshal(domain.QuotationRequest{
+		OrderID:                 "order-1",
+		CarrierID:               "manual",
+		OriginCityCode:          "11001000",
+		DestCityCode:            "76001000",
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		DeclaredValue:           50000,
+		CollectOnDeliveryAmount: 0,
+		ShipmentMode:            domain.ShipmentModeExpress,
+	})
+	if marshalErr != nil {
+		t.Fatalf("marshal snapshot: %v", marshalErr)
+	}
+	quotationRepository.rows["quote-1"] = port.QuotationRecord{
+		ID:              "quote-1",
+		OrderID:         "order-1",
+		OrderIdentifier: "1024554",
+		CarrierID:       "manual",
+		OriginCityCode:  "11001000",
+		DestCityCode:    "76001000",
+		FreightCost:     15000,
+		Units:           []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		RequestSnapshot: base64.StdEncoding.EncodeToString(snapshot),
+		CreatedAt:       time.Now().UTC(),
+	}
+
+	mark, err := service.CreateBatchMarkFromQuotation(context.Background(), CreateBatchMarkFromQuotationCommand{
+		BatchID:     batch.ID,
+		QuotationID: "quote-1",
+		Direct:      false,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMarkFromQuotation() error = %v", err)
+	}
+	if mark == nil || mark.QuotationID == nil || *mark.QuotationID != "quote-1" {
+		t.Fatalf("mark quotation id = %#v", mark)
+	}
+	if mark.CollectOnDeliveryAmount != 0 {
+		t.Fatalf("mark.CollectOnDeliveryAmount = %v, want 0", mark.CollectOnDeliveryAmount)
+	}
+	if mark.Recipient.CityCode != "76001000" {
+		t.Fatalf("mark recipient city = %q, want 76001000", mark.Recipient.CityCode)
 	}
 }
 
