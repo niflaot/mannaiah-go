@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"mannaiah/module/auth/application"
+	"mannaiah/module/auth/domain"
 	corehttp "mannaiah/module/core/http"
 )
 
@@ -14,11 +15,21 @@ import (
 type serviceMock struct {
 	// requireFn defines require behavior.
 	requireFn func(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error
+	// authenticateFn defines authenticate behavior.
+	authenticateFn func(ctx context.Context, authorizationHeader string) (*domain.Claims, error)
 }
 
 // Require executes configured require behavior.
 func (m serviceMock) Require(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error {
 	return m.requireFn(ctx, authorizationHeader, requiredPermissions...)
+}
+
+// Authenticate executes configured authenticate behavior.
+func (m serviceMock) Authenticate(ctx context.Context, authorizationHeader string) (*domain.Claims, error) {
+	if m.authenticateFn != nil {
+		return m.authenticateFn(ctx, authorizationHeader)
+	}
+	return &domain.Claims{}, nil
 }
 
 // TestNewHandlerRejectsNilService verifies constructor validation behavior.
