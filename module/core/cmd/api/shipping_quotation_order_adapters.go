@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	contactdomain "mannaiah/module/contacts/domain"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
@@ -21,6 +22,12 @@ type shippingOrderQuotationService interface {
 	List(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error)
 }
 
+// shippingOrderQuotationContactService defines contact lookup behavior required by the shipping quotation order source adapter.
+type shippingOrderQuotationContactService interface {
+	// Get resolves one contact by identifier.
+	Get(ctx context.Context, id string) (*contactdomain.Contact, error)
+}
+
 // shippingProductQuotationService defines product lookup behavior required by the shipping quotation product source adapter.
 type shippingProductQuotationService interface {
 	// Get retrieves a product by internal ID.
@@ -33,6 +40,8 @@ type shippingProductQuotationService interface {
 type shippingOrderQuotationSourceAdapter struct {
 	// orders defines order lookup dependencies.
 	orders shippingOrderQuotationService
+	// contacts defines optional contact lookup dependencies used for recipient enrichment/fallback.
+	contacts shippingOrderQuotationContactService
 }
 
 // GetByIDOrIdentifier resolves order quotation data by internal ID or external identifier.
@@ -70,6 +79,17 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		return nil, nil
 	}
 
+	var contact *contactdomain.Contact
+	if a.contacts != nil {
+		contactID := strings.TrimSpace(order.ContactID)
+		if contactID != "" {
+			resolvedContact, contactErr := a.contacts.Get(ctx, contactID)
+			if contactErr == nil {
+				contact = resolvedContact
+			}
+		}
+	}
+
 	var totalValue float64
 	items := make([]shippingport.OrderQuotationItem, 0, len(order.Items))
 	for _, item := range order.Items {
@@ -86,21 +106,30 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		})
 	}
 	collectOnDeliveryAmount := resolveOrderCollectOnDeliveryAmount(totalValue, order.PaymentMethod)
-	recipientAddressLine := strings.TrimSpace(strings.Join([]string{
+	shippingAddressLine := strings.TrimSpace(strings.Join([]string{
 		strings.TrimSpace(order.ShippingAddress.Address),
 		strings.TrimSpace(order.ShippingAddress.Address2),
 	}, " "))
-	recipientAddressLine = strings.Join(strings.Fields(recipientAddressLine), " ")
+	shippingAddressLine = strings.Join(strings.Fields(shippingAddressLine), " ")
+	contactAddressLine := strings.TrimSpace(strings.Join([]string{
+		firstNonEmptyTrimmed(contactAddress(contact)),
+		firstNonEmptyTrimmed(contactAddressExtra(contact)),
+	}, " "))
+	contactAddressLine = strings.Join(strings.Fields(contactAddressLine), " ")
+	recipientName := firstNonEmptyTrimmed(resolveContactDisplayName(contact), contactEmail(contact), "Cliente")
 
 	return &shippingport.OrderQuotationData{
 		OrderID:                 order.ID,
 		OrderIdentifier:         order.Identifier,
-		DestCityCode:            order.ShippingAddress.CityCode,
+		DestCityCode:            firstNonEmptyTrimmed(order.ShippingAddress.CityCode, contactCityCode(contact)),
 		TotalValue:              totalValue,
 		CollectOnDeliveryAmount: collectOnDeliveryAmount,
-		RecipientName:           "Cliente",
-		RecipientAddressLine:    recipientAddressLine,
-		RecipientPhone:          strings.TrimSpace(order.ShippingAddress.Phone),
+		RecipientName:           recipientName,
+		RecipientID:             contactDocumentNumber(contact),
+		RecipientIDType:         contactDocumentType(contact),
+		RecipientAddressLine:    firstNonEmptyTrimmed(shippingAddressLine, contactAddressLine),
+		RecipientPhone:          firstNonEmptyTrimmed(order.ShippingAddress.Phone, contactPhone(contact)),
+		RecipientEmail:          contactEmail(contact),
 		Items:                   items,
 	}, nil
 }
@@ -139,6 +168,81 @@ func isCashOnDeliveryPaymentMethod(paymentMethod string) bool {
 	}
 
 	return strings.Contains(trimmed, "cash on delivery") || strings.Contains(trimmed, "pay on delivery") || strings.Contains(trimmed, "contra entrega")
+}
+
+// firstNonEmptyTrimmed resolves the first non-empty trimmed value.
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return ""
+}
+
+// contactEmail resolves contact email values.
+func contactEmail(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(contact.Email)
+}
+
+// contactPhone resolves contact phone values.
+func contactPhone(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(contact.Phone)
+}
+
+// contactCityCode resolves contact city code values.
+func contactCityCode(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(contact.CityCode)
+}
+
+// contactAddress resolves contact address line 1 values.
+func contactAddress(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(contact.Address)
+}
+
+// contactAddressExtra resolves contact address line 2 values.
+func contactAddressExtra(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(contact.AddressExtra)
+}
+
+// contactDocumentNumber resolves contact document-number values.
+func contactDocumentNumber(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(contact.DocumentNumber)
+}
+
+// contactDocumentType resolves contact document-type values.
+func contactDocumentType(contact *contactdomain.Contact) string {
+	if contact == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(contact.DocumentType))
 }
 
 // shippingProductQuotationSourceAdapter adapts the products service to the shipping OrderProductSource port.

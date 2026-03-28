@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	contactdomain "mannaiah/module/contacts/domain"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
 )
@@ -14,6 +15,17 @@ type shippingOrderQuotationServiceStub struct {
 	order *ordersdomain.Order
 	// list defines fallback list result values.
 	list *ordersapplication.ListResult
+}
+
+// shippingOrderQuotationContactServiceStub defines contact lookup behavior for shipping quotation order adapter tests.
+type shippingOrderQuotationContactServiceStub struct {
+	// contact defines returned contact values.
+	contact *contactdomain.Contact
+}
+
+// Get resolves one configured contact value.
+func (s shippingOrderQuotationContactServiceStub) Get(ctx context.Context, id string) (*contactdomain.Contact, error) {
+	return s.contact, nil
 }
 
 // Get resolves one configured order value.
@@ -102,6 +114,124 @@ func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierResolvesCODByPaym
 				t.Fatalf("row.CollectOnDeliveryAmount = %v, want %v", row.CollectOnDeliveryAmount, testCase.expectedCOD)
 			}
 		})
+	}
+}
+
+// TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientEnrichment verifies recipient fields are resolved from contact and shipping data.
+func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientEnrichment(t *testing.T) {
+	t.Parallel()
+
+	adapter := shippingOrderQuotationSourceAdapter{
+		orders: shippingOrderQuotationServiceStub{
+			order: &ordersdomain.Order{
+				ID:            "order-1",
+				Identifier:    "601205",
+				ContactID:     "contact-1",
+				PaymentMethod: "stripe",
+				ShippingAddress: ordersdomain.ShippingAddress{
+					Address:  "Calle 18 Sur # 24d - 46",
+					Address2: "Piso 2",
+					Phone:    "3057901484",
+					CityCode: "11001",
+				},
+				Items: []ordersdomain.Item{{SKU: "sku-1", Quantity: 1, Value: 144000}},
+			},
+		},
+		contacts: shippingOrderQuotationContactServiceStub{
+			contact: &contactdomain.Contact{
+				ID:             "contact-1",
+				DocumentType:   contactdomain.DocumentTypeCC,
+				DocumentNumber: "123456789",
+				FirstName:      "Ian",
+				LastName:       "Castaño",
+				Email:          "coccostoreco@gmail.com",
+				Phone:          "3001112233",
+				Address:        "Fallback Address 1",
+				AddressExtra:   "Fallback Address 2",
+				CityCode:       "05001",
+			},
+		},
+	}
+
+	row, err := adapter.GetByIDOrIdentifier(context.Background(), "601205")
+	if err != nil {
+		t.Fatalf("GetByIDOrIdentifier() error = %v", err)
+	}
+	if row == nil {
+		t.Fatal("GetByIDOrIdentifier() returned nil row")
+	}
+	if row.RecipientName != "Ian Castaño" {
+		t.Fatalf("row.RecipientName = %q, want %q", row.RecipientName, "Ian Castaño")
+	}
+	if row.RecipientIDType != "CC" {
+		t.Fatalf("row.RecipientIDType = %q, want %q", row.RecipientIDType, "CC")
+	}
+	if row.RecipientID != "123456789" {
+		t.Fatalf("row.RecipientID = %q, want %q", row.RecipientID, "123456789")
+	}
+	if row.RecipientEmail != "coccostoreco@gmail.com" {
+		t.Fatalf("row.RecipientEmail = %q, want %q", row.RecipientEmail, "coccostoreco@gmail.com")
+	}
+	if row.RecipientAddressLine != "Calle 18 Sur # 24d - 46 Piso 2" {
+		t.Fatalf("row.RecipientAddressLine = %q, want shipping address", row.RecipientAddressLine)
+	}
+	if row.RecipientPhone != "3057901484" {
+		t.Fatalf("row.RecipientPhone = %q, want shipping phone", row.RecipientPhone)
+	}
+	if row.DestCityCode != "11001" {
+		t.Fatalf("row.DestCityCode = %q, want shipping city", row.DestCityCode)
+	}
+}
+
+// TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientShippingFallback verifies recipient shipping fields fallback to contact when shipping fields are empty.
+func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientShippingFallback(t *testing.T) {
+	t.Parallel()
+
+	adapter := shippingOrderQuotationSourceAdapter{
+		orders: shippingOrderQuotationServiceStub{
+			order: &ordersdomain.Order{
+				ID:            "order-2",
+				Identifier:    "601206",
+				ContactID:     "contact-2",
+				PaymentMethod: "stripe",
+				ShippingAddress: ordersdomain.ShippingAddress{
+					Address:  "",
+					Address2: "",
+					Phone:    "",
+					CityCode: "",
+				},
+				Items: []ordersdomain.Item{{SKU: "sku-1", Quantity: 1, Value: 144000}},
+			},
+		},
+		contacts: shippingOrderQuotationContactServiceStub{
+			contact: &contactdomain.Contact{
+				ID:           "contact-2",
+				FirstName:    "Ana",
+				LastName:     "Rojas",
+				Email:        "ana@example.com",
+				Phone:        "3009991122",
+				Address:      "Carrera 1 # 2-3",
+				AddressExtra: "Apto 4",
+				CityCode:     "05001",
+			},
+		},
+	}
+
+	row, err := adapter.GetByIDOrIdentifier(context.Background(), "601206")
+	if err != nil {
+		t.Fatalf("GetByIDOrIdentifier() error = %v", err)
+	}
+	if row == nil {
+		t.Fatal("GetByIDOrIdentifier() returned nil row")
+	}
+	if row.RecipientAddressLine != "Carrera 1 # 2-3 Apto 4" {
+		t.Fatalf("row.RecipientAddressLine = %q, want contact fallback address", row.RecipientAddressLine)
+	}
+	if row.RecipientPhone != "3009991122" {
+		t.Fatalf("row.RecipientPhone = %q, want contact fallback phone", row.RecipientPhone)
+	}
+	if row.DestCityCode != "05001" {
+		t.Fatalf("row.DestCityCode = %q, want contact fallback city", row.DestCityCode)
 	}
 }
 
