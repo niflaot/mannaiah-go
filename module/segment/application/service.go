@@ -33,6 +33,8 @@ type CreateCommand struct {
 	Slug string
 	// Channel defines target channel values.
 	Channel string
+	// ParentSegmentID defines an optional parent segment for sub-segment scoping.
+	ParentSegmentID *string
 	// Filters defines filter DSL values.
 	Filters []domain.Filter
 }
@@ -45,6 +47,9 @@ type UpdateCommand struct {
 	Slug *string
 	// Channel defines optional target channel values.
 	Channel *string
+	// ParentSegmentID defines an optional parent segment for sub-segment scoping.
+	// A non-nil pointer to an empty string clears the parent.
+	ParentSegmentID *string
 	// Filters defines optional filter DSL values.
 	Filters *[]domain.Filter
 }
@@ -134,8 +139,11 @@ func (s *SegmentService) Create(ctx context.Context, command CreateCommand) (*do
 	if err := validateFilters(command.Filters); err != nil {
 		return nil, err
 	}
+	if err := s.validateParent(ctx, "", command.ParentSegmentID); err != nil {
+		return nil, err
+	}
 
-	segment := &domain.Segment{Name: name, Slug: slug, Channel: strings.TrimSpace(command.Channel), Filters: normalizeFilters(command.Filters)}
+	segment := &domain.Segment{Name: name, Slug: slug, Channel: strings.TrimSpace(command.Channel), ParentSegmentID: command.ParentSegmentID, Filters: normalizeFilters(command.Filters)}
 	if err := s.repository.Create(ctx, segment); err != nil {
 		return nil, fmt.Errorf("create segment: %w", err)
 	}
@@ -203,6 +211,17 @@ func (s *SegmentService) Update(ctx context.Context, id string, command UpdateCo
 	if command.Channel != nil {
 		segment.Channel = strings.TrimSpace(*command.Channel)
 	}
+	if command.ParentSegmentID != nil {
+		parentID := strings.TrimSpace(*command.ParentSegmentID)
+		if parentID == "" {
+			segment.ParentSegmentID = nil
+		} else {
+			if err := s.validateParent(ctx, segment.ID, &parentID); err != nil {
+				return nil, err
+			}
+			segment.ParentSegmentID = &parentID
+		}
+	}
 	if command.Filters != nil {
 		if err := validateFilters(*command.Filters); err != nil {
 			return nil, err
@@ -248,6 +267,9 @@ func (s *SegmentService) Resolve(ctx context.Context, id string, page int, limit
 	if err != nil {
 		return nil, err
 	}
+	if err := s.applyParentScope(ctx, segment.ParentSegmentID, &filter); err != nil {
+		return nil, err
+	}
 	contactIDs, resolveErr := s.resolveWithAnalytics(ctx, filter, page, limit)
 	if resolveErr != nil {
 		return nil, resolveErr
@@ -265,6 +287,9 @@ func (s *SegmentService) Count(ctx context.Context, id string) (int64, error) {
 
 	filter, err := s.buildAnalyticsFilter(ctx, segment.Filters)
 	if err != nil {
+		return 0, err
+	}
+	if err := s.applyParentScope(ctx, segment.ParentSegmentID, &filter); err != nil {
 		return 0, err
 	}
 	count, resolveErr := s.resolveCountWithAnalytics(ctx, filter)
@@ -291,6 +316,65 @@ func (s *SegmentService) PreviewCount(ctx context.Context, filters []domain.Filt
 	}
 
 	return count, nil
+}
+
+// validateParent validates parent segment references for circular reference prevention.
+func (s *SegmentService) validateParent(ctx context.Context, selfID string, parentSegmentID *string) error {
+	if parentSegmentID == nil {
+		return nil
+	}
+	parentID := strings.TrimSpace(*parentSegmentID)
+	if parentID == "" {
+		return nil
+	}
+	if parentID == selfID && selfID != "" {
+		return domain.ErrCircularReference
+	}
+
+	visited := map[string]struct{}{}
+	if selfID != "" {
+		visited[selfID] = struct{}{}
+	}
+	current := parentID
+	for current != "" {
+		if _, seen := visited[current]; seen {
+			return domain.ErrCircularReference
+		}
+		visited[current] = struct{}{}
+		parent, err := s.repository.GetByID(ctx, current)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return domain.ErrParentNotFound
+			}
+			return fmt.Errorf("validate parent segment: %w", err)
+		}
+		if parent.ParentSegmentID == nil {
+			break
+		}
+		current = strings.TrimSpace(*parent.ParentSegmentID)
+	}
+
+	return nil
+}
+
+// applyParentScope resolves parent segment contacts and restricts the filter scope.
+func (s *SegmentService) applyParentScope(ctx context.Context, parentSegmentID *string, filter *analyticsdomain.SegmentFilter) error {
+	if parentSegmentID == nil || strings.TrimSpace(*parentSegmentID) == "" {
+		return nil
+	}
+	parentID := strings.TrimSpace(*parentSegmentID)
+
+	parentResult, err := s.Resolve(ctx, parentID, 1, 100000)
+	if err != nil {
+		return fmt.Errorf("resolve parent segment %s: %w", parentID, err)
+	}
+	if len(parentResult.ContactIDs) == 0 {
+		filter.ContactIDScope = []string{"__impossible__"}
+		return nil
+	}
+	filter.ContactIDScope = parentResult.ContactIDs
+
+	return nil
 }
 
 // resolveWithAnalytics resolves contact ids using analytics resolver with SQL fallback.
@@ -609,6 +693,13 @@ func toAnalyticsFilter(filters []domain.Filter) analyticsdomain.SegmentFilter {
 			if vars, ok := asAffinityVariationFilters(filterParameter(filter, "variations")); ok {
 				result.AffinityVariations = vars
 			}
+		case "mail_open_rate":
+			if value, ok := asPercentage(filterParameter(filter, "min")); ok {
+				result.MailOpenRateMin = &value
+			}
+			if value, ok := asPercentage(filterParameter(filter, "max")); ok {
+				result.MailOpenRateMax = &value
+			}
 		}
 	}
 
@@ -817,6 +908,12 @@ func validateFilters(filters []domain.Filter) error {
 		case "variation_affinity":
 			rows, ok := asAffinityVariationFilters(filterParameter(filter, "variations"))
 			if !ok || len(rows) == 0 {
+				return domain.ErrInvalidFilter
+			}
+		case "mail_open_rate":
+			_, hasMin := asPercentage(filterParameter(filter, "min"))
+			_, hasMax := asPercentage(filterParameter(filter, "max"))
+			if !hasMin && !hasMax {
 				return domain.ErrInvalidFilter
 			}
 		default:

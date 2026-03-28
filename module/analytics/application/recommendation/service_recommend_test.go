@@ -553,3 +553,124 @@ func TestRecommendExcludePurchasedProducts(t *testing.T) {
 		t.Fatalf("results[0].ID = %q, want %q", results[0].ID, "p-2")
 	}
 }
+
+// TestRecommendSeedProducesDeterministicOrder verifies that the same seed always produces the same product ordering.
+func TestRecommendSeedProducesDeterministicOrder(t *testing.T) {
+	t.Parallel()
+
+	price := 100.0
+	entries := make([]port.ProductCatalogEntry, 6)
+	for i := range entries {
+		id := "p-" + string(rune('a'+i))
+		entries[i] = port.ProductCatalogEntry{
+			ID:   id,
+			Tags: []string{"general"},
+			Datasheets: []port.ProductDatasheetEntry{{
+				Realm: "default",
+				Name:  "Product " + id,
+				Price: &price,
+			}},
+		}
+	}
+
+	catalog := &catalogStoreStub{entries: entries}
+	svc, err := NewService(affinityStoreStub{}, correlationStoreStub{}, catalog)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	query := domain.RecommendationQuery{BaseTags: []string{"general"}, Limit: 6, Seed: 42}
+
+	first, err := svc.Recommend(context.Background(), "", query)
+	if err != nil {
+		t.Fatalf("Recommend() first call error = %v", err)
+	}
+
+	for i := 0; i < 5; i++ {
+		result, err := svc.Recommend(context.Background(), "", query)
+		if err != nil {
+			t.Fatalf("Recommend() call %d error = %v", i+2, err)
+		}
+		if !reflect.DeepEqual(first, result) {
+			t.Fatalf("call %d produced different order: got %v, want %v", i+2, result, first)
+		}
+	}
+}
+
+// TestRecommendDifferentSeedsProduceDifferentOrder verifies that different seeds yield different orderings (with high probability).
+func TestRecommendDifferentSeedsProduceDifferentOrder(t *testing.T) {
+	t.Parallel()
+
+	price := 100.0
+	entries := make([]port.ProductCatalogEntry, 10)
+	for i := range entries {
+		id := "p-" + string(rune('a'+i))
+		entries[i] = port.ProductCatalogEntry{
+			ID:   id,
+			Tags: []string{"general"},
+			Datasheets: []port.ProductDatasheetEntry{{
+				Realm: "default",
+				Name:  "Product " + id,
+				Price: &price,
+			}},
+		}
+	}
+
+	catalog := &catalogStoreStub{entries: entries}
+	svc, err := NewService(affinityStoreStub{}, correlationStoreStub{}, catalog)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	r1, err := svc.Recommend(context.Background(), "", domain.RecommendationQuery{BaseTags: []string{"general"}, Limit: 10, Seed: 1})
+	if err != nil {
+		t.Fatalf("Recommend() seed=1 error = %v", err)
+	}
+
+	r2, err := svc.Recommend(context.Background(), "", domain.RecommendationQuery{BaseTags: []string{"general"}, Limit: 10, Seed: 2})
+	if err != nil {
+		t.Fatalf("Recommend() seed=2 error = %v", err)
+	}
+
+	if reflect.DeepEqual(r1, r2) {
+		t.Fatalf("different seeds produced identical results — unlikely for 10 items")
+	}
+}
+
+// TestRecommendZeroSeedSkipsShuffle verifies that seed=0 (default) does not shuffle.
+func TestRecommendZeroSeedSkipsShuffle(t *testing.T) {
+	t.Parallel()
+
+	price := 100.0
+	entries := make([]port.ProductCatalogEntry, 5)
+	for i := range entries {
+		id := "p-" + string(rune('a'+i))
+		entries[i] = port.ProductCatalogEntry{
+			ID:   id,
+			Tags: []string{"general"},
+			Datasheets: []port.ProductDatasheetEntry{{
+				Realm: "default",
+				Name:  "Product " + id,
+				Price: &price,
+			}},
+		}
+	}
+
+	catalog := &catalogStoreStub{entries: entries}
+	svc, err := NewService(affinityStoreStub{}, correlationStoreStub{}, catalog)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	results, err := svc.Recommend(context.Background(), "", domain.RecommendationQuery{BaseTags: []string{"general"}, Limit: 5, Seed: 0})
+	if err != nil {
+		t.Fatalf("Recommend() error = %v", err)
+	}
+
+	for i, r := range results {
+		expected := "p-" + string(rune('a'+i))
+		if r.ID != expected {
+			t.Fatalf("results[%d].ID = %q, want %q (original order)", i, r.ID, expected)
+		}
+	}
+}

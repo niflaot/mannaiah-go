@@ -3,6 +3,7 @@ package affinity
 import (
 	"context"
 	"errors"
+	"hash/fnv"
 
 	"mannaiah/module/analytics/application/recommendation"
 	"mannaiah/module/analytics/domain"
@@ -34,7 +35,7 @@ func NewProductProvider(service *recommendation.RecommendationService) (*Product
 }
 
 // GetProducts returns recommended products for one contact and one product block configuration.
-func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, block campaigndomain.ProductBlock) ([]campaigndomain.TemplateProduct, error) {
+func (p *ProductProvider) GetProducts(ctx context.Context, campaignID string, contactID string, block campaigndomain.ProductBlock) ([]campaigndomain.TemplateProduct, error) {
 	query := domain.RecommendationQuery{
 		BaseTag:                  block.BaseTag,
 		BaseTags:                 block.BaseTags,
@@ -55,6 +56,7 @@ func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, blo
 		ExcludeProductIDs:        block.ExcludeProductIDs,
 		FilterVariationIDs:       block.FilterVariationIDs,
 		PreferVariationIDs:       block.PreferVariationIDs,
+		Seed:                     computeSeed(campaignID, contactID),
 	}
 
 	recommended, err := p.service.Recommend(ctx, contactID, query)
@@ -74,4 +76,13 @@ func (p *ProductProvider) GetProducts(ctx context.Context, contactID string, blo
 	}
 
 	return result, nil
+}
+
+// computeSeed produces a deterministic int64 seed from campaignID and contactID.
+func computeSeed(campaignID, contactID string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(campaignID))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(contactID))
+	return int64(h.Sum64())
 }

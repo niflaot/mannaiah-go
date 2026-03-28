@@ -13,4 +13,8 @@ var (
 	ErrInvalidFilter = errors.New("segment filter is invalid")
 	// ErrNotFound is returned when segment rows are missing.
 	ErrNotFound = errors.New("segment not found")
+	// ErrParentNotFound is returned when a referenced parent segment does not exist.
+	ErrParentNotFound = errors.New("parent segment not found")
+	// ErrCircularReference is returned when a sub-segment references itself or creates a cycle.
+	ErrCircularReference = errors.New("circular segment reference detected")
 )

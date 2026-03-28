@@ -3,6 +3,7 @@ package recommendation
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"sort"
 	"strings"
 
@@ -222,6 +223,14 @@ func (s *RecommendationService) Recommend(ctx context.Context, contactID string,
 			})
 		}
 		candidates = filterByRealmPrice(candidates, query.Realm, query.MinPrice, query.MaxPrice)
+
+		// Apply seed-based shuffle for deterministic but varied ordering per seed.
+		if query.Seed != 0 {
+			shuffled := make([]port.ProductCatalogEntry, len(candidates))
+			copy(shuffled, candidates)
+			seededShuffle(shuffled, affinityScores, query.Seed)
+			candidates = shuffled
+		}
 
 		if len(candidates) > dynamicLimit {
 			candidates = candidates[:dynamicLimit]
@@ -551,5 +560,41 @@ func normalizeVariationToken(value string) string {
 		if normalized == "" {
 			return ""
 		}
+	}
+}
+
+// seededShuffle applies a deterministic shuffle to candidates using the provided seed.
+// When affinity scores are present, candidates are grouped into equal-score buckets and
+// shuffled within each bucket to preserve relative ranking while adding variety.
+// When no affinity scores are provided, all candidates are shuffled uniformly.
+func seededShuffle(candidates []port.ProductCatalogEntry, affinityScores map[string]float64, seed int64) {
+	if len(candidates) <= 1 {
+		return
+	}
+
+	rng := rand.New(rand.NewSource(seed))
+
+	if affinityScores == nil {
+		rng.Shuffle(len(candidates), func(i, j int) {
+			candidates[i], candidates[j] = candidates[j], candidates[i]
+		})
+		return
+	}
+
+	// Shuffle within equal-score buckets to preserve ranking while adding variety.
+	start := 0
+	for start < len(candidates) {
+		score := productAffinityScore(candidates[start].Tags, affinityScores)
+		end := start + 1
+		for end < len(candidates) && productAffinityScore(candidates[end].Tags, affinityScores) == score {
+			end++
+		}
+		if end-start > 1 {
+			bucket := candidates[start:end]
+			rng.Shuffle(len(bucket), func(i, j int) {
+				bucket[i], bucket[j] = bucket[j], bucket[i]
+			})
+		}
+		start = end
 	}
 }

@@ -192,3 +192,64 @@ func TestToAnalyticsFilterMapsAffinityPercentage(t *testing.T) {
 		t.Fatalf("len(mapped.AffinityTags[0].RelatedTags) = %d, want 2", len(row.RelatedTags))
 	}
 }
+
+// TestValidateMailOpenRateFilter verifies mail_open_rate filter validation behavior.
+func TestValidateMailOpenRateFilter(t *testing.T) {
+	err := validateFilters([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{"min": float64(50)}},
+	})
+	if err != nil {
+		t.Fatalf("validateFilters(mail_open_rate min=50) error = %v, want nil", err)
+	}
+
+	err = validateFilters([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{"max": float64(80)}},
+	})
+	if err != nil {
+		t.Fatalf("validateFilters(mail_open_rate max=80) error = %v, want nil", err)
+	}
+
+	err = validateFilters([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{"min": float64(30), "max": float64(90)}},
+	})
+	if err != nil {
+		t.Fatalf("validateFilters(mail_open_rate min+max) error = %v, want nil", err)
+	}
+
+	err = validateFilters([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{}},
+	})
+	if err == nil {
+		t.Fatalf("validateFilters(mail_open_rate no params) expected error")
+	}
+
+	err = validateFilters([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{"min": float64(150)}},
+	})
+	if err == nil {
+		t.Fatalf("validateFilters(mail_open_rate min=150) expected error (out of range)")
+	}
+}
+
+// TestToAnalyticsFilterMapsMailOpenRate verifies mail_open_rate analytics mapping behavior.
+func TestToAnalyticsFilterMapsMailOpenRate(t *testing.T) {
+	mapped := toAnalyticsFilter([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{"min": float64(40), "max": float64(90)}},
+	})
+	if mapped.MailOpenRateMin == nil || *mapped.MailOpenRateMin != 40 {
+		t.Fatalf("mapped.MailOpenRateMin = %#v, want 40", mapped.MailOpenRateMin)
+	}
+	if mapped.MailOpenRateMax == nil || *mapped.MailOpenRateMax != 90 {
+		t.Fatalf("mapped.MailOpenRateMax = %#v, want 90", mapped.MailOpenRateMax)
+	}
+
+	mappedMinOnly := toAnalyticsFilter([]domain.Filter{
+		{Type: "mail_open_rate", Parameters: map[string]any{"min": float64(25)}},
+	})
+	if mappedMinOnly.MailOpenRateMin == nil || *mappedMinOnly.MailOpenRateMin != 25 {
+		t.Fatalf("mappedMinOnly.MailOpenRateMin = %#v, want 25", mappedMinOnly.MailOpenRateMin)
+	}
+	if mappedMinOnly.MailOpenRateMax != nil {
+		t.Fatalf("mappedMinOnly.MailOpenRateMax = %#v, want nil", mappedMinOnly.MailOpenRateMax)
+	}
+}

@@ -104,4 +104,11 @@ type SegmentFilter struct {
 	// MinOrderCount defines an optional minimum distinct order count filter.
 	// When set, only contacts with at least this many orders are included.
 	MinOrderCount *int
+	// ContactIDScope restricts resolution to contacts within this set.
+	// When non-empty, an additional WHERE contact_id IN (...) clause is applied.
+	ContactIDScope []string
+	// MailOpenRateMin defines an optional minimum email-open-rate percentage filter [0,100].
+	MailOpenRateMin *float64
+	// MailOpenRateMax defines an optional maximum email-open-rate percentage filter [0,100].
+	MailOpenRateMax *float64
 }

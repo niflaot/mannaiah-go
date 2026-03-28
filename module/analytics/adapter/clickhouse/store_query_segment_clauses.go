@@ -11,6 +11,9 @@ import (
 func buildSegmentWhereFromClauses(filter domain.SegmentFilter, topSpenderIDs []string) (string, []any) {
 	conditions := []string{"1 = 1"}
 	args := make([]any, 0, 32)
+
+	appendContactIDScope(&conditions, &args, filter)
+
 	includedStatuses, excludedStatuses := collectOrderStatusScopes(filter)
 
 	for _, clause := range filter.Clauses {
@@ -471,6 +474,34 @@ func buildClauseCondition(clause domain.SegmentClause, includedStatuses []string
 		}
 
 		return "(" + strings.Join(parts, " AND ") + ")", args
+	case "mail_open_rate":
+		minPct, hasMin := clauseAsFloat64(clauseParameter(clause, "min"))
+		maxPct, hasMax := clauseAsFloat64(clauseParameter(clause, "max"))
+		if !hasMin && !hasMax {
+			return "", nil
+		}
+		subquery := `cs.contact_id IN (
+		SELECT ce_agg.contact_id FROM (
+			SELECT
+				ce.contact_id,
+				countDistinctIf(ce.campaign_id, ce.status = 'opened') AS opened_campaigns,
+				countDistinctIf(ce.campaign_id, ce.status = 'delivered') AS delivered_campaigns
+			FROM campaign_events ce
+			GROUP BY ce.contact_id
+			HAVING delivered_campaigns > 0`
+		args := make([]any, 0, 2)
+		if hasMin {
+			subquery += ` AND (opened_campaigns * 100.0 / delivered_campaigns) >= ?`
+			args = append(args, minPct)
+		}
+		if hasMax {
+			subquery += ` AND (opened_campaigns * 100.0 / delivered_campaigns) <= ?`
+			args = append(args, maxPct)
+		}
+		subquery += `
+		) ce_agg
+	)`
+		return subquery, args
 	default:
 		return "", nil
 	}

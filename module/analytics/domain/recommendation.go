@@ -67,6 +67,11 @@ type RecommendationQuery struct {
 	// realm-visible image when no variation-specific image is found.
 	// Optional — when empty, the first realm-visible image is used.
 	PreferVariationIDs []string
+	// Seed enables deterministic pseudo-random shuffling of equally-scored candidates.
+	// When non-zero, candidates are shuffled using this value as RNG seed after affinity
+	// ranking, producing repeatable but varied orderings per seed.
+	// Typical usage: hash(campaignID + contactID) to get 1:1 frontend/backend parity.
+	Seed int64
 }
 
 // Normalize canonicalizes query values before resolution.

@@ -165,6 +165,35 @@ func queryInt(ctx corehttp.Context, key string, defaultVal int) int {
 	return n
 }
 
+// queryInt64 parses an int64 query parameter with a default fallback.
+// Supports optional leading minus sign for negative values.
+func queryInt64(ctx corehttp.Context, key string, defaultVal int64) int64 {
+	val := strings.TrimSpace(ctx.Query(key))
+	if val == "" {
+		return defaultVal
+	}
+	negative := false
+	start := 0
+	if len(val) > 0 && val[0] == '-' {
+		negative = true
+		start = 1
+	}
+	if start >= len(val) {
+		return defaultVal
+	}
+	var n int64
+	for _, ch := range val[start:] {
+		if ch < '0' || ch > '9' {
+			return defaultVal
+		}
+		n = n*10 + int64(ch-'0')
+	}
+	if negative {
+		n = -n
+	}
+	return n
+}
+
 // queryFloat64 parses a float64 query parameter with a default fallback.
 func queryFloat64(ctx corehttp.Context, key string, defaultVal float64) float64 {
 	val := strings.TrimSpace(ctx.Query(key))

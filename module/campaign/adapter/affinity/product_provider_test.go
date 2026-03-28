@@ -110,7 +110,7 @@ func TestGetProductsForcesDefaultRealm(t *testing.T) {
 		t.Fatalf("NewProductProvider() error = %v", err)
 	}
 
-	products, err := provider.GetProducts(context.Background(), "contact-1", campaigndomain.ProductBlock{
+	products, err := provider.GetProducts(context.Background(), "campaign-1", "contact-1", campaigndomain.ProductBlock{
 		ID:       "hero_products",
 		BaseTags: []string{"cuero"},
 		Realm:    "woo",

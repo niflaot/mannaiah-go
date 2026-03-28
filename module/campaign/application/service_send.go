@@ -274,7 +274,7 @@ func (s *CampaignService) buildTemplateContext(ctx context.Context, campaign *do
 		if strings.TrimSpace(block.ID) == "" || !hasProductSource(block) {
 			continue
 		}
-		items, err := s.affinityProductProvider.GetProducts(ctx, contactID, block)
+		items, err := s.affinityProductProvider.GetProducts(ctx, campaign.ID, contactID, block)
 		if err != nil {
 			continue
 		}

@@ -62,6 +62,8 @@ type createRequest struct {
 	Slug string `json:"slug"`
 	// Channel defines target channel values.
 	Channel string `json:"channel"`
+	// ParentSegmentID defines an optional parent segment for sub-segment scoping.
+	ParentSegmentID *string `json:"parentSegmentId,omitempty"`
 	// Filters defines filter DSL values.
 	Filters []domain.Filter `json:"filters"`
 }
@@ -80,6 +82,8 @@ type updateRequest struct {
 	Slug *string `json:"slug"`
 	// Channel defines optional target channel values.
 	Channel *string `json:"channel"`
+	// ParentSegmentID defines an optional parent segment for sub-segment scoping.
+	ParentSegmentID *string `json:"parentSegmentId,omitempty"`
 	// Filters defines optional filter DSL values.
 	Filters *[]domain.Filter `json:"filters"`
 }
@@ -142,10 +146,11 @@ func (h *Handler) create(ctx corehttp.Context) error {
 	}
 
 	segment, err := h.service.Create(ctx.Context(), application.CreateCommand{
-		Name:    request.Name,
-		Slug:    request.Slug,
-		Channel: request.Channel,
-		Filters: request.Filters,
+		Name:            request.Name,
+		Slug:            request.Slug,
+		Channel:         request.Channel,
+		ParentSegmentID: request.ParentSegmentID,
+		Filters:         request.Filters,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -185,10 +190,11 @@ func (h *Handler) update(ctx corehttp.Context) error {
 	}
 
 	segment, err := h.service.Update(ctx.Context(), strings.TrimSpace(ctx.Params("id")), application.UpdateCommand{
-		Name:    request.Name,
-		Slug:    request.Slug,
-		Channel: request.Channel,
-		Filters: request.Filters,
+		Name:            request.Name,
+		Slug:            request.Slug,
+		Channel:         request.Channel,
+		ParentSegmentID: request.ParentSegmentID,
+		Filters:         request.Filters,
 	})
 	if err != nil {
 		return h.mapError(err)
@@ -258,13 +264,13 @@ func (h *Handler) mapError(err error) error {
 			return corehttp.NewAppError(403, "forbidden", err)
 		}
 	}
-	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrInvalidFilter) {
+	if errors.Is(err, domain.ErrInvalidID) || errors.Is(err, domain.ErrInvalidName) || errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrInvalidFilter) || errors.Is(err, domain.ErrCircularReference) {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
 	if errors.Is(err, application.ErrResolverUnavailable) || errors.Is(err, application.ErrRFMGroupRepositoryUnavailable) {
 		return corehttp.NewAppError(503, "segment_backend_unavailable", err)
 	}
-	if errors.Is(err, domain.ErrNotFound) {
+	if errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrParentNotFound) {
 		return corehttp.NewAppError(404, "segment_not_found", err)
 	}
 

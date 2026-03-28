@@ -30,7 +30,7 @@ func (s contactDataProviderStub) GetContactData(_ context.Context, _ string) (po
 }
 
 // GetProducts tracks calls and returns one deterministic product for rendering assertions.
-func (s *affinityProductProviderSpy) GetProducts(_ context.Context, _ string, _ domain.ProductBlock) ([]domain.TemplateProduct, error) {
+func (s *affinityProductProviderSpy) GetProducts(_ context.Context, _ string, _ string, _ domain.ProductBlock) ([]domain.TemplateProduct, error) {
 	s.calls++
 	return []domain.TemplateProduct{{
 		ID:       "p-1",

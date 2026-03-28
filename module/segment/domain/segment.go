@@ -24,6 +24,8 @@ type Segment struct {
 	Slug string `json:"slug"`
 	// Channel defines target channel values.
 	Channel string `json:"channel"`
+	// ParentSegmentID defines an optional parent segment for sub-segment scoping.
+	ParentSegmentID *string `json:"parentSegmentId,omitempty"`
 	// Filters defines filter DSL values.
 	Filters []Filter `json:"filters"`
 	// CreatedAt defines row creation timestamp values.

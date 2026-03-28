@@ -15,6 +15,7 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 	conditions := []string{"1 = 1"}
 	args := make([]any, 0, 16)
 
+	appendContactIDScope(&conditions, &args, filter)
 	appendCityCodeCondition(&conditions, &args, filter)
 	appendMembershipCondition(&conditions, &args, filter)
 	appendOptInChannelCondition(&conditions, &args, filter)
@@ -33,8 +34,21 @@ func buildSegmentWhere(filter domain.SegmentFilter, topSpenderIDs []string) (str
 	appendCategoryAffinityCondition(&conditions, &args, filter)
 	appendVariationAffinityCondition(&conditions, &args, filter)
 	appendMinOrderCountCondition(&conditions, &args, filter)
+	appendMailOpenRateCondition(&conditions, &args, filter)
 
 	return strings.Join(conditions, " AND "), args
+}
+
+// appendContactIDScope appends a contact_id IN filter when scope restriction is set.
+func appendContactIDScope(conditions *[]string, args *[]any, filter domain.SegmentFilter) {
+	if len(filter.ContactIDScope) == 0 {
+		return
+	}
+	placeholders := makePlaceholders(len(filter.ContactIDScope))
+	*conditions = append(*conditions, "cs.contact_id IN ("+placeholders+")")
+	for _, id := range filter.ContactIDScope {
+		*args = append(*args, id)
+	}
 }
 
 // appendMinOrderCountCondition appends a HAVING countDistinct >= N filter for minimum order count.
@@ -50,6 +64,34 @@ func appendMinOrderCountCondition(conditions *[]string, args *[]any, filter doma
 	)`)
 	*args = appendOrderStatusArgs(*args, filter.OrderStatuses)
 	*args = append(*args, *filter.MinOrderCount)
+}
+
+// appendMailOpenRateCondition appends a mail-open-rate filter based on campaign_events data.
+func appendMailOpenRateCondition(conditions *[]string, args *[]any, filter domain.SegmentFilter) {
+	if filter.MailOpenRateMin == nil && filter.MailOpenRateMax == nil {
+		return
+	}
+	subquery := `cs.contact_id IN (
+		SELECT ce_agg.contact_id FROM (
+			SELECT
+				ce.contact_id,
+				countDistinctIf(ce.campaign_id, ce.status = 'opened') AS opened_campaigns,
+				countDistinctIf(ce.campaign_id, ce.status = 'delivered') AS delivered_campaigns
+			FROM campaign_events ce
+			GROUP BY ce.contact_id
+			HAVING delivered_campaigns > 0`
+	if filter.MailOpenRateMin != nil {
+		subquery += ` AND (opened_campaigns * 100.0 / delivered_campaigns) >= ?`
+		*args = append(*args, *filter.MailOpenRateMin)
+	}
+	if filter.MailOpenRateMax != nil {
+		subquery += ` AND (opened_campaigns * 100.0 / delivered_campaigns) <= ?`
+		*args = append(*args, *filter.MailOpenRateMax)
+	}
+	subquery += `
+		) ce_agg
+	)`
+	*conditions = append(*conditions, subquery)
 }
 
 // appendCityCodeCondition appends a city code IN filter when city codes are set.

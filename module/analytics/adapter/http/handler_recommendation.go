@@ -101,6 +101,7 @@ func (h *RecommendationHandler) getRecommendations(ctx corehttp.Context) error {
 		ExcludeProductIDs:        excludeIDs,
 		FilterVariationIDs:       splitCommaSeparated(ctx.Query("filterVariationIds")),
 		PreferVariationIDs:       splitCommaSeparated(ctx.Query("preferVariationIds")),
+		Seed:                     queryInt64(ctx, "seed", 0),
 	}
 
 	products, err := h.service.Recommend(ctx.Context(), contactID, query)

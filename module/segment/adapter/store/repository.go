@@ -28,6 +28,8 @@ type model struct {
 	Slug string `gorm:"column:slug"`
 	// Channel defines channel values.
 	Channel string `gorm:"column:channel"`
+	// ParentSegmentID defines optional parent segment references.
+	ParentSegmentID *string `gorm:"column:parent_segment_id"`
 	// FiltersJSON defines filter payload values serialized as JSON.
 	FiltersJSON string `gorm:"column:filters_json"`
 	// CreatedAt defines row creation timestamp values.
@@ -67,11 +69,12 @@ func (r *Repository) Create(ctx context.Context, segment *domain.Segment) error 
 		segment.ID = uuid.NewString()
 	}
 	row := model{
-		ID:          segment.ID,
-		Name:        segment.Name,
-		Slug:        segment.Slug,
-		Channel:     segment.Channel,
-		FiltersJSON: marshalFilters(segment.Filters),
+		ID:              segment.ID,
+		Name:            segment.Name,
+		Slug:            segment.Slug,
+		Channel:         segment.Channel,
+		ParentSegmentID: segment.ParentSegmentID,
+		FiltersJSON:     marshalFilters(segment.Filters),
 	}
 	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return fmt.Errorf("create segment: %w", err)
@@ -127,10 +130,11 @@ func (r *Repository) List(ctx context.Context, page int, limit int) ([]domain.Se
 // Update persists segment row updates.
 func (r *Repository) Update(ctx context.Context, segment *domain.Segment) error {
 	updates := map[string]any{
-		"name":         segment.Name,
-		"slug":         segment.Slug,
-		"channel":      segment.Channel,
-		"filters_json": marshalFilters(segment.Filters),
+		"name":              segment.Name,
+		"slug":              segment.Slug,
+		"channel":           segment.Channel,
+		"parent_segment_id": segment.ParentSegmentID,
+		"filters_json":      marshalFilters(segment.Filters),
 	}
 	result := r.db.WithContext(ctx).Model(&model{}).Where("id = ?", segment.ID).Updates(updates)
 	if result.Error != nil {
@@ -165,13 +169,14 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 // mapModel maps persistence rows into domain values.
 func mapModel(row model) *domain.Segment {
 	return &domain.Segment{
-		ID:        row.ID,
-		Name:      row.Name,
-		Slug:      row.Slug,
-		Channel:   row.Channel,
-		Filters:   unmarshalFilters(row.FiltersJSON),
-		CreatedAt: row.CreatedAt.UTC(),
-		UpdatedAt: row.UpdatedAt.UTC(),
+		ID:              row.ID,
+		Name:            row.Name,
+		Slug:            row.Slug,
+		Channel:         row.Channel,
+		ParentSegmentID: row.ParentSegmentID,
+		Filters:         unmarshalFilters(row.FiltersJSON),
+		CreatedAt:       row.CreatedAt.UTC(),
+		UpdatedAt:       row.UpdatedAt.UTC(),
 	}
 }
 
