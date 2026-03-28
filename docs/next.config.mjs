@@ -6,6 +6,7 @@ const withMDX = createMDX();
 const config = {
   output: 'standalone',
   reactStrictMode: true,
+  basePath: '/wiki',
 };
 
 export default withMDX(config);
