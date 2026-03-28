@@ -110,7 +110,7 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	registry := shippingcarrier.NewRegistry(providers, trackingProviders)
 	publisher := resolvePublisher(publishers)
 	quotationSvc := quotationservice.NewService(quotationRepository, registry, quotationservice.Config{
-		ExpirationTTLHours: cfg.Quotation.ExpirationTTLHours,
+		ExpirationTTLMinutes: cfg.Quotation.ExpirationTTLMinutes,
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
@@ -162,6 +162,24 @@ func (m *Module) QuotationService() *quotationservice.Service {
 	}
 
 	return m.quotationService
+}
+
+// SetQuotationOrderSource configures the order data source for order-based quotation workflows.
+func (m *Module) SetQuotationOrderSource(source port.OrderQuotationSource) {
+	if m == nil || m.quotationService == nil {
+		return
+	}
+
+	m.quotationService.SetOrderSource(source)
+}
+
+// SetQuotationProductSource configures the product shipping attribute source for box-packing.
+func (m *Module) SetQuotationProductSource(source port.OrderProductSource) {
+	if m == nil || m.quotationService == nil {
+		return
+	}
+
+	m.quotationService.SetProductSource(source)
 }
 
 // MarkService returns mark service dependencies.

@@ -13,6 +13,8 @@ const (
 func Paths() *openapi3.Paths {
 	return openapi3.NewPaths(
 		openapi3.WithPath("/shipping/quotations", &openapi3.PathItem{Post: quotationCreateOperation(), Get: quotationListOperation()}),
+		openapi3.WithPath("/shipping/quotations/order", &openapi3.PathItem{Post: quotationFromOrderOperation()}),
+		openapi3.WithPath("/shipping/quotations/order/{identifier}", &openapi3.PathItem{Get: getOrderQuotationOperation()}),
 		openapi3.WithPath("/shipping/marks", &openapi3.PathItem{Post: markCreateOperation(), Get: markListOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}", &openapi3.PathItem{Get: markGetOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}/related", &openapi3.PathItem{Get: markRelatedOperation()}),
@@ -135,6 +137,38 @@ func quotationListOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Quotation list.", quotationListResponseSchema())),
+		),
+	}
+}
+
+// quotationFromOrderOperation defines the OpenAPI operation for order-based quotation.
+func quotationFromOrderOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_quoteFromOrder",
+		Summary:     "Request a freight quotation from an order's products",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		RequestBody: jsonRequestBody(quotationFromOrderRequestSchema(), true),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(201, jsonResponse("Quotation result with warnings.", quotationResultSchema())),
+		),
+	}
+}
+
+// getOrderQuotationOperation defines the OpenAPI operation for retrieving the latest order quotation.
+func getOrderQuotationOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getOrderQuotation",
+		Summary:     "Get the latest non-expired quotation for an order and carrier",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("identifier", "Order internal ID or external identifier."),
+			queryStringParameter("carrierId", "Carrier identifier filter.", true),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, jsonResponse("Quotation record.", quotationRecordSchema())),
+			openapi3.WithStatus(404, jsonResponse("Quotation not found.", openapi3.NewObjectSchema())),
 		),
 	}
 }
@@ -407,12 +441,18 @@ func quotationRequestSchema() *openapi3.Schema {
 
 // quotationResultSchema defines schema for quotation result payloads.
 func quotationResultSchema() *openapi3.Schema {
+	warningSchema := openapi3.NewObjectSchema().
+		WithProperty("code", openapi3.NewStringSchema()).
+		WithProperty("message", openapi3.NewStringSchema())
+
 	return openapi3.NewObjectSchema().
 		WithProperty("id", openapi3.NewStringSchema()).
 		WithProperty("orderId", openapi3.NewStringSchema()).
+		WithProperty("orderIdentifier", openapi3.NewStringSchema()).
 		WithProperty("carrierId", openapi3.NewStringSchema()).
 		WithProperty("originCityCode", openapi3.NewStringSchema()).
 		WithProperty("destCityCode", openapi3.NewStringSchema()).
+		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
 		WithProperty("freightCost", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryFeePercent", openapi3.NewFloat64Schema()).
@@ -422,6 +462,7 @@ func quotationResultSchema() *openapi3.Schema {
 		WithProperty("currencyCode", openapi3.NewStringSchema()).
 		WithProperty("expiresAt", openapi3.NewDateTimeSchema()).
 		WithProperty("rawResponse", openapi3.NewStringSchema()).
+		WithProperty("warnings", openapi3.NewArraySchema().WithItems(warningSchema)).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema())
 }
 
@@ -437,6 +478,7 @@ func quotationRecordSchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("ID", openapi3.NewStringSchema()).
 		WithProperty("OrderID", openapi3.NewStringSchema()).
+		WithProperty("OrderIdentifier", openapi3.NewStringSchema()).
 		WithProperty("CarrierID", openapi3.NewStringSchema()).
 		WithProperty("OriginCityCode", openapi3.NewStringSchema()).
 		WithProperty("DestCityCode", openapi3.NewStringSchema()).
@@ -447,6 +489,18 @@ func quotationRecordSchema() *openapi3.Schema {
 		WithProperty("RequestSnapshot", openapi3.NewStringSchema()).
 		WithProperty("RawResponse", openapi3.NewStringSchema()).
 		WithProperty("CreatedAt", openapi3.NewDateTimeSchema())
+}
+
+// quotationFromOrderRequestSchema defines schema for order-based quotation request payloads.
+func quotationFromOrderRequestSchema() *openapi3.Schema {
+	schema := openapi3.NewObjectSchema().
+		WithProperty("orderIdentifier", openapi3.NewStringSchema()).
+		WithProperty("carrierId", openapi3.NewStringSchema()).
+		WithProperty("originCityCode", openapi3.NewStringSchema()).
+		WithProperty("shipmentMode", shipmentModeSchema())
+	schema.Required = []string{"orderIdentifier", "carrierId", "originCityCode", "shipmentMode"}
+
+	return schema
 }
 
 // markRequestSchema defines schema for mark generation request payloads.

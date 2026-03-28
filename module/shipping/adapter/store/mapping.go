@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -137,9 +138,10 @@ func mapBatchModel(row dispatchBatchModel, markIDs []string) domain.DispatchBatc
 }
 
 func mapQuotationRecord(row quotationModel) port.QuotationRecord {
-	return port.QuotationRecord{
+	record := port.QuotationRecord{
 		ID:              row.ID,
 		OrderID:         row.OrderID,
+		OrderIdentifier: row.OrderIdentifier,
 		CarrierID:       row.CarrierID,
 		OriginCityCode:  row.OriginCityCode,
 		DestCityCode:    row.DestCityCode,
@@ -151,12 +153,23 @@ func mapQuotationRecord(row quotationModel) port.QuotationRecord {
 		RawResponse:     row.RawResponse,
 		CreatedAt:       row.CreatedAt.UTC(),
 	}
+	if row.RequestSnapshot != "" {
+		var snapshot struct {
+			Units []domain.PackageUnit `json:"units"`
+		}
+		if jsonErr := json.Unmarshal([]byte(row.RequestSnapshot), &snapshot); jsonErr == nil {
+			record.Units = snapshot.Units
+		}
+	}
+
+	return record
 }
 
 func mapQuotationModel(record port.QuotationRecord) quotationModel {
 	return quotationModel{
 		ID:              record.ID,
 		OrderID:         record.OrderID,
+		OrderIdentifier: record.OrderIdentifier,
 		CarrierID:       record.CarrierID,
 		OriginCityCode:  record.OriginCityCode,
 		DestCityCode:    record.DestCityCode,

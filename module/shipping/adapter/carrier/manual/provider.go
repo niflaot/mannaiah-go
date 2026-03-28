@@ -25,6 +25,7 @@ func NewProvider() *Provider {
 		HasQuotation:         false,
 		HasManifestDocument:  false,
 		HasTracking:          false,
+		NeedsURL:             true,
 	}}
 }
 

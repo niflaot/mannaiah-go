@@ -24,8 +24,9 @@ type Config struct {
 
 // QuotationConfig defines quotation behavior configuration values.
 type QuotationConfig struct {
-	// ExpirationTTLHours defines how many hours stored quotations remain valid before expiring.
-	ExpirationTTLHours float64 `mapstructure:"SHIPPING_QUOTATION_TTL_HOURS" default:"24"`
+	// ExpirationTTLMinutes defines how many minutes stored quotations remain valid before expiring.
+	// Zero or negative values default to 10 minutes.
+	ExpirationTTLMinutes int `mapstructure:"SHIPPING_QUOTATION_TTL_MINUTES" default:"10"`
 }
 
 // TCCConfig defines TCC carrier configuration values.

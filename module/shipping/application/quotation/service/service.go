@@ -15,15 +15,17 @@ import (
 
 // Config defines quotation service behavior configuration values.
 type Config struct {
-	// ExpirationTTLHours defines how many hours a stored quotation is valid before it expires.
-	// Zero or negative values default to 24 hours.
-	ExpirationTTLHours float64
+	// ExpirationTTLMinutes defines how many minutes a stored quotation is valid before it expires.
+	// Zero or negative values default to 10 minutes.
+	ExpirationTTLMinutes int
 }
 
 // QuoteCommand defines quotation command input values.
 type QuoteCommand struct {
 	// OrderID defines optional order identifier values.
 	OrderID string
+	// OrderIdentifier defines optional external order identifier values (e.g. WooCommerce number).
+	OrderIdentifier string
 	// CarrierID defines carrier identifier values.
 	CarrierID string
 	// OriginCityCode defines origin city-code values.
@@ -48,22 +50,36 @@ type Service struct {
 	registry port.ProviderRegistry
 	// cfg defines quotation behavior configuration values.
 	cfg Config
+	// orderSource defines optional order data source dependencies.
+	orderSource port.OrderQuotationSource
+	// productSource defines optional product shipping attribute source dependencies.
+	productSource port.OrderProductSource
 }
 
 // NewService creates quotation services.
 func NewService(repository port.QuotationRepository, registry port.ProviderRegistry, cfg Config) *Service {
-	ttl := cfg.ExpirationTTLHours
+	ttl := cfg.ExpirationTTLMinutes
 	if ttl <= 0 {
-		ttl = 24
+		ttl = 10
 	}
 
 	return &Service{
 		repository: repository,
 		registry:   registry,
 		cfg: Config{
-			ExpirationTTLHours: ttl,
+			ExpirationTTLMinutes: ttl,
 		},
 	}
+}
+
+// SetOrderSource configures the order data source used for order-based quotation workflows.
+func (s *Service) SetOrderSource(source port.OrderQuotationSource) {
+	s.orderSource = source
+}
+
+// SetProductSource configures the product shipping attribute source used for box-packing.
+func (s *Service) SetProductSource(source port.OrderProductSource) {
+	s.productSource = source
 }
 
 // Quote requests one carrier quotation and stores the audit record.
@@ -111,6 +127,9 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 	if strings.TrimSpace(result.OrderID) == "" {
 		result.OrderID = request.OrderID
 	}
+	if strings.TrimSpace(result.OrderIdentifier) == "" {
+		result.OrderIdentifier = strings.TrimSpace(command.OrderIdentifier)
+	}
 	if strings.TrimSpace(result.OriginCityCode) == "" {
 		result.OriginCityCode = request.OriginCityCode
 	}
@@ -121,7 +140,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 		result.CurrencyCode = "COP"
 	}
 	if result.ExpiresAt.IsZero() {
-		result.ExpiresAt = result.CreatedAt.Add(time.Duration(s.cfg.ExpirationTTLHours * float64(time.Hour)))
+		result.ExpiresAt = result.CreatedAt.Add(time.Duration(s.cfg.ExpirationTTLMinutes) * time.Minute)
 	}
 	result.FreightCost = normalizeMoney(result.FreightCost)
 	result.CollectOnDeliveryAmount = normalizeMoney(request.CollectOnDeliveryAmount)
@@ -146,6 +165,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 		record := port.QuotationRecord{
 			ID:              result.ID,
 			OrderID:         result.OrderID,
+			OrderIdentifier: result.OrderIdentifier,
 			CarrierID:       result.CarrierID,
 			OriginCityCode:  result.OriginCityCode,
 			DestCityCode:    result.DestCityCode,
@@ -153,6 +173,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 			EstimatedDays:   result.EstimatedDays,
 			CurrencyCode:    result.CurrencyCode,
 			ExpiresAt:       result.ExpiresAt,
+			Units:           request.Units,
 			RequestSnapshot: string(snapshot),
 			RawResponse:     result.RawResponse,
 			CreatedAt:       result.CreatedAt,
@@ -181,6 +202,15 @@ func (s *Service) ListByOrderID(ctx context.Context, orderID string) ([]port.Quo
 	}
 
 	return s.repository.ListByOrderID(ctx, strings.TrimSpace(orderID))
+}
+
+// GetLatestByOrderAndCarrier returns the most recent non-expired quotation for the given order and carrier.
+func (s *Service) GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error) {
+	if s == nil || s.repository == nil {
+		return nil, nil
+	}
+
+	return s.repository.GetLatestByOrderAndCarrier(ctx, strings.TrimSpace(orderID), strings.TrimSpace(carrierID))
 }
 
 func normalizeMoney(value float64) float64 {

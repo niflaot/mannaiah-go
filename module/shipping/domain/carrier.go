@@ -30,6 +30,8 @@ type Carrier struct {
 	HasManifestDocument bool `json:"hasManifestDocument"`
 	// HasTracking defines whether the carrier provides a tracking URL.
 	HasTracking bool `json:"hasTracking"`
+	// NeedsURL defines whether the carrier requires an operator-provided custom tracking URL when creating a mark.
+	NeedsURL bool `json:"needsUrl"`
 }
 
 // Validate validates carrier fields.

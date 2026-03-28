@@ -102,3 +102,50 @@ func parsePageLimit(ctx corehttp.Context, defaultLimit int) (int, int) {
 
 	return page, limit
 }
+
+// quoteFromOrderRequest defines order-based quotation request payload values.
+type quoteFromOrderRequest struct {
+	// OrderIdentifier defines the order identifier (internal ID or external/WooCommerce number).
+	OrderIdentifier string `json:"orderIdentifier"`
+	// CarrierID defines carrier identifier values.
+	CarrierID string `json:"carrierId"`
+	// OriginCityCode defines origin city-code values.
+	OriginCityCode string `json:"originCityCode"`
+	// ShipmentMode defines the delivery mode for this quotation (parcel or express).
+	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
+}
+
+// quoteFromOrder handles order-based quotation requests.
+func (h *Handler) quoteFromOrder(ctx corehttp.Context) error {
+	request := quoteFromOrderRequest{}
+	if err := ctx.BodyParser(&request); err != nil {
+		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	result, err := h.quotations.QuoteFromOrder(ctx.Context(), quotationservice.QuoteFromOrderCommand{
+		OrderIdentifier: strings.TrimSpace(request.OrderIdentifier),
+		CarrierID:       strings.TrimSpace(request.CarrierID),
+		OriginCityCode:  strings.TrimSpace(request.OriginCityCode),
+		ShipmentMode:    request.ShipmentMode,
+	})
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(201).JSON(result)
+}
+
+// getOrderQuotation handles retrieval of the latest quotation for an order and carrier.
+func (h *Handler) getOrderQuotation(ctx corehttp.Context) error {
+	identifier := strings.TrimSpace(ctx.Params("identifier"))
+	carrierID := strings.TrimSpace(ctx.Query("carrierId"))
+
+	record, err := h.quotations.GetLatestByOrderAndCarrier(ctx.Context(), identifier, carrierID)
+	if err != nil {
+		return h.mapError(err)
+	}
+	if record == nil {
+		return corehttp.NewAppError(404, "quotation_not_found", nil)
+	}
+
+	return ctx.Status(200).JSON(record)
+}

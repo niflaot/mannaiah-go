@@ -18,7 +18,13 @@ type quotationServiceStub struct{}
 func (quotationServiceStub) Quote(ctx context.Context, command quotationservice.QuoteCommand) (*domain.QuotationResult, error) {
 	return &domain.QuotationResult{}, nil
 }
+func (quotationServiceStub) QuoteFromOrder(ctx context.Context, command quotationservice.QuoteFromOrderCommand) (*domain.QuotationResult, error) {
+	return &domain.QuotationResult{}, nil
+}
 func (quotationServiceStub) ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error) {
+	return nil, nil
+}
+func (quotationServiceStub) GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error) {
 	return nil, nil
 }
 

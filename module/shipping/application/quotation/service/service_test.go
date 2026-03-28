@@ -39,6 +39,10 @@ func (s *quotationRepositoryStub) DeleteExpired(ctx context.Context) (int64, err
 	return deleted, nil
 }
 
+func (s *quotationRepositoryStub) GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error) {
+	return nil, nil
+}
+
 // quotationProviderNoExpiry returns a quotation result with a zero ExpiresAt to test TTL fallback.
 type quotationProviderNoExpiry struct{}
 
@@ -162,7 +166,7 @@ func TestQuoteDefaultsCODFeeAmountWhenProviderOmitsFields(t *testing.T) {
 // TestQuoteExpiresAtSetFromTTL verifies ExpiresAt is set from TTL when the provider returns zero.
 func TestQuoteExpiresAtSetFromTTL(t *testing.T) {
 	repository := &quotationRepositoryStub{}
-	service := NewService(repository, quotationRegistryStub{provider: quotationProviderNoExpiry{}}, Config{ExpirationTTLHours: 2})
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderNoExpiry{}}, Config{ExpirationTTLMinutes: 120})
 
 	before := time.Now()
 	result, err := service.Quote(context.Background(), QuoteCommand{

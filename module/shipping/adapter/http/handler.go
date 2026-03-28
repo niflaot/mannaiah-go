@@ -34,8 +34,12 @@ type Authorizer interface {
 type QuotationService interface {
 	// Quote requests one freight quotation.
 	Quote(ctx context.Context, command quotationservice.QuoteCommand) (*domain.QuotationResult, error)
+	// QuoteFromOrder builds packages from order products and requests a freight quotation.
+	QuoteFromOrder(ctx context.Context, command quotationservice.QuoteFromOrderCommand) (*domain.QuotationResult, error)
 	// ListByOrderID lists quotation records for one order.
 	ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error)
+	// GetLatestByOrderAndCarrier returns the most recent non-expired quotation for an order and carrier.
+	GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error)
 }
 
 // MarkService defines shipping mark behavior required by HTTP handlers.
@@ -129,6 +133,8 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/quotations", h.protect("shipping:quotations", h.createQuotation))
 	router.Get("/shipping/quotations", h.protect("shipping:quotations", h.listQuotations))
+	router.Post("/shipping/quotations/order", h.protect("shipping:quotations", h.quoteFromOrder))
+	router.Get("/shipping/quotations/order/:identifier", h.protect("shipping:quotations", h.getOrderQuotation))
 	router.Post("/shipping/marks", h.protect("shipping:generate", h.createMark))
 	router.Get("/shipping/marks/:id", h.protect("shipping:quotations", h.getMark))
 	router.Get("/shipping/marks/:id/related", h.protect("shipping:quotations", h.listRelatedMarks))

@@ -89,6 +89,7 @@ func (p *Provider) Carrier() domain.Carrier {
 		HasQuotation:         true,
 		HasManifestDocument:  true,
 		HasTracking:          true,
+		NeedsURL:             false,
 	}
 }
 

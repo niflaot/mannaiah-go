@@ -91,18 +91,30 @@ func (r QuotationRequest) Validate() error {
 	return nil
 }
 
+// QuotationWarning defines a non-fatal advisory attached to a quotation result.
+type QuotationWarning struct {
+	// Code defines machine-readable warning code values.
+	Code string `json:"code"`
+	// Message defines human-readable warning message values.
+	Message string `json:"message"`
+}
+
 // QuotationResult defines normalized quotation response values.
 type QuotationResult struct {
 	// ID defines quotation identifier values.
 	ID string `json:"id"`
 	// OrderID defines optional order identifier values.
 	OrderID string `json:"orderId,omitempty"`
+	// OrderIdentifier defines optional external order identifier values (e.g. WooCommerce number).
+	OrderIdentifier string `json:"orderIdentifier,omitempty"`
 	// CarrierID defines carrier identifier values.
 	CarrierID string `json:"carrierId"`
 	// OriginCityCode defines origin city-code values.
 	OriginCityCode string `json:"originCityCode"`
 	// DestCityCode defines destination city-code values.
 	DestCityCode string `json:"destCityCode"`
+	// Units defines the package units that were quoted.
+	Units []PackageUnit `json:"units,omitempty"`
 	// FreightCost defines carrier-reported freight-cost amounts.
 	FreightCost float64 `json:"freightCost"`
 	// CollectOnDeliveryAmount defines requested COD collection amounts.
@@ -121,6 +133,8 @@ type QuotationResult struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 	// RawResponse defines raw provider-response payloads.
 	RawResponse string `json:"rawResponse,omitempty"`
+	// Warnings defines non-fatal advisory messages produced during quotation.
+	Warnings []QuotationWarning `json:"warnings,omitempty"`
 	// CreatedAt defines row creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 }

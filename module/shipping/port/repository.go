@@ -37,6 +37,8 @@ type QuotationRecord struct {
 	ID string
 	// OrderID defines optional order identifier values.
 	OrderID string
+	// OrderIdentifier defines optional external order identifier values (e.g. WooCommerce number).
+	OrderIdentifier string
 	// CarrierID defines carrier identifier values.
 	CarrierID string
 	// OriginCityCode defines origin city-code values.
@@ -51,6 +53,8 @@ type QuotationRecord struct {
 	CurrencyCode string
 	// ExpiresAt defines quotation expiration timestamps.
 	ExpiresAt time.Time
+	// Units defines the package units used in the quotation request.
+	Units []domain.PackageUnit
 	// RequestSnapshot defines serialized quotation request payload values.
 	RequestSnapshot string
 	// RawResponse defines provider raw response payload values.
@@ -101,6 +105,8 @@ type QuotationRepository interface {
 	Create(ctx context.Context, record QuotationRecord) error
 	// ListByOrderID lists quotation records by order identifier.
 	ListByOrderID(ctx context.Context, orderID string) ([]QuotationRecord, error)
+	// GetLatestByOrderAndCarrier returns the most recent non-expired quotation for an order and carrier.
+	GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*QuotationRecord, error)
 	// DeleteExpired deletes all quotation records whose expiration timestamp is in the past.
 	DeleteExpired(ctx context.Context) (int64, error)
 }

@@ -493,6 +493,25 @@ func (r *QuotationRepository) ListByOrderID(ctx context.Context, orderID string)
 	return result, nil
 }
 
+// GetLatestByOrderAndCarrier returns the most recent non-expired quotation for the given order and carrier.
+func (r *QuotationRepository) GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error) {
+	var row quotationModel
+	err := r.db.WithContext(ctx).
+		Where("order_id = ? AND carrier_id = ? AND expires_at > ?", strings.TrimSpace(orderID), strings.TrimSpace(carrierID), time.Now().UTC()).
+		Order("created_at DESC").
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("get latest quotation by order and carrier: %w", err)
+	}
+	record := mapQuotationRecord(row)
+
+	return &record, nil
+}
+
 // listMarkIDs lists mark identifiers belonging to one batch.
 func (r *BatchRepository) listMarkIDs(ctx context.Context, batchID string) ([]string, error) {
 	rows := make([]shippingMarkModel, 0)

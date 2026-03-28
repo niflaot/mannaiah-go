@@ -92,6 +92,7 @@ func (dispatchBatchModel) TableName() string {
 type quotationModel struct {
 	ID              string    `gorm:"column:id;type:varchar(64);primaryKey"`
 	OrderID         string    `gorm:"column:order_id;type:varchar(255);index"`
+	OrderIdentifier string    `gorm:"column:order_identifier;type:varchar(255);index;default:null"`
 	CarrierID       string    `gorm:"column:carrier_id;type:varchar(100);index"`
 	OriginCityCode  string    `gorm:"column:origin_city_code;type:varchar(20)"`
 	DestCityCode    string    `gorm:"column:dest_city_code;type:varchar(20)"`

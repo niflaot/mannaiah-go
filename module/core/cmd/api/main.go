@@ -487,6 +487,8 @@ func run(ctx context.Context, envFile string) error {
 	shippingModule.DispatchService().SetBatchManifestOrderSummaryResolver(shippingBatchManifestOrderSummaryAdapter{
 		orders: ordersModule.Service(),
 	})
+	shippingModule.SetQuotationOrderSource(shippingOrderQuotationSourceAdapter{orders: ordersModule.Service()})
+	shippingModule.SetQuotationProductSource(shippingProductQuotationSourceAdapter{products: productsModule.Service()})
 
 	var wooScheduler corecron.Scheduler
 	if wooCfg.SyncContacts || wooCfg.SyncOrders {

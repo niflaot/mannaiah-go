@@ -32,6 +32,8 @@
   - `(*shipping.Module).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /shipping/quotations`, `GET /shipping/quotations`
+  - `POST /shipping/quotations/order` — auto-build packages from order products and request a quotation
+  - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
   - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
   - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
   - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
@@ -64,6 +66,41 @@
   - `discountPercent` (configured percent)
   - `discountedFreightCost` (value after discount)
   - `freightCost` (compatibility alias of `discountedFreightCost`)
+
+## Order-Based Quotation
+`POST /shipping/quotations/order` auto-builds packages from order products using the overlapping box-packing algorithm:
+
+**Request:**
+```json
+{
+  "orderIdentifier": "<internal-id or WooCommerce order number>",
+  "carrierId": "tcc",
+  "originCityCode": "11001000",
+  "shipmentMode": "parcel"
+}
+```
+
+**Algorithm:**
+1. Resolves order by internal ID or external identifier (WooCommerce number).
+2. Reads product shipping attributes from the `"default"` realm datasheet for each line item SKU:
+   - `pweight` → weight (kg), `pheight` → height (cm), `pwidth` → width (cm), `plength` → length/depth (cm)
+   - `price` → declared value (defaults to `1` if missing), `overlapped` → packing flag (defaults to `true` if missing)
+3. Skips products with any missing dimension.
+4. Applies box-packing: non-overlapped items are standalone boxes; overlapped items are nested (max 3 per box).
+5. If all products are overlapped, the largest becomes the main box (emits `ALL_OVERLAPPED` warning).
+6. COD = total order value (sum of `item.value × quantity`).
+
+**Warnings** (non-fatal, included in response `warnings[]`):
+| Code | Meaning |
+|---|---|
+| `NO_PRODUCTS` | No valid products found — returns an error |
+| `ALL_OVERLAPPED` | Every product is flagged as overlapped; largest item promoted to main box |
+| `INVALID_CITY` | Carrier rejected the destination city code |
+
+**Quotation TTL:** `SHIPPING_QUOTATION_TTL_MINUTES` (default: `10` minutes).
+
+**Get latest quotation for order:** `GET /shipping/quotations/order/:identifier?carrierId={carrierID}`
+— Returns the most recent non-expired quotation for the given order and carrier, or `404` if none found.
 
 ## COD Collection
 - Mark create requests accept `collectOnDeliveryAmount`.
