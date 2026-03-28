@@ -115,6 +115,15 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	markSvc := markservice.NewService(markRepository, registry, publisher)
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
 	dispatchSvc.SetQuotationRepository(quotationRepository)
+	dispatchSvc.SetDefaultSender(domain.Address{
+		Name:        strings.TrimSpace(cfg.DefaultSender.Name),
+		ID:          strings.TrimSpace(cfg.DefaultSender.ID),
+		IDType:      strings.TrimSpace(cfg.DefaultSender.IDType),
+		AddressLine: strings.TrimSpace(cfg.DefaultSender.Address),
+		CityCode:    strings.TrimSpace(cfg.DefaultSender.CityCode),
+		Phone:       strings.TrimSpace(cfg.DefaultSender.Phone),
+		Email:       strings.TrimSpace(cfg.DefaultSender.Email),
+	})
 	dispatchSvc.SetBatchManifestDocumentCacheTTL(time.Duration(cfg.BatchManifestCacheTTLSeconds) * time.Second)
 	if err := dispatchSvc.SetBatchManifestDocumentCoverTemplateFromFile(cfg.BatchManifestTemplatePath); err != nil {
 		return nil, fmt.Errorf("configure batch manifest cover template: %w", err)

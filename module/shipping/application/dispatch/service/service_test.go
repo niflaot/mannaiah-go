@@ -383,6 +383,15 @@ func TestCreateBatchMarkFromQuotation(t *testing.T) {
 	quotationRepository := newDispatchQuotationRepositoryStub()
 	service := NewService(batchRepository, markRepository, nil)
 	service.SetQuotationRepository(quotationRepository)
+	service.SetDefaultSender(domain.Address{
+		Name:        "(FALKON)-GRUPO COCCO",
+		ID:          "901599500",
+		IDType:      "NIT",
+		AddressLine: "Calle 18 Sur 24D 46 P2",
+		CityCode:    "11001",
+		Phone:       "3057901484",
+		Email:       "coccostoreco@gmail.com",
+	})
 	service.SetOrderSource(dispatchOrderQuotationSourceStub{row: &port.OrderQuotationData{
 		OrderID:                 "order-1",
 		DestCityCode:            "76001000",
@@ -438,6 +447,12 @@ func TestCreateBatchMarkFromQuotation(t *testing.T) {
 	}
 	if mark.Recipient.CityCode != "76001000" {
 		t.Fatalf("mark recipient city = %q, want 76001000", mark.Recipient.CityCode)
+	}
+	if mark.Sender.Name != "(FALKON)-GRUPO COCCO" {
+		t.Fatalf("mark sender name = %q, want configured default sender name", mark.Sender.Name)
+	}
+	if mark.Sender.CityCode != "11001" {
+		t.Fatalf("mark sender city = %q, want 11001", mark.Sender.CityCode)
 	}
 }
 

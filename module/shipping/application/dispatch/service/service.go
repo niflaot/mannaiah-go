@@ -123,6 +123,8 @@ type Service struct {
 	quotationRepository port.QuotationRepository
 	// orderSource defines optional order lookup dependencies used to enrich quotation-seeded recipient data.
 	orderSource port.OrderQuotationSource
+	// defaultSender defines fallback sender values used by quotation-seeded batch mark creation.
+	defaultSender domain.Address
 	// manifestDocuments defines on-demand batch manifest document generation dependencies.
 	manifestDocuments *batchManifestDocumentBuilder
 }
@@ -159,6 +161,15 @@ func (s *Service) SetOrderSource(source port.OrderQuotationSource) {
 	}
 
 	s.orderSource = source
+}
+
+// SetDefaultSender configures fallback sender values used by quotation-seeded batch mark creation.
+func (s *Service) SetDefaultSender(sender domain.Address) {
+	if s == nil {
+		return
+	}
+
+	s.defaultSender = sender.Normalize()
 }
 
 // Create creates one dispatch batch.
@@ -361,7 +372,7 @@ func (s *Service) CreateBatchMarkFromQuotation(ctx context.Context, command Crea
 		QuotationID:             trimmedQuotationID,
 		QuotedFreightCost:       record.FreightCost,
 		OrderID:                 orderID,
-		Sender:                  domain.Address{},
+		Sender:                  s.defaultSender,
 		Recipient:               recipient,
 		Units:                   units,
 		DeclaredValue:           declaredValue,
