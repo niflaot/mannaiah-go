@@ -340,8 +340,8 @@ func TestHandlerAuthEnforcement(t *testing.T) {
 			if authorizationHeader == "Bearer forbidden" {
 				return forbiddenError
 			}
-			if len(requiredPermissions) != 1 || requiredPermissions[0] != "contacts:read" {
-				t.Fatalf("requiredPermissions = %#v, want contacts:read", requiredPermissions)
+			if len(requiredPermissions) != 1 || requiredPermissions[0] != "contact:view" {
+				t.Fatalf("requiredPermissions = %#v, want contact:view", requiredPermissions)
 			}
 			return nil
 		},

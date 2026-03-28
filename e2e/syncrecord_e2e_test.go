@@ -74,7 +74,7 @@ func TestSyncRecordWooCommerceE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	manageToken := harness.SignToken(t, "contacts:manage marketing:manage")
+	manageToken := harness.SignToken(t, "contact:manage marketing:manage")
 
 	harness.tracer.Step("trigger woocommerce contacts sync")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/contacts", manageToken, nil)

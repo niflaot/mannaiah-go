@@ -1,0 +1,52 @@
+---
+title: Infrastructure Utilities
+description: Config loader, cron scheduler, circuit breaker primitive, startup composition root, and OpenAPI aggregation.
+---
+
+These packages form the non-IO infrastructure layer of core — they are used by every other package
+but carry no domain logic and no external dependencies beyond their specific concerns.
+
+## Cron Scheduler
+
+The `cron` package wraps [robfig/cron/v3](https://pkg.go.dev/github.com/robfig/cron/v3) with a
+`Scheduler` interface. Modules call `Add(spec, job)` to register periodic tasks; the scheduler
+handles timezone conversion and second-precision expressions when enabled.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CRON_LOCATION` | `UTC` | IANA timezone for all cron expressions |
+| `CRON_WITH_SECONDS` | `false` | Enable six-field expressions (includes seconds) |
+
+## Circuit Breaker
+
+`circuitbreaker.Service` wraps [Sony gobreaker](https://github.com/sony/gobreaker) and is used
+internally by both the Redis and S3 adapters. It can be used as a standalone primitive anywhere
+an outbound dependency needs fail-fast protection.
+
+States: `StateClosed` (normal), `StateHalfOpen` (probing), `StateOpen` (failing fast).
+
+| Field | Description |
+|-------|-------------|
+| `Name` | Identifier logged on state transitions |
+| `MaxRequests` | How many requests are allowed in half-open state |
+| `IntervalMS` | Rolling counter reset window in closed state |
+| `TimeoutMS` | How long the breaker stays open before probing |
+| `FailureThreshold` | Consecutive failures required to open the breaker |
+
+## Startup Composition Root
+
+`startup.Runtime` is the wiring point for all modules. After all infrastructure is initialised,
+`cmd/api` creates a `Runtime` and iterates over every loaded module:
+
+```go
+runtime.RegisterRoutes(module)   // mount HTTP handlers
+runtime.AddOpenAPISpec(module)   // merge OpenAPI paths and components
+```
+
+The runtime also exposes `GET /status` (health check) and `GET /openapi.json` (aggregated spec)
+from core itself.
+
+## OpenAPI Aggregation
+
+`swagger.Document` holds the merged OpenAPI document. Each module calls `Merge(spec)` during
+startup. The final document is served at `GET /openapi.json` and rendered by the `/docs` UI.

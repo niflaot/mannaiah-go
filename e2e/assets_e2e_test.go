@@ -22,11 +22,11 @@ func TestAssetsAndProductsIntegrationE2E(t *testing.T) {
 		t.Fatalf("payload.message = %v, want %q", payload["message"], "unauthorized")
 	}
 
-	assetsCreateToken := harness.SignToken(t, "assets:create")
-	assetsReadToken := harness.SignToken(t, "assets:read")
-	assetsUpdateToken := harness.SignToken(t, "assets:update")
-	assetsDeleteToken := harness.SignToken(t, "assets:delete")
-	productsManageToken := harness.SignToken(t, "products:manage")
+	assetsCreateToken := harness.SignToken(t, "assets:manage")
+	assetsReadToken := harness.SignToken(t, "assets:view")
+	assetsUpdateToken := harness.SignToken(t, "assets:manage")
+	assetsDeleteToken := harness.SignToken(t, "assets:manage")
+	productsManageToken := harness.SignToken(t, "product:manage")
 
 	harness.tracer.Step("create folder for logical organization")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/assets/folders", assetsCreateToken, []byte(`{"name":"Catalog","tags":[{"name":"hero","color":"#ff0000"}]}`))

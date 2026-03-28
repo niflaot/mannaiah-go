@@ -174,14 +174,14 @@ func (h *Handler) SetSyncRecorder(recorder port.SyncRecorder) {
 // RegisterRoutes registers Falabella integration routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/falabella/images/transcoded", h.transcodeImage)
-	router.Get("/falabella/brands", h.protect("products:read", h.getBrands))
-	router.Post("/falabella/sync/products", h.protect("products:update", h.syncProducts))
-	router.Post("/falabella/sync/products/:id", h.protect("products:update", h.syncProductByID))
-	router.Get("/falabella/sync/status/feed/:feedId", h.protect("products:read", h.getSyncStatusByFeed))
-	router.Get("/falabella/sync/status/execution/:executionId", h.protect("products:read", h.getSyncStatusExecution))
-	router.Get("/falabella/sync/status/execution/:executionId/feeds", h.protect("products:read", h.getSyncStatusByExecution))
-	router.Get("/falabella/sync/status/product/:productId", h.protect("products:read", h.getSyncStatusByProduct))
-	router.Post("/falabella/sync/status/feed/:feedId/resolve", h.protect("products:update", h.resolveFeedStatus))
+	router.Get("/falabella/brands", h.protect("product:view", h.getBrands))
+	router.Post("/falabella/sync/products", h.protect("product:manage", h.syncProducts))
+	router.Post("/falabella/sync/products/:id", h.protect("product:manage", h.syncProductByID))
+	router.Get("/falabella/sync/status/feed/:feedId", h.protect("product:view", h.getSyncStatusByFeed))
+	router.Get("/falabella/sync/status/execution/:executionId", h.protect("product:view", h.getSyncStatusExecution))
+	router.Get("/falabella/sync/status/execution/:executionId/feeds", h.protect("product:view", h.getSyncStatusByExecution))
+	router.Get("/falabella/sync/status/product/:productId", h.protect("product:view", h.getSyncStatusByProduct))
+	router.Post("/falabella/sync/status/feed/:feedId/resolve", h.protect("product:manage", h.resolveFeedStatus))
 }
 
 // getBrands retrieves Falabella brands through integration service dependencies.

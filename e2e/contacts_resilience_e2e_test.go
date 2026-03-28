@@ -74,7 +74,7 @@ func TestContactsAuthJWKSUnavailableE2E(t *testing.T) {
 	server.RegisterRoutes(contactsModule.RegisterRoutes)
 
 	tracer.Step("sign token against unreachable issuer")
-	token := signTokenForIssuer(t, key, issuer, e2eAudience, "contacts:manage", "unreachable-kid")
+	token := signTokenForIssuer(t, key, issuer, e2eAudience, "contact:manage", "unreachable-kid")
 
 	tracer.Step("request protected endpoint and expect unauthorized")
 	status, payload, headers, err := doJSONRequestRaw(server, http.MethodPost, "/contacts", token, []byte(`{"email":"jwks-unavailable@example.com","legalName":"JWKS Unavailable"}`))
@@ -100,7 +100,7 @@ func TestContactsDBConnectionFailureE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
 
-	readToken := harness.SignToken(t, "contacts:read")
+	readToken := harness.SignToken(t, "contact:view")
 
 	harness.tracer.Step("close database handle to simulate outage")
 	harness.CloseDatabase(t)
@@ -130,8 +130,8 @@ func TestContactsPublisherFailureE2E(t *testing.T) {
 	defer jwksServer.Close()
 	defer closeE2EDatabase(t, db)
 
-	manageToken := signTokenForIssuer(t, key, strings.TrimSuffix(jwksServer.URL, e2eIssuerSuffix), e2eAudience, "contacts:manage", e2eTokenKid)
-	readToken := signTokenForIssuer(t, key, strings.TrimSuffix(jwksServer.URL, e2eIssuerSuffix), e2eAudience, "contacts:read", e2eTokenKid)
+	manageToken := signTokenForIssuer(t, key, strings.TrimSuffix(jwksServer.URL, e2eIssuerSuffix), e2eAudience, "contact:manage", e2eTokenKid)
+	readToken := signTokenForIssuer(t, key, strings.TrimSuffix(jwksServer.URL, e2eIssuerSuffix), e2eAudience, "contact:view", e2eTokenKid)
 
 	tracer.Step("request create endpoint with failing integration publisher")
 	status, payload, headers, err := doJSONRequestRaw(server, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"publisher-failure@example.com","legalName":"Publisher Failure"}`))
@@ -174,8 +174,8 @@ func TestContactsConcurrentCreateConflictE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
 
-	manageToken := harness.SignToken(t, "contacts:manage")
-	readToken := harness.SignToken(t, "contacts:read")
+	manageToken := harness.SignToken(t, "contact:manage")
+	readToken := harness.SignToken(t, "contact:view")
 
 	harness.tracer.Step("run concurrent create requests with same unique fields")
 

@@ -10,10 +10,10 @@ func TestCategoriesTagsAndPriceE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
 
-	viewToken := harness.SignToken(t, "products:read")
-	manageToken := harness.SignToken(t, "products:manage")
-	assetCreateToken := harness.SignToken(t, "assets:create")
-	productsManageToken := harness.SignToken(t, "products:manage")
+	viewToken := harness.SignToken(t, "product:view product:tags")
+	manageToken := harness.SignToken(t, "product:manage")
+	assetCreateToken := harness.SignToken(t, "assets:manage")
+	productsManageToken := harness.SignToken(t, "product:manage")
 
 	harness.tracer.Step("upload asset for product")
 	assetStatus, assetPayload := doAssetUploadRequest(t, harness, assetCreateToken, "tag-test.png", []byte("image"), map[string]string{"name": "Tag Test"})

@@ -138,11 +138,11 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers contact CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/contacts", h.protect("contacts:create", h.create))
-	router.Get("/contacts", h.protect("contacts:read", h.findAll))
-	router.Get("/contacts/:id", h.protect("contacts:read", h.findOne))
-	router.Patch("/contacts/:id", h.protect("contacts:update", h.update))
-	router.Delete("/contacts/:id", h.protect("contacts:delete", h.remove))
+	router.Post("/contacts", h.protect("contact:manage", h.create))
+	router.Get("/contacts", h.protect("contact:view", h.findAll))
+	router.Get("/contacts/:id", h.protect("contact:view", h.findOne))
+	router.Patch("/contacts/:id", h.protect("contact:manage", h.update))
+	router.Delete("/contacts/:id", h.protect("contact:manage", h.remove))
 }
 
 // create handles contact creation endpoints.

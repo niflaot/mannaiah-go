@@ -90,11 +90,11 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers variation CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/variations", h.protect("products:create", h.create))
-	router.Get("/variations", h.protect("products:read", h.findAll))
-	router.Get("/variations/:id", h.protect("products:read", h.findOne))
-	router.Patch("/variations/:id", h.protect("products:update", h.update))
-	router.Delete("/variations/:id", h.protect("products:delete", h.remove))
+	router.Post("/variations", h.protect("product:manage", h.create))
+	router.Get("/variations", h.protect("product:view", h.findAll))
+	router.Get("/variations/:id", h.protect("product:view", h.findOne))
+	router.Patch("/variations/:id", h.protect("product:manage", h.update))
+	router.Delete("/variations/:id", h.protect("product:manage", h.remove))
 }
 
 // create handles variation creation endpoints.

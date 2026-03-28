@@ -1,0 +1,58 @@
+---
+title: What is Mannaiah?
+description: An overview of Mannaiah — the all-in-one business administration platform powering Flock.
+---
+
+## Overview
+
+Mannaiah is the operational backbone of [Flock](https://www.flockstore.co/) — an all-in-one business
+administration platform that centralises the core workflows of a modern e-commerce and retail operation
+into a single, cohesive backend system.
+
+## The Problem it Solves
+
+Running a multi-channel retail business means coordinating a sprawling set of tools: a product catalogue
+manager, a customer relationship system, an order management solution, logistics providers, and marketplace
+connectors. Each tool ships with its own data model, its own API contract, and its own concept of truth.
+Keeping them in sync is expensive and error-prone.
+
+Mannaiah eliminates this coordination overhead by providing a modular monolith where every functional
+domain shares a common runtime, a common data layer, and a common event bus. The result is a system
+that behaves consistently and can be extended without glue code.
+
+## Core Domains
+
+| Domain | Description |
+|--------|-------------|
+| **PIM** | Centralises product catalogue management, variant/attribute modelling, and marketplace-specific transformations (Falabella, WooCommerce). |
+| **CRM** | Unified contact model with consent management, RFM segmentation, audience segments, and campaign fan-out. |
+| **Orders** | Multi-channel order ingestion, normalisation, and lifecycle tracking. |
+| **Shipping & Logistics** | Carrier-agnostic quotation, label generation, dispatch batching, and parcel tracking. |
+| **Assets** | S3-compatible media storage with automated JPEG transcoding workers. |
+| **Campaigns & Email** | Template-driven campaign orchestration with delivery tracking and webhook ingestion. |
+| **Analytics** | ClickHouse-backed event stream for business intelligence and reporting. |
+| **Sync Record** | Centralised execution registry for marketplace sync operations, idempotency, and audit. |
+
+## Integration Ecosystem
+
+Mannaiah connects to the external world through purpose-built integration modules:
+
+- **Falabella** — product listings, image upload, order sync, and status reconciliation against the Falabella Seller Center API.
+- **WooCommerce** — bidirectional sync for contacts, orders, and product data.
+
+New integrations are added as independent modules; core messaging routes integration events without
+tight coupling between modules.
+
+## Architecture at a Glance
+
+Mannaiah is built as a **modular monolith** following Domain-Driven Design and Hexagonal Architecture:
+
+- `module/core` is the shared runtime foundation (HTTP server, config, database, messaging, cron, OpenAPI aggregation).
+- Every other module (`auth`, `contacts`, `orders`, `products`, `shipping`, etc.) is an independent Go module under `module/` with its own `go.mod`, domain layer, ports, and adapters.
+- Cross-module communication happens through integration events over an in-process message bus, not direct function calls.
+- The `core` composition root wires all modules together at startup and exposes the aggregated OpenAPI spec.
+
+## Audience
+
+Mannaiah is a backend service built for Flock's internal operations team and the engineering teams
+that maintain it. It is not a general-purpose SaaS product.

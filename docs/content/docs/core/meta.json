@@ -1,0 +1,14 @@
+{
+  "title": "Core Module",
+  "pages": [
+    "index",
+    "config",
+    "http",
+    "database",
+    "messaging",
+    "cache",
+    "storage",
+    "observability",
+    "infrastructure"
+  ]
+}

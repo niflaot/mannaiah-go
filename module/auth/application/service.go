@@ -158,6 +158,10 @@ func parseBearerToken(authorizationHeader string) (string, error) {
 }
 
 // hasPermission reports whether any scope satisfies required permission values.
+// It applies:
+//  1. Exact match.
+//  2. Manage wildcard: resource:manage satisfies any resource:action.
+//  3. Intermediate hierarchy: permissions listed in domain.PermissionCovers.
 func hasPermission(scopes []string, required string) bool {
 	for _, scope := range scopes {
 		if scope == required {
@@ -165,14 +169,28 @@ func hasPermission(scopes []string, required string) bool {
 		}
 	}
 
+	// Manage wildcard: resource:manage covers any resource:action.
 	manage := managePermission(required)
-	if manage == "" {
-		return false
+	if manage != "" {
+		for _, scope := range scopes {
+			if scope == manage {
+				return true
+			}
+		}
 	}
 
-	for _, scope := range scopes {
-		if scope == manage {
-			return true
+	// Intermediate hierarchy: a scope may cover the required permission
+	// without being a full manage wildcard (e.g. product:edit covers product:view).
+	for intermediate, covered := range domain.PermissionCovers {
+		for _, c := range covered {
+			if c != required {
+				continue
+			}
+			for _, scope := range scopes {
+				if scope == intermediate {
+					return true
+				}
+			}
 		}
 	}
 

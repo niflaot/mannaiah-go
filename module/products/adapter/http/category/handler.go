@@ -131,13 +131,13 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers category CRUD and listing endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/categories", h.protect("products:manage", h.create))
-	router.Get("/categories", h.protect("products:read", h.tree))
-	router.Get("/categories/:id", h.protect("products:read", h.findOne))
-	router.Get("/categories/:id/children", h.protect("products:read", h.findChildren))
-	router.Get("/categories/:id/products", h.protect("products:read", h.listProducts))
-	router.Patch("/categories/:id", h.protect("products:manage", h.update))
-	router.Delete("/categories/:id", h.protect("products:manage", h.remove))
+	router.Post("/categories", h.protect("product:manage", h.create))
+	router.Get("/categories", h.protect("product:view", h.tree))
+	router.Get("/categories/:id", h.protect("product:view", h.findOne))
+	router.Get("/categories/:id/children", h.protect("product:view", h.findChildren))
+	router.Get("/categories/:id/products", h.protect("product:view", h.listProducts))
+	router.Patch("/categories/:id", h.protect("product:manage", h.update))
+	router.Delete("/categories/:id", h.protect("product:manage", h.remove))
 }
 
 // create handles category creation endpoints.

@@ -1,0 +1,43 @@
+---
+title: Storage
+description: S3-compatible object storage with circuit breaker protection and a provider-agnostic Store interface.
+---
+
+The `storage` package abstracts binary asset operations (upload, download, delete, existence check)
+behind a `Store` interface with an S3 implementation backed by the AWS SDK v2.
+
+## Store Interface
+
+| Method | Description |
+|--------|-------------|
+| `Upload(ctx, request)` | Upload a binary asset by key |
+| `Download(ctx, key)` | Retrieve the raw bytes of an asset |
+| `Delete(ctx, key)` | Remove an asset |
+| `Exists(ctx, key)` | Check whether a key is present |
+| `AvailabilityError()` | Returns a non-nil error when the store is misconfigured or unavailable |
+
+A `Disabled` implementation is returned when storage is not configured, returning a descriptive
+availability error so callers can surface a controlled service-unavailable response.
+
+## Circuit Breaker
+
+All S3 operations are wrapped in a circuit breaker. When the failure threshold is exceeded, the
+breaker opens and remaining calls return `ErrUnavailable` immediately rather than waiting on a
+timed-out S3 request.
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STORAGE_ENDPOINT` | `https://s3.amazonaws.com` | S3 API endpoint (override for MinIO, etc.) |
+| `STORAGE_REGION` | `us-east-1` | AWS / S3 region |
+| `STORAGE_BUCKET_NAME` | `mannaiah-assets` | Target bucket |
+| `STORAGE_ACCESS_KEY` | _(required)_ | AWS access key ID |
+| `STORAGE_SECRET_KEY` | _(required)_ | AWS secret access key |
+| `STORAGE_FORCE_PATH_STYLE` | `false` | Enable path-style addressing for local/MinIO use |
+| `STORAGE_REQUEST_TIMEOUT_MS` | `5000` | Per-request timeout |
+| `STORAGE_CIRCUIT_BREAKER_ENABLED` | `true` | Enable circuit breaker |
+| `STORAGE_CIRCUIT_BREAKER_MAX_REQUESTS` | `1` | Half-open trial requests |
+| `STORAGE_CIRCUIT_BREAKER_INTERVAL_MS` | `60000` | Closed-state counter reset window |
+| `STORAGE_CIRCUIT_BREAKER_TIMEOUT_MS` | `30000` | Open-state cooldown window |
+| `STORAGE_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Failures before breaker opens |

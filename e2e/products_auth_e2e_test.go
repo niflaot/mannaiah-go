@@ -19,9 +19,9 @@ func TestProductsAuthE2E(t *testing.T) {
 		t.Fatalf("payload.message = %v, want %q", payload["message"], "unauthorized")
 	}
 
-	readToken := harness.SignToken(t, "products:read")
-	manageToken := harness.SignToken(t, "products:manage")
-	assetCreateToken := harness.SignToken(t, "assets:create")
+	readToken := harness.SignToken(t, "product:view")
+	manageToken := harness.SignToken(t, "product:manage")
+	assetCreateToken := harness.SignToken(t, "assets:manage")
 
 	harness.tracer.Step("upload asset for product gallery")
 	assetStatus, assetPayload := doAssetUploadRequest(t, harness, assetCreateToken, "product.png", []byte("image"), map[string]string{"name": "Product Image"})

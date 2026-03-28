@@ -70,8 +70,8 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers WooCommerce integration routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/woo/sync/contacts", h.protect("contacts:manage", h.syncContacts))
-	router.Post("/woo/sync/orders", h.protect("orders:manage", h.syncOrders))
+	router.Post("/woo/sync/contacts", h.protect("contact:sync", h.syncContacts))
+	router.Post("/woo/sync/orders", h.protect("order:sync", h.syncOrders))
 }
 
 // syncContacts triggers manual contact sync behavior.

@@ -1,0 +1,54 @@
+---
+title: Observability
+description: OpenTelemetry distributed tracing, Prometheus metrics, and structured Zap logging.
+---
+
+Mannaiah ships with a complete observability stack built on OpenTelemetry and Prometheus. All
+components are fail-open: exporter failures do not affect service startup or request handling.
+
+## Structured Logging
+
+The `logger` package wraps [Zap](https://github.com/uber-go/zap) with two output modes:
+
+- **pretty** — human-readable colored output for local development.
+- **json** — machine-readable structured lines for production log aggregation.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_FORMAT` | `pretty` | Log format: `pretty` or `json` |
+| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+
+## Distributed Tracing
+
+Tracing uses the [OpenTelemetry Go SDK](https://opentelemetry.io/docs/languages/go/) with OTLP
+gRPC export. Trace context propagates via the W3C `traceparent` header across:
+
+- Inbound HTTP requests (extracted by Fiber middleware).
+- Outbound integration events (injected into message metadata by the publisher adapter).
+- Outbound HTTP calls and dependency I/O (storage, Redis) via auto-instrumented spans.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TELEMETRY_ENABLED` | `true` | Master toggle for all telemetry |
+| `TELEMETRY_SERVICE_NAME` | `mannaiah-api` | Service name in traces |
+| `TELEMETRY_SERVICE_VERSION` | `v1.0.0` | Service version in traces |
+| `TELEMETRY_TRACES_ENABLED` | `true` | Enable trace export |
+| `TELEMETRY_TRACES_EXPORTER` | `otlp` | Exporter type |
+| `TELEMETRY_OTLP_ENDPOINT` | `otel-collector:4317` | OTLP gRPC collector address |
+| `TELEMETRY_OTLP_INSECURE` | `false` | Disable TLS for local collectors |
+| `TELEMETRY_TRACES_SAMPLER` | `parentbased_traceidratio` | Sampler algorithm |
+| `TELEMETRY_TRACES_SAMPLER_RATIO` | `0.10` | Sampling fraction (0.0 to 1.0) |
+
+## Metrics
+
+Prometheus metrics are exposed at `GET /metrics`. All metric labels use low-cardinality values;
+request paths, query strings, payload fragments, and IDs are never used as label values.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TELEMETRY_METRICS_ENABLED` | `true` | Enable Prometheus metrics |
+| `TELEMETRY_METRICS_PATH` | `/metrics` | Metrics endpoint path |
+| `TELEMETRY_DB_STATS_INTERVAL_MS` | `15000` | Database connection-pool stats scrape interval |
+
+Keep `HTTP_PREFORK=false` when using Prometheus; prefork spawns multiple processes and each
+would expose independent metric state.

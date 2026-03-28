@@ -22,8 +22,8 @@ func TestContactsAuthEventsE2E(t *testing.T) {
 		t.Fatalf("payload.message = %v, want %q", payload["message"], "unauthorized")
 	}
 
-	readToken := harness.SignToken(t, "contacts:read")
-	manageToken := harness.SignToken(t, "contacts:manage")
+	readToken := harness.SignToken(t, "contact:view")
+	manageToken := harness.SignToken(t, "contact:manage")
 
 	harness.tracer.Step("request create with insufficient permissions")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/contacts", readToken, []byte(`{"email":"forbidden@example.com","legalName":"Forbidden"}`))

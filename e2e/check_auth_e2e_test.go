@@ -29,7 +29,7 @@ func TestCheckAuthE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("request check-auth with valid token")
-	token := harness.SignToken(t, "contacts:read")
+	token := harness.SignToken(t, "contact:view")
 	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/check-auth", token, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)

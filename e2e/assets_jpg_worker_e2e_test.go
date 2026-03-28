@@ -16,9 +16,9 @@ func TestAssetsJPGWorkerE2E(t *testing.T) {
 	harness := newContactsE2EHarness(t)
 	defer harness.Close(t)
 
-	assetsCreateToken := harness.SignToken(t, "assets:create")
-	assetsReadToken := harness.SignToken(t, "assets:read")
-	assetsUpdateToken := harness.SignToken(t, "assets:update")
+	assetsCreateToken := harness.SignToken(t, "assets:manage")
+	assetsReadToken := harness.SignToken(t, "assets:view")
+	assetsUpdateToken := harness.SignToken(t, "product:manage")
 
 	harness.tracer.Step("upload tagged asset eligible for jpg worker")
 	status, payload := doAssetUploadRequest(t, harness, assetsCreateToken, "morral_traveler_camo_negro_frente.webp", samplePNGFixture(t), map[string]string{

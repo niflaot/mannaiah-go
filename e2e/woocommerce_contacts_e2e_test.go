@@ -63,8 +63,8 @@ func TestWooCommerceContactsSyncE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	manageToken := harness.SignToken(t, "contacts:manage")
-	readToken := harness.SignToken(t, "contacts:read")
+	manageToken := harness.SignToken(t, "contact:manage")
+	readToken := harness.SignToken(t, "contact:view")
 
 	harness.tracer.Step("trigger manual woocommerce contacts sync")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/contacts", manageToken, nil)
@@ -157,7 +157,7 @@ func TestWooCommerceInvalidIntegrationE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	manageToken := harness.SignToken(t, "contacts:manage")
+	manageToken := harness.SignToken(t, "contact:manage")
 
 	harness.tracer.Step("trigger manual woocommerce contacts sync with invalid integration")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/contacts", manageToken, nil)
@@ -195,7 +195,7 @@ func TestWooCommerceSyncDisabledE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	manageToken := harness.SignToken(t, "contacts:manage")
+	manageToken := harness.SignToken(t, "contact:manage")
 
 	harness.tracer.Step("trigger manual woocommerce contacts sync while disabled")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/contacts", manageToken, nil)
@@ -256,7 +256,7 @@ func TestWooCommerceOutageCircuitBreakerE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	manageToken := harness.SignToken(t, "contacts:manage")
+	manageToken := harness.SignToken(t, "contact:manage")
 
 	harness.tracer.Step("trigger repeated manual sync requests during outage")
 	for attempt := 0; attempt < 3; attempt++ {
@@ -319,8 +319,8 @@ func TestWooCommerceSyncPageFailureNoPartialWritesE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	manageToken := harness.SignToken(t, "contacts:manage")
-	readToken := harness.SignToken(t, "contacts:read")
+	manageToken := harness.SignToken(t, "contact:manage")
+	readToken := harness.SignToken(t, "contact:view")
 
 	harness.tracer.Step("trigger manual woocommerce contacts sync expecting page failure")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/contacts", manageToken, nil)

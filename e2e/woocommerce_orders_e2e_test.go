@@ -56,9 +56,9 @@ func TestWooCommerceOrdersSyncE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	ordersManageToken := harness.SignToken(t, "orders:manage")
-	ordersReadToken := harness.SignToken(t, "orders:read")
-	contactsReadToken := harness.SignToken(t, "contacts:read")
+	ordersManageToken := harness.SignToken(t, "order:manage contact:manage product:manage")
+	ordersReadToken := harness.SignToken(t, "order:view contact:manage product:manage")
+	contactsReadToken := harness.SignToken(t, "contact:view")
 
 	harness.tracer.Step("trigger manual woocommerce orders sync")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/orders", ordersManageToken, nil)

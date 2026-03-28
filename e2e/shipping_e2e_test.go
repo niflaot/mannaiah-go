@@ -20,7 +20,7 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	shippingModule.SetAuthorizer(harness.authModule)
 	harness.server.RegisterRoutes(shippingModule.RegisterRoutes)
 
-	manageToken := harness.SignToken(t, "marketing:manage")
+	manageToken := harness.SignToken(t, "shipping:manage")
 
 	harness.tracer.Step("request carriers without authorization header")
 	status, payload := harness.DoJSONRequest(t, http.MethodGet, "/shipping/carriers", "", nil)

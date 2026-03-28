@@ -1,0 +1,52 @@
+---
+title: Messaging
+description: In-process pub/sub event bus backed by Watermill, with retry, DLQ, and OpenTelemetry trace propagation.
+---
+
+The `messaging` package provides the integration event bus that connects all Mannaiah modules
+without direct coupling. Modules publish events; other modules subscribe to them through handlers
+registered on the same in-memory bus.
+
+## Architecture
+
+```
+Publisher  →  InMemoryPlatform  →  retry middleware  →  Handler
+                                          ↓ (after max retries)
+                                     DLQ topic (.dlq suffix)
+```
+
+The bus is powered by [Watermill](https://watermill.io/) with a `GoChannel` backend.
+All messages pass through retry middleware before reaching handlers, and failed messages
+are automatically dead-lettered to a topic named `<original-topic>.dlq`.
+
+## Trace Propagation
+
+Every published message carries a `traceparent` metadata field extracted from the caller's
+OpenTelemetry span context. Handlers restore this context so the full request trace crosses
+messaging boundaries end-to-end.
+
+## Key Interfaces
+
+| Type | Purpose |
+|------|---------|
+| `Publisher` | `Publish(ctx, msg)` — send an integration event |
+| `Registrar` | `AddHandler(topic, handler)` — subscribe a handler |
+| `Message` | ID, Topic, Payload (bytes), Metadata (string map) |
+| `Handler` | `func(ctx, msg) error` — message handler signature |
+
+## Metadata Keys
+
+`MetadataEventID`, `MetadataCorrelationID`, `MetadataCausationID`, `MetadataProducedAt`,
+`MetadataSchemaVersion`, `MetadataTraceparent`, `MetadataDLQOriginalTopic`,
+`MetadataDLQError`, `MetadataDLQFailedAt`.
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MESSAGING_GOCHANNEL_BUFFER` | `100` | In-memory channel buffer size |
+| `MESSAGING_RETRY_MAX_RETRIES` | `3` | Max handler retry attempts before DLQ |
+| `MESSAGING_RETRY_INITIAL_INTERVAL_MS` | `100` | Initial retry delay |
+| `MESSAGING_RETRY_MAX_INTERVAL_MS` | `2000` | Maximum retry delay |
+| `MESSAGING_RETRY_MULTIPLIER` | `2.0` | Exponential backoff multiplier |
+| `MESSAGING_DLQ_SUFFIX` | `.dlq` | Suffix appended to dead-letter topics |

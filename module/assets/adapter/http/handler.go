@@ -110,19 +110,19 @@ func (h *Handler) SetJPGWorkerDefaults(command assetsapplication.JPGWorkerComman
 
 // RegisterRoutes registers asset and folder CRUD endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/assets/folders", h.protect("assets:create", h.createFolder))
-	router.Get("/assets/folders", h.protect("assets:read", h.findFolders))
-	router.Get("/assets/folders/tree", h.protect("assets:read", h.findFolderTree))
-	router.Get("/assets/folders/:id", h.protect("assets:read", h.findFolderByID))
-	router.Patch("/assets/folders/:id", h.protect("assets:update", h.updateFolder))
-	router.Delete("/assets/folders/:id", h.protect("assets:delete", h.deleteFolder))
+	router.Post("/assets/folders", h.protect("assets:manage", h.createFolder))
+	router.Get("/assets/folders", h.protect("assets:view", h.findFolders))
+	router.Get("/assets/folders/tree", h.protect("assets:view", h.findFolderTree))
+	router.Get("/assets/folders/:id", h.protect("assets:view", h.findFolderByID))
+	router.Patch("/assets/folders/:id", h.protect("assets:manage", h.updateFolder))
+	router.Delete("/assets/folders/:id", h.protect("assets:manage", h.deleteFolder))
 
-	router.Post("/assets", h.protect("assets:create", h.createAsset))
-	router.Get("/assets", h.protect("assets:read", h.findAssets))
-	router.Get("/assets/:id", h.protect("assets:read", h.findAssetByID))
-	router.Patch("/assets/:id", h.protect("assets:update", h.updateAsset))
-	router.Delete("/assets/:id", h.protect("assets:delete", h.deleteAsset))
-	router.Post("/assets/workers/jpg/run", h.protect("assets:update", h.runJPGWorker))
+	router.Post("/assets", h.protect("assets:manage", h.createAsset))
+	router.Get("/assets", h.protect("assets:view", h.findAssets))
+	router.Get("/assets/:id", h.protect("assets:view", h.findAssetByID))
+	router.Patch("/assets/:id", h.protect("assets:manage", h.updateAsset))
+	router.Delete("/assets/:id", h.protect("assets:manage", h.deleteAsset))
+	router.Post("/assets/workers/jpg/run", h.protect("product:manage", h.runJPGWorker))
 }
 
 // protect wraps handlers with optional auth checks.

@@ -166,14 +166,14 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers order endpoints.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/orders", h.protect("orders:create", h.create))
-	router.Get("/orders", h.protect("orders:read", h.findAll))
-	router.Get("/orders/:id", h.protect("orders:read", h.findOne))
-	router.Patch("/orders/:id", h.protect("orders:update", h.update))
-	router.Patch("/orders/:id/status", h.protect("orders:update", h.updateStatus))
-	router.Post("/orders/:id/comments", h.protect("orders:update", h.addComment))
-	router.Patch("/orders/:id/comments/:commentId", h.protect("orders:update", h.updateComment))
-	router.Delete("/orders/:id/comments/:commentId", h.protect("orders:update", h.deleteComment))
+	router.Post("/orders", h.protect(h.create, "order:manage", "contact:view", "product:view"))
+	router.Get("/orders", h.protect(h.findAll, "order:view", "contact:view", "product:view"))
+	router.Get("/orders/:id", h.protect(h.findOne, "order:view", "contact:view", "product:view"))
+	router.Patch("/orders/:id", h.protect(h.update, "order:manage", "contact:view", "product:view"))
+	router.Patch("/orders/:id/status", h.protect(h.updateStatus, "order:triage", "contact:view", "product:view"))
+	router.Post("/orders/:id/comments", h.protect(h.addComment, "order:triage", "contact:view", "product:view"))
+	router.Patch("/orders/:id/comments/:commentId", h.protect(h.updateComment, "order:triage", "contact:view", "product:view"))
+	router.Delete("/orders/:id/comments/:commentId", h.protect(h.deleteComment, "order:triage", "contact:view", "product:view"))
 }
 
 // create handles order creation endpoints.
@@ -344,13 +344,13 @@ func parsePositiveInt(raw string) (int, error) {
 }
 
 // protect wraps endpoint handlers with optional authentication and permission checks.
-func (h *Handler) protect(permission string, next corehttp.Handler) corehttp.Handler {
+func (h *Handler) protect(next corehttp.Handler, permissions ...string) corehttp.Handler {
 	if h == nil || h.authorizer == nil {
 		return next
 	}
 
 	return func(ctx corehttp.Context) error {
-		err := h.authorizer.Require(ctx.Context(), ctx.GetHeader("Authorization"), permission)
+		err := h.authorizer.Require(ctx.Context(), ctx.GetHeader("Authorization"), permissions...)
 		if err != nil {
 			return h.mapError(err)
 		}

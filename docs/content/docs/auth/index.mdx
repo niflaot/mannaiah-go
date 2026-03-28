@@ -1,0 +1,686 @@
+---
+title: Authentication & Authorization
+description: How Mannaiah authenticates HTTP requests and enforces scope-based permissions using Logto as the identity provider.
+---
+
+## Overview
+
+Every protected endpoint in Mannaiah requires a valid JSON Web Token (JWT) in the `Authorization`
+header. The `module/auth` package is the single source of truth for authentication and authorization
+logic across all HTTP handlers. It:
+
+- Validates bearer tokens against JWKS keys published by [Logto](https://logto.io/), Mannaiah's
+  identity provider.
+- Extracts and exposes structured claims (subject, audience, scope) to every handler.
+- Enforces fine-grained, scope-based permissions per endpoint.
+- Provides a development bypass for local testing without a running Logto instance.
+
+No session state is stored server-side. Every request is verified independently against the JWKS
+endpoint. Mannaiah is fully stateless with respect to authentication.
+
+---
+
+## Identity Provider: Logto
+
+Mannaiah uses **[Logto](https://logto.io/)** — an open-source, self-hosted OIDC-compliant identity
+and access management platform — as its sole identity provider.
+
+### OIDC Integration
+
+Logto exposes a standard OpenID Connect discovery document. Mannaiah consumes only the JWKS endpoint
+for offline token validation:
+
+| Logto Endpoint | URL pattern |
+|----------------|-------------|
+| OIDC base | `LOGTO_ISSUER` (e.g. `https://auth.flockstore.co/oidc`) |
+| JWKS endpoint | `<LOGTO_ISSUER>/jwks` |
+| Token endpoint | `<LOGTO_ISSUER>/token` (consumed by API clients, not by Mannaiah itself) |
+
+### API Resource Model
+
+In Logto, Mannaiah is registered as an **API resource** — a named protected service with its own
+permission set. The resource identifier is the value of `LOGTO_AUDIENCE`
+(e.g. `http://149.56.241.62:7777`).
+
+When a client requests an access token scoped to this resource, Logto includes:
+
+- The resource URL as the `aud` (audience) claim.
+- The granted permissions as a space-delimited `scope` claim.
+- The client or user identity as the `sub` (subject) claim.
+
+No user profile data (email, name, etc.) is surfaced through the access token. The token is a
+pure access credential — Mannaiah never contacts Logto's UserInfo endpoint.
+
+### Current Deployment
+
+| Item | Value |
+|------|-------|
+| Logto host | `https://auth.flockstore.co` |
+| OIDC issuer | `https://auth.flockstore.co/oidc` |
+| API resource (audience) | Configured via `LOGTO_AUDIENCE` in `.env` |
+| Supported signing algorithms | `RS256`, `ES384` |
+
+---
+
+## Authentication Flow
+
+The lifecycle of a protected request from client to response:
+
+```
+Client                  Logto                   Mannaiah
+  |                       |                        |
+  |-- POST /oidc/token --> |                        |
+  |   grant_type=client    |                        |
+  |   _credentials         |                        |
+  |   resource=<audience>  |                        |
+  |   scope=contact:view   |                        |
+  |<-- JWT access token -- |                        |
+  |                        |                        |
+  |-- GET /contacts -------------------------------->|
+  |   Authorization: Bearer <token>                 |
+  |                                       [1] Extract Bearer token from header
+  |                                       [2] Look up key ID (kid) in JWKS cache
+  |                                       [3] On cache miss: fetch JWKS from Logto
+  |                                           (rate-limited, AUTH_JWKS_RATE_LIMIT_PER_MINUTE)
+  |                                       [4] Validate signature (RS256 / ES384)
+  |                                       [5] Validate iss, aud, exp claims
+  |                                       [6] Map JWT MapClaims → domain.Claims
+  |                                       [7] Check required scope against claims.Scope
+  |<-- 200 / 401 ----------------------------------- |
+```
+
+### Step-by-step Walkthrough
+
+1. The HTTP handler calls `authorizer.Require(ctx, authorizationHeader, "resource:action")`.
+2. `AuthService.Authenticate` strips the `Bearer ` prefix and forwards the raw token to
+   `jwt.Verifier`.
+3. `jwt.Verifier` calls `jwtlib.Parse` using a keyfunc backed by `jwkset` HTTP storage.
+4. If the token's `kid` is not in the local JWKS cache, the verifier fetches fresh keys from
+   `<LOGTO_ISSUER>/jwks`. This fetch goes through a `golang.org/x/time/rate.Limiter` to prevent
+   hammering Logto when unknown key IDs arrive in bursts.
+5. The JWT library validates: signature algorithm (`RS256` or `ES384`), issuer (`iss`), audience
+   (`aud`), and expiry (`exp`).
+6. On success, `MapClaims` is mapped to `domain.Claims`:
+
+   ```go
+   type Claims struct {
+       Subject  string         // "sub" claim
+       Issuer   string         // "iss" claim
+       Audience []string       // "aud" claim (string or []any)
+       Scope    string         // "scope" claim (space-delimited permissions)
+       Raw      map[string]any // all raw JWT claims
+   }
+
+   // Scopes() splits Scope on whitespace, trims blanks.
+   func (c *Claims) Scopes() []string
+   ```
+
+7. `AuthService.Authorize` checks whether every required permission is satisfied in `claims.Scopes()`
+   applying the wildcard rule (see below).
+
+---
+
+## Authorization Model
+
+### Permission Format
+
+All permissions follow the `resource:action` pattern:
+
+```
+contact:view
+order:manage
+product:edit
+shipping:generate
+```
+
+Actions used across the API:
+
+| Action | Meaning |
+|--------|---------|
+| `view` | Read-only access — list and retrieve resources |
+| `edit` | Create and modify resources (subset of `manage`) |
+| `manage` | Full control — wildcard that covers all actions for the resource |
+| `sync` | Trigger synchronisation jobs |
+| `triage` | Transition order status and apply operational flags |
+| `generate` | Create shipping labels and dispatch batches |
+| `quotations` | Calculate and list shipping quotes |
+| `tags` | Access tag and correlation data |
+
+### Wildcard Rule
+
+`resource:manage` satisfies **any** `resource:action` check.
+
+A token carrying `contact:manage` passes authorization checks for `contact:view`, `contact:sync`,
+and any other `contact:*` scope without needing those individually.
+
+### Permission Hierarchy
+
+Beyond the wildcard, some actions imply a subset of related actions:
+
+| Token scope | Also satisfies |
+|-------------|---------------|
+| `product:edit` | `product:view` |
+| `shipping:generate` | `shipping:quotations` |
+
+These relationships are defined in `domain.PermissionCovers` and are evaluated by
+`application.AuthService.hasPermission` after the exact-match and wildcard checks.
+
+### Cross-Domain Dependency Rules
+
+Some permissions impose requirements on other domains. These are declared in `domain.DependencyRules`
+and enforced at two levels:
+
+1. **Handler level** — order endpoints call `h.protect(handler, "order:view", "contact:view", "product:view")` so the token must satisfy all listed permissions simultaneously.
+2. **Runtime validation** — `GET /users/malformation` detects tokens that carry an order scope without the required contact/product scopes (see [HTTP Endpoints](#http-endpoints)).
+
+| Subject scope | Required scope | Reason |
+|---------------|---------------|--------|
+| `order:view` | `contact:view` | Order data embeds contact references |
+| `order:view` | `product:view` | Order lines reference product records |
+| `order:triage` | `contact:view` | Triage operations surface contact context |
+| `order:triage` | `product:view` | Triage operations surface product context |
+| `order:manage` | `contact:view` | Full order control requires contact access |
+| `order:manage` | `product:view` | Full order control requires product access |
+| `order:sync` | `contact:view` | Sync jobs resolve contacts |
+| `order:sync` | `product:view` | Sync jobs resolve products |
+| `product:edit` | `assets:view` | Product edit UI requires asset browsing for image selection |
+| `product:manage` | `assets:view` | Product manage requires asset access for image sync workflows |
+
+Dependency checks apply the wildcard rule: `contact:manage` satisfies the `contact:view` requirement,
+and `product:manage` satisfies both `product:view` and `product:edit`.
+
+The check is implemented in `application.AuthService.hasPermission`:
+
+```go
+func hasPermission(scopes []string, required string) bool {
+    for _, s := range scopes {
+        if s == required {
+            return true  // exact match
+        }
+        // wildcard: resource:manage covers resource:*
+        if idx := strings.Index(required, ":"); idx != -1 {
+            if s == required[:idx]+":manage" {
+                return true
+            }
+        }
+        // hierarchy: e.g. product:edit covers product:view
+        if covers, ok := domain.PermissionCovers[s]; ok {
+            for _, covered := range covers {
+                if covered == required {
+                    return true
+                }
+            }
+        }
+    }
+    return false
+}
+```
+
+---
+
+## Scope Reference
+
+The complete set of scopes used across all Mannaiah modules. Register these in the
+**Permissions** section of your API resource in the Logto Admin Console.
+
+### Contacts
+
+| Scope | Endpoints |
+|-------|-----------|
+| `contact:view` | `GET /contacts`, `GET /contacts/:id` |
+| `contact:sync` | Contact synchronisation jobs |
+| `contact:manage` | Wildcard — covers `contact:view`, `contact:sync`, and all write operations (`POST /contacts`, `PATCH /contacts/:id`, `DELETE /contacts/:id`) |
+
+### Orders
+
+Order endpoints require the caller to hold **all** of the listed permissions simultaneously. The
+dependency scopes must be present in the same token (see [Cross-Domain Dependency Rules](#cross-domain-dependency-rules)).
+
+| Scope | Endpoints | Also requires |
+|-------|-----------|---------------|
+| `order:view` | `GET /orders`, `GET /orders/:id` | `contact:view`, `product:view` |
+| `order:triage` | `PATCH /orders/:id/status`, operational flag endpoints | `contact:view`, `product:view` |
+| `order:manage` | `POST /orders`, `PATCH /orders/:id`, comment endpoints | `contact:view`, `product:view` |
+| `order:sync` | WooCommerce order sync ingestion jobs | `contact:view`, `product:view` |
+
+### Products
+
+| Scope | Endpoints |
+|-------|-----------|
+| `product:view` | `GET /products`, `GET /products/:id`, `GET /products/sku/:sku`, `GET /categories/*`, `GET /variations/*`, `GET /falabella/brands`, `GET /falabella/sync/status` |
+| `product:edit` | `POST /products`, `PATCH /products/:id`, `POST /variations`, `PATCH /variations/:id` — also satisfies `product:view` |
+| `product:manage` | `DELETE /products/:id`, `DELETE /variations/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id`, `POST /assets/workers/jpg/run`, `POST /falabella/sync/products`, `POST /falabella/sync/products/:id`, `PATCH /falabella/sync/status/feed/:feedId/resolve` — wildcard covering `product:edit` and `product:view` |
+| `product:tags` | `GET /tags` |
+
+### Assets
+
+| Scope | Endpoints |
+|-------|-----------|
+| `assets:view` | `GET /assets`, `GET /assets/:id`, `GET /assets/folders`, `GET /assets/folders/tree`, `GET /assets/folders/:id` |
+| `assets:manage` | `POST /assets`, `POST /assets/folders`, `PATCH /assets/:id`, `PATCH /assets/folders/:id`, `DELETE /assets/:id`, `DELETE /assets/folders/:id` — wildcard covering `assets:view` |
+
+### Marketing
+
+All campaign, segment, email, membership, and sync-record endpoints share `marketing:manage`.
+Tag correlation endpoints also use `marketing:manage`.
+
+| Scope | Endpoints |
+|-------|-----------|
+| `marketing:manage` | All `POST/GET/PATCH/DELETE /campaigns/*`, `/segments/*`, `/email/*`, `/membership/*`, `/syncrecord/*` |
+| `marketing:manage` | `GET/POST/PATCH/DELETE /tags/correlations/*`, `DELETE /tags/:name` |
+
+### Shipping
+
+| Scope | Endpoints |
+|-------|-----------|
+| `shipping:quotations` | `GET /shipping/quotations`, carrier list endpoints |
+| `shipping:generate` | `POST /shipping/quotations/batch`, dispatch batch creation — also satisfies `shipping:quotations` |
+| `shipping:manage` | Void and administrative shipping endpoints — wildcard covering `shipping:generate` and `shipping:quotations` |
+
+### Recommended Scope Sets by Role
+
+| Role | Token scope string |
+|------|--------------------|
+| Admin / backend service | `contact:manage order:manage product:manage assets:manage marketing:manage shipping:manage` |
+| Read-only audit | `contact:view order:view product:view assets:view shipping:quotations` |
+| Marketing operator | `contact:view marketing:manage` |
+| Product manager | `product:manage assets:manage` |
+| Orders processor | `order:manage contact:manage product:manage` |
+| Shipping operator | `shipping:generate` |
+
+---
+
+## JWKS Handling & Resilience
+
+Mannaiah does not embed public keys. All signing keys are fetched from Logto's JWKS endpoint and
+cached in memory using `github.com/MicahParks/jwkset` with `github.com/MicahParks/keyfunc/v3`.
+
+### Key Refresh Strategy
+
+| Mechanism | Detail |
+|-----------|--------|
+| Background refresh | A goroutine refreshes the JWKS cache every `AUTH_JWKS_CACHE_TTL_MS` milliseconds (default: 5 minutes). |
+| Unknown `kid` trigger | When an incoming token carries a `kid` not found in the local store, an immediate refresh is triggered before rejecting the token. |
+| Rate limiter on `kid` miss | `golang.org/x/time/rate.Limiter` — `rate.Every(time.Minute / AUTH_JWKS_RATE_LIMIT_PER_MINUTE)`, burst = 1. Prevents Logto from being flooded when many requests arrive with an unknown or rotated key. |
+| HTTP timeout | `AUTH_JWKS_HTTP_TIMEOUT_MS` (default: 5 s) applies to each JWKS HTTP request. |
+| Startup tolerance | `NoErrorReturnFirstHTTPReq: true` — a JWKS fetch failure at boot time does not prevent the service from starting. The first request triggers a retry. |
+
+### JWKS URL Construction
+
+The JWKS URL is derived at startup from the issuer:
+
+```
+strings.TrimRight(LOGTO_ISSUER, "/") + "/jwks"
+```
+
+With `LOGTO_ISSUER=https://auth.flockstore.co/oidc` this produces
+`https://auth.flockstore.co/oidc/jwks`.
+
+### Algorithm Support
+
+The verifier accepts only `RS256` and `ES384`. Tokens using any other algorithm are rejected
+regardless of signature validity.
+
+```go
+jwt.WithValidMethods([]string{"RS256", "ES384"})
+```
+
+---
+
+## HTTP Endpoints
+
+### `GET /check-auth`
+
+A lightweight readiness probe that verifies token validity without requiring any specific scope.
+Useful for frontend health checks and session validation.
+
+**Request**
+
+```http
+GET /check-auth HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+**Responses**
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| `200 OK` | `{"status":"authenticated"}` | Token is valid and not expired |
+| `401 Unauthorized` | `{"code":"unauthorized"}` | Missing, expired, or invalid token; also returned on insufficient scope |
+| `500 Internal Server Error` | `{"code":"internal_server_error"}` | Unexpected internal error |
+
+Both authentication failures (`ErrUnauthorized`) and authorization failures (`ErrForbidden`) return
+HTTP 401. There is intentionally no HTTP 403 response — this avoids disclosing whether a valid token
+exists for the requesting principal.
+
+### `GET /users/malformation`
+
+Detects cross-domain dependency violations in the caller's token. A token is _malformed_ when it
+carries a scope that requires a dependency scope that is not also present in the token (e.g. holding
+`order:manage` without `contact:view` or `product:view`).
+
+This endpoint is useful for validating API-key / machine-to-machine token configurations during
+setup or CI.
+
+**Request**
+
+```http
+GET /users/malformation HTTP/1.1
+Authorization: Bearer <access_token>
+```
+
+**Responses**
+
+| Status | Body | Condition |
+|--------|------|-----------|
+| `200 OK` | `{"status":"ok", "issues":[]}` | Token is valid and has no dependency violations |
+| `200 OK` | `{"status":"malformed", "issues":[...]}` | Token is valid but has one or more dependency violations |
+| `401 Unauthorized` | `{"code":"unauthorized"}` | Missing, expired, or invalid token |
+| `500 Internal Server Error` | `{"code":"internal_server_error"}` | Unexpected internal error |
+
+Note: the endpoint always returns HTTP 200 when the token is valid. The `status` field in the
+body indicates whether issues were found — HTTP status is not used to signal malformation.
+
+**Example — malformed token:**
+
+```json
+{
+  "status": "malformed",
+  "issues": [
+    {
+      "permission": "order:manage",
+      "requires": "contact:view",
+      "description": "Order access requires contact:view (or contact:manage)"
+    },
+    {
+      "permission": "order:manage",
+      "requires": "product:view",
+      "description": "Order access requires product:view (or product:edit/manage)"
+    }
+  ]
+}
+```
+
+**Example — well-formed token:**
+
+```json
+{
+  "status": "ok",
+  "issues": []
+}
+```
+
+---
+
+## Using Auth in Other Modules
+
+Every module that exposes HTTP endpoints receives the `Authorizer` interface at construction time:
+
+```go
+type Authorizer interface {
+    Require(ctx context.Context, authorizationHeader string, requiredPermissions ...string) error
+    IsUnauthorized(err error) bool
+    IsForbidden(err error) bool
+    Subject(ctx context.Context, authorizationHeader string) string
+}
+```
+
+Modules implement a `protect` helper to wrap individual handlers with one or more permission checks:
+
+```go
+func (h *Handler) protect(next corehttp.Handler, permissions ...string) corehttp.Handler {
+    return func(ctx corehttp.Context) error {
+        err := h.authorizer.Require(ctx.Context(), ctx.GetHeader("Authorization"), permissions...)
+        if err != nil {
+            if h.authorizer.IsForbidden(err) {
+                return ctx.JSON(403, map[string]string{"code": "forbidden"})
+            }
+            if h.authorizer.IsUnauthorized(err) {
+                return ctx.JSON(401, map[string]string{"code": "unauthorized"})
+            }
+            return ctx.JSON(500, map[string]string{"code": "internal_server_error"})
+        }
+        return next(ctx)
+    }
+}
+```
+
+Routes are registered with their required permission scope(s). Endpoints that span domain boundaries
+list all required scopes; the caller must satisfy **every** listed scope:
+
+```go
+// Single-domain endpoint
+router.Get("/contacts",       h.protect(h.findAll, "contact:view"))
+router.Post("/contacts",      h.protect(h.create,  "contact:manage"))
+router.Delete("/contacts/:id", h.protect(h.remove, "contact:manage"))
+
+// Cross-domain endpoint: token must hold order:view AND contact:view AND product:view
+router.Get("/orders", h.protect(h.findAll, "order:view", "contact:view", "product:view"))
+```
+
+The `Subject` helper returns the `sub` claim from a valid token, or `"system"` on any failure
+(including when the dev bypass activates). It is used for audit logging.
+
+---
+
+## Development Bypass
+
+In `development` environments, Mannaiah supports a static token bypass to decouple local
+development from a running Logto instance.
+
+### Activation Conditions
+
+All three conditions must be true simultaneously for the bypass to activate:
+
+| Condition | Configuration |
+|-----------|---------------|
+| `CORE_ENVIRONMENT == "development"` | Default when the variable is unset |
+| `DEV_AUTH_TOKEN` is non-empty | Set any random hex string |
+| `Authorization` header is exactly `"Bearer <DEV_AUTH_TOKEN>"` | Case-sensitive, no whitespace trimming |
+
+### Resulting Synthetic Claims
+
+When the bypass activates, the verifier returns hardcoded claims without any network call:
+
+```go
+&domain.Claims{
+    Subject: "dev-admin",
+    Scope:   DEV_AUTH_SCOPE,          // space-delimited; empty means no scopes
+    Raw:     map[string]any{
+        "roles": []any{"admin"},
+    },
+}
+```
+
+`Subject(ctx, header)` always returns `"system"` for bypass callers.
+
+### Recommended Development Setup
+
+```dotenv
+CORE_ENVIRONMENT=development
+
+# Static bypass token — use any random hex string
+DEV_AUTH_TOKEN=2a5f705e73702c1bf4a7729fe6e5f808cb4b5c39bb8e6b07b0df0716524f0fb1
+
+# Grant all scopes so every endpoint is reachable
+DEV_AUTH_SCOPE=contact:manage order:manage product:manage assets:manage marketing:manage shipping:manage
+```
+
+With this setup any request carrying the static token behaves identically to a production Logto
+token with full admin scope.
+
+### Security Guarantee
+
+The dev bypass is **completely inactive** when `CORE_ENVIRONMENT` is anything other than
+`"development"`. In non-development environments `DEV_AUTH_TOKEN` is ignored entirely and every
+incoming token is forwarded to the JWKS verifier without exception.
+
+---
+
+## Module Initialization
+
+`auth.New(cfg Config, coreEnvironment string, logger *zap.Logger)` is called during the application
+composition root startup. The initialization sequence is:
+
+1. Resolve the environment string; an empty value defaults to `"development"`.
+2. Construct the JWKS URL: `strings.TrimRight(cfg.Issuer, "/") + "/jwks"`.
+3. Build a `jwt.Config` from the resolved issuer, audience, JWKS URL, rate-limit settings, cache
+   TTL, and HTTP timeout.
+4. Call `jwt.NewVerifier(jwtCfg)`:
+   - Creates `jwkset.HTTPClientStorageOptions` with `RefreshInterval = CacheTTL` and
+     `NoErrorReturnFirstHTTPReq: true`.
+   - Starts a background JWKS refresh goroutine.
+   - Creates a `rate.Limiter` for unknown-`kid` throttling.
+5. Construct `application.NewService(env, devAuthToken, devAuthScope, verifier, logger)`.
+6. Construct `adapter/http.NewHandler(service)`.
+7. Return `*Module` exposing the service and handler.
+
+**Startup is non-blocking with respect to Logto availability.** If Logto is unreachable at boot
+time, the service starts normally. The first request with an unknown `kid` will trigger a JWKS
+fetch attempt against the live endpoint.
+
+### What the Module Provides
+
+| Method | Description |
+|--------|-------------|
+| `Require(ctx, header, ...permissions)` | Full authenticate-then-authorize check |
+| `Authenticate(ctx, header)` | Authenticate only, returns `*domain.Claims` |
+| `Authorize(claims, ...permissions)` | Scope check on already-parsed claims |
+| `IsUnauthorized(err)` | Error classifier for 401 response mapping |
+| `IsForbidden(err)` | Error classifier for 403/401 response mapping |
+| `Subject(ctx, header)` | Returns `sub` claim or `"system"` on failure |
+| `RegisterRoutes(router)` | Mounts `GET /check-auth` and `GET /users/malformation` |
+| `Load(loader)` | Registers routes and contributes OpenAPI spec to aggregation |
+| `OpenAPISpec()` | Returns the module-level OpenAPI 3.0.3 document |
+
+---
+
+## Error Reference
+
+| Error | Source | Meaning | HTTP response |
+|-------|--------|---------|---------------|
+| `application.ErrUnauthorized` | `application` | Missing bearer token, expired token, or invalid signature | `401 {"code":"unauthorized"}` |
+| `application.ErrForbidden` | `application` | Token is valid but required scope is not granted | `401 {"code":"unauthorized"}` |
+| `jwt.ErrInvalidToken` | `adapter/jwt` | JWT parse or validation failure | Wrapped as `ErrUnauthorized` → 401 |
+| `jwt.ErrInvalidConfig` | `adapter/jwt` | Missing issuer, audience, or JWKS URL | Startup failure |
+| `application.ErrNilVerifier` | `application` | `nil` verifier passed to `NewService` | Startup failure |
+| `http.ErrNilService` | `adapter/http` | `nil` service passed to HTTP handler constructor | Startup failure |
+
+Both `ErrForbidden` and `ErrUnauthorized` map to HTTP 401 to avoid disclosing token validity to
+unauthorized callers.
+
+---
+
+## Environment Variables
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `LOGTO_ISSUER` | — | **Yes** | Logto OIDC issuer base URL. JWKS is fetched from `<issuer>/jwks`. Must match the `iss` claim in all issued access tokens. |
+| `LOGTO_AUDIENCE` | — | **Yes** | Expected `aud` claim in access tokens. Set to the API resource identifier registered in the Logto Admin Console. |
+| `DEV_AUTH_TOKEN` | _(empty)_ | No | Static bypass token. Only active when `CORE_ENVIRONMENT=development`. Use a cryptographically random hex string. |
+| `DEV_AUTH_SCOPE` | _(empty)_ | No | Space-delimited scopes granted to the dev bypass token. Has no effect outside `development` environments. |
+| `AUTH_JWKS_RATE_LIMIT_PER_MINUTE` | `5` | No | Maximum JWKS refresh requests per minute triggered by unknown token key IDs. Burst size is 1. |
+| `AUTH_JWKS_CACHE_TTL_MS` | `300000` | No | JWKS in-memory cache TTL in milliseconds (default 5 minutes). Also controls the background refresh interval. |
+| `AUTH_JWKS_HTTP_TIMEOUT_MS` | `5000` | No | HTTP request timeout for JWKS endpoint calls in milliseconds (default 5 seconds). |
+
+---
+
+## Logto Setup Guide
+
+### 1. Create an API Resource
+
+In the Logto Admin Console, navigate to **API Resources** and create a new resource:
+
+- **API Name:** `Mannaiah API` (or any label)
+- **API Identifier:** the URL of your Mannaiah deployment, e.g. `https://api.yourdomain.com`
+  This value becomes `LOGTO_AUDIENCE`.
+
+Under **Permissions**, add the following scopes:
+
+```
+contact:view     contact:sync      contact:manage
+order:view       order:triage      order:manage      order:sync
+product:view     product:edit      product:manage    product:tags
+assets:view      assets:manage
+marketing:manage
+shipping:quotations  shipping:generate  shipping:manage
+```
+
+### 2. Create a Machine-to-Machine Application
+
+For backend services, CI pipelines, and integration testing:
+
+1. Navigate to **Applications** → **Create Application** → **Machine-to-machine**.
+2. Note the **App ID** and **App Secret**.
+3. On the **API Resources** tab of the new app, assign the Mannaiah API resource and tick the
+   required scopes.
+
+### 3. Obtain an Access Token
+
+```bash
+curl -X POST https://auth.flockstore.co/oidc/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=<APP_ID>" \
+  -d "client_secret=<APP_SECRET>" \
+  -d "resource=<LOGTO_AUDIENCE>" \
+  -d "scope=contact:manage order:manage product:manage assets:manage marketing:manage shipping:manage"
+```
+
+Response:
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "contact:manage order:manage product:manage assets:manage marketing:manage shipping:manage"
+}
+```
+
+### 4. Call a Protected Endpoint
+
+```bash
+curl https://api.yourdomain.com/contacts \
+  -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+```
+
+### 5. Verify Authentication Status
+
+```bash
+curl https://api.yourdomain.com/check-auth \
+  -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+# → {"status":"authenticated"}
+```
+
+---
+
+## Grants & Token Lifecycle
+
+### Client Credentials Grant (Machine-to-Machine)
+
+Used for automation, integrations, and background services:
+
+- No user context is present — the `sub` claim is the Logto application ID.
+- Tokens are short-lived (typically 1 hour). Obtain a new token by re-submitting the
+  `client_credentials` request; no refresh token is issued.
+- Mannaiah is fully stateless — tokens are never stored server-side.
+
+### Authorization Code Grant (User Sessions)
+
+Used when Mannaiah is accessed on behalf of a logged-in user via a frontend:
+
+- The `sub` claim is the Logto user ID.
+- Refresh tokens may be issued depending on Logto application configuration.
+- Mannaiah treats both grant types identically — it validates whatever JWT is presented.
+
+### Token Expiry & Revocation
+
+All standard JWT claims (`exp`, `nbf`, `iat`) are validated at parse time by `golang-jwt/jwt/v5`.
+An expired token returns `ErrUnauthorized` (HTTP 401) immediately.
+
+There is no server-side revocation check. Revocation is enforced by:
+
+- Keeping token TTL short (1 hour recommended).
+- Using Logto's token rotation capabilities on the client side.
+- Adding a token introspection proxy in front of Mannaiah if immediate revocation is required.

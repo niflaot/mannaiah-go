@@ -45,7 +45,7 @@ func TestStartupProcessE2E(t *testing.T) {
 		"LOGTO_ISSUER=https://issuer.example",
 		"LOGTO_AUDIENCE=https://api.mannaiah.e2e",
 		"DEV_AUTH_TOKEN=dev-bypass-token",
-		"DEV_AUTH_SCOPE=contacts:manage assets:create",
+		"DEV_AUTH_SCOPE=contact:manage assets:manage",
 	)
 
 	var stdout bytes.Buffer
@@ -168,7 +168,7 @@ func TestStartupProcessRequiresStorage(t *testing.T) {
 		"LOGTO_ISSUER=https://issuer.example",
 		"LOGTO_AUDIENCE=https://api.mannaiah.e2e",
 		"DEV_AUTH_TOKEN=dev-bypass-token",
-		"DEV_AUTH_SCOPE=contacts:manage",
+		"DEV_AUTH_SCOPE=contact:manage",
 	)
 
 	var stderr bytes.Buffer

@@ -97,8 +97,8 @@ func TestWooCommerceMainstreamOrderUpdateE2E(t *testing.T) {
 		_ = wooModule.Stop(stopCtx)
 	}()
 
-	contactsManageToken := harness.SignToken(t, "contacts:manage")
-	ordersManageToken := harness.SignToken(t, "orders:manage")
+	contactsManageToken := harness.SignToken(t, "contact:manage")
+	ordersManageToken := harness.SignToken(t, "order:manage contact:manage product:manage")
 
 	harness.tracer.Step("create contact for order creation")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/contacts", contactsManageToken, []byte(`{

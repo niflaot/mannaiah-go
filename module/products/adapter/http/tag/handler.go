@@ -84,7 +84,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/tags/correlations", h.protect("marketing:manage", h.createCorrelation))
 	router.Patch("/tags/correlations/:id", h.protect("marketing:manage", h.updateCorrelation))
 	router.Delete("/tags/correlations/:id", h.protect("marketing:manage", h.removeCorrelation))
-	router.Get("/tags", h.protect("products:read", h.listTags))
+	router.Get("/tags", h.protect("product:tags", h.listTags))
 	router.Delete("/tags/:name", h.protect("marketing:manage", h.removeTag))
 }
 

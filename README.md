@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v1.0.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.10.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -115,17 +115,61 @@ go test ./application/contact/service -run '^$' -bench BenchmarkProcessCommands 
 
 ## Docker
 
-### Build
+### Build API
 
 ```bash
 docker build -t mannaiah-go:local .
 ```
 
-### Run
+### Run API
 
 ```bash
 docker run --rm -p 8080:8080 --env-file .env mannaiah-go:local
 ```
+
+### Build Wiki (Docs)
+
+```bash
+docker build -f Dockerfile.docs -t mannaiah-go-wiki:local .
+```
+
+### Run Wiki
+
+```bash
+docker run --rm -p 3001:3001 mannaiah-go-wiki:local
+```
+
+Set `WIKI_PORT` in `.env` to change the host port used for the docs container.
+Set `WIKI_ENABLED=true` to include the wiki in your deployment stack.
+
+## Wiki / Documentation
+
+The internal knowledge base is built with [Fumadocs](https://fumadocs.dev/) and lives in the `docs/`
+directory as a Next.js 16 application.
+
+### Local Development
+
+```bash
+cd docs
+npm install
+npm run dev
+```
+
+The wiki listens on `http://localhost:3001` by default (controlled by `WIKI_PORT`).
+
+### Build for Production
+
+```bash
+cd docs
+npm run build
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WIKI_ENABLED` | `false` | Enable the wiki deployment in CI/CD and container stacks. |
+| `WIKI_PORT` | `3001` | Port the docs container listens on. |
 
 ## CI/CD
 
@@ -133,7 +177,8 @@ docker run --rm -p 8080:8080 --env-file .env mannaiah-go:local
 - Validation pipeline runs module tests, e2e tests, and WooCommerce benchmark checks.
 - Docker images are published to Nexus registry:
   - Registry: `docker.momlesstomato.dev`
-  - Repository: `fl-docker/mannaiah-go`
+  - API repository: `fl-docker/mannaiah-go`
+  - Wiki repository: `fl-docker/mannaiah-go-wiki` (published when `WIKI_ENABLED=true`)
 - Drone secrets required for publish:
   - `nexus_username`
   - `nexus_password`

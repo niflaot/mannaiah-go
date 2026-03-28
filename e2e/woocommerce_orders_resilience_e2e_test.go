@@ -40,7 +40,7 @@ func TestWooCommerceOrdersInvalidIntegrationE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	ordersManageToken := harness.SignToken(t, "orders:manage")
+	ordersManageToken := harness.SignToken(t, "order:manage contact:manage product:manage")
 
 	harness.tracer.Step("trigger manual woocommerce orders sync with invalid integration")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/orders", ordersManageToken, nil)
@@ -78,7 +78,7 @@ func TestWooCommerceOrdersSyncDisabledE2E(t *testing.T) {
 		_ = module.Stop(stopCtx)
 	}()
 
-	ordersManageToken := harness.SignToken(t, "orders:manage")
+	ordersManageToken := harness.SignToken(t, "order:manage contact:manage product:manage")
 
 	harness.tracer.Step("trigger manual woocommerce orders sync while disabled")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/woo/sync/orders", ordersManageToken, nil)

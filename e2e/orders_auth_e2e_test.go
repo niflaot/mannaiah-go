@@ -11,7 +11,7 @@ func TestOrdersAuthE2E(t *testing.T) {
 	defer harness.Close(t)
 
 	harness.tracer.Step("create contact required by order flow")
-	contactsManageToken := harness.SignToken(t, "contacts:manage")
+	contactsManageToken := harness.SignToken(t, "contact:manage")
 	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/contacts", contactsManageToken, []byte(`{"email":"order-contact@example.com","legalName":"Order Contact","address":"Billing Street 9","addressExtra":"Apt 101","phone":"+573001112233","cityCode":"11001"}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
@@ -31,7 +31,7 @@ func TestOrdersAuthE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("request create order with insufficient permissions")
-	ordersReadToken := harness.SignToken(t, "orders:read")
+	ordersReadToken := harness.SignToken(t, "order:view contact:manage product:manage")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/orders", ordersReadToken, []byte(`{"identifier":"woo-201","realm":"woocommerce","contactId":"`+contactID+`","items":[{"sku":"SKU-1","quantity":2}]}`))
 	if status != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", status, http.StatusForbidden)
@@ -41,7 +41,7 @@ func TestOrdersAuthE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("create order with manage scope")
-	ordersManageToken := harness.SignToken(t, "orders:manage")
+	ordersManageToken := harness.SignToken(t, "order:manage contact:manage product:manage")
 	status, payload = harness.DoJSONRequest(t, http.MethodPost, "/orders", ordersManageToken, []byte(`{"identifier":"woo-201","realm":"woocommerce","contactId":"`+contactID+`","items":[{"sku":"SKU-1","quantity":2},{"sku":"SKU-2","alternateName":"Fallback Name","quantity":1}],"author":"integration","description":"imported from woo"}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)

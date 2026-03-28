@@ -1,0 +1,43 @@
+---
+title: Core Module
+description: The shared runtime foundation that wires all Mannaiah modules together.
+---
+
+`module/core` is the foundational package of the entire Mannaiah platform. Every other module depends
+on it for configuration loading, database access, HTTP serving, caching, messaging, scheduling, storage,
+and observability. It is deliberately not a domain module — it carries no business logic.
+
+## Responsibility Map
+
+| Package | Responsibility |
+|---------|----------------|
+| `config` | Environment-variable loading and validation via Viper |
+| `http` | Fiber HTTP server, middleware, and abstract router/context |
+| `database` | GORM initialization, connection pooling, generic CRUD, and migrations |
+| `redis` | Redis client with connection pooling and circuit breaker |
+| `cache` | Provider-agnostic cache abstraction (implemented by `redis`) |
+| `messaging` | In-memory pub/sub bus backed by Watermill |
+| `cron` | Timezone-aware job scheduler |
+| `storage` | S3-compatible object storage with circuit breaker |
+| `circuitbreaker` | Reusable fail-fast circuit breaker primitive |
+| `logger` | Structured Zap logger with pretty/JSON output |
+| `telemetry` | OpenTelemetry tracing and Prometheus metrics |
+| `swagger` | OpenAPI document aggregation from all modules |
+| `startup` | Composition root that mounts all modules onto the HTTP server |
+| `cmd/api` | Main entrypoint: wires and starts the HTTP server |
+| `cmd/migrate` | Standalone CLI for running versioned SQL migrations |
+
+## Startup Flow
+
+When `cmd/api` starts:
+
+1. Loads all module configs from environment variables via `config.Load`.
+2. Initialises the Zap logger.
+3. Connects to Redis and wraps it in a circuit-breaker-backed `cache.Store`.
+4. Opens the GORM database connection and runs pending migrations.
+5. Creates the in-memory Watermill messaging platform.
+6. Creates the cron scheduler.
+7. Creates the S3 storage client.
+8. Wires every domain module, passing the shared infrastructure as dependencies.
+9. Creates a `startup.Runtime` and calls each module's `RegisterRoutes` and `AddOpenAPISpec` hooks.
+10. Starts the Fiber HTTP server and blocks until SIGTERM.
