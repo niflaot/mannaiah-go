@@ -31,8 +31,6 @@ type QuoteFromOrderCommand struct {
 	CarrierID string
 	// OriginCityCode defines origin city-code values.
 	OriginCityCode string
-	// ShipmentMode defines the delivery mode for this quotation (parcel or express).
-	ShipmentMode domain.ShipmentMode
 }
 
 // packageCandidate holds resolved attributes for one product unit.
@@ -71,6 +69,12 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 
 	units := packBoxes(candidates, &warnings)
 
+	// Auto-determine shipment mode: more than one packed box requires express delivery.
+	shipmentMode := domain.ShipmentModeParcel
+	if len(units) > 1 {
+		shipmentMode = domain.ShipmentModeExpress
+	}
+
 	result, quoteErr := s.Quote(ctx, QuoteCommand{
 		OrderID:                 orderData.OrderID,
 		OrderIdentifier:         orderData.OrderIdentifier,
@@ -80,7 +84,7 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 		Units:                   units,
 		DeclaredValue:           orderData.TotalValue,
 		CollectOnDeliveryAmount: orderData.TotalValue,
-		ShipmentMode:            cmd.ShipmentMode,
+		ShipmentMode:            shipmentMode,
 	})
 	if quoteErr != nil {
 		if isCityError(quoteErr) {
@@ -190,7 +194,7 @@ func packBoxes(candidates []packageCandidate, warnings *[]domain.QuotationWarnin
 	for _, box := range main {
 		units = append(units, domain.PackageUnit{
 			Description: box.attrs.SKU,
-			PackageType: "parcel",
+			PackageType: "CAJA",
 			Dimensions: domain.Dimensions{
 				HeightCM:         box.attrs.HeightCM,
 				WidthCM:          box.attrs.WidthCM,

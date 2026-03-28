@@ -111,8 +111,6 @@ type quoteFromOrderRequest struct {
 	CarrierID string `json:"carrierId"`
 	// OriginCityCode defines origin city-code values.
 	OriginCityCode string `json:"originCityCode"`
-	// ShipmentMode defines the delivery mode for this quotation (parcel or express).
-	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
 }
 
 // quoteFromOrder handles order-based quotation requests.
@@ -125,7 +123,6 @@ func (h *Handler) quoteFromOrder(ctx corehttp.Context) error {
 		OrderIdentifier: strings.TrimSpace(request.OrderIdentifier),
 		CarrierID:       strings.TrimSpace(request.CarrierID),
 		OriginCityCode:  strings.TrimSpace(request.OriginCityCode),
-		ShipmentMode:    request.ShipmentMode,
 	})
 	if err != nil {
 		return h.mapError(err)

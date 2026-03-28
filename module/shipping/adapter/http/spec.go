@@ -496,9 +496,8 @@ func quotationFromOrderRequestSchema() *openapi3.Schema {
 	schema := openapi3.NewObjectSchema().
 		WithProperty("orderIdentifier", openapi3.NewStringSchema()).
 		WithProperty("carrierId", openapi3.NewStringSchema()).
-		WithProperty("originCityCode", openapi3.NewStringSchema()).
-		WithProperty("shipmentMode", shipmentModeSchema())
-	schema.Required = []string{"orderIdentifier", "carrierId", "originCityCode", "shipmentMode"}
+		WithProperty("originCityCode", openapi3.NewStringSchema())
+	schema.Required = []string{"orderIdentifier", "carrierId", "originCityCode"}
 
 	return schema
 }
