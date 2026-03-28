@@ -71,6 +71,11 @@ func jsonResponse(description string, schema *openapi3.Schema) *openapi3.Respons
 	})}
 }
 
+// errorResponse builds one JSON error response descriptor using the standard HTTP error payload.
+func errorResponse(description string) *openapi3.ResponseRef {
+	return jsonResponse(description, errorResponseSchema())
+}
+
 // binaryPDFResponse builds one binary PDF response descriptor.
 func binaryPDFResponse(description string) *openapi3.ResponseRef {
 	return &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription(description).WithContent(openapi3.Content{
@@ -151,6 +156,11 @@ func quotationFromOrderOperation() *openapi3.Operation {
 		RequestBody: jsonRequestBody(quotationFromOrderRequestSchema(), true),
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(201, jsonResponse("Quotation result with warnings.", quotationResultSchema())),
+			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload, no_valid_products, carrier_not_supported, quotation_not_supported, invalid_city_code.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
 		),
 	}
 }
@@ -168,7 +178,11 @@ func getOrderQuotationOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Quotation record.", quotationRecordSchema())),
-			openapi3.WithStatus(404, jsonResponse("Quotation not found.", openapi3.NewObjectSchema())),
+			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload, carrier_not_supported.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Possible message codes: quotation_not_found, shipping_resource_not_found.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
 		),
 	}
 }
@@ -496,6 +510,13 @@ func quotationRecordSchema() *openapi3.Schema {
 		WithProperty("RequestSnapshot", requestSnapshotSchema).
 		WithProperty("RawResponse", rawResponseSchema).
 		WithProperty("CreatedAt", openapi3.NewDateTimeSchema())
+}
+
+// errorResponseSchema defines schema for standard HTTP error payloads.
+func errorResponseSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("message", openapi3.NewStringSchema()).
+		WithProperty("error", openapi3.NewStringSchema())
 }
 
 // quotationFromOrderRequestSchema defines schema for order-based quotation request payloads.

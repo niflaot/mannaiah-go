@@ -64,6 +64,42 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 		t.Fatalf("expected collectOnDeliveryChargedAmount in quotation response schema")
 	}
 
+	postQuotationFromOrder := paths.Find("/shipping/quotations/order").Post
+	if postQuotationFromOrder == nil || postQuotationFromOrder.Responses == nil {
+		t.Fatalf("expected /shipping/quotations/order POST responses")
+	}
+	for _, status := range []string{"400", "401", "403", "404", "500"} {
+		errorResponse := postQuotationFromOrder.Responses.Value(status)
+		if errorResponse == nil || errorResponse.Value == nil {
+			t.Fatalf("expected /shipping/quotations/order POST %s response", status)
+		}
+		content := errorResponse.Value.Content.Get("application/json")
+		if content == nil || content.Schema == nil || content.Schema.Value == nil {
+			t.Fatalf("expected /shipping/quotations/order POST %s JSON error schema", status)
+		}
+		if content.Schema.Value.Properties["message"] == nil || content.Schema.Value.Properties["error"] == nil {
+			t.Fatalf("expected /shipping/quotations/order POST %s error schema properties", status)
+		}
+	}
+
+	getOrderQuotation := paths.Find("/shipping/quotations/order/{identifier}").Get
+	if getOrderQuotation == nil || getOrderQuotation.Responses == nil {
+		t.Fatalf("expected /shipping/quotations/order/{identifier} GET responses")
+	}
+	for _, status := range []string{"400", "401", "403", "404", "500"} {
+		errorResponse := getOrderQuotation.Responses.Value(status)
+		if errorResponse == nil || errorResponse.Value == nil {
+			t.Fatalf("expected /shipping/quotations/order/{identifier} GET %s response", status)
+		}
+		content := errorResponse.Value.Content.Get("application/json")
+		if content == nil || content.Schema == nil || content.Schema.Value == nil {
+			t.Fatalf("expected /shipping/quotations/order/{identifier} GET %s JSON error schema", status)
+		}
+		if content.Schema.Value.Properties["message"] == nil || content.Schema.Value.Properties["error"] == nil {
+			t.Fatalf("expected /shipping/quotations/order/{identifier} GET %s error schema properties", status)
+		}
+	}
+
 	postMark := paths.Find("/shipping/marks").Post
 	if postMark == nil || postMark.RequestBody == nil {
 		t.Fatalf("expected /shipping/marks POST request body")
