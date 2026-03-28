@@ -69,10 +69,10 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 
 	units := packBoxes(candidates, &warnings)
 
-	// Auto-determine shipment mode: more than one packed box requires express delivery.
-	shipmentMode := domain.ShipmentModeParcel
+	// Auto-determine shipment mode: a single packed box uses express delivery; two or more use parcel.
+	shipmentMode := domain.ShipmentModeExpress
 	if len(units) > 1 {
-		shipmentMode = domain.ShipmentModeExpress
+		shipmentMode = domain.ShipmentModeParcel
 	}
 
 	result, quoteErr := s.Quote(ctx, QuoteCommand{

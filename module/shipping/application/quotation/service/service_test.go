@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -56,9 +58,11 @@ func (quotationProviderNoExpiry) Quote(ctx context.Context, request domain.Quota
 func (quotationProviderNoExpiry) GenerateMark(ctx context.Context, mark *domain.ShippingMark) error {
 	return nil
 }
-func (quotationProviderNoExpiry) VoidMark(ctx context.Context, trackingNumber string) error { return nil }
-func (quotationProviderNoExpiry) CheckBalance(ctx context.Context) error                    { return nil }
-func (quotationProviderNoExpiry) SupportsQuotation() bool                                   { return true }
+func (quotationProviderNoExpiry) VoidMark(ctx context.Context, trackingNumber string) error {
+	return nil
+}
+func (quotationProviderNoExpiry) CheckBalance(ctx context.Context) error { return nil }
+func (quotationProviderNoExpiry) SupportsQuotation() bool                { return true }
 
 type quotationProviderStub struct{}
 
@@ -67,7 +71,17 @@ func (quotationProviderStub) Carrier() domain.Carrier {
 	return domain.Carrier{ID: "manual", Name: "Manual", Type: domain.CarrierTypeManual, Active: true}
 }
 func (quotationProviderStub) Quote(ctx context.Context, request domain.QuotationRequest) (*domain.QuotationResult, error) {
-	return &domain.QuotationResult{CarrierID: request.CarrierID, OrderID: request.OrderID, OriginCityCode: request.OriginCityCode, DestCityCode: request.DestCityCode, FreightCost: 12000, EstimatedDays: 2, CurrencyCode: "COP", ExpiresAt: time.Now().Add(time.Hour)}, nil
+	return &domain.QuotationResult{
+		CarrierID:      request.CarrierID,
+		OrderID:        request.OrderID,
+		OriginCityCode: request.OriginCityCode,
+		DestCityCode:   request.DestCityCode,
+		FreightCost:    12000,
+		EstimatedDays:  2,
+		CurrencyCode:   "COP",
+		ExpiresAt:      time.Now().Add(time.Hour),
+		RawResponse:    `{"provider":"manual"}`,
+	}, nil
 }
 func (quotationProviderStub) GenerateMark(ctx context.Context, mark *domain.ShippingMark) error {
 	return nil
@@ -75,6 +89,37 @@ func (quotationProviderStub) GenerateMark(ctx context.Context, mark *domain.Ship
 func (quotationProviderStub) VoidMark(ctx context.Context, trackingNumber string) error { return nil }
 func (quotationProviderStub) CheckBalance(ctx context.Context) error                    { return nil }
 func (quotationProviderStub) SupportsQuotation() bool                                   { return true }
+
+type quotationProviderCaptureStub struct {
+	lastRequest domain.QuotationRequest
+}
+
+func (s *quotationProviderCaptureStub) CarrierID() string { return "manual" }
+func (s *quotationProviderCaptureStub) Carrier() domain.Carrier {
+	return domain.Carrier{ID: "manual", Name: "Manual", Type: domain.CarrierTypeManual, Active: true}
+}
+func (s *quotationProviderCaptureStub) Quote(ctx context.Context, request domain.QuotationRequest) (*domain.QuotationResult, error) {
+	s.lastRequest = request
+	return &domain.QuotationResult{
+		CarrierID:      request.CarrierID,
+		OrderID:        request.OrderID,
+		OriginCityCode: request.OriginCityCode,
+		DestCityCode:   request.DestCityCode,
+		FreightCost:    12000,
+		EstimatedDays:  2,
+		CurrencyCode:   "COP",
+		ExpiresAt:      time.Now().Add(time.Hour),
+		RawResponse:    `{"provider":"manual"}`,
+	}, nil
+}
+func (s *quotationProviderCaptureStub) GenerateMark(ctx context.Context, mark *domain.ShippingMark) error {
+	return nil
+}
+func (s *quotationProviderCaptureStub) VoidMark(ctx context.Context, trackingNumber string) error {
+	return nil
+}
+func (s *quotationProviderCaptureStub) CheckBalance(ctx context.Context) error { return nil }
+func (s *quotationProviderCaptureStub) SupportsQuotation() bool                { return true }
 
 type quotationRegistryStub struct {
 	provider port.CarrierProvider
@@ -131,6 +176,23 @@ func TestQuote(t *testing.T) {
 	}
 	if repository.rows[0].FreightCost != 12000 {
 		t.Fatalf("stored freight cost = %v, want 12000", repository.rows[0].FreightCost)
+	}
+	decodedSnapshot, decodeErr := base64.StdEncoding.DecodeString(repository.rows[0].RequestSnapshot)
+	if decodeErr != nil {
+		t.Fatalf("decode request snapshot: %v", decodeErr)
+	}
+	var snapshot map[string]any
+	if jsonErr := json.Unmarshal(decodedSnapshot, &snapshot); jsonErr != nil {
+		t.Fatalf("unmarshal request snapshot: %v", jsonErr)
+	}
+	if snapshot["shipmentMode"] != "express" {
+		t.Fatalf("snapshot shipmentMode = %v, want express", snapshot["shipmentMode"])
+	}
+	if repository.rows[0].RawResponse == "" {
+		t.Fatalf("stored raw response should be base64-encoded and non-empty")
+	}
+	if _, decodeErr := base64.StdEncoding.DecodeString(repository.rows[0].RawResponse); decodeErr != nil {
+		t.Fatalf("decode raw response: %v", decodeErr)
 	}
 }
 
@@ -202,6 +264,31 @@ func TestPurgeExpired(t *testing.T) {
 	}
 	if len(repository.rows) != 2 {
 		t.Fatalf("remaining rows = %d, want 2", len(repository.rows))
+	}
+}
+
+// TestQuoteForcesParcelWhenMultipleUnits verifies shipment mode normalization to parcel for two or more units.
+func TestQuoteForcesParcelWhenMultipleUnits(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	provider := &quotationProviderCaptureStub{}
+	service := NewService(repository, quotationRegistryStub{provider: provider}, Config{})
+
+	_, err := service.Quote(context.Background(), QuoteCommand{
+		OrderID:        "order-2-boxes",
+		CarrierID:      "manual",
+		OriginCityCode: "11001000",
+		DestCityCode:   "76001000",
+		ShipmentMode:   domain.ShipmentModeExpress,
+		Units: []domain.PackageUnit{
+			{Description: "box-1", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}},
+			{Description: "box-2", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 12, WidthCM: 12, DepthCM: 12, RealWeightKG: 2}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Quote() error = %v", err)
+	}
+	if provider.lastRequest.ShipmentMode != domain.ShipmentModeParcel {
+		t.Fatalf("provider.lastRequest.ShipmentMode = %q, want %q", provider.lastRequest.ShipmentMode, domain.ShipmentModeParcel)
 	}
 }
 

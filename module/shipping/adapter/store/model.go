@@ -90,22 +90,44 @@ func (dispatchBatchModel) TableName() string {
 
 // quotationModel defines quotation persistence row values.
 type quotationModel struct {
-	ID              string    `gorm:"column:id;type:varchar(64);primaryKey"`
-	OrderID         string    `gorm:"column:order_id;type:varchar(255);index"`
-	OrderIdentifier string    `gorm:"column:order_identifier;type:varchar(255);index;default:null"`
-	CarrierID       string    `gorm:"column:carrier_id;type:varchar(100);index"`
-	OriginCityCode  string    `gorm:"column:origin_city_code;type:varchar(20)"`
-	DestCityCode    string    `gorm:"column:dest_city_code;type:varchar(20)"`
-	FreightCost     float64   `gorm:"column:freight_cost;type:decimal(15,2)"`
-	EstimatedDays   int       `gorm:"column:estimated_days"`
-	CurrencyCode    string    `gorm:"column:currency_code;type:varchar(5)"`
-	ExpiresAt       time.Time `gorm:"column:expires_at"`
-	RequestSnapshot string    `gorm:"column:request_snapshot;type:text"`
-	RawResponse     string    `gorm:"column:raw_response;type:text"`
-	CreatedAt       time.Time `gorm:"column:created_at"`
+	ID              string               `gorm:"column:id;type:varchar(64);primaryKey"`
+	OrderID         string               `gorm:"column:order_id;type:varchar(255);index"`
+	OrderIdentifier string               `gorm:"column:order_identifier;type:varchar(255);index;default:null"`
+	CarrierID       string               `gorm:"column:carrier_id;type:varchar(100);index"`
+	OriginCityCode  string               `gorm:"column:origin_city_code;type:varchar(20)"`
+	DestCityCode    string               `gorm:"column:dest_city_code;type:varchar(20)"`
+	FreightCost     float64              `gorm:"column:freight_cost;type:decimal(15,2)"`
+	EstimatedDays   int                  `gorm:"column:estimated_days"`
+	CurrencyCode    string               `gorm:"column:currency_code;type:varchar(5)"`
+	ExpiresAt       time.Time            `gorm:"column:expires_at"`
+	RequestSnapshot string               `gorm:"column:request_snapshot;type:text"`
+	RawResponse     string               `gorm:"column:raw_response;type:text"`
+	CreatedAt       time.Time            `gorm:"column:created_at"`
+	Units           []quotationUnitModel `gorm:"foreignKey:ShippingQuotationID;references:ID"`
 }
 
 // TableName defines quotation table names.
 func (quotationModel) TableName() string {
 	return "shipping_quotations"
+}
+
+// quotationUnitModel defines processed quotation package-unit row values.
+type quotationUnitModel struct {
+	ID                  string    `gorm:"column:id;type:varchar(64);primaryKey"`
+	ShippingQuotationID string    `gorm:"column:shipping_quotation_id;type:varchar(64);index"`
+	UnitIndex           int       `gorm:"column:unit_index;type:int"`
+	Description         string    `gorm:"column:description;type:varchar(500)"`
+	PackageType         string    `gorm:"column:package_type;type:varchar(50)"`
+	HeightCM            float64   `gorm:"column:height_cm;type:decimal(8,2)"`
+	WidthCM             float64   `gorm:"column:width_cm;type:decimal(8,2)"`
+	DepthCM             float64   `gorm:"column:depth_cm;type:decimal(8,2)"`
+	RealWeightKG        float64   `gorm:"column:real_weight_kg;type:decimal(8,2)"`
+	VolumetricWeightKG  float64   `gorm:"column:volumetric_weight_kg;type:decimal(8,2)"`
+	DeclaredValue       float64   `gorm:"column:declared_value;type:decimal(15,2)"`
+	CreatedAt           time.Time `gorm:"column:created_at"`
+}
+
+// TableName defines quotation unit table names.
+func (quotationUnitModel) TableName() string {
+	return "shipping_quotation_units"
 }

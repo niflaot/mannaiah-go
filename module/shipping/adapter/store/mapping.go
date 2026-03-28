@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -153,20 +154,16 @@ func mapQuotationRecord(row quotationModel) port.QuotationRecord {
 		RawResponse:     row.RawResponse,
 		CreatedAt:       row.CreatedAt.UTC(),
 	}
-	if row.RequestSnapshot != "" {
-		var snapshot struct {
-			Units []domain.PackageUnit `json:"units"`
-		}
-		if jsonErr := json.Unmarshal([]byte(row.RequestSnapshot), &snapshot); jsonErr == nil {
-			record.Units = snapshot.Units
-		}
+	record.Units = mapQuotationUnitModels(row.Units)
+	if len(record.Units) == 0 {
+		record.Units = extractQuotationUnitsFromSnapshot(row.RequestSnapshot)
 	}
 
 	return record
 }
 
 func mapQuotationModel(record port.QuotationRecord) quotationModel {
-	return quotationModel{
+	row := quotationModel{
 		ID:              record.ID,
 		OrderID:         record.OrderID,
 		OrderIdentifier: record.OrderIdentifier,
@@ -181,6 +178,9 @@ func mapQuotationModel(record port.QuotationRecord) quotationModel {
 		RawResponse:     record.RawResponse,
 		CreatedAt:       normalizeTime(record.CreatedAt),
 	}
+	row.Units = mapQuotationUnitDomain(record.ID, record.Units)
+
+	return row
 }
 
 func normalizeTime(value time.Time) time.Time {
@@ -210,4 +210,65 @@ func derefString(value *string) string {
 
 func buildDeterministicID(base string, index int) string {
 	return base + "-unit-" + strconv.Itoa(index+1)
+}
+
+func mapQuotationUnitModels(rows []quotationUnitModel) []domain.PackageUnit {
+	result := make([]domain.PackageUnit, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, domain.PackageUnit{
+			Description: row.Description,
+			PackageType: row.PackageType,
+			Dimensions: domain.Dimensions{
+				HeightCM:           row.HeightCM,
+				WidthCM:            row.WidthCM,
+				DepthCM:            row.DepthCM,
+				RealWeightKG:       row.RealWeightKG,
+				VolumetricWeightKG: row.VolumetricWeightKG,
+				DeclaredValueCOP:   row.DeclaredValue,
+			},
+		})
+	}
+
+	return result
+}
+
+func mapQuotationUnitDomain(quotationID string, units []domain.PackageUnit) []quotationUnitModel {
+	result := make([]quotationUnitModel, 0, len(units))
+	for index, unit := range units {
+		result = append(result, quotationUnitModel{
+			ID:                  buildDeterministicID(quotationID, index),
+			ShippingQuotationID: quotationID,
+			UnitIndex:           index + 1,
+			Description:         strings.TrimSpace(unit.Description),
+			PackageType:         strings.TrimSpace(unit.PackageType),
+			HeightCM:            unit.Dimensions.HeightCM,
+			WidthCM:             unit.Dimensions.WidthCM,
+			DepthCM:             unit.Dimensions.DepthCM,
+			RealWeightKG:        unit.Dimensions.RealWeightKG,
+			VolumetricWeightKG:  unit.Dimensions.VolumetricWeightKG,
+			DeclaredValue:       unit.Dimensions.DeclaredValueCOP,
+			CreatedAt:           time.Now().UTC(),
+		})
+	}
+
+	return result
+}
+
+func extractQuotationUnitsFromSnapshot(snapshotValue string) []domain.PackageUnit {
+	trimmedSnapshot := strings.TrimSpace(snapshotValue)
+	if trimmedSnapshot == "" {
+		return nil
+	}
+	decodedSnapshot, decodeErr := base64.StdEncoding.DecodeString(trimmedSnapshot)
+	if decodeErr != nil {
+		decodedSnapshot = []byte(trimmedSnapshot)
+	}
+	var snapshot struct {
+		Units []domain.PackageUnit `json:"units"`
+	}
+	if jsonErr := json.Unmarshal(decodedSnapshot, &snapshot); jsonErr != nil {
+		return nil
+	}
+
+	return snapshot.Units
 }

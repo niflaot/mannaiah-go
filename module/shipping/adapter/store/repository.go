@@ -462,27 +462,59 @@ func (r *BatchRepository) List(ctx context.Context, query port.BatchListQuery) (
 // Create creates one quotation audit record.
 func (r *QuotationRepository) Create(ctx context.Context, record port.QuotationRecord) error {
 	row := mapQuotationModel(record)
-	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return fmt.Errorf("create quotation: %w", err)
-	}
+	now := time.Now().UTC()
 
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if _, err := deleteExpiredQuotationsTx(tx, now); err != nil {
+			return err
+		}
+		exists, err := quotationDuplicateExistsTx(tx, row, now)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return nil
+		}
+		if err := tx.Omit(clause.Associations).Create(&row).Error; err != nil {
+			return fmt.Errorf("create quotation: %w", err)
+		}
+		if len(row.Units) == 0 {
+			return nil
+		}
+		if err := tx.Create(&row.Units).Error; err != nil {
+			return fmt.Errorf("create quotation units: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // DeleteExpired deletes all quotation records whose expiration timestamp is in the past.
 func (r *QuotationRepository) DeleteExpired(ctx context.Context) (int64, error) {
-	result := r.db.WithContext(ctx).Where("expires_at > '0001-01-01 00:00:00' AND expires_at <= ?", time.Now().UTC()).Delete(&quotationModel{})
-	if result.Error != nil {
-		return 0, fmt.Errorf("delete expired quotations: %w", result.Error)
+	var deleted int64
+	now := time.Now().UTC()
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		rows, err := deleteExpiredQuotationsTx(tx, now)
+		if err != nil {
+			return err
+		}
+		deleted = rows
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
 
-	return result.RowsAffected, nil
+	return deleted, nil
 }
 
 // ListByOrderID lists quotation records by order identifier.
 func (r *QuotationRepository) ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error) {
 	rows := make([]quotationModel, 0)
-	if err := r.db.WithContext(ctx).Where("order_id = ?", strings.TrimSpace(orderID)).Order("created_at DESC").Find(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Units", func(db *gorm.DB) *gorm.DB {
+		return db.Order("unit_index ASC")
+	}).Where("order_id = ?", strings.TrimSpace(orderID)).Order("created_at DESC").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list quotations by order id: %w", err)
 	}
 	result := make([]port.QuotationRecord, 0, len(rows))
@@ -497,6 +529,9 @@ func (r *QuotationRepository) ListByOrderID(ctx context.Context, orderID string)
 func (r *QuotationRepository) GetLatestByOrderAndCarrier(ctx context.Context, orderID string, carrierID string) (*port.QuotationRecord, error) {
 	var row quotationModel
 	err := r.db.WithContext(ctx).
+		Preload("Units", func(db *gorm.DB) *gorm.DB {
+			return db.Order("unit_index ASC")
+		}).
 		Where("order_id = ? AND carrier_id = ? AND expires_at > ?", strings.TrimSpace(orderID), strings.TrimSpace(carrierID), time.Now().UTC()).
 		Order("created_at DESC").
 		First(&row).Error
@@ -510,6 +545,51 @@ func (r *QuotationRepository) GetLatestByOrderAndCarrier(ctx context.Context, or
 	record := mapQuotationRecord(row)
 
 	return &record, nil
+}
+
+func deleteExpiredQuotationsTx(tx *gorm.DB, now time.Time) (int64, error) {
+	expiredIDs := make([]string, 0)
+	if err := tx.Model(&quotationModel{}).
+		Where("expires_at > '0001-01-01 00:00:00' AND expires_at <= ?", now).
+		Pluck("id", &expiredIDs).Error; err != nil {
+		return 0, fmt.Errorf("load expired quotation ids: %w", err)
+	}
+	if len(expiredIDs) == 0 {
+		return 0, nil
+	}
+	if err := tx.Where("shipping_quotation_id IN ?", expiredIDs).Delete(&quotationUnitModel{}).Error; err != nil {
+		return 0, fmt.Errorf("delete expired quotation units: %w", err)
+	}
+	result := tx.Where("id IN ?", expiredIDs).Delete(&quotationModel{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("delete expired quotations: %w", result.Error)
+	}
+
+	return result.RowsAffected, nil
+}
+
+func quotationDuplicateExistsTx(tx *gorm.DB, row quotationModel, now time.Time) (bool, error) {
+	var existing quotationModel
+	err := tx.
+		Where("order_id = ? AND COALESCE(order_identifier, '') = ? AND carrier_id = ? AND origin_city_code = ? AND dest_city_code = ? AND request_snapshot = ? AND expires_at > ?",
+			row.OrderID,
+			row.OrderIdentifier,
+			row.CarrierID,
+			row.OriginCityCode,
+			row.DestCityCode,
+			row.RequestSnapshot,
+			now,
+		).
+		Order("created_at DESC").
+		First(&existing).Error
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("check quotation duplicate: %w", err)
 }
 
 // listMarkIDs lists mark identifiers belonging to one batch.

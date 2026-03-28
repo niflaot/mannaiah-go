@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ func TestRepositories(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if migrateErr := db.AutoMigrate(&shippingMarkModel{}, &shippingMarkUnitModel{}, &dispatchBatchModel{}, &quotationModel{}); migrateErr != nil {
+	if migrateErr := db.AutoMigrate(&shippingMarkModel{}, &shippingMarkUnitModel{}, &dispatchBatchModel{}, &quotationModel{}, &quotationUnitModel{}); migrateErr != nil {
 		t.Fatalf("automigrate: %v", migrateErr)
 	}
 
@@ -89,7 +90,9 @@ func TestRepositories(t *testing.T) {
 		EstimatedDays:   2,
 		CurrencyCode:    "COP",
 		ExpiresAt:       time.Now().UTC().Add(time.Hour),
-		RequestSnapshot: "{}",
+		Units:           []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2, VolumetricWeightKG: 2.4, DeclaredValueCOP: 10000}}},
+		RequestSnapshot: base64.StdEncoding.EncodeToString([]byte(`{"units":[{"description":"box"}]}`)),
+		RawResponse:     base64.StdEncoding.EncodeToString([]byte(`{"ok":true}`)),
 		CreatedAt:       time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("Create(quotation) error = %v", err)
@@ -103,5 +106,57 @@ func TestRepositories(t *testing.T) {
 	}
 	if quotations[0].FreightCost != 9000 {
 		t.Fatalf("unexpected quotation values = %#v", quotations[0])
+	}
+	if len(quotations[0].Units) != 1 {
+		t.Fatalf("quotation units = %d, want 1", len(quotations[0].Units))
+	}
+	if quotations[0].Units[0].Description != "box" {
+		t.Fatalf("quotation unit description = %q, want box", quotations[0].Units[0].Description)
+	}
+}
+
+// TestQuotationRepositoryPreventsDuplicateActiveRows verifies duplicate quotation inserts are ignored while non-expired.
+func TestQuotationRepositoryPreventsDuplicateActiveRows(t *testing.T) {
+	db, err := coredatabase.Open(coredatabase.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if migrateErr := db.AutoMigrate(&quotationModel{}, &quotationUnitModel{}); migrateErr != nil {
+		t.Fatalf("automigrate: %v", migrateErr)
+	}
+	quotationRepository, repoErr := NewQuotationRepository(db)
+	if repoErr != nil {
+		t.Fatalf("NewQuotationRepository() error = %v", repoErr)
+	}
+
+	record := port.QuotationRecord{
+		ID:              "quote-dedup-1",
+		OrderID:         "order-dedup",
+		CarrierID:       "manual",
+		OriginCityCode:  "11001000",
+		DestCityCode:    "76001000",
+		FreightCost:     9000,
+		EstimatedDays:   2,
+		CurrencyCode:    "COP",
+		ExpiresAt:       time.Now().UTC().Add(time.Hour),
+		RequestSnapshot: base64.StdEncoding.EncodeToString([]byte(`{"orderId":"order-dedup","units":[{"description":"box"}]}`)),
+		RawResponse:     base64.StdEncoding.EncodeToString([]byte(`{"ok":true}`)),
+		Units:           []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		CreatedAt:       time.Now().UTC(),
+	}
+	if err := quotationRepository.Create(context.Background(), record); err != nil {
+		t.Fatalf("Create(first) error = %v", err)
+	}
+	record.ID = "quote-dedup-2"
+	if err := quotationRepository.Create(context.Background(), record); err != nil {
+		t.Fatalf("Create(duplicate) error = %v", err)
+	}
+
+	rows, err := quotationRepository.ListByOrderID(context.Background(), "order-dedup")
+	if err != nil {
+		t.Fatalf("ListByOrderID() error = %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("quotation rows = %d, want 1", len(rows))
 	}
 }

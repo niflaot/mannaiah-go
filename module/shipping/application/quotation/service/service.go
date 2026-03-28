@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"math"
 	"strings"
@@ -94,6 +95,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 		ShipmentMode:            command.ShipmentMode,
 	}.Normalize()
+	request.ShipmentMode = resolveShipmentModeByUnits(request.Units)
 	if err := request.Validate(); err != nil {
 		return nil, err
 	}
@@ -162,6 +164,11 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 
 	if s.repository != nil {
 		snapshot, _ := json.Marshal(request)
+		rawResponse := strings.TrimSpace(result.RawResponse)
+		encodedRawResponse := ""
+		if rawResponse != "" {
+			encodedRawResponse = base64.StdEncoding.EncodeToString([]byte(rawResponse))
+		}
 		record := port.QuotationRecord{
 			ID:              result.ID,
 			OrderID:         result.OrderID,
@@ -174,8 +181,8 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 			CurrencyCode:    result.CurrencyCode,
 			ExpiresAt:       result.ExpiresAt,
 			Units:           request.Units,
-			RequestSnapshot: string(snapshot),
-			RawResponse:     result.RawResponse,
+			RequestSnapshot: base64.StdEncoding.EncodeToString(snapshot),
+			RawResponse:     encodedRawResponse,
 			CreatedAt:       result.CreatedAt,
 		}
 		if err := s.repository.Create(ctx, record); err != nil {
@@ -211,6 +218,14 @@ func (s *Service) GetLatestByOrderAndCarrier(ctx context.Context, orderID string
 	}
 
 	return s.repository.GetLatestByOrderAndCarrier(ctx, strings.TrimSpace(orderID), strings.TrimSpace(carrierID))
+}
+
+func resolveShipmentModeByUnits(units []domain.PackageUnit) domain.ShipmentMode {
+	if len(units) <= 1 {
+		return domain.ShipmentModeExpress
+	}
+
+	return domain.ShipmentModeParcel
 }
 
 func normalizeMoney(value float64) float64 {

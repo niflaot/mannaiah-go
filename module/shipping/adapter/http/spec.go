@@ -425,6 +425,8 @@ func shipmentModeSchema() *openapi3.Schema {
 
 // quotationRequestSchema defines schema for quotation request payloads.
 func quotationRequestSchema() *openapi3.Schema {
+	modeSchema := shipmentModeSchema()
+	modeSchema.Description = "Requested shipment mode. The service normalizes to express for one unit and parcel for two or more units."
 	schema := openapi3.NewObjectSchema().
 		WithProperty("orderId", openapi3.NewStringSchema()).
 		WithProperty("carrierId", openapi3.NewStringSchema()).
@@ -433,7 +435,7 @@ func quotationRequestSchema() *openapi3.Schema {
 		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
 		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
-		WithProperty("shipmentMode", shipmentModeSchema())
+		WithProperty("shipmentMode", modeSchema)
 	schema.Required = []string{"carrierId", "originCityCode", "destCityCode", "units", "shipmentMode"}
 
 	return schema
@@ -475,6 +477,11 @@ func quotationListResponseSchema() *openapi3.Schema {
 
 // quotationRecordSchema defines schema for persisted quotation records.
 func quotationRecordSchema() *openapi3.Schema {
+	requestSnapshotSchema := openapi3.NewStringSchema()
+	requestSnapshotSchema.Description = "Base64-encoded JSON quotation request snapshot."
+	rawResponseSchema := openapi3.NewStringSchema()
+	rawResponseSchema.Description = "Base64-encoded carrier raw response payload."
+
 	return openapi3.NewObjectSchema().
 		WithProperty("ID", openapi3.NewStringSchema()).
 		WithProperty("OrderID", openapi3.NewStringSchema()).
@@ -486,8 +493,8 @@ func quotationRecordSchema() *openapi3.Schema {
 		WithProperty("EstimatedDays", openapi3.NewIntegerSchema()).
 		WithProperty("CurrencyCode", openapi3.NewStringSchema()).
 		WithProperty("ExpiresAt", openapi3.NewDateTimeSchema()).
-		WithProperty("RequestSnapshot", openapi3.NewStringSchema()).
-		WithProperty("RawResponse", openapi3.NewStringSchema()).
+		WithProperty("RequestSnapshot", requestSnapshotSchema).
+		WithProperty("RawResponse", rawResponseSchema).
 		WithProperty("CreatedAt", openapi3.NewDateTimeSchema())
 }
 
