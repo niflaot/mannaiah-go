@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	ordersapplication "mannaiah/module/orders/application"
@@ -183,6 +184,7 @@ func (a shippingProductQuotationSourceAdapter) GetShippingAttributesByID(ctx con
 }
 
 // extractFloat reads a float64 attribute value from a map by key.
+// Handles both native numeric types and JSON-string encoded numbers (e.g. "1", "40").
 func extractFloat(attrs map[string]any, key string) float64 {
 	if attrs == nil {
 		return 0
@@ -200,12 +202,19 @@ func extractFloat(attrs map[string]any, key string) float64 {
 		return float64(v)
 	case int64:
 		return float64(v)
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		if err != nil {
+			return 0
+		}
+		return f
 	default:
 		return 0
 	}
 }
 
 // extractBool reads a bool attribute value from a map by key, returning defaultValue when absent.
+// Handles both native bool and JSON-string encoded booleans (e.g. "true", "false").
 func extractBool(attrs map[string]any, key string, defaultValue bool) bool {
 	if attrs == nil {
 		return defaultValue
@@ -214,10 +223,16 @@ func extractBool(attrs map[string]any, key string, defaultValue bool) bool {
 	if !ok {
 		return defaultValue
 	}
-	b, ok := val.(bool)
-	if !ok {
+	switch v := val.(type) {
+	case bool:
+		return v
+	case string:
+		b, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return defaultValue
+		}
+		return b
+	default:
 		return defaultValue
 	}
-
-	return b
 }
