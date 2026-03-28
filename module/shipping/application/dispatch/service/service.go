@@ -55,6 +55,36 @@ type DraftMarkCommand struct {
 	Observations string
 }
 
+// CreateBatchMarkCommand defines one batch mark creation input values for quoted or direct flows.
+type CreateBatchMarkCommand struct {
+	// BatchID defines the target batch identifier.
+	BatchID string
+	// Direct defines whether the mark should be materialized immediately.
+	Direct bool
+	// QuotationID defines the optional quotation reference attached to this draft.
+	QuotationID string
+	// QuotedFreightCost defines the freight cost snapshot from the quotation.
+	QuotedFreightCost float64
+	// OrderID defines order identifier values.
+	OrderID string
+	// Sender defines sender address values.
+	Sender domain.Address
+	// Recipient defines recipient address values.
+	Recipient domain.Address
+	// Units defines shipment package units.
+	Units []domain.PackageUnit
+	// DeclaredValue defines declared shipment value amounts.
+	DeclaredValue float64
+	// PaymentForm defines payment arrangement values.
+	PaymentForm string
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64
+	// ShipmentMode defines the delivery mode for this draft mark.
+	ShipmentMode domain.ShipmentMode
+	// Observations defines optional observation values.
+	Observations string
+}
+
 // ListQuery defines dispatch batch listing query values.
 type ListQuery struct {
 	// CarrierID filters rows by carrier identifier.
@@ -190,6 +220,84 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 	mark.DispatchBatchID = &batchID
 
 	return &mark, nil
+}
+
+// CreateBatchMark creates one batch mark as draft (quoted) or direct (materialized immediately).
+func (s *Service) CreateBatchMark(ctx context.Context, command CreateBatchMarkCommand) (*domain.ShippingMark, error) {
+	if strings.TrimSpace(command.BatchID) == "" {
+		return nil, domain.ErrInvalidID
+	}
+	if command.Direct {
+		return s.createDirectBatchMark(ctx, command)
+	}
+
+	return s.DraftMark(ctx, DraftMarkCommand{
+		BatchID:                 strings.TrimSpace(command.BatchID),
+		QuotationID:             strings.TrimSpace(command.QuotationID),
+		QuotedFreightCost:       command.QuotedFreightCost,
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		Sender:                  command.Sender,
+		Recipient:               command.Recipient,
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(command.PaymentForm),
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
+		Observations:            strings.TrimSpace(command.Observations),
+	})
+}
+
+// createDirectBatchMark creates one mark in a batch and materializes it immediately, even when the batch is closed.
+func (s *Service) createDirectBatchMark(ctx context.Context, command CreateBatchMarkCommand) (*domain.ShippingMark, error) {
+	if s == nil || s.batchRepository == nil || s.markRepository == nil || s.materializer == nil {
+		return nil, domain.ErrCarrierNotSupported
+	}
+	batch, err := s.batchRepository.GetByID(ctx, strings.TrimSpace(command.BatchID))
+	if err != nil {
+		return nil, err
+	}
+	var quotationID *string
+	if trimmed := strings.TrimSpace(command.QuotationID); trimmed != "" {
+		quotationID = &trimmed
+	}
+	batchID := batch.ID
+	mark := domain.ShippingMark{
+		ID:                      uuid.NewString(),
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		CarrierID:               batch.CarrierID,
+		Status:                  domain.MarkStatusQuoted,
+		Sender:                  command.Sender,
+		Recipient:               command.Recipient,
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(command.PaymentForm),
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
+		Observations:            strings.TrimSpace(command.Observations),
+		QuotationID:             quotationID,
+		QuotedFreightCost:       command.QuotedFreightCost,
+		DispatchBatchID:         &batchID,
+		CreatedAt:               time.Now().UTC(),
+		UpdatedAt:               time.Now().UTC(),
+	}.Normalize()
+	if err := mark.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.markRepository.Create(ctx, &mark); err != nil {
+		return nil, err
+	}
+	if err := s.batchRepository.AddMark(ctx, batchID, mark.ID); err != nil {
+		return nil, err
+	}
+	if err := s.materializer.Materialize(ctx, &mark); err != nil {
+		return nil, err
+	}
+	persisted, err := s.markRepository.GetByID(ctx, mark.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return persisted, nil
 }
 
 // RemoveDraftMark permanently deletes one QUOTED draft mark from a batch.

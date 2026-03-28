@@ -76,6 +76,54 @@ Returns all non-expired quotations for a given order.
 
 ---
 
+### Preview Order Packaging (No Carrier Call)
+
+```
+POST /shippings/quotations/order-packaging
+```
+
+```json
+{
+  "orderIdentifier": "1024554",
+  "carrierId": "tcc",
+  "originCityCode": "11001"
+}
+```
+
+Returns order packaging preview without calling carrier quotation APIs and without persisting quotation rows.
+
+**Response** `200 OK`
+
+```json
+{
+  "orderId": "9cd1e0ccacf39f0f1088ef81eb0d166a",
+  "orderIdentifier": "1024554",
+  "carrierId": "tcc",
+  "originCityCode": "11001",
+  "destCityCode": "11001",
+  "declaredValue": 311000,
+  "collectOnDeliveryAmount": 311000,
+  "shipmentMode": "parcel",
+  "units": [
+    {
+      "description": "7709738583238",
+      "packageType": "CAJA",
+      "dimensions": {
+        "heightCm": 5,
+        "widthCm": 40,
+        "depthCm": 30,
+        "realWeightKg": 1,
+        "volumetricWeightKg": 2.4,
+        "declaredValueCop": 157000
+      }
+    }
+  ],
+  "warnings": []
+}
+```
+
+---
+
 ## Mark Endpoints
 
 ### Generate Mark (Direct)
@@ -276,6 +324,39 @@ Creates a mark with `status = QUOTED` and `DispatchBatchID = batch.ID`.
 **Errors:** `400` if batch is closed, `400` if carrier mismatch.
 
 **Response** `200 OK` with the updated `DispatchBatch` (including the new mark ID in `markIDs`).
+
+---
+
+### Create Batch Mark (Draft or Direct)
+
+```
+POST /shipping/batches/marks
+```
+
+`batchId` is always required.
+
+`direct=false` (default or omitted): creates a `QUOTED` draft mark and requires the batch to be open.  
+`direct=true`: creates and materializes the mark immediately and assigns it to the batch even when the batch is closed.
+
+```json
+{
+  "batchId": "b-uuid",
+  "direct": true,
+  "orderId": "order-uuid",
+  "shipmentMode": "parcel",
+  "sender": { "name": "Bodega", "addressLine": "Cra 1 #2-3", "cityCode": "11001" },
+  "recipient": { "name": "Juan", "addressLine": "Calle 4 #5-6", "cityCode": "05001" },
+  "units": [
+    {
+      "description": "SKU-1",
+      "packageType": "CAJA",
+      "dimensions": { "heightCm": 5, "widthCm": 25, "depthCm": 30, "realWeightKg": 1 }
+    }
+  ]
+}
+```
+
+**Response** `201 Created` with the `ShippingMark` object.
 
 ---
 

@@ -370,9 +370,6 @@ func (r *BatchRepository) AddMark(ctx context.Context, batchID string, markID st
 
 			return fmt.Errorf("load dispatch batch: %w", err)
 		}
-		if batch.Status != string(domain.BatchStatusOpen) {
-			return domain.ErrBatchClosed
-		}
 		result := tx.Model(&shippingMarkModel{}).
 			Where("id = ?", trimmedMarkID).
 			Update("dispatch_batch_id", &trimmedBatchID)

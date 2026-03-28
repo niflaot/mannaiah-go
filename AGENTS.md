@@ -41,6 +41,7 @@
 - Every endpoint must be documented in module-level OpenAPI specs.
 - Modules must provide their own OpenAPI spec artifacts; core startup must merge all module specs into a single aggregated document.
 - Composition roots must expose the aggregated spec endpoint (for example, `/openapi.json`).
+- Shipping API contract updates must also update `module/shipping/README.md` endpoint matrix with request/response behavior notes for new routes.
 
 ## Architecture
 - `module/core` is the foundational core module (`core/` in domain terms).

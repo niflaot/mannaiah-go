@@ -37,10 +37,59 @@ type packageCandidate struct {
 	volume float64
 }
 
+// OrderPackagingResult defines order packaging preview values without carrier quotation execution.
+type OrderPackagingResult struct {
+	// OrderID defines internal order identifier values.
+	OrderID string `json:"orderId"`
+	// OrderIdentifier defines external order identifier values.
+	OrderIdentifier string `json:"orderIdentifier"`
+	// CarrierID defines carrier identifier values.
+	CarrierID string `json:"carrierId"`
+	// OriginCityCode defines origin city-code values.
+	OriginCityCode string `json:"originCityCode"`
+	// DestCityCode defines destination city-code values.
+	DestCityCode string `json:"destCityCode"`
+	// Units defines the packed package units.
+	Units []domain.PackageUnit `json:"units"`
+	// DeclaredValue defines declared order value amounts.
+	DeclaredValue float64 `json:"declaredValue"`
+	// CollectOnDeliveryAmount defines COD value amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
+	// ShipmentMode defines auto-resolved shipment mode values.
+	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
+	// Warnings defines non-fatal packaging warnings.
+	Warnings []domain.QuotationWarning `json:"warnings,omitempty"`
+}
+
 // QuoteFromOrder builds package units from order products and requests a freight quotation.
 // It reads shipping attributes from the "default" realm datasheet of each product,
 // applies the overlapping box-packing algorithm, and calls Quote() with the resulting units.
 func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand) (*domain.QuotationResult, error) {
+	packaging, err := s.OrderPackagingFromOrder(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	result, quoteErr := s.Quote(ctx, QuoteCommand{
+		OrderID:                 packaging.OrderID,
+		OrderIdentifier:         packaging.OrderIdentifier,
+		CarrierID:               packaging.CarrierID,
+		OriginCityCode:          packaging.OriginCityCode,
+		DestCityCode:            packaging.DestCityCode,
+		Units:                   packaging.Units,
+		DeclaredValue:           packaging.DeclaredValue,
+		CollectOnDeliveryAmount: packaging.CollectOnDeliveryAmount,
+	})
+	if quoteErr != nil {
+		return nil, quoteErr
+	}
+	result.Warnings = packaging.Warnings
+
+	return result, nil
+}
+
+// OrderPackagingFromOrder resolves packed units and order totals without carrier quotation requests.
+func (s *Service) OrderPackagingFromOrder(ctx context.Context, cmd QuoteFromOrderCommand) (*OrderPackagingResult, error) {
 	if s.orderSource == nil {
 		return nil, errors.New("order source not configured")
 	}
@@ -66,8 +115,9 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 	}
 
 	units := packBoxes(candidates, &warnings)
+	shipmentMode := resolveShipmentModeByUnits(units)
 
-	result, quoteErr := s.Quote(ctx, QuoteCommand{
+	return &OrderPackagingResult{
 		OrderID:                 orderData.OrderID,
 		OrderIdentifier:         orderData.OrderIdentifier,
 		CarrierID:               strings.TrimSpace(cmd.CarrierID),
@@ -76,14 +126,9 @@ func (s *Service) QuoteFromOrder(ctx context.Context, cmd QuoteFromOrderCommand)
 		Units:                   units,
 		DeclaredValue:           orderData.TotalValue,
 		CollectOnDeliveryAmount: orderData.TotalValue,
-	})
-	if quoteErr != nil {
-		return nil, quoteErr
-	}
-
-	result.Warnings = warnings
-
-	return result, nil
+		ShipmentMode:            shipmentMode,
+		Warnings:                warnings,
+	}, nil
 }
 
 // buildCandidates resolves product shipping attributes for all order items and returns one candidate

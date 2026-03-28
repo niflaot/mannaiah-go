@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -233,6 +234,94 @@ func TestDraftMarkAndClose(t *testing.T) {
 	}
 	if len(publisher.events) < 2 || publisher.events[len(publisher.events)-1].Topic != port.TopicBatchClosed {
 		t.Fatalf("missing batch closed event")
+	}
+}
+
+// TestCreateBatchMarkDraft verifies CreateBatchMark delegates to draft behavior when direct is disabled.
+func TestCreateBatchMarkDraft(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	mark, err := service.CreateBatchMark(context.Background(), CreateBatchMarkCommand{
+		BatchID:      batch.ID,
+		Direct:       false,
+		OrderID:      "order-1",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMark() error = %v", err)
+	}
+	if mark.Status != domain.MarkStatusQuoted {
+		t.Fatalf("status = %q", mark.Status)
+	}
+	if mark.DispatchBatchID == nil || *mark.DispatchBatchID != batch.ID {
+		t.Fatalf("dispatch batch id = %v", mark.DispatchBatchID)
+	}
+}
+
+// TestCreateBatchMarkDirectAllowsClosedBatch verifies direct creation materializes marks even when the batch is closed.
+func TestCreateBatchMarkDirectAllowsClosedBatch(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	materializer := &materializerStub{repository: markRepository}
+	service := NewService(batchRepository, markRepository, nil, materializer)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := batchRepository.Close(context.Background(), batch.ID); err != nil {
+		t.Fatalf("Close() stub error = %v", err)
+	}
+
+	mark, err := service.CreateBatchMark(context.Background(), CreateBatchMarkCommand{
+		BatchID:      batch.ID,
+		Direct:       true,
+		OrderID:      "order-2",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMark() error = %v", err)
+	}
+	if materializer.calls != 1 {
+		t.Fatalf("materializer calls = %d", materializer.calls)
+	}
+	if mark.Status != domain.MarkStatusCreated {
+		t.Fatalf("status = %q", mark.Status)
+	}
+	if mark.DispatchBatchID == nil || *mark.DispatchBatchID != batch.ID {
+		t.Fatalf("dispatch batch id = %v", mark.DispatchBatchID)
+	}
+}
+
+// TestCreateBatchMarkRequiresBatchID verifies batch id is mandatory for both draft and direct flows.
+func TestCreateBatchMarkRequiresBatchID(t *testing.T) {
+	service := NewService(newDispatchBatchRepositoryStub(), newDispatchMarkRepositoryStub(), nil)
+
+	_, err := service.CreateBatchMark(context.Background(), CreateBatchMarkCommand{
+		Direct:       false,
+		OrderID:      "order-1",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	})
+	if !errors.Is(err, domain.ErrInvalidID) {
+		t.Fatalf("CreateBatchMark() error = %v", err)
 	}
 }
 

@@ -23,6 +23,12 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/marks/{id}/related") == nil {
 		t.Fatalf("missing /shipping/marks/{id}/related path")
 	}
+	if paths.Find("/shipping/batches/marks") == nil {
+		t.Fatalf("missing /shipping/batches/marks path")
+	}
+	if paths.Find("/shippings/quotations/order-packaging") == nil {
+		t.Fatalf("missing /shippings/quotations/order-packaging path")
+	}
 }
 
 // TestShippingOperationsExposeSchemas verifies shipping operations expose request/response schemas.
@@ -80,6 +86,27 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 		if content.Schema.Value.Properties["message"] == nil || content.Schema.Value.Properties["error"] == nil {
 			t.Fatalf("expected /shipping/quotations/order POST %s error schema properties", status)
 		}
+	}
+	postOrderPackaging := paths.Find("/shippings/quotations/order-packaging").Post
+	if postOrderPackaging == nil || postOrderPackaging.RequestBody == nil {
+		t.Fatalf("expected /shippings/quotations/order-packaging POST request body")
+	}
+	if postOrderPackaging.Responses == nil || postOrderPackaging.Responses.Value("200") == nil {
+		t.Fatalf("expected /shippings/quotations/order-packaging POST 200 response")
+	}
+	orderPackagingResponse := postOrderPackaging.Responses.Value("200")
+	if orderPackagingResponse == nil || orderPackagingResponse.Value == nil || orderPackagingResponse.Value.Content.Get("application/json") == nil {
+		t.Fatalf("expected /shippings/quotations/order-packaging POST 200 JSON schema")
+	}
+	orderPackagingSchema := orderPackagingResponse.Value.Content.Get("application/json").Schema
+	if orderPackagingSchema == nil || orderPackagingSchema.Value == nil {
+		t.Fatalf("expected /shippings/quotations/order-packaging POST 200 schema object")
+	}
+	if orderPackagingSchema.Value.Properties["units"] == nil {
+		t.Fatalf("expected units in order packaging response schema")
+	}
+	if orderPackagingSchema.Value.Properties["shipmentMode"] == nil {
+		t.Fatalf("expected shipmentMode in order packaging response schema")
 	}
 
 	getOrderQuotation := paths.Find("/shipping/quotations/order/{identifier}").Get
@@ -145,6 +172,36 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	}
 	if postBatchMarks.Responses == nil || postBatchMarks.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/batches/{id}/marks POST 201 response")
+	}
+	postCreateBatchMark := paths.Find("/shipping/batches/marks").Post
+	if postCreateBatchMark == nil || postCreateBatchMark.RequestBody == nil {
+		t.Fatalf("expected /shipping/batches/marks POST request body")
+	}
+	postCreateBatchMarkRequest := postCreateBatchMark.RequestBody.Value.Content.Get("application/json")
+	if postCreateBatchMarkRequest == nil || postCreateBatchMarkRequest.Schema == nil || postCreateBatchMarkRequest.Schema.Value == nil {
+		t.Fatalf("expected /shipping/batches/marks POST JSON request schema")
+	}
+	if postCreateBatchMarkRequest.Schema.Value.Properties["batchId"] == nil {
+		t.Fatalf("expected batchId in /shipping/batches/marks POST request schema")
+	}
+	if postCreateBatchMarkRequest.Schema.Value.Properties["direct"] == nil {
+		t.Fatalf("expected direct in /shipping/batches/marks POST request schema")
+	}
+	if postCreateBatchMark.Responses == nil || postCreateBatchMark.Responses.Value("201") == nil {
+		t.Fatalf("expected /shipping/batches/marks POST 201 response")
+	}
+	for _, status := range []string{"400", "401", "403", "404", "409", "500"} {
+		errorResponse := postCreateBatchMark.Responses.Value(status)
+		if errorResponse == nil || errorResponse.Value == nil {
+			t.Fatalf("expected /shipping/batches/marks POST %s response", status)
+		}
+		content := errorResponse.Value.Content.Get("application/json")
+		if content == nil || content.Schema == nil || content.Schema.Value == nil {
+			t.Fatalf("expected /shipping/batches/marks POST %s JSON error schema", status)
+		}
+		if content.Schema.Value.Properties["message"] == nil || content.Schema.Value.Properties["error"] == nil {
+			t.Fatalf("expected /shipping/batches/marks POST %s error schema properties", status)
+		}
 	}
 
 	patchVoid := paths.Find("/shipping/marks/{id}/void").Patch

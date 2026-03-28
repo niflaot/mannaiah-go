@@ -14,6 +14,7 @@ func Paths() *openapi3.Paths {
 	return openapi3.NewPaths(
 		openapi3.WithPath("/shipping/quotations", &openapi3.PathItem{Post: quotationCreateOperation(), Get: quotationListOperation()}),
 		openapi3.WithPath("/shipping/quotations/order", &openapi3.PathItem{Post: quotationFromOrderOperation()}),
+		openapi3.WithPath("/shippings/quotations/order-packaging", &openapi3.PathItem{Post: quotationOrderPackagingOperation()}),
 		openapi3.WithPath("/shipping/quotations/order/{identifier}", &openapi3.PathItem{Get: getOrderQuotationOperation()}),
 		openapi3.WithPath("/shipping/marks", &openapi3.PathItem{Post: markCreateOperation(), Get: markListOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}", &openapi3.PathItem{Get: markGetOperation()}),
@@ -22,6 +23,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/batches", &openapi3.PathItem{Post: batchCreateOperation(), Get: batchListOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}", &openapi3.PathItem{Get: batchGetOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/marks", &openapi3.PathItem{Post: batchAddMarkOperation()}),
+		openapi3.WithPath("/shipping/batches/marks", &openapi3.PathItem{Post: batchCreateMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Delete: batchRemoveMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/manifest-document", &openapi3.PathItem{Get: batchManifestDocumentOperation()}),
@@ -157,6 +159,25 @@ func quotationFromOrderOperation() *openapi3.Operation {
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(201, jsonResponse("Quotation result with warnings.", quotationResultSchema())),
 			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload, no_valid_products, carrier_not_supported, quotation_not_supported, invalid_city_code.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
+		),
+	}
+}
+
+// quotationOrderPackagingOperation defines the OpenAPI operation for order packaging previews without carrier quotation calls.
+func quotationOrderPackagingOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_quoteOrderPackaging",
+		Summary:     "Preview packed units for an order without carrier quotation",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		RequestBody: jsonRequestBody(quotationFromOrderRequestSchema(), true),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, jsonResponse("Order packaging preview.", orderPackagingResultSchema())),
+			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload, no_valid_products, carrier_not_supported.")),
 			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
 			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
 			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
@@ -331,6 +352,26 @@ func batchAddMarkOperation() *openapi3.Operation {
 		RequestBody: jsonRequestBody(draftMarkRequestSchema(), true),
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(201, jsonResponse("Draft shipping mark.", shippingMarkSchema())),
+		),
+	}
+}
+
+// batchCreateMarkOperation defines the OpenAPI operation for quoted/direct mark creation with explicit batch id in payload.
+func batchCreateMarkOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_createBatchMark",
+		Summary:     "Create one quoted or direct shipping mark in a batch",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		RequestBody: jsonRequestBody(createBatchMarkRequestSchema(), true),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(201, jsonResponse("Shipping mark created.", shippingMarkSchema())),
+			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload, invalid_city_code, carrier_not_supported.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(409, errorResponse("Conflict. Possible message codes: batch_closed, batch_carrier_mismatch, batch_mark_status_mismatch.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
 		),
 	}
 }
@@ -530,6 +571,25 @@ func quotationFromOrderRequestSchema() *openapi3.Schema {
 	return schema
 }
 
+// orderPackagingResultSchema defines schema for order packaging preview payloads.
+func orderPackagingResultSchema() *openapi3.Schema {
+	warningSchema := openapi3.NewObjectSchema().
+		WithProperty("code", openapi3.NewStringSchema()).
+		WithProperty("message", openapi3.NewStringSchema())
+
+	return openapi3.NewObjectSchema().
+		WithProperty("orderId", openapi3.NewStringSchema()).
+		WithProperty("orderIdentifier", openapi3.NewStringSchema()).
+		WithProperty("carrierId", openapi3.NewStringSchema()).
+		WithProperty("originCityCode", openapi3.NewStringSchema()).
+		WithProperty("destCityCode", openapi3.NewStringSchema()).
+		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
+		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
+		WithProperty("shipmentMode", shipmentModeSchema()).
+		WithProperty("warnings", openapi3.NewArraySchema().WithItems(warningSchema))
+}
+
 // markRequestSchema defines schema for mark generation request payloads.
 func markRequestSchema() *openapi3.Schema {
 	schema := openapi3.NewObjectSchema().
@@ -591,6 +651,27 @@ func draftMarkRequestSchema() *openapi3.Schema {
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("shipmentMode", shipmentModeSchema())
 	schema.Required = []string{"orderId", "sender", "recipient", "units", "shipmentMode"}
+
+	return schema
+}
+
+// createBatchMarkRequestSchema defines schema for quoted/direct batch mark creation request payloads.
+func createBatchMarkRequestSchema() *openapi3.Schema {
+	schema := openapi3.NewObjectSchema().
+		WithProperty("batchId", openapi3.NewStringSchema()).
+		WithProperty("direct", openapi3.NewBoolSchema()).
+		WithProperty("quotationId", openapi3.NewStringSchema()).
+		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
+		WithProperty("orderId", openapi3.NewStringSchema()).
+		WithProperty("sender", addressSchema()).
+		WithProperty("recipient", addressSchema()).
+		WithProperty("units", openapi3.NewArraySchema().WithItems(packageUnitSchema())).
+		WithProperty("declaredValue", openapi3.NewFloat64Schema()).
+		WithProperty("paymentForm", openapi3.NewStringSchema()).
+		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
+		WithProperty("observations", openapi3.NewStringSchema()).
+		WithProperty("shipmentMode", shipmentModeSchema())
+	schema.Required = []string{"batchId", "orderId", "sender", "recipient", "units", "shipmentMode"}
 
 	return schema
 }

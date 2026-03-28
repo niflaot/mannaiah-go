@@ -41,6 +41,36 @@ type draftMarkRequest struct {
 	Observations string `json:"observations"`
 }
 
+// createBatchMarkRequest defines one payload for quoted/direct batch mark creation.
+type createBatchMarkRequest struct {
+	// BatchID defines the target batch identifier.
+	BatchID string `json:"batchId"`
+	// Direct defines whether the mark should be materialized immediately.
+	Direct bool `json:"direct"`
+	// QuotationID defines the optional quotation reference attached to this mark.
+	QuotationID string `json:"quotationId"`
+	// QuotedFreightCost defines the freight cost snapshot from the quotation.
+	QuotedFreightCost float64 `json:"quotedFreightCost"`
+	// OrderID defines order identifier values.
+	OrderID string `json:"orderId"`
+	// Sender defines sender address values.
+	Sender domain.Address `json:"sender"`
+	// Recipient defines recipient address values.
+	Recipient domain.Address `json:"recipient"`
+	// Units defines package-unit values.
+	Units []draftMarkUnitRequest `json:"units"`
+	// DeclaredValue defines declared shipment value amounts.
+	DeclaredValue float64 `json:"declaredValue"`
+	// PaymentForm defines payment arrangement values.
+	PaymentForm string `json:"paymentForm"`
+	// CollectOnDeliveryAmount defines requested cash-on-delivery collection amounts.
+	CollectOnDeliveryAmount float64 `json:"collectOnDeliveryAmount"`
+	// ShipmentMode defines the delivery mode for this mark (parcel or express).
+	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
+	// Observations defines observation values.
+	Observations string `json:"observations"`
+}
+
 // draftMarkUnitRequest defines package-unit values within a draft mark request.
 type draftMarkUnitRequest struct {
 	// Description defines package description values.
@@ -116,14 +146,7 @@ func (h *Handler) addBatchMark(ctx corehttp.Context) error {
 	if err := ctx.BodyParser(&request); err != nil {
 		return corehttp.NewAppError(400, "invalid_payload", err)
 	}
-	units := make([]domain.PackageUnit, 0, len(request.Units))
-	for _, unit := range request.Units {
-		units = append(units, domain.PackageUnit{
-			Description: strings.TrimSpace(unit.Description),
-			PackageType: strings.TrimSpace(unit.PackageType),
-			Dimensions:  unit.Dimensions,
-		})
-	}
+	units := mapDraftMarkUnits(request.Units)
 	mark, err := h.batches.DraftMark(ctx.Context(), dispatchservice.DraftMarkCommand{
 		BatchID:                 strings.TrimSpace(ctx.Params("id")),
 		QuotationID:             strings.TrimSpace(request.QuotationID),
@@ -132,6 +155,34 @@ func (h *Handler) addBatchMark(ctx corehttp.Context) error {
 		Sender:                  request.Sender,
 		Recipient:               request.Recipient,
 		Units:                   units,
+		DeclaredValue:           request.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(request.PaymentForm),
+		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
+		ShipmentMode:            request.ShipmentMode,
+		Observations:            strings.TrimSpace(request.Observations),
+	})
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(201).JSON(mark)
+}
+
+// createBatchMark handles quoted/direct mark creation with explicit batch id in body.
+func (h *Handler) createBatchMark(ctx corehttp.Context) error {
+	request := createBatchMarkRequest{}
+	if err := ctx.BodyParser(&request); err != nil {
+		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	mark, err := h.batches.CreateBatchMark(ctx.Context(), dispatchservice.CreateBatchMarkCommand{
+		BatchID:                 strings.TrimSpace(request.BatchID),
+		Direct:                  request.Direct,
+		QuotationID:             strings.TrimSpace(request.QuotationID),
+		QuotedFreightCost:       request.QuotedFreightCost,
+		OrderID:                 strings.TrimSpace(request.OrderID),
+		Sender:                  request.Sender,
+		Recipient:               request.Recipient,
+		Units:                   mapDraftMarkUnits(request.Units),
 		DeclaredValue:           request.DeclaredValue,
 		PaymentForm:             strings.TrimSpace(request.PaymentForm),
 		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
@@ -178,4 +229,17 @@ func (h *Handler) batchManifestDocument(ctx corehttp.Context) error {
 	ctx.SetHeader("Cache-Control", "private, max-age=300")
 
 	return ctx.Status(200).SendBytes(payload)
+}
+
+func mapDraftMarkUnits(unitsRequest []draftMarkUnitRequest) []domain.PackageUnit {
+	units := make([]domain.PackageUnit, 0, len(unitsRequest))
+	for _, unit := range unitsRequest {
+		units = append(units, domain.PackageUnit{
+			Description: strings.TrimSpace(unit.Description),
+			PackageType: strings.TrimSpace(unit.PackageType),
+			Dimensions:  unit.Dimensions,
+		})
+	}
+
+	return units
 }

@@ -33,9 +33,10 @@
 - Endpoints:
   - `POST /shipping/quotations`, `GET /shipping/quotations`
   - `POST /shipping/quotations/order` — auto-build packages from order products and request a quotation
+  - `POST /shippings/quotations/order-packaging` — preview package allocation, COD value, destination city, and resolved shipment mode without carrier calls or persistence
   - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
   - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
-  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
+  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
   - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
 - Events:
@@ -101,6 +102,14 @@
 
 **Get latest quotation for order:** `GET /shipping/quotations/order/:identifier?carrierId={carrierID}`
 — Returns the most recent non-expired quotation for the given order and carrier, or `404` if none found.
+
+**Preview packaging only:** `POST /shippings/quotations/order-packaging`
+— Returns the auto-packed `units`, `declaredValue`, `collectOnDeliveryAmount`, `destCityCode`, and normalized `shipmentMode` (`express` for one unit, `parcel` for two or more) without calling carrier quotation APIs and without storing quotation rows.
+
+## Batch Mark Creation Modes
+- `POST /shipping/batches/marks` accepts `batchId` (required) and `direct` (optional, default `false`).
+- `direct=false` (or omitted): creates a `QUOTED` draft mark in the target batch and requires the batch to be `OPEN`.
+- `direct=true`: creates and materializes the mark immediately and assigns it to the target batch even if the batch is `CLOSED`.
 
 ## COD Collection
 - Mark create requests accept `collectOnDeliveryAmount`.

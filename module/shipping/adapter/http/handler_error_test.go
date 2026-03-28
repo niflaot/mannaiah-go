@@ -21,6 +21,9 @@ func (quotationServiceStub) Quote(ctx context.Context, command quotationservice.
 func (quotationServiceStub) QuoteFromOrder(ctx context.Context, command quotationservice.QuoteFromOrderCommand) (*domain.QuotationResult, error) {
 	return &domain.QuotationResult{}, nil
 }
+func (quotationServiceStub) OrderPackagingFromOrder(ctx context.Context, command quotationservice.QuoteFromOrderCommand) (*quotationservice.OrderPackagingResult, error) {
+	return &quotationservice.OrderPackagingResult{}, nil
+}
 func (quotationServiceStub) ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error) {
 	return nil, nil
 }
@@ -61,6 +64,9 @@ func (dispatchServiceStub) List(ctx context.Context, query dispatchservice.ListQ
 	return nil, 0, nil
 }
 func (dispatchServiceStub) DraftMark(ctx context.Context, command dispatchservice.DraftMarkCommand) (*domain.ShippingMark, error) {
+	return &domain.ShippingMark{}, nil
+}
+func (dispatchServiceStub) CreateBatchMark(ctx context.Context, command dispatchservice.CreateBatchMarkCommand) (*domain.ShippingMark, error) {
 	return &domain.ShippingMark{}, nil
 }
 func (dispatchServiceStub) RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {

@@ -131,6 +131,24 @@ func (h *Handler) quoteFromOrder(ctx corehttp.Context) error {
 	return ctx.Status(201).JSON(result)
 }
 
+// quoteOrderPackaging handles order packaging preview requests without calling carrier quotation APIs.
+func (h *Handler) quoteOrderPackaging(ctx corehttp.Context) error {
+	request := quoteFromOrderRequest{}
+	if err := ctx.BodyParser(&request); err != nil {
+		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	result, err := h.quotations.OrderPackagingFromOrder(ctx.Context(), quotationservice.QuoteFromOrderCommand{
+		OrderIdentifier: strings.TrimSpace(request.OrderIdentifier),
+		CarrierID:       strings.TrimSpace(request.CarrierID),
+		OriginCityCode:  strings.TrimSpace(request.OriginCityCode),
+	})
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(result)
+}
+
 // getOrderQuotation handles retrieval of the latest quotation for an order and carrier.
 func (h *Handler) getOrderQuotation(ctx corehttp.Context) error {
 	identifier := strings.TrimSpace(ctx.Params("identifier"))

@@ -388,6 +388,65 @@ func TestQuoteFromOrderReturnsCityValidationErrors(t *testing.T) {
 	}
 }
 
+// TestOrderPackagingFromOrderPreviewsUnitsWithoutPersistence verifies packaging previews are computed without carrier calls or quotation persistence.
+func TestOrderPackagingFromOrderPreviewsUnitsWithoutPersistence(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{})
+	service.SetOrderSource(orderSourceStub{row: &port.OrderQuotationData{
+		OrderID:         "order-packaging",
+		OrderIdentifier: "1024554",
+		DestCityCode:    "11001",
+		TotalValue:      311000,
+		Items: []port.OrderQuotationItem{
+			{SKU: "7709738583238", Quantity: 1},
+			{SKU: "7709296832021", Quantity: 1},
+		},
+	}})
+	service.SetProductSource(productSourceStub{attrsBySKU: map[string]port.ProductShippingAttributes{
+		"7709738583238": {
+			SKU:        "7709738583238",
+			WeightKG:   1,
+			HeightCM:   5,
+			WidthCM:    40,
+			LengthCM:   30,
+			Price:      157000,
+			Overlapped: false,
+			Valid:      true,
+		},
+		"7709296832021": {
+			SKU:        "7709296832021",
+			WeightKG:   1,
+			HeightCM:   5,
+			WidthCM:    40,
+			LengthCM:   30,
+			Price:      154000,
+			Overlapped: false,
+			Valid:      true,
+		},
+	}})
+
+	result, err := service.OrderPackagingFromOrder(context.Background(), QuoteFromOrderCommand{
+		OrderIdentifier: "1024554",
+		CarrierID:       "manual",
+		OriginCityCode:  "11001",
+	})
+	if err != nil {
+		t.Fatalf("OrderPackagingFromOrder() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("OrderPackagingFromOrder() returned nil result")
+	}
+	if len(result.Units) != 2 {
+		t.Fatalf("units = %d, want 2", len(result.Units))
+	}
+	if result.ShipmentMode != domain.ShipmentModeParcel {
+		t.Fatalf("shipment mode = %q, want %q", result.ShipmentMode, domain.ShipmentModeParcel)
+	}
+	if len(repository.rows) != 0 {
+		t.Fatalf("quotation repository rows = %d, want 0", len(repository.rows))
+	}
+}
+
 // TestApplySurcharge verifies surcharge application behavior.
 func TestApplySurcharge(t *testing.T) {
 	if got := applySurcharge(100000, 4); got != 104000 {

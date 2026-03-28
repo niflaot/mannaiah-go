@@ -36,6 +36,8 @@ type QuotationService interface {
 	Quote(ctx context.Context, command quotationservice.QuoteCommand) (*domain.QuotationResult, error)
 	// QuoteFromOrder builds packages from order products and requests a freight quotation.
 	QuoteFromOrder(ctx context.Context, command quotationservice.QuoteFromOrderCommand) (*domain.QuotationResult, error)
+	// OrderPackagingFromOrder builds package allocation from order products without carrier quotation calls.
+	OrderPackagingFromOrder(ctx context.Context, command quotationservice.QuoteFromOrderCommand) (*quotationservice.OrderPackagingResult, error)
 	// ListByOrderID lists quotation records for one order.
 	ListByOrderID(ctx context.Context, orderID string) ([]port.QuotationRecord, error)
 	// GetLatestByOrderAndCarrier returns the most recent non-expired quotation for an order and carrier.
@@ -68,6 +70,8 @@ type DispatchService interface {
 	List(ctx context.Context, query dispatchservice.ListQuery) ([]domain.DispatchBatch, int64, error)
 	// DraftMark creates one QUOTED draft mark and assigns it to an open batch.
 	DraftMark(ctx context.Context, command dispatchservice.DraftMarkCommand) (*domain.ShippingMark, error)
+	// CreateBatchMark creates one batch mark as draft (quoted) or direct (materialized immediately).
+	CreateBatchMark(ctx context.Context, command dispatchservice.CreateBatchMarkCommand) (*domain.ShippingMark, error)
 	// RemoveDraftMark removes one QUOTED draft mark from a batch and sets it to REMOVED.
 	RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error)
 	// Close closes one dispatch batch.
@@ -134,6 +138,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/quotations", h.protect("shipping:quotations", h.createQuotation))
 	router.Get("/shipping/quotations", h.protect("shipping:quotations", h.listQuotations))
 	router.Post("/shipping/quotations/order", h.protect("shipping:quotations", h.quoteFromOrder))
+	router.Post("/shippings/quotations/order-packaging", h.protect("shipping:quotations", h.quoteOrderPackaging))
 	router.Get("/shipping/quotations/order/:identifier", h.protect("shipping:quotations", h.getOrderQuotation))
 	router.Post("/shipping/marks", h.protect("shipping:generate", h.createMark))
 	router.Get("/shipping/marks/:id", h.protect("shipping:quotations", h.getMark))
@@ -145,6 +150,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/shipping/batches/:id", h.protect("shipping:quotations", h.getBatch))
 	router.Get("/shipping/batches", h.protect("shipping:quotations", h.listBatches))
 	router.Post("/shipping/batches/:id/marks", h.protect("shipping:generate", h.addBatchMark))
+	router.Post("/shipping/batches/marks", h.protect("shipping:generate", h.createBatchMark))
 	router.Delete("/shipping/batches/:id/marks/:markID", h.protect("shipping:generate", h.removeBatchMark))
 	router.Patch("/shipping/batches/:id/close", h.protect("shipping:generate", h.closeBatch))
 	router.Get("/shipping/batches/:id/manifest-document", h.protect("shipping:generate", h.batchManifestDocument))
