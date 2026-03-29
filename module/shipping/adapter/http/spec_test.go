@@ -157,6 +157,12 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postMarkSchema.Value.Properties["manifestRef"] == nil {
 		t.Fatalf("expected manifestRef in mark response schema")
 	}
+	if postMarkSchema.Value.Properties["draftSnapshot"] == nil {
+		t.Fatalf("expected draftSnapshot in mark response schema")
+	}
+	if postMarkSchema.Value.Properties["responseSnapshot"] == nil {
+		t.Fatalf("expected responseSnapshot in mark response schema")
+	}
 
 	postBatch := paths.Find("/shipping/batches").Post
 	if postBatch == nil || postBatch.RequestBody == nil {

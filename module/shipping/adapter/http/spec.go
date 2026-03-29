@@ -714,6 +714,11 @@ func carrierListResponseSchema() *openapi3.Schema {
 
 // shippingMarkSchema defines schema for generated shipping-mark payloads.
 func shippingMarkSchema() *openapi3.Schema {
+	draftSnapshotSchema := openapi3.NewStringSchema()
+	draftSnapshotSchema.Description = "Base64-encoded JSON snapshot captured before carrier submission."
+	responseSnapshotSchema := openapi3.NewStringSchema()
+	responseSnapshotSchema.Description = "Base64-encoded JSON snapshot captured after carrier response handling."
+
 	return openapi3.NewObjectSchema().
 		WithProperty("id", openapi3.NewStringSchema()).
 		WithProperty("orderId", openapi3.NewStringSchema()).
@@ -738,7 +743,8 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("dispatchBatchId", openapi3.NewStringSchema()).
 		WithProperty("quotationId", openapi3.NewStringSchema()).
 		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
-		WithProperty("draftSnapshot", openapi3.NewStringSchema()).
+		WithProperty("draftSnapshot", draftSnapshotSchema).
+		WithProperty("responseSnapshot", responseSnapshotSchema).
 		WithProperty("shipmentMode", shipmentModeSchema()).
 		WithProperty("failureReason", openapi3.NewStringSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).

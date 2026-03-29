@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -147,6 +149,18 @@ func TestGenerateAndVoid(t *testing.T) {
 	if created == nil || created.Status != domain.MarkStatusGenerated {
 		t.Fatalf("created status = %#v", created)
 	}
+	if created.DraftSnapshot == "" {
+		t.Fatal("created.DraftSnapshot not set")
+	}
+	if created.ResponseSnapshot == "" {
+		t.Fatal("created.ResponseSnapshot not set")
+	}
+	if _, decodeErr := base64.StdEncoding.DecodeString(created.DraftSnapshot); decodeErr != nil {
+		t.Fatalf("created.DraftSnapshot should be base64: %v", decodeErr)
+	}
+	if _, decodeErr := base64.StdEncoding.DecodeString(created.ResponseSnapshot); decodeErr != nil {
+		t.Fatalf("created.ResponseSnapshot should be base64: %v", decodeErr)
+	}
 	if created.CollectOnDeliveryAmount != 100000 || created.CollectOnDeliveryChargedAmount != 100000 {
 		t.Fatalf("created COD values = %#v", created)
 	}
@@ -255,6 +269,25 @@ func TestMaterialize(t *testing.T) {
 	}
 	if mark.DraftSnapshot == "" {
 		t.Fatal("DraftSnapshot not set")
+	}
+	if mark.ResponseSnapshot == "" {
+		t.Fatal("ResponseSnapshot not set")
+	}
+	decodedDraftSnapshot, decodeErr := base64.StdEncoding.DecodeString(mark.DraftSnapshot)
+	if decodeErr != nil {
+		t.Fatalf("DraftSnapshot should be base64: %v", decodeErr)
+	}
+	decodedResponseSnapshot, responseDecodeErr := base64.StdEncoding.DecodeString(mark.ResponseSnapshot)
+	if responseDecodeErr != nil {
+		t.Fatalf("ResponseSnapshot should be base64: %v", responseDecodeErr)
+	}
+	var draftPayload map[string]any
+	if unmarshalErr := json.Unmarshal(decodedDraftSnapshot, &draftPayload); unmarshalErr != nil {
+		t.Fatalf("decode DraftSnapshot json: %v", unmarshalErr)
+	}
+	var responsePayload map[string]any
+	if unmarshalErr := json.Unmarshal(decodedResponseSnapshot, &responsePayload); unmarshalErr != nil {
+		t.Fatalf("decode ResponseSnapshot json: %v", unmarshalErr)
 	}
 	if mark.TrackingNumber == "" {
 		t.Fatal("TrackingNumber not set by provider")

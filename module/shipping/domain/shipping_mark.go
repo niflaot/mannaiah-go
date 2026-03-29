@@ -97,6 +97,8 @@ type ShippingMark struct {
 	ShipmentMode ShipmentMode `json:"shipmentMode"`
 	// DraftSnapshot defines a JSON snapshot of all mark fields captured before carrier submission.
 	DraftSnapshot string `json:"draftSnapshot,omitempty"`
+	// ResponseSnapshot defines a JSON snapshot of all mark fields after carrier submission attempt.
+	ResponseSnapshot string `json:"responseSnapshot,omitempty"`
 	// FailureReason defines the error message recorded when the mark transitions to FAILED status.
 	FailureReason string `json:"failureReason,omitempty"`
 	// CustomTrackingURL defines an operator-provided tracking URL override for this mark.
@@ -177,7 +179,8 @@ func (m ShippingMark) Normalize() ShippingMark {
 		QuotationID:                    m.QuotationID,
 		QuotedFreightCost:              round2(quotedFreightCost),
 		ShipmentMode:                   m.ShipmentMode,
-		DraftSnapshot:                  m.DraftSnapshot,
+		DraftSnapshot:                  strings.TrimSpace(m.DraftSnapshot),
+		ResponseSnapshot:               strings.TrimSpace(m.ResponseSnapshot),
 		FailureReason:                  strings.TrimSpace(m.FailureReason),
 		CustomTrackingURL:              normalizeOptionalURL(m.CustomTrackingURL),
 		CreatedAt:                      m.CreatedAt,

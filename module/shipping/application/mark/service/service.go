@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"sort"
 	"strings"
@@ -109,6 +110,7 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),
 	}.Normalize()
+	mark.DraftSnapshot = encodeMarkSnapshot(mark)
 	if err := mark.Validate(); err != nil {
 		return nil, err
 	}
@@ -121,6 +123,7 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 	if err := provider.GenerateMark(ctx, &mark); err != nil {
 		mark.Status = domain.MarkStatusFailed
 		mark.FailureReason = err.Error()
+		mark.ResponseSnapshot = encodeMarkSnapshot(mark)
 		mark.UpdatedAt = time.Now().UTC()
 		if createErr := s.repository.Create(ctx, &mark); createErr != nil {
 			return nil, createErr
@@ -132,6 +135,7 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 	if mark.Status == "" {
 		mark.Status = domain.MarkStatusGenerated
 	}
+	mark.ResponseSnapshot = encodeMarkSnapshot(mark)
 	mark.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Create(ctx, &mark); err != nil {
 		return nil, err
@@ -304,7 +308,7 @@ func (s *Service) Void(ctx context.Context, id string, reason string) (*domain.S
 }
 
 // Materialize submits one QUOTED draft mark to the carrier and updates its status to CREATED or FAILED.
-// A JSON snapshot of the mark fields is captured before submission and stored in DraftSnapshot.
+// Base64-encoded JSON snapshots are captured before submission (DraftSnapshot) and after response handling (ResponseSnapshot).
 func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) error {
 	if s == nil || s.repository == nil || s.registry == nil {
 		return domain.ErrCarrierNotSupported
@@ -313,12 +317,12 @@ func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) er
 	if !exists || provider == nil {
 		return domain.ErrCarrierNotSupported
 	}
-	snapshot, _ := json.Marshal(mark)
-	mark.DraftSnapshot = string(snapshot)
+	mark.DraftSnapshot = encodeMarkSnapshot(*mark)
 	if provider.Carrier().RequiresBalanceCheck {
 		if err := provider.CheckBalance(ctx); err != nil {
 			mark.Status = domain.MarkStatusFailed
 			mark.FailureReason = domain.ErrInsufficientBalance.Error()
+			mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
 			mark.UpdatedAt = time.Now().UTC()
 			_ = s.repository.Update(ctx, mark)
 			s.publish(ctx, markevent.BuildMarkFailed(*mark, domain.ErrInsufficientBalance.Error()))
@@ -329,6 +333,7 @@ func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) er
 	if err := provider.GenerateMark(ctx, mark); err != nil {
 		mark.Status = domain.MarkStatusFailed
 		mark.FailureReason = err.Error()
+		mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
 		mark.UpdatedAt = time.Now().UTC()
 		_ = s.repository.Update(ctx, mark)
 		s.publish(ctx, markevent.BuildMarkFailed(*mark, err.Error()))
@@ -336,6 +341,7 @@ func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) er
 		return err
 	}
 	mark.Status = domain.MarkStatusCreated
+	mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
 	mark.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Update(ctx, mark); err != nil {
 		return err
@@ -351,4 +357,16 @@ func (s *Service) publish(ctx context.Context, event port.IntegrationEvent) {
 		return
 	}
 	_ = s.publisher.Publish(ctx, event)
+}
+
+func encodeMarkSnapshot(mark domain.ShippingMark) string {
+	snapshot := mark.Normalize()
+	snapshot.DraftSnapshot = ""
+	snapshot.ResponseSnapshot = ""
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		return ""
+	}
+
+	return base64.StdEncoding.EncodeToString(payload)
 }
