@@ -164,6 +164,16 @@ func (s *materializerStub) Materialize(ctx context.Context, mark *domain.Shippin
 	return nil
 }
 
+type materializerErrorStub struct {
+	calls int
+	err   error
+}
+
+func (s *materializerErrorStub) Materialize(ctx context.Context, mark *domain.ShippingMark) error {
+	s.calls++
+	return s.err
+}
+
 type dispatchPublisherStub struct {
 	events []port.IntegrationEvent
 }
@@ -285,6 +295,59 @@ func TestDraftMarkAndClose(t *testing.T) {
 	}
 	if len(publisher.events) < 2 || publisher.events[len(publisher.events)-1].Topic != port.TopicBatchClosed {
 		t.Fatalf("missing batch closed event")
+	}
+}
+
+// TestCloseReturnsGuardrailViolation verifies batch close stops and returns guardrail violations from mark materialization.
+func TestCloseReturnsGuardrailViolation(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	guardrailErr := &domain.GuardrailViolationError{
+		CarrierID:      "tcc",
+		MarkID:         "mark-guardrail",
+		OrderID:        "order-guardrail",
+		Rule:           "tcc_non_cod_formapago_must_be_1",
+		RequestPreview: "{\"formapago\":\"2\"}",
+	}
+	materializer := &materializerErrorStub{err: guardrailErr}
+	service := NewService(batchRepository, markRepository, nil, materializer)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "tcc", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	_, err = service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:      batch.ID,
+		OrderID:      "order-guardrail",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+
+	closed, err := service.Close(context.Background(), batch.ID)
+	if err == nil {
+		t.Fatalf("Close() error = nil, want guardrail violation")
+	}
+	if closed != nil {
+		t.Fatalf("Close() batch = %#v, want nil on guardrail error", closed)
+	}
+	if err != guardrailErr {
+		t.Fatalf("Close() error = %v, want same guardrail error", err)
+	}
+	if materializer.calls != 1 {
+		t.Fatalf("materializer calls = %d, want 1", materializer.calls)
+	}
+	reloaded, getErr := batchRepository.GetByID(context.Background(), batch.ID)
+	if getErr != nil {
+		t.Fatalf("GetByID() error = %v", getErr)
+	}
+	if reloaded.Status != domain.BatchStatusOpen {
+		t.Fatalf("batch status = %q, want OPEN", reloaded.Status)
 	}
 }
 

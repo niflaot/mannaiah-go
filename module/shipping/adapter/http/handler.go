@@ -226,6 +226,10 @@ func (h *Handler) mapError(err error) error {
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "shipping_resource_not_found", err)
 	}
+	var guardrailErr *domain.GuardrailViolationError
+	if errors.As(err, &guardrailErr) {
+		return corehttp.NewAppError(500, "shipping_guardrail_violation", err)
+	}
 
 	return corehttp.NewAppError(500, "internal_server_error", err)
 }

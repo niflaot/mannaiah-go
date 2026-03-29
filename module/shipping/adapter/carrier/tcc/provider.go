@@ -156,11 +156,9 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	collectOnDeliveryFeePercent := normalizePercent(resolved.CollectOnDeliveryFeePercent)
 	collectOnDeliveryChargedAmount := max(resolved.CollectOnDeliveryChargedAmount, collectOnDeliveryAmount)
 	units := make([]DispatchUnit, 0, len(resolved.Units))
-	totalUnitsDeclaredValue := 0.0
 	for _, unit := range resolved.Units {
 		normalized := unit.Normalize()
 		unitDeclaredValue := normalizeDispatchDeclaredValue(normalized.Dimensions.DeclaredValueCOP)
-		totalUnitsDeclaredValue += unitDeclaredValue
 		units = append(units, DispatchUnit{
 			UnitType:       "TIPO_UND_PAQ",
 			PackageType:    "",
@@ -188,14 +186,18 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	// time); the provider config CODFeePercent is NOT re-applied here to avoid double-charging.
 	// Example: COD $150 000, freight quote $25 000 → netCOD = $125 000 sent to TCC;
 	// courier collects $25 000 + $125 000 = $150 000 (the original COD total).
-	// When COD is not active, formapago uses the configured value and both amounts are 0.
+	// When COD is not active, formapago uses the configured value and COD-only payload keys
+	// (recaudoproducto/totalvalorproducto) are omitted completely.
 	paymentForm := strconv.Itoa(p.cfg.PaymentForm)
-	codCollectStr := ""
+	var codCollectStr string
+	var codCollectValue *string
+	var totalProductValue *string
 	if collectOnDeliveryChargedAmount > 0 {
 		paymentForm = "2"
 		codCollectStr = FormatFloatString(max(collectOnDeliveryChargedAmount-resolved.QuotedFreightCost, 0))
+		codCollectValue = formatDispatchCODAmountPointer(codCollectStr)
+		totalProductValue = formatDispatchCODAmountPointer(codCollectStr)
 	}
-	totalProductValue := resolveDispatchTotalProductValue(codCollectStr, totalUnitsDeclaredValue)
 	request := DispatchRequest{
 		RelationNumber:          "",
 		RelationDateTime:        "",
@@ -236,7 +238,7 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		TotalWeight:             FormatFloatString(resolved.TotalWeight),
 		TotalVolumeWeight:       FormatFloatString(resolved.TotalVolumetricWeight),
 		PaymentForm:             paymentForm,
-		CollectOnDeliveryAmount: codCollectStr,
+		CollectOnDeliveryAmount: codCollectValue,
 		Observations:            resolved.Observations,
 		DeliverWarehouse:        "",
 		PickupWarehouse:         "",
@@ -247,6 +249,9 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		Units:                   units,
 		ServiceType:             "",
 		ReferenceDocuments:      []DispatchDocument{},
+	}
+	if err := validateDispatchGuardrails(resolved, request); err != nil {
+		return err
 	}
 	response, err := p.client.Dispatch(ctx, request)
 	if err != nil {
@@ -451,16 +456,4 @@ func normalizeDispatchDeclaredValue(value float64) float64 {
 	}
 
 	return value
-}
-
-// resolveDispatchTotalProductValue resolves total merchandise-value payloads for TCC dispatch requests.
-func resolveDispatchTotalProductValue(codCollect string, unitsDeclaredValue float64) string {
-	trimmedCODCollect := strings.TrimSpace(codCollect)
-	if trimmedCODCollect != "" {
-		if value, err := strconv.ParseFloat(trimmedCODCollect, 64); err == nil && value > 0 {
-			return trimmedCODCollect
-		}
-	}
-
-	return FormatFloatString(normalizeDispatchDeclaredValue(unitsDeclaredValue))
 }

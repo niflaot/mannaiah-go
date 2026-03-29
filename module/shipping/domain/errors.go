@@ -1,6 +1,10 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 var (
 	// ErrInvalidID is returned when identifiers are empty.
@@ -36,3 +40,34 @@ var (
 	// ErrNoValidProducts is returned when no order products have the required shipping dimension attributes.
 	ErrNoValidProducts = errors.New("no valid products with shipping dimensions found")
 )
+
+// GuardrailViolationError defines carrier guardrail validation errors raised before outbound dispatch calls.
+type GuardrailViolationError struct {
+	// CarrierID defines the carrier identifier that raised the guardrail.
+	CarrierID string
+	// MarkID defines the affected shipping mark identifier.
+	MarkID string
+	// OrderID defines the affected order identifier.
+	OrderID string
+	// Rule defines the activated guardrail rule identifier.
+	Rule string
+	// RequestPreview defines the outbound request preview payload serialized as JSON.
+	RequestPreview string
+}
+
+// Error returns a compact guardrail violation message including mark/order context.
+func (e *GuardrailViolationError) Error() string {
+	if e == nil {
+		return "shipping guardrail violation"
+	}
+	carrierID := strings.TrimSpace(e.CarrierID)
+	if carrierID == "" {
+		carrierID = "unknown"
+	}
+	message := fmt.Sprintf("%s guardrail violation: rule=%s mark_id=%s order_id=%s", carrierID, strings.TrimSpace(e.Rule), strings.TrimSpace(e.MarkID), strings.TrimSpace(e.OrderID))
+	if strings.TrimSpace(e.RequestPreview) == "" {
+		return message
+	}
+
+	return fmt.Sprintf("%s request_preview=%s", message, strings.TrimSpace(e.RequestPreview))
+}

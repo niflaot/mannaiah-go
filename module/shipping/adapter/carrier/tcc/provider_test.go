@@ -3,8 +3,10 @@ package tcc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"mannaiah/module/shipping/domain"
@@ -115,11 +117,11 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 	// No quoted freight cost and no pre-computed charged amount: provider config fee is NOT
 	// re-applied at generate time, so codCollectAmount = CollectOnDeliveryAmount - 0 = 100000.
-	if dispatchRequest.CollectOnDeliveryAmount != "100000" {
-		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q", dispatchRequest.CollectOnDeliveryAmount)
+	if dispatchRequest.CollectOnDeliveryAmount == nil || *dispatchRequest.CollectOnDeliveryAmount != "100000" {
+		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %v, want 100000", dispatchRequest.CollectOnDeliveryAmount)
 	}
-	if dispatchRequest.TotalProductValue != "100000" {
-		t.Fatalf("dispatchRequest.TotalProductValue = %q", dispatchRequest.TotalProductValue)
+	if dispatchRequest.TotalProductValue == nil || *dispatchRequest.TotalProductValue != "100000" {
+		t.Fatalf("dispatchRequest.TotalProductValue = %v, want 100000", dispatchRequest.TotalProductValue)
 	}
 	if dispatchRequest.PaymentForm != "2" {
 		t.Fatalf("dispatchRequest.PaymentForm = %q, want \"2\" for COD", dispatchRequest.PaymentForm)
@@ -349,11 +351,11 @@ func TestProviderCODNetAmount(t *testing.T) {
 	if dispatchRequest.PaymentForm != "2" {
 		t.Fatalf("dispatchRequest.PaymentForm = %q, want \"2\"", dispatchRequest.PaymentForm)
 	}
-	if dispatchRequest.CollectOnDeliveryAmount != "125000" {
-		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q, want \"125000\"", dispatchRequest.CollectOnDeliveryAmount)
+	if dispatchRequest.CollectOnDeliveryAmount == nil || *dispatchRequest.CollectOnDeliveryAmount != "125000" {
+		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %v, want 125000", dispatchRequest.CollectOnDeliveryAmount)
 	}
-	if dispatchRequest.TotalProductValue != "125000" {
-		t.Fatalf("dispatchRequest.TotalProductValue = %q, want \"125000\"", dispatchRequest.TotalProductValue)
+	if dispatchRequest.TotalProductValue == nil || *dispatchRequest.TotalProductValue != "125000" {
+		t.Fatalf("dispatchRequest.TotalProductValue = %v, want 125000", dispatchRequest.TotalProductValue)
 	}
 }
 
@@ -411,11 +413,11 @@ func TestProviderCODNetAmountWithPreComputedFee(t *testing.T) {
 	if dispatchRequest.PaymentForm != "2" {
 		t.Fatalf("dispatchRequest.PaymentForm = %q, want \"2\"", dispatchRequest.PaymentForm)
 	}
-	if dispatchRequest.CollectOnDeliveryAmount != "131000" {
-		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %q, want \"131000\"", dispatchRequest.CollectOnDeliveryAmount)
+	if dispatchRequest.CollectOnDeliveryAmount == nil || *dispatchRequest.CollectOnDeliveryAmount != "131000" {
+		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %v, want 131000", dispatchRequest.CollectOnDeliveryAmount)
 	}
-	if dispatchRequest.TotalProductValue != "131000" {
-		t.Fatalf("dispatchRequest.TotalProductValue = %q, want \"131000\"", dispatchRequest.TotalProductValue)
+	if dispatchRequest.TotalProductValue == nil || *dispatchRequest.TotalProductValue != "131000" {
+		t.Fatalf("dispatchRequest.TotalProductValue = %v, want 131000", dispatchRequest.TotalProductValue)
 	}
 }
 
@@ -467,8 +469,11 @@ func TestProviderDispatchDeclaredValueFallback(t *testing.T) {
 	if dispatchRequest.Units[0].DeclaredValue != "10000" {
 		t.Fatalf("dispatchRequest.Units[0].DeclaredValue = %q, want \"10000\"", dispatchRequest.Units[0].DeclaredValue)
 	}
-	if dispatchRequest.TotalProductValue != "10000" {
-		t.Fatalf("dispatchRequest.TotalProductValue = %q, want \"10000\"", dispatchRequest.TotalProductValue)
+	if dispatchRequest.TotalProductValue != nil {
+		t.Fatalf("dispatchRequest.TotalProductValue = %v, want nil for non-COD shipments", dispatchRequest.TotalProductValue)
+	}
+	if dispatchRequest.CollectOnDeliveryAmount != nil {
+		t.Fatalf("dispatchRequest.CollectOnDeliveryAmount = %v, want nil for non-COD shipments", dispatchRequest.CollectOnDeliveryAmount)
 	}
 }
 
@@ -532,5 +537,120 @@ func TestCalculateCollectOnDeliveryChargedAmount(t *testing.T) {
 	}
 	if got := calculateCollectOnDeliveryChargedAmount(0, 4); got != 0 {
 		t.Fatalf("calculateCollectOnDeliveryChargedAmount() zero amount = %v", got)
+	}
+}
+
+// TestProviderGenerateMarkGuardrailRejectsNonCODPaymentFormTwo verifies non-COD payloads fail when formapago is not 1.
+func TestProviderGenerateMarkGuardrailRejectsNonCODPaymentFormTwo(t *testing.T) {
+	dispatchCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/api/clientes/remesas/grabardespacho7" {
+			dispatchCalls++
+		}
+		writer.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         2,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:           "mark-noncod-formapago",
+		OrderID:      "order-noncod-formapago",
+		CarrierID:    "tcc",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	}
+	err = provider.GenerateMark(context.Background(), mark)
+	if err == nil {
+		t.Fatalf("GenerateMark() error = nil, want guardrail violation")
+	}
+	var guardrailErr *domain.GuardrailViolationError
+	if !errors.As(err, &guardrailErr) {
+		t.Fatalf("GenerateMark() error type = %T, want *domain.GuardrailViolationError", err)
+	}
+	if guardrailErr.Rule != guardrailNonCODPaymentFormRule {
+		t.Fatalf("guardrailErr.Rule = %q, want %q", guardrailErr.Rule, guardrailNonCODPaymentFormRule)
+	}
+	if guardrailErr.MarkID != "mark-noncod-formapago" {
+		t.Fatalf("guardrailErr.MarkID = %q", guardrailErr.MarkID)
+	}
+	if guardrailErr.OrderID != "order-noncod-formapago" {
+		t.Fatalf("guardrailErr.OrderID = %q", guardrailErr.OrderID)
+	}
+	if !strings.Contains(guardrailErr.RequestPreview, "\"formapago\":\"2\"") {
+		t.Fatalf("guardrailErr.RequestPreview = %q, want formapago=2", guardrailErr.RequestPreview)
+	}
+	if dispatchCalls != 0 {
+		t.Fatalf("dispatchCalls = %d, want 0", dispatchCalls)
+	}
+}
+
+// TestProviderGenerateMarkGuardrailRejectsCODWithoutPositiveCollect verifies COD payloads fail when net recaudo is zero or negative.
+func TestProviderGenerateMarkGuardrailRejectsCODWithoutPositiveCollect(t *testing.T) {
+	dispatchCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/api/clientes/remesas/grabardespacho7" {
+			dispatchCalls++
+		}
+		writer.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	mark := &domain.ShippingMark{
+		ID:                      "mark-cod-zero-net",
+		OrderID:                 "order-cod-zero-net",
+		CarrierID:               "tcc",
+		Sender:                  domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+		Recipient:               domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001"},
+		Units:                   []domain.PackageUnit{{Description: "box", PackageType: "CLEM_CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		CollectOnDeliveryAmount: 15000,
+		QuotedFreightCost:       15000,
+		ShipmentMode:            domain.ShipmentModeParcel,
+	}
+	err = provider.GenerateMark(context.Background(), mark)
+	if err == nil {
+		t.Fatalf("GenerateMark() error = nil, want guardrail violation")
+	}
+	var guardrailErr *domain.GuardrailViolationError
+	if !errors.As(err, &guardrailErr) {
+		t.Fatalf("GenerateMark() error type = %T, want *domain.GuardrailViolationError", err)
+	}
+	if guardrailErr.Rule != guardrailCODCollectAmountRule {
+		t.Fatalf("guardrailErr.Rule = %q, want %q", guardrailErr.Rule, guardrailCODCollectAmountRule)
+	}
+	if !strings.Contains(guardrailErr.RequestPreview, "\"formapago\":\"2\"") {
+		t.Fatalf("guardrailErr.RequestPreview = %q, want formapago=2", guardrailErr.RequestPreview)
+	}
+	if !strings.Contains(guardrailErr.RequestPreview, "\"recaudoproducto\":\"0\"") {
+		t.Fatalf("guardrailErr.RequestPreview = %q, want recaudo 0", guardrailErr.RequestPreview)
+	}
+	if dispatchCalls != 0 {
+		t.Fatalf("dispatchCalls = %d, want 0", dispatchCalls)
 	}
 }

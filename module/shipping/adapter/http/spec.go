@@ -371,7 +371,7 @@ func batchCreateMarkOperation() *openapi3.Operation {
 			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
 			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
 			openapi3.WithStatus(409, errorResponse("Conflict. Possible message codes: batch_closed, batch_carrier_mismatch, batch_mark_status_mismatch.")),
-			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Possible message codes: internal_server_error, shipping_guardrail_violation. Guardrail errors include mark_id, order_id, guardrail rule, and request_preview in the error field.")),
 		),
 	}
 }
@@ -405,6 +405,12 @@ func batchCloseOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Dispatch batch closed.", dispatchBatchSchema())),
+			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload, invalid_city_code, carrier_not_supported.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(409, errorResponse("Conflict. Possible message codes: batch_closed, batch_status_invalid.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Possible message codes: internal_server_error, shipping_guardrail_violation. Guardrail errors include mark_id, order_id, guardrail rule, and request_preview in the error field.")),
 		),
 	}
 }

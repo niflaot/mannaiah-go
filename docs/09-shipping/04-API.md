@@ -348,6 +348,11 @@ POST /shipping/batches/marks
 
 **Response** `201 Created` with the `ShippingMark` object.
 
+If `direct=true`, guardrails are evaluated right before the carrier dispatch call. On violation,
+the endpoint returns `500` with:
+- `message`: `shipping_guardrail_violation`
+- `error`: includes `mark_id`, `order_id`, `rule`, and `request_preview`.
+
 ---
 
 ### Remove Mark from Batch
@@ -368,9 +373,17 @@ Permanently deletes the mark. Only `QUOTED` marks may be removed.
 PATCH /shipping/batches/:id/close
 ```
 
-Submits all `QUOTED` marks to the carrier. Individual failures do not abort the batch.
+Submits all `QUOTED` marks to the carrier.
+
+Guardrails are evaluated right before each carrier dispatch call:
+- Non-guardrail carrier failures are logged and processing continues for the rest of marks.
+- Guardrail violations abort batch close and return `500`.
 
 **Response** `200 OK` with the closed `DispatchBatch`.
+
+On guardrail violation:
+- `message`: `shipping_guardrail_violation`
+- `error`: includes `mark_id`, `order_id`, `rule`, and `request_preview`.
 
 ---
 

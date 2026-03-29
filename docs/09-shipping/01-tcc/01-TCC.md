@@ -201,6 +201,42 @@ original `CollectOnDeliveryAmount`. TCC uses both values to validate the fee.
 
 ---
 
+## Dispatch Guardrails (Mandatory)
+
+Before every TCC mark-creation call (`grabardespacho7`), guardrails validate the final outbound
+payload using:
+- the normalized shipping mark context (order + COD data)
+- the exact request preview that is about to be sent
+
+These guardrails run in:
+- `PATCH /shipping/batches/:id/close` (for each `QUOTED` mark)
+- `POST /shipping/batches/marks` when `direct=true`
+
+### COD rules
+- `formapago` must be `"2"`.
+- `recaudoproducto` must exist and be a positive number.
+- `totalvalorproducto` must exist and be a positive number.
+
+### Non-COD rules
+- `formapago` must be `"1"`.
+- `recaudoproducto` must not exist in the JSON request.
+- `totalvalorproducto` must not exist in the JSON request.
+
+### COD netting rule for TCC collection behavior
+TCC collects freight + COD from the recipient. To avoid charging the recipient twice for freight,
+the sent COD amount is netted before dispatch:
+
+`recaudoproducto = collectOnDeliveryChargedAmount - quotedFreightCost`
+
+If that net amount is not positive, dispatch is blocked by guardrail.
+
+### Failure contract
+On guardrail activation, API returns HTTP `500` with:
+- `message = shipping_guardrail_violation`
+- `error` containing `mark_id`, `order_id`, `rule`, and `request_preview`.
+
+---
+
 ### Tracking (`POST /api/clientes/remesas/consultarestatusremesasv3`)
 
 **Request:**

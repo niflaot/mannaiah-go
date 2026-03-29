@@ -110,6 +110,8 @@
 - `POST /shipping/batches/marks` accepts `batch` (required), `quotationId` (required), and `direct` (optional, default `false`).
 - `direct=false` (or omitted): creates a `QUOTED` draft mark in the target batch and requires the batch to be `OPEN`.
 - `direct=true`: creates and materializes the mark immediately and assigns it to the target batch even if the batch is `CLOSED`.
+- During `direct=true` materialization and during `PATCH /shipping/batches/:id/close`, carrier guardrails run immediately before outbound carrier dispatch.
+- Guardrail violations return HTTP `500` (`message=shipping_guardrail_violation`) and include `mark_id`, `order_id`, `rule`, and `request_preview` in the `error` field.
 
 ## COD Collection
 - Mark create requests accept `collectOnDeliveryAmount`.
@@ -125,3 +127,27 @@
   - `collectOnDeliveryFeePercent` (carrier-applied fee percent)
   - `collectOnDeliveryFeeAmount` (carrier-applied fee amount)
   - `collectOnDeliveryChargedAmount` (amount projected to carrier)
+
+## TCC Guardrails (Pre-Dispatch)
+- Guardrails execute right before `tcc` dispatch API calls (`grabardespacho7`), both for:
+  - batch close (`PATCH /shipping/batches/:id/close`) over quoted marks
+  - direct batch mark creation (`POST /shipping/batches/marks` with `direct=true`)
+- Validation input always includes:
+  - the normalized order context (from the mark)
+  - the exact outbound request preview (serialized JSON payload)
+
+### COD orders
+- `formapago` must be `"2"`.
+- `recaudoproducto` must exist and be `> 0`.
+- `totalvalorproducto` must exist and be `> 0`.
+
+### Non-COD orders
+- `formapago` must be `"1"`.
+- `recaudoproducto` must not exist in JSON payload.
+- `totalvalorproducto` must not exist in JSON payload.
+
+### COD amount sent to TCC
+- TCC collects freight + COD from recipient.
+- To avoid over-collection, sent COD is netted:
+  - `recaudoproducto = collectOnDeliveryChargedAmount - quotedFreightCost`
+- If this net value is not positive, guardrail blocks dispatch.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -509,6 +510,10 @@ func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBa
 			}
 			if err := s.materializer.Materialize(ctx, &marks[i]); err != nil {
 				zap.L().Error("mark materialization failed", zap.String("batch_id", trimmedID), zap.String("mark_id", marks[i].ID), zap.String("order_id", marks[i].OrderID), zap.Error(err))
+				var guardrailErr *domain.GuardrailViolationError
+				if errors.As(err, &guardrailErr) {
+					return nil, err
+				}
 			}
 		}
 	}

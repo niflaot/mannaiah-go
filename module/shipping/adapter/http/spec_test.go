@@ -212,6 +212,23 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 			t.Fatalf("expected /shipping/batches/marks POST %s error schema properties", status)
 		}
 	}
+	patchCloseBatch := paths.Find("/shipping/batches/{id}/close").Patch
+	if patchCloseBatch == nil || patchCloseBatch.Responses == nil {
+		t.Fatalf("expected /shipping/batches/{id}/close PATCH responses")
+	}
+	for _, status := range []string{"400", "401", "403", "404", "409", "500"} {
+		errorResponse := patchCloseBatch.Responses.Value(status)
+		if errorResponse == nil || errorResponse.Value == nil {
+			t.Fatalf("expected /shipping/batches/{id}/close PATCH %s response", status)
+		}
+		content := errorResponse.Value.Content.Get("application/json")
+		if content == nil || content.Schema == nil || content.Schema.Value == nil {
+			t.Fatalf("expected /shipping/batches/{id}/close PATCH %s JSON error schema", status)
+		}
+		if content.Schema.Value.Properties["message"] == nil || content.Schema.Value.Properties["error"] == nil {
+			t.Fatalf("expected /shipping/batches/{id}/close PATCH %s error schema properties", status)
+		}
+	}
 
 	patchVoid := paths.Find("/shipping/marks/{id}/void").Patch
 	if patchVoid == nil || patchVoid.RequestBody == nil {

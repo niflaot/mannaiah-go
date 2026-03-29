@@ -85,12 +85,12 @@ type DispatchRequest struct {
 	TotalWeight             string                `json:"totalpeso"`
 	TotalVolumeWeight       string                `json:"totalpesovolumen"`
 	PaymentForm             string                `json:"formapago"`
-	CollectOnDeliveryAmount string                `json:"recaudoproducto"`
+	CollectOnDeliveryAmount *string               `json:"recaudoproducto,omitempty"`
 	Observations            string                `json:"observaciones"`
 	DeliverWarehouse        string                `json:"llevabodega"`
 	PickupWarehouse         string                `json:"recogebodega"`
 	CostCenter              string                `json:"centrocostos"`
-	TotalProductValue       string                `json:"totalvalorproducto"`
+	TotalProductValue       *string               `json:"totalvalorproducto,omitempty"`
 	GenerateDocuments       string                `json:"generardocumentos"`
 	GenerateBinaries        string                `json:"generarbinarios"`
 	Units                   []DispatchUnit        `json:"unidades"`
