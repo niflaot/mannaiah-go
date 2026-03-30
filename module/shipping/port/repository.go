@@ -34,33 +34,35 @@ type BatchListQuery struct {
 // QuotationRecord defines persisted quotation records.
 type QuotationRecord struct {
 	// ID defines quotation identifier values.
-	ID string
+	ID string `json:"id"`
 	// OrderID defines optional order identifier values.
-	OrderID string
+	OrderID string `json:"orderId"`
 	// OrderIdentifier defines optional external order identifier values (e.g. WooCommerce number).
-	OrderIdentifier string
+	OrderIdentifier string `json:"orderIdentifier"`
 	// CarrierID defines carrier identifier values.
-	CarrierID string
+	CarrierID string `json:"carrierId"`
 	// OriginCityCode defines origin city-code values.
-	OriginCityCode string
+	OriginCityCode string `json:"originCityCode"`
 	// DestCityCode defines destination city-code values.
-	DestCityCode string
+	DestCityCode string `json:"destCityCode"`
 	// FreightCost defines carrier-reported freight-cost values.
-	FreightCost float64
+	FreightCost float64 `json:"freightCost"`
+	// CollectOnDeliveryFeeAmount defines the COD fee amount applied to this quotation.
+	CollectOnDeliveryFeeAmount float64 `json:"collectOnDeliveryFeeAmount,omitempty"`
 	// EstimatedDays defines estimated delivery-day values.
-	EstimatedDays int
+	EstimatedDays int `json:"estimatedDays"`
 	// CurrencyCode defines currency-code values.
-	CurrencyCode string
+	CurrencyCode string `json:"currencyCode"`
 	// ExpiresAt defines quotation expiration timestamps.
-	ExpiresAt time.Time
+	ExpiresAt time.Time `json:"expiresAt"`
 	// Units defines the package units used in the quotation request.
-	Units []domain.PackageUnit
+	Units []domain.PackageUnit `json:"units,omitempty"`
 	// RequestSnapshot defines serialized quotation request payload values.
-	RequestSnapshot string
+	RequestSnapshot string `json:"requestSnapshot"`
 	// RawResponse defines provider raw response payload values.
-	RawResponse string
+	RawResponse string `json:"rawResponse"`
 	// CreatedAt defines row creation timestamps.
-	CreatedAt time.Time
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ShippingMarkRepository defines shipping-mark persistence behavior.

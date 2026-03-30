@@ -178,20 +178,21 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 			encodedRawResponse = base64.StdEncoding.EncodeToString([]byte(rawResponse))
 		}
 		record := port.QuotationRecord{
-			ID:              result.ID,
-			OrderID:         result.OrderID,
-			OrderIdentifier: result.OrderIdentifier,
-			CarrierID:       result.CarrierID,
-			OriginCityCode:  result.OriginCityCode,
-			DestCityCode:    result.DestCityCode,
-			FreightCost:     result.FreightCost,
-			EstimatedDays:   result.EstimatedDays,
-			CurrencyCode:    result.CurrencyCode,
-			ExpiresAt:       result.ExpiresAt,
-			Units:           request.Units,
-			RequestSnapshot: encodedRequestSnapshot,
-			RawResponse:     encodedRawResponse,
-			CreatedAt:       result.CreatedAt,
+			ID:                         result.ID,
+			OrderID:                    result.OrderID,
+			OrderIdentifier:            result.OrderIdentifier,
+			CarrierID:                  result.CarrierID,
+			OriginCityCode:             result.OriginCityCode,
+			DestCityCode:               result.DestCityCode,
+			FreightCost:                result.FreightCost,
+			CollectOnDeliveryFeeAmount: result.CollectOnDeliveryFeeAmount,
+			EstimatedDays:              result.EstimatedDays,
+			CurrencyCode:               result.CurrencyCode,
+			ExpiresAt:                  result.ExpiresAt,
+			Units:                      request.Units,
+			RequestSnapshot:            encodedRequestSnapshot,
+			RawResponse:                encodedRawResponse,
+			CreatedAt:                  result.CreatedAt,
 		}
 		if err := s.repository.Create(ctx, record); err != nil {
 			return nil, err

@@ -97,8 +97,9 @@ type quotationModel struct {
 	CarrierID       string               `gorm:"column:carrier_id;type:varchar(100);index"`
 	OriginCityCode  string               `gorm:"column:origin_city_code;type:varchar(20)"`
 	DestCityCode    string               `gorm:"column:dest_city_code;type:varchar(20)"`
-	FreightCost     float64              `gorm:"column:freight_cost;type:decimal(15,2)"`
-	EstimatedDays   int                  `gorm:"column:estimated_days"`
+	FreightCost                float64              `gorm:"column:freight_cost;type:decimal(15,2)"`
+	CollectOnDeliveryFeeAmount float64              `gorm:"column:collect_on_delivery_fee_amount;type:decimal(15,2);default:0"`
+	EstimatedDays              int                  `gorm:"column:estimated_days"`
 	CurrencyCode    string               `gorm:"column:currency_code;type:varchar(5)"`
 	ExpiresAt       time.Time            `gorm:"column:expires_at"`
 	RequestSnapshot string               `gorm:"column:request_snapshot;type:longtext"`

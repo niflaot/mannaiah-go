@@ -142,19 +142,20 @@ func mapBatchModel(row dispatchBatchModel, markIDs []string) domain.DispatchBatc
 
 func mapQuotationRecord(row quotationModel) port.QuotationRecord {
 	record := port.QuotationRecord{
-		ID:              row.ID,
-		OrderID:         row.OrderID,
-		OrderIdentifier: row.OrderIdentifier,
-		CarrierID:       row.CarrierID,
-		OriginCityCode:  row.OriginCityCode,
-		DestCityCode:    row.DestCityCode,
-		FreightCost:     row.FreightCost,
-		EstimatedDays:   row.EstimatedDays,
-		CurrencyCode:    row.CurrencyCode,
-		ExpiresAt:       row.ExpiresAt.UTC(),
-		RequestSnapshot: row.RequestSnapshot,
-		RawResponse:     row.RawResponse,
-		CreatedAt:       row.CreatedAt.UTC(),
+		ID:                         row.ID,
+		OrderID:                    row.OrderID,
+		OrderIdentifier:            row.OrderIdentifier,
+		CarrierID:                  row.CarrierID,
+		OriginCityCode:             row.OriginCityCode,
+		DestCityCode:               row.DestCityCode,
+		FreightCost:                row.FreightCost,
+		CollectOnDeliveryFeeAmount: row.CollectOnDeliveryFeeAmount,
+		EstimatedDays:              row.EstimatedDays,
+		CurrencyCode:               row.CurrencyCode,
+		ExpiresAt:                  row.ExpiresAt.UTC(),
+		RequestSnapshot:            row.RequestSnapshot,
+		RawResponse:                row.RawResponse,
+		CreatedAt:                  row.CreatedAt.UTC(),
 	}
 	record.Units = mapQuotationUnitModels(row.Units)
 	if len(record.Units) == 0 {
@@ -166,19 +167,20 @@ func mapQuotationRecord(row quotationModel) port.QuotationRecord {
 
 func mapQuotationModel(record port.QuotationRecord) quotationModel {
 	row := quotationModel{
-		ID:              record.ID,
-		OrderID:         record.OrderID,
-		OrderIdentifier: record.OrderIdentifier,
-		CarrierID:       record.CarrierID,
-		OriginCityCode:  record.OriginCityCode,
-		DestCityCode:    record.DestCityCode,
-		FreightCost:     record.FreightCost,
-		EstimatedDays:   record.EstimatedDays,
-		CurrencyCode:    record.CurrencyCode,
-		ExpiresAt:       record.ExpiresAt.UTC(),
-		RequestSnapshot: record.RequestSnapshot,
-		RawResponse:     record.RawResponse,
-		CreatedAt:       normalizeTime(record.CreatedAt),
+		ID:                         record.ID,
+		OrderID:                    record.OrderID,
+		OrderIdentifier:            record.OrderIdentifier,
+		CarrierID:                  record.CarrierID,
+		OriginCityCode:             record.OriginCityCode,
+		DestCityCode:               record.DestCityCode,
+		FreightCost:                record.FreightCost,
+		CollectOnDeliveryFeeAmount: record.CollectOnDeliveryFeeAmount,
+		EstimatedDays:              record.EstimatedDays,
+		CurrencyCode:               record.CurrencyCode,
+		ExpiresAt:                  record.ExpiresAt.UTC(),
+		RequestSnapshot:            record.RequestSnapshot,
+		RawResponse:                record.RawResponse,
+		CreatedAt:                  normalizeTime(record.CreatedAt),
 	}
 	row.Units = mapQuotationUnitDomain(record.ID, record.Units)
 
