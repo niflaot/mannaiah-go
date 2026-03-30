@@ -8,6 +8,7 @@
 *.out
 bin/
 dist/
+module/core/api
 
 # Build and coverage artifacts
 coverage.out
@@ -28,6 +29,8 @@ go.work.sum
 .vscode/
 .claude/
 plan/
+plan/*
 
 *.log
 playground.go
+_fix_*.py

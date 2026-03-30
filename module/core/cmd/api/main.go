@@ -22,9 +22,11 @@ import (
 	"mannaiah/module/campaign"
 	campaignaffinity "mannaiah/module/campaign/adapter/affinity"
 	campaignevent "mannaiah/module/campaign/adapter/event"
+	campaignsearch "mannaiah/module/campaign/adapter/search"
 	campaignport "mannaiah/module/campaign/port"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
+	contactsearch "mannaiah/module/contacts/adapter/search"
 	contactapplication "mannaiah/module/contacts/application"
 	contactdomain "mannaiah/module/contacts/domain"
 	contactport "mannaiah/module/contacts/port"
@@ -40,6 +42,7 @@ import (
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
+	coresearch "mannaiah/module/core/search"
 	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/email"
 	emailapplication "mannaiah/module/email/application"
@@ -55,11 +58,18 @@ import (
 	ordercontacts "mannaiah/module/orders/adapter/contacts"
 	orderevent "mannaiah/module/orders/adapter/event"
 	orderproducts "mannaiah/module/orders/adapter/products"
+	ordersearch "mannaiah/module/orders/adapter/search"
 	"mannaiah/module/products"
+	productsearch "mannaiah/module/products/adapter/search/product"
+	categorysearch "mannaiah/module/products/adapter/search/category"
+	variationsearch "mannaiah/module/products/adapter/search/variation"
+	tagsearch "mannaiah/module/products/adapter/search/tag"
 	"mannaiah/module/segment"
 	segmentapplication "mannaiah/module/segment/application"
+	segmentsearch "mannaiah/module/segment/adapter/search"
 	"mannaiah/module/shipping"
 	shippingevent "mannaiah/module/shipping/adapter/event"
+	shippingsearch "mannaiah/module/shipping/adapter/search"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -223,6 +233,74 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("add core openapi spec: %w", err)
 	}
 	runtime.RegisterRoutes(registerCoreStatusRoute)
+
+	// --- Search infrastructure (registered before module routes for path priority) ---
+	contactSearchRepo, err := contactsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create contacts search repo: %w", err)
+	}
+	orderSearchRepo, err := ordersearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create orders search repo: %w", err)
+	}
+	productSearchRepo, err := productsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create products search repo: %w", err)
+	}
+	categorySearchRepo, err := categorysearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create categories search repo: %w", err)
+	}
+	variationSearchRepo, err := variationsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create variations search repo: %w", err)
+	}
+	tagSearchRepo, err := tagsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create tags search repo: %w", err)
+	}
+	shippingSearchRepo, err := shippingsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create shipping search repo: %w", err)
+	}
+	campaignSearchRepo, err := campaignsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create campaigns search repo: %w", err)
+	}
+	segmentSearchRepo, err := segmentsearch.NewRepository(db)
+	if err != nil {
+		return fmt.Errorf("create segments search repo: %w", err)
+	}
+
+	spotlightService := coresearch.NewSpotlightService(
+		2*time.Second,
+		contactSearchRepo,
+		orderSearchRepo,
+		productSearchRepo,
+		categorySearchRepo,
+		variationSearchRepo,
+		tagSearchRepo,
+		shippingSearchRepo,
+		campaignSearchRepo,
+		segmentSearchRepo,
+	)
+
+	runtime.RegisterRoutes(func(router corehttp.Router) {
+		router.Get("/search/contacts", coresearch.SearchHandlerFunc(contactSearchRepo))
+		router.Get("/search/orders", coresearch.SearchHandlerFunc(orderSearchRepo))
+		router.Get("/search/products", coresearch.SearchHandlerFunc(productSearchRepo))
+		router.Get("/search/categories", coresearch.SearchHandlerFunc(categorySearchRepo))
+		router.Get("/search/variations", coresearch.SearchHandlerFunc(variationSearchRepo))
+		router.Get("/search/tags", coresearch.SearchHandlerFunc(tagSearchRepo))
+		router.Get("/search/shipping", coresearch.SearchHandlerFunc(shippingSearchRepo))
+		router.Get("/search/campaigns", coresearch.SearchHandlerFunc(campaignSearchRepo))
+		router.Get("/search/segments", coresearch.SearchHandlerFunc(segmentSearchRepo))
+		router.Get("/search", coresearch.SpotlightHandlerFunc(spotlightService))
+	})
+
+	if err := runtime.AddOpenAPISpec(coresearch.OpenAPISpec()); err != nil {
+		return fmt.Errorf("add search openapi spec: %w", err)
+	}
 
 	contactPublisher, err := contactevent.NewPublisher(messaging.Publisher())
 	if err != nil {
