@@ -143,15 +143,15 @@ func TestProviderLifecycle(t *testing.T) {
 	if mark.CollectOnDeliveryChargedAmount != 100000 {
 		t.Fatalf("mark.CollectOnDeliveryChargedAmount = %v", mark.CollectOnDeliveryChargedAmount)
 	}
-	if mark.DraftSnapshot == "" {
-		t.Fatal("mark.DraftSnapshot is empty")
+	if mark.RequestSnapshot == "" {
+		t.Fatal("mark.RequestSnapshot is empty")
 	}
-	decodedDraftSnapshot, decodeErr := base64.StdEncoding.DecodeString(mark.DraftSnapshot)
+	decodedRequestSnapshot, decodeErr := base64.StdEncoding.DecodeString(mark.RequestSnapshot)
 	if decodeErr != nil {
-		t.Fatalf("decode mark draft snapshot: %v", decodeErr)
+		t.Fatalf("decode mark request snapshot: %v", decodeErr)
 	}
-	if !strings.Contains(string(decodedDraftSnapshot), "\"formapago\":\"2\"") {
-		t.Fatalf("mark draft snapshot = %s", string(decodedDraftSnapshot))
+	if !strings.Contains(string(decodedRequestSnapshot), "\"formapago\":\"2\"") {
+		t.Fatalf("mark request snapshot = %s", string(decodedRequestSnapshot))
 	}
 	if mark.ResponseSnapshot == "" {
 		t.Fatal("mark.ResponseSnapshot is empty")

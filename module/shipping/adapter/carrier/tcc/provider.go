@@ -257,12 +257,12 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	if err := validateDispatchGuardrails(resolved, request); err != nil {
 		requestBody, marshalErr := json.Marshal(request)
 		if marshalErr == nil {
-			mark.DraftSnapshot = encodePayloadSnapshot(requestBody)
+			mark.RequestSnapshot = encodePayloadSnapshot(requestBody)
 		}
 		return err
 	}
 	response, requestBody, responseBody, err := p.client.DispatchRaw(ctx, request)
-	mark.DraftSnapshot = encodePayloadSnapshot(requestBody)
+	mark.RequestSnapshot = encodePayloadSnapshot(requestBody)
 	mark.ResponseSnapshot = encodePayloadSnapshot(responseBody)
 	if err != nil {
 		return err

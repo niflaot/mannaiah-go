@@ -376,6 +376,7 @@ func (s *Service) publish(ctx context.Context, event port.IntegrationEvent) {
 func encodeMarkSnapshot(mark domain.ShippingMark) string {
 	snapshot := mark.Normalize()
 	snapshot.DraftSnapshot = ""
+	snapshot.RequestSnapshot = ""
 	snapshot.ResponseSnapshot = ""
 	payload, err := json.Marshal(snapshot)
 	if err != nil {

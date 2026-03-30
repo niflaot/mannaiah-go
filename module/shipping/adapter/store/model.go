@@ -41,6 +41,7 @@ type shippingMarkModel struct {
 	QuotationID                    *string                 `gorm:"column:quotation_id;type:varchar(64)"`
 	QuotedFreightCost              float64                 `gorm:"column:quoted_freight_cost;type:decimal(15,2)"`
 	DraftSnapshot                  string                  `gorm:"column:draft_snapshot;type:longtext"`
+	RequestSnapshot                string                  `gorm:"column:request_snapshot;type:longtext"`
 	ResponseSnapshot               string                  `gorm:"column:response_snapshot;type:longtext"`
 	ShipmentMode                   string                  `gorm:"column:shipment_mode;type:varchar(16)"`
 	FailureReason                  string                  `gorm:"column:failure_reason;type:text;default:null"`

@@ -97,7 +97,9 @@ type ShippingMark struct {
 	ShipmentMode ShipmentMode `json:"shipmentMode"`
 	// DraftSnapshot defines a JSON snapshot of all mark fields captured before carrier submission.
 	DraftSnapshot string `json:"draftSnapshot,omitempty"`
-	// ResponseSnapshot defines a JSON snapshot of all mark fields after carrier submission attempt.
+	// RequestSnapshot defines the base64-encoded raw request body sent to the carrier API.
+	RequestSnapshot string `json:"requestSnapshot,omitempty"`
+	// ResponseSnapshot defines the base64-encoded raw response body received from the carrier API.
 	ResponseSnapshot string `json:"responseSnapshot,omitempty"`
 	// FailureReason defines the error message recorded when the mark transitions to FAILED status.
 	FailureReason string `json:"failureReason,omitempty"`
