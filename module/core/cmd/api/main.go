@@ -316,14 +316,26 @@ func run(ctx context.Context, envFile string) error {
 		return errors.New("segment module requires analytics to be enabled")
 	}
 
+	var analyticsScheduler corecron.Scheduler
+	if analyticsCfg.Enabled && analyticsCfg.AffinityRefreshEnabled {
+		analyticsScheduler, err = corecron.NewScheduler(cronCfg, logger)
+		if err != nil {
+			return fmt.Errorf("create analytics scheduler: %w", err)
+		}
+	}
+
 	analyticsModule, err := analytics.New(analyticsCfg, db, messaging.Registrar())
 	if err != nil {
 		return fmt.Errorf("initialize analytics module: %w", err)
 	}
+	analyticsModule.ConfigureScheduler(analyticsScheduler)
 	analyticsModule.SetSyncRecorder(analyticsSyncRecorderAdapter{recorder: recorderAdapter})
 	analyticsModule.SetAuthorizer(authModule)
 	if err := analyticsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load analytics module: %w", err)
+	}
+	if err := analyticsModule.Start(ctx); err != nil {
+		return fmt.Errorf("start analytics module: %w", err)
 	}
 	defer func() {
 		_ = analyticsModule.Stop()

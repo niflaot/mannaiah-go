@@ -6,6 +6,8 @@ Composition root for analytics wiring and optional ClickHouse backend lifecycle.
 - Methods:
   - `New(cfg, db, registrar)`
   - `(*Module).Load(loader)`
+  - `(*Module).ConfigureScheduler(scheduler)`
+  - `(*Module).Start(ctx)`
   - `(*Module).QueryService()`
   - `(*Module).Stop()`
 - Endpoints:

@@ -55,6 +55,16 @@ The API listens on `CORE_HOST:CORE_PORT` (`0.0.0.0:8080` by default).
 - `ANALYTICS_ENABLED=true` enables ClickHouse analytics and integration consumers.
 - `SEGMENT_ENABLED=true` requires analytics to be enabled.
 - Run `POST /analytics/seed` once (admin scope `marketing:manage`) to backfill ClickHouse from transactional data.
+- Optional affinity-map auto-refresh cron:
+  - `ANALYTICS_AFFINITY_REFRESH_ENABLED=true`
+  - `ANALYTICS_AFFINITY_REFRESH_CRON=*/30 * * * *` (every 30 minutes)
+  - `ANALYTICS_AFFINITY_REFRESH_TIMEOUT_MS=600000`
+
+### WooCommerce Order Sync Cron
+
+- `WOOCOMMERCE_SYNC_ORDERS=true`
+- `WOOCOMMERCE_SYNC_ORDERS_CRON=*/30 * * * *` (every 30 minutes)
+- `CRON_LOCATION=America/Bogota` to run cron expressions in Colombia timezone.
 
 ### Email Tracking Pixel
 

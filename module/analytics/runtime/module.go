@@ -2,10 +2,14 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"mannaiah/module/analytics/adapter/clickhouse"
 	analyticshttp "mannaiah/module/analytics/adapter/http"
@@ -15,8 +19,14 @@ import (
 	recommendationapp "mannaiah/module/analytics/application/recommendation"
 	rfmapp "mannaiah/module/analytics/application/rfm"
 	"mannaiah/module/analytics/port"
+	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
 	"mannaiah/module/core/messaging/bus"
+)
+
+var (
+	// ErrModuleNotInitialized is returned when module lifecycle methods are called on nil receivers.
+	ErrModuleNotInitialized = errors.New("analytics module is not initialized")
 )
 
 // Loader defines bootstrap hooks required by analytics modules.
@@ -49,6 +59,14 @@ type Module struct {
 	recommendationHandler *analyticshttp.RecommendationHandler
 	// clickhouseClient defines optional clickhouse dependencies.
 	clickhouseClient *clickhouse.Client
+	// scheduler defines optional cron scheduler dependencies.
+	scheduler corecron.Scheduler
+	// affinityRefreshEntryID defines optional scheduled affinity-refresh entry identifiers.
+	affinityRefreshEntryID corecron.EntryID
+	// mutex guards scheduler lifecycle state.
+	mutex sync.Mutex
+	// started reports whether scheduler lifecycle start logic has completed.
+	started bool
 }
 
 // New creates analytics modules with adapter wiring.
@@ -284,11 +302,87 @@ func (m *Module) Load(loader Loader) error {
 	return nil
 }
 
-// Stop closes analytics backend connections.
+// Stop closes analytics backend connections and scheduled jobs.
 func (m *Module) Stop() error {
-	if m == nil || m.clickhouseClient == nil {
+	if m == nil {
 		return nil
 	}
+	m.mutex.Lock()
+	started := m.started
+	m.started = false
+	entryID := m.affinityRefreshEntryID
+	m.affinityRefreshEntryID = 0
+	scheduler := m.scheduler
+	m.mutex.Unlock()
 
-	return m.clickhouseClient.Close()
+	var stopErr error
+	if started && scheduler != nil {
+		if entryID != 0 {
+			scheduler.Remove(entryID)
+		}
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := scheduler.Stop(stopCtx); err != nil {
+			stopErr = err
+		}
+	}
+	if m.clickhouseClient != nil {
+		if err := m.clickhouseClient.Close(); err != nil && stopErr == nil {
+			stopErr = err
+		}
+	}
+
+	return stopErr
+}
+
+// ConfigureScheduler configures the cron scheduler for periodic affinity refresh behavior.
+func (m *Module) ConfigureScheduler(scheduler corecron.Scheduler) {
+	if m == nil {
+		return
+	}
+
+	m.scheduler = scheduler
+}
+
+// Start registers and starts affinity refresh cron behavior.
+func (m *Module) Start(_ context.Context) error {
+	if m == nil {
+		return ErrModuleNotInitialized
+	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if m.started {
+		return nil
+	}
+	if !m.cfg.Enabled || !m.cfg.AffinityRefreshEnabled || m.scheduler == nil || m.affinityService == nil || strings.TrimSpace(m.cfg.AffinityRefreshCron) == "" {
+		m.started = true
+		return nil
+	}
+	entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.AffinityRefreshCron), func() {
+		refreshCtx, cancel := context.WithTimeout(context.Background(), resolveAffinityRefreshTimeout(m.cfg.AffinityRefreshTimeoutMS))
+		defer cancel()
+
+		if refreshErr := m.affinityService.RefreshAll(refreshCtx); refreshErr != nil {
+			// Fail-open behavior: log and continue next scheduled execution.
+			zap.L().Warn("analytics cron affinity refresh failed", zap.Error(refreshErr))
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("register analytics affinity refresh cron: %w", err)
+	}
+
+	m.affinityRefreshEntryID = entryID
+	m.scheduler.Start()
+	m.started = true
+	return nil
+}
+
+func resolveAffinityRefreshTimeout(timeoutMS int) time.Duration {
+	if timeoutMS <= 0 {
+		return 10 * time.Minute
+	}
+
+	return time.Duration(timeoutMS) * time.Millisecond
 }
