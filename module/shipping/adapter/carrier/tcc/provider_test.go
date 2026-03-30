@@ -2,6 +2,7 @@ package tcc
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -89,6 +90,19 @@ func TestProviderLifecycle(t *testing.T) {
 	if quote.CollectOnDeliveryChargedAmount != 104000 {
 		t.Fatalf("quote.CollectOnDeliveryChargedAmount = %v", quote.CollectOnDeliveryChargedAmount)
 	}
+	if quote.RequestSnapshot == "" {
+		t.Fatalf("quote.RequestSnapshot is empty")
+	}
+	decodedQuoteRequest, decodeErr := base64.StdEncoding.DecodeString(quote.RequestSnapshot)
+	if decodeErr != nil {
+		t.Fatalf("decode quote request snapshot: %v", decodeErr)
+	}
+	if !strings.Contains(string(decodedQuoteRequest), "\"idciudadorigen\":\"11001000\"") {
+		t.Fatalf("quote request snapshot = %s", string(decodedQuoteRequest))
+	}
+	if !strings.Contains(quote.RawResponse, "\"codigoResultado\":\"0\"") {
+		t.Fatalf("quote.RawResponse = %q", quote.RawResponse)
+	}
 
 	mark := &domain.ShippingMark{
 		ID:                      "mark-1",
@@ -128,6 +142,26 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 	if mark.CollectOnDeliveryChargedAmount != 100000 {
 		t.Fatalf("mark.CollectOnDeliveryChargedAmount = %v", mark.CollectOnDeliveryChargedAmount)
+	}
+	if mark.DraftSnapshot == "" {
+		t.Fatal("mark.DraftSnapshot is empty")
+	}
+	decodedDraftSnapshot, decodeErr := base64.StdEncoding.DecodeString(mark.DraftSnapshot)
+	if decodeErr != nil {
+		t.Fatalf("decode mark draft snapshot: %v", decodeErr)
+	}
+	if !strings.Contains(string(decodedDraftSnapshot), "\"formapago\":\"2\"") {
+		t.Fatalf("mark draft snapshot = %s", string(decodedDraftSnapshot))
+	}
+	if mark.ResponseSnapshot == "" {
+		t.Fatal("mark.ResponseSnapshot is empty")
+	}
+	decodedResponseSnapshot, decodeErr := base64.StdEncoding.DecodeString(mark.ResponseSnapshot)
+	if decodeErr != nil {
+		t.Fatalf("decode mark response snapshot: %v", decodeErr)
+	}
+	if !strings.Contains(string(decodedResponseSnapshot), "\"codigoresultado\":\"0\"") {
+		t.Fatalf("mark response snapshot = %s", string(decodedResponseSnapshot))
 	}
 
 	history, err := provider.GetTrackingHistory(context.Background(), mark.TrackingNumber)

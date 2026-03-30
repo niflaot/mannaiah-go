@@ -168,6 +168,10 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 
 	if s.repository != nil {
 		snapshot, _ := json.Marshal(request)
+		encodedRequestSnapshot := base64.StdEncoding.EncodeToString(snapshot)
+		if trimmed := strings.TrimSpace(result.RequestSnapshot); trimmed != "" {
+			encodedRequestSnapshot = base64.StdEncoding.EncodeToString([]byte(trimmed))
+		}
 		rawResponse := strings.TrimSpace(result.RawResponse)
 		encodedRawResponse := ""
 		if rawResponse != "" {
@@ -185,7 +189,7 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 			CurrencyCode:    result.CurrencyCode,
 			ExpiresAt:       result.ExpiresAt,
 			Units:           request.Units,
-			RequestSnapshot: base64.StdEncoding.EncodeToString(snapshot),
+			RequestSnapshot: encodedRequestSnapshot,
 			RawResponse:     encodedRawResponse,
 			CreatedAt:       result.CreatedAt,
 		}

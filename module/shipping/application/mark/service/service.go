@@ -110,7 +110,9 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),
 	}.Normalize()
-	mark.DraftSnapshot = encodeMarkSnapshot(mark)
+	if mark.DraftSnapshot == "" {
+		mark.DraftSnapshot = encodeMarkSnapshot(mark)
+	}
 	if err := mark.Validate(); err != nil {
 		return nil, err
 	}
@@ -123,7 +125,9 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 	if err := provider.GenerateMark(ctx, &mark); err != nil {
 		mark.Status = domain.MarkStatusFailed
 		mark.FailureReason = err.Error()
-		mark.ResponseSnapshot = encodeMarkSnapshot(mark)
+		if mark.ResponseSnapshot == "" {
+			mark.ResponseSnapshot = encodeMarkSnapshot(mark)
+		}
 		mark.UpdatedAt = time.Now().UTC()
 		if createErr := s.repository.Create(ctx, &mark); createErr != nil {
 			return nil, createErr
@@ -135,7 +139,9 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 	if mark.Status == "" {
 		mark.Status = domain.MarkStatusGenerated
 	}
-	mark.ResponseSnapshot = encodeMarkSnapshot(mark)
+	if mark.ResponseSnapshot == "" {
+		mark.ResponseSnapshot = encodeMarkSnapshot(mark)
+	}
 	mark.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Create(ctx, &mark); err != nil {
 		return nil, err
@@ -317,12 +323,16 @@ func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) er
 	if !exists || provider == nil {
 		return domain.ErrCarrierNotSupported
 	}
-	mark.DraftSnapshot = encodeMarkSnapshot(*mark)
+	if strings.TrimSpace(mark.DraftSnapshot) == "" {
+		mark.DraftSnapshot = encodeMarkSnapshot(*mark)
+	}
 	if provider.Carrier().RequiresBalanceCheck {
 		if err := provider.CheckBalance(ctx); err != nil {
 			mark.Status = domain.MarkStatusFailed
 			mark.FailureReason = domain.ErrInsufficientBalance.Error()
-			mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
+			if strings.TrimSpace(mark.ResponseSnapshot) == "" {
+				mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
+			}
 			mark.UpdatedAt = time.Now().UTC()
 			_ = s.repository.Update(ctx, mark)
 			s.publish(ctx, markevent.BuildMarkFailed(*mark, domain.ErrInsufficientBalance.Error()))
@@ -333,7 +343,9 @@ func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) er
 	if err := provider.GenerateMark(ctx, mark); err != nil {
 		mark.Status = domain.MarkStatusFailed
 		mark.FailureReason = err.Error()
-		mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
+		if strings.TrimSpace(mark.ResponseSnapshot) == "" {
+			mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
+		}
 		mark.UpdatedAt = time.Now().UTC()
 		_ = s.repository.Update(ctx, mark)
 		s.publish(ctx, markevent.BuildMarkFailed(*mark, err.Error()))
@@ -341,7 +353,9 @@ func (s *Service) Materialize(ctx context.Context, mark *domain.ShippingMark) er
 		return err
 	}
 	mark.Status = domain.MarkStatusCreated
-	mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
+	if strings.TrimSpace(mark.ResponseSnapshot) == "" {
+		mark.ResponseSnapshot = encodeMarkSnapshot(*mark)
+	}
 	mark.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Update(ctx, mark); err != nil {
 		return err

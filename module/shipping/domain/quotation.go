@@ -133,6 +133,8 @@ type QuotationResult struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 	// RawResponse defines raw provider-response payloads.
 	RawResponse string `json:"rawResponse,omitempty"`
+	// RequestSnapshot defines raw provider-request payloads used for persistence snapshots.
+	RequestSnapshot string `json:"-"`
 	// Warnings defines non-fatal advisory messages produced during quotation.
 	Warnings []QuotationWarning `json:"warnings,omitempty"`
 	// CreatedAt defines row creation timestamps.

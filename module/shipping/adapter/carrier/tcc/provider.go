@@ -2,6 +2,8 @@ package tcc
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -112,7 +114,7 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 		return nil, err
 	}
 	payload := BuildQuoteRequest(p.resolveAccountNumber(request.ShipmentMode), request)
-	response, err := p.client.Quote(ctx, payload)
+	response, requestBody, responseBody, err := p.client.QuoteRaw(ctx, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +136,8 @@ func (p *Provider) Quote(ctx context.Context, request domain.QuotationRequest) (
 	result.CollectOnDeliveryFeePercent = collectOnDeliveryFeePercent
 	result.CollectOnDeliveryFeeAmount = max(collectOnDeliveryChargedAmount-collectOnDeliveryAmount, 0)
 	result.CollectOnDeliveryChargedAmount = collectOnDeliveryChargedAmount
+	result.RequestSnapshot = encodePayloadSnapshot(requestBody)
+	result.RawResponse = strings.TrimSpace(string(responseBody))
 
 	return result, nil
 }
@@ -251,9 +255,15 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 		ReferenceDocuments:      []DispatchDocument{},
 	}
 	if err := validateDispatchGuardrails(resolved, request); err != nil {
+		requestBody, marshalErr := json.Marshal(request)
+		if marshalErr == nil {
+			mark.DraftSnapshot = encodePayloadSnapshot(requestBody)
+		}
 		return err
 	}
-	response, err := p.client.Dispatch(ctx, request)
+	response, requestBody, responseBody, err := p.client.DispatchRaw(ctx, request)
+	mark.DraftSnapshot = encodePayloadSnapshot(requestBody)
+	mark.ResponseSnapshot = encodePayloadSnapshot(responseBody)
 	if err != nil {
 		return err
 	}
@@ -309,6 +319,14 @@ func (p *Provider) GenerateMark(ctx context.Context, mark *domain.ShippingMark) 
 	mark.UpdatedAt = time.Now().UTC()
 
 	return nil
+}
+
+func encodePayloadSnapshot(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+
+	return base64.StdEncoding.EncodeToString(payload)
 }
 
 // VoidMark voids marks in TCC providers.

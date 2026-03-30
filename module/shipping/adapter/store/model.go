@@ -40,8 +40,8 @@ type shippingMarkModel struct {
 	DispatchBatchID                *string                 `gorm:"column:dispatch_batch_id;type:varchar(64);index"`
 	QuotationID                    *string                 `gorm:"column:quotation_id;type:varchar(64)"`
 	QuotedFreightCost              float64                 `gorm:"column:quoted_freight_cost;type:decimal(15,2)"`
-	DraftSnapshot                  string                  `gorm:"column:draft_snapshot;type:text"`
-	ResponseSnapshot               string                  `gorm:"column:response_snapshot;type:text"`
+	DraftSnapshot                  string                  `gorm:"column:draft_snapshot;type:longtext"`
+	ResponseSnapshot               string                  `gorm:"column:response_snapshot;type:longtext"`
 	ShipmentMode                   string                  `gorm:"column:shipment_mode;type:varchar(16)"`
 	FailureReason                  string                  `gorm:"column:failure_reason;type:text;default:null"`
 	CustomTrackingURL              *string                 `gorm:"column:custom_tracking_url;type:varchar(2048);default:null"`
@@ -101,8 +101,8 @@ type quotationModel struct {
 	EstimatedDays   int                  `gorm:"column:estimated_days"`
 	CurrencyCode    string               `gorm:"column:currency_code;type:varchar(5)"`
 	ExpiresAt       time.Time            `gorm:"column:expires_at"`
-	RequestSnapshot string               `gorm:"column:request_snapshot;type:text"`
-	RawResponse     string               `gorm:"column:raw_response;type:text"`
+	RequestSnapshot string               `gorm:"column:request_snapshot;type:longtext"`
+	RawResponse     string               `gorm:"column:raw_response;type:longtext"`
 	CreatedAt       time.Time            `gorm:"column:created_at"`
 	Units           []quotationUnitModel `gorm:"foreignKey:ShippingQuotationID;references:ID"`
 }

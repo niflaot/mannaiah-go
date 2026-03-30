@@ -539,9 +539,9 @@ func quotationListResponseSchema() *openapi3.Schema {
 // quotationRecordSchema defines schema for persisted quotation records.
 func quotationRecordSchema() *openapi3.Schema {
 	requestSnapshotSchema := openapi3.NewStringSchema()
-	requestSnapshotSchema.Description = "Base64-encoded JSON quotation request snapshot."
+	requestSnapshotSchema.Description = "Base64-encoded carrier request snapshot (TCC payload when carrier=tcc; normalized quotation request for providers without carrier-native snapshot)."
 	rawResponseSchema := openapi3.NewStringSchema()
-	rawResponseSchema.Description = "Base64-encoded carrier raw response payload."
+	rawResponseSchema.Description = "Base64-encoded raw carrier response payload."
 
 	return openapi3.NewObjectSchema().
 		WithProperty("ID", openapi3.NewStringSchema()).

@@ -74,42 +74,64 @@ func NewClient(config ClientConfig) (*Client, error) {
 
 // Quote requests one quotation from the TCC quotation endpoint.
 func (c *Client) Quote(ctx context.Context, request QuoteRequest) (*QuoteResponse, error) {
-	response := QuoteResponse{}
-	if err := c.postJSON(ctx, quotePath, request, &response); err != nil {
+	response, _, _, err := c.QuoteRaw(ctx, request)
+	if err != nil {
 		return nil, err
 	}
 
-	return &response, nil
+	return response, nil
+}
+
+// QuoteRaw requests one quotation from the TCC quotation endpoint and returns decoded plus raw payloads.
+func (c *Client) QuoteRaw(ctx context.Context, request QuoteRequest) (*QuoteResponse, []byte, []byte, error) {
+	response := QuoteResponse{}
+	requestBody, responseBody, err := c.postJSON(ctx, quotePath, request, &response)
+	if err != nil {
+		return nil, requestBody, responseBody, err
+	}
+
+	return &response, requestBody, responseBody, nil
 }
 
 // Dispatch creates one shipment in TCC.
 func (c *Client) Dispatch(ctx context.Context, request DispatchRequest) (*DispatchResponse, error) {
-	response := DispatchResponse{}
-	if err := c.postJSON(ctx, dispatchPath, request, &response); err != nil {
+	response, _, _, err := c.DispatchRaw(ctx, request)
+	if err != nil {
 		return nil, err
 	}
 
-	return &response, nil
+	return response, nil
+}
+
+// DispatchRaw creates one shipment in TCC and returns decoded plus raw payloads.
+func (c *Client) DispatchRaw(ctx context.Context, request DispatchRequest) (*DispatchResponse, []byte, []byte, error) {
+	response := DispatchResponse{}
+	requestBody, responseBody, err := c.postJSON(ctx, dispatchPath, request, &response)
+	if err != nil {
+		return nil, requestBody, responseBody, err
+	}
+
+	return &response, requestBody, responseBody, nil
 }
 
 // Track requests one tracking response from TCC.
 func (c *Client) Track(ctx context.Context, request TrackingRequest) (*TrackingResponse, error) {
 	response := TrackingResponse{}
-	if err := c.postJSON(ctx, trackingPath, request, &response); err != nil {
+	if _, _, err := c.postJSON(ctx, trackingPath, request, &response); err != nil {
 		return nil, err
 	}
 
 	return &response, nil
 }
 
-func (c *Client) postJSON(ctx context.Context, path string, payload any, out any) error {
+func (c *Client) postJSON(ctx context.Context, path string, payload any, out any) ([]byte, []byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal tcc request: %w", err)
+		return nil, nil, fmt.Errorf("marshal tcc request: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("build tcc request: %w", err)
+		return body, nil, fmt.Errorf("build tcc request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("AccessToken", c.accessToken)
@@ -126,7 +148,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 			zap.Duration("latency", time.Since(start)),
 			zap.Error(err),
 		)
-		return fmt.Errorf("request tcc endpoint %s: %w", path, err)
+		return body, nil, fmt.Errorf("request tcc endpoint %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 5*1024*1024))
@@ -137,7 +159,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 			zap.Duration("latency", time.Since(start)),
 			zap.Error(err),
 		)
-		return fmt.Errorf("read tcc response: %w", err)
+		return body, nil, fmt.Errorf("read tcc response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		zap.L().Error("tcc http error",
@@ -146,7 +168,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 			zap.Duration("latency", time.Since(start)),
 			zap.String("response_body", strings.TrimSpace(string(responseBody))),
 		)
-		return fmt.Errorf("tcc endpoint %s returned status %d: %s", path, response.StatusCode, strings.TrimSpace(string(responseBody)))
+		return body, responseBody, fmt.Errorf("tcc endpoint %s returned status %d: %s", path, response.StatusCode, strings.TrimSpace(string(responseBody)))
 	}
 	if len(responseBody) == 0 {
 		zap.L().Error("tcc empty response",
@@ -154,7 +176,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 			zap.Int("status", response.StatusCode),
 			zap.Duration("latency", time.Since(start)),
 		)
-		return fmt.Errorf("tcc endpoint %s returned an empty response", path)
+		return body, responseBody, fmt.Errorf("tcc endpoint %s returned an empty response", path)
 	}
 	if err := json.Unmarshal(responseBody, out); err != nil {
 		zap.L().Error("tcc response decode failed",
@@ -164,7 +186,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 			zap.String("response_body", strings.TrimSpace(string(responseBody))),
 			zap.Error(err),
 		)
-		return fmt.Errorf("decode tcc response: %w", err)
+		return body, responseBody, fmt.Errorf("decode tcc response: %w", err)
 	}
 	zap.L().Info("tcc api call",
 		zap.String("path", path),
@@ -173,5 +195,5 @@ func (c *Client) postJSON(ctx context.Context, path string, payload any, out any
 		zap.String("response_body", strings.TrimSpace(string(responseBody))),
 	)
 
-	return nil
+	return body, responseBody, nil
 }

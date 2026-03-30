@@ -151,6 +151,38 @@ func (quotationProviderCityErrorStub) VoidMark(ctx context.Context, trackingNumb
 func (quotationProviderCityErrorStub) CheckBalance(ctx context.Context) error { return nil }
 func (quotationProviderCityErrorStub) SupportsQuotation() bool                { return true }
 
+type quotationProviderRequestSnapshotStub struct{}
+
+func (quotationProviderRequestSnapshotStub) CarrierID() string { return "manual" }
+func (quotationProviderRequestSnapshotStub) Carrier() domain.Carrier {
+	return domain.Carrier{ID: "manual", Name: "Manual", Type: domain.CarrierTypeManual, Active: true}
+}
+func (quotationProviderRequestSnapshotStub) Quote(ctx context.Context, request domain.QuotationRequest) (*domain.QuotationResult, error) {
+	return &domain.QuotationResult{
+		CarrierID:       request.CarrierID,
+		OrderID:         request.OrderID,
+		OriginCityCode:  request.OriginCityCode,
+		DestCityCode:    request.DestCityCode,
+		FreightCost:     12000,
+		EstimatedDays:   2,
+		CurrencyCode:    "COP",
+		ExpiresAt:       time.Now().Add(time.Hour),
+		RequestSnapshot: `{"idciudadorigen":"11001000","cuenta":"7000880"}`,
+		RawResponse:     `{"codigoResultado":"0","mensajeResultado":"OK"}`,
+		Warnings:        nil,
+		CreatedAt:       time.Now().UTC(),
+		OrderIdentifier: "",
+	}, nil
+}
+func (quotationProviderRequestSnapshotStub) GenerateMark(ctx context.Context, mark *domain.ShippingMark) error {
+	return nil
+}
+func (quotationProviderRequestSnapshotStub) VoidMark(ctx context.Context, trackingNumber string) error {
+	return nil
+}
+func (quotationProviderRequestSnapshotStub) CheckBalance(ctx context.Context) error { return nil }
+func (quotationProviderRequestSnapshotStub) SupportsQuotation() bool                { return true }
+
 type quotationRegistryStub struct {
 	provider port.CarrierProvider
 }
@@ -248,6 +280,41 @@ func TestQuote(t *testing.T) {
 	}
 	if _, decodeErr := base64.StdEncoding.DecodeString(repository.rows[0].RawResponse); decodeErr != nil {
 		t.Fatalf("decode raw response: %v", decodeErr)
+	}
+}
+
+// TestQuotePersistsProviderRequestSnapshot verifies provider-origin snapshots are persisted when present.
+func TestQuotePersistsProviderRequestSnapshot(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderRequestSnapshotStub{}}, Config{})
+
+	_, err := service.Quote(context.Background(), QuoteCommand{
+		OrderID:        "order-provider-snapshot",
+		CarrierID:      "manual",
+		OriginCityCode: "11001000",
+		DestCityCode:   "76001000",
+		ShipmentMode:   domain.ShipmentModeExpress,
+		Units:          []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 1}}},
+	})
+	if err != nil {
+		t.Fatalf("Quote() error = %v", err)
+	}
+	if len(repository.rows) != 1 {
+		t.Fatalf("stored rows = %d, want 1", len(repository.rows))
+	}
+	decodedRequestSnapshot, decodeErr := base64.StdEncoding.DecodeString(repository.rows[0].RequestSnapshot)
+	if decodeErr != nil {
+		t.Fatalf("decode request snapshot: %v", decodeErr)
+	}
+	if string(decodedRequestSnapshot) != `{"idciudadorigen":"11001000","cuenta":"7000880"}` {
+		t.Fatalf("request snapshot = %s", string(decodedRequestSnapshot))
+	}
+	decodedRawResponse, decodeErr := base64.StdEncoding.DecodeString(repository.rows[0].RawResponse)
+	if decodeErr != nil {
+		t.Fatalf("decode raw response: %v", decodeErr)
+	}
+	if string(decodedRawResponse) != `{"codigoResultado":"0","mensajeResultado":"OK"}` {
+		t.Fatalf("raw response = %s", string(decodedRawResponse))
 	}
 }
 
