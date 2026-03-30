@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"go.uber.org/zap"
 
 	corecache "mannaiah/module/core/cache"
@@ -92,6 +91,8 @@ type batchManifestCoverMeta struct {
 type batchManifestCoverRow struct {
 	// TrackingNumber defines tracking/document fallback identifiers.
 	TrackingNumber string
+	// FreightCost defines the freight cost amount (excluding COD fees).
+	FreightCost float64
 	// RecipientName defines recipient display-name values.
 	RecipientName string
 	// OrderNumber defines short/public order-number values.
@@ -139,7 +140,7 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	rows, manifestURLs := s.resolveBatchManifestCoverRows(ctx, marks)
+	rows, _ := s.resolveBatchManifestCoverRows(ctx, marks)
 	cover, err := s.buildBatchManifestCoverPDF(ctx, batchManifestCoverMeta{
 		BatchID:     batch.ID,
 		CarrierID:   batch.CarrierID,
@@ -150,29 +151,9 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 		return nil, err
 	}
 
-	sources := make([]io.ReadSeeker, 0, 1+len(manifestURLs))
-	sources = append(sources, bytes.NewReader(cover))
-	for _, manifestURL := range manifestURLs {
-		pdfBytes, downloadErr := s.downloadManifestPDF(ctx, manifestURL)
-		if downloadErr != nil {
-			zap.L().Warn("batch manifest download failed", zap.String("batch_id", trimmedBatchID), zap.String("manifest_url", manifestURL), zap.Error(downloadErr))
-			continue
-		}
-		sources = append(sources, bytes.NewReader(pdfBytes))
-	}
+	s.cacheBatchManifestDocument(ctx, trimmedBatchID, cover)
 
-	merged := cover
-	if len(sources) > 1 {
-		var output bytes.Buffer
-		if mergeErr := api.MergeRaw(sources, &output, false, nil); mergeErr != nil {
-			return nil, mergeErr
-		}
-		merged = append([]byte(nil), output.Bytes()...)
-	}
-
-	s.cacheBatchManifestDocument(ctx, trimmedBatchID, merged)
-
-	return append([]byte(nil), merged...), nil
+	return append([]byte(nil), cover...), nil
 }
 
 // SetBatchManifestOrderSummaryResolver configures optional order summary lookup dependencies.
@@ -308,6 +289,7 @@ func (s *Service) resolveBatchManifestCoverRows(ctx context.Context, marks []dom
 		orderNumber, items := s.resolveBatchManifestOrderSummary(ctx, mark)
 		rows = append(rows, batchManifestCoverRow{
 			TrackingNumber: firstNonEmpty(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.ID)),
+			FreightCost:    mark.QuotedFreightCost,
 			RecipientName:  firstNonEmpty(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName), "-"),
 			OrderNumber:    orderNumber,
 			City:           firstNonEmpty(strings.TrimSpace(mark.Recipient.CityCode), "-"),

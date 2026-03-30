@@ -230,11 +230,11 @@ func TestManifestDocumentBuildsMergedPDFAndCaches(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if got := manifestHits["/manifest-1.pdf"]; got != 1 {
-		t.Fatalf("manifest-1 hits = %d, want 1", got)
+	if got := manifestHits["/manifest-1.pdf"]; got != 0 {
+		t.Fatalf("manifest-1 hits = %d, want 0 (individual manifests no longer merged)", got)
 	}
-	if got := manifestHits["/manifest-2.pdf"]; got != 1 {
-		t.Fatalf("manifest-2 hits = %d, want 1", got)
+	if got := manifestHits["/manifest-2.pdf"]; got != 0 {
+		t.Fatalf("manifest-2 hits = %d, want 0 (individual manifests no longer merged)", got)
 	}
 	if got := manifestHits["/logo.png"]; got != 1 {
 		t.Fatalf("logo hits = %d, want 1", got)

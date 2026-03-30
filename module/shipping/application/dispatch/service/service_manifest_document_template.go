@@ -30,6 +30,8 @@ type batchManifestCoverTemplate struct {
 	QuantityLabel string `json:"quantityLabel"`
 	// TrackingNumberHeader defines tracking-number column header values.
 	TrackingNumberHeader string `json:"trackingNumberHeader"`
+	// FreightHeader defines freight-cost column header values.
+	FreightHeader string `json:"freightHeader"`
 	// RecipientHeader defines recipient column header values.
 	RecipientHeader string `json:"recipientHeader"`
 	// OrderNumberHeader defines order-number column header values.
@@ -55,6 +57,7 @@ func loadDefaultBatchManifestCoverTemplate() batchManifestCoverTemplate {
 			CarrierLabel:         "Transportadora",
 			QuantityLabel:        "Cantidad",
 			TrackingNumberHeader: "NÚMERO DE GUÍA",
+			FreightHeader:        "FLETE",
 			RecipientHeader:      "DESTINATARIO",
 			OrderNumberHeader:    "PEDIDO #",
 			CityHeader:           "CIUDAD",
@@ -121,6 +124,7 @@ func (t batchManifestCoverTemplate) normalize() batchManifestCoverTemplate {
 	t.CarrierLabel = strings.TrimSpace(t.CarrierLabel)
 	t.QuantityLabel = strings.TrimSpace(t.QuantityLabel)
 	t.TrackingNumberHeader = strings.TrimSpace(t.TrackingNumberHeader)
+	t.FreightHeader = strings.TrimSpace(t.FreightHeader)
 	t.RecipientHeader = strings.TrimSpace(t.RecipientHeader)
 	t.OrderNumberHeader = strings.TrimSpace(t.OrderNumberHeader)
 	t.CityHeader = strings.TrimSpace(t.CityHeader)
@@ -146,6 +150,7 @@ func (t batchManifestCoverTemplate) validate() error {
 		t.CarrierLabel,
 		t.QuantityLabel,
 		t.TrackingNumberHeader,
+		t.FreightHeader,
 		t.RecipientHeader,
 		t.OrderNumberHeader,
 		t.CityHeader,

@@ -5,6 +5,7 @@
   "carrierLabel": "Transportadora",
   "quantityLabel": "Cantidad",
   "trackingNumberHeader": "NÚMERO DE GUÍA",
+  "freightHeader": "FLETE",
   "recipientHeader": "DESTINATARIO",
   "orderNumberHeader": "PEDIDO #",
   "cityHeader": "CIUDAD",
