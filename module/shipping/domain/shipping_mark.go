@@ -182,6 +182,7 @@ func (m ShippingMark) Normalize() ShippingMark {
 		QuotedFreightCost:              round2(quotedFreightCost),
 		ShipmentMode:                   m.ShipmentMode,
 		DraftSnapshot:                  strings.TrimSpace(m.DraftSnapshot),
+		RequestSnapshot:                strings.TrimSpace(m.RequestSnapshot),
 		ResponseSnapshot:               strings.TrimSpace(m.ResponseSnapshot),
 		FailureReason:                  strings.TrimSpace(m.FailureReason),
 		CustomTrackingURL:              normalizeOptionalURL(m.CustomTrackingURL),
