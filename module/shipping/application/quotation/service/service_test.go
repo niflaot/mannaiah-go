@@ -16,10 +16,10 @@ type quotationRepositoryStub struct {
 	rows []port.QuotationRecord
 }
 
-func (s *quotationRepositoryStub) Create(ctx context.Context, record port.QuotationRecord) error {
+func (s *quotationRepositoryStub) Create(ctx context.Context, record port.QuotationRecord) (string, error) {
 	s.rows = append(s.rows, record)
 
-	return nil
+	return record.ID, nil
 }
 
 func (s *quotationRepositoryStub) GetByID(ctx context.Context, id string) (*port.QuotationRecord, error) {

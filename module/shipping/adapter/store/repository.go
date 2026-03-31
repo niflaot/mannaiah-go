@@ -457,20 +457,23 @@ func (r *BatchRepository) List(ctx context.Context, query port.BatchListQuery) (
 	return result, total, nil
 }
 
-// Create creates one quotation audit record.
-func (r *QuotationRepository) Create(ctx context.Context, record port.QuotationRecord) error {
+// Create creates one quotation audit record and returns the persisted record ID.
+// If an equivalent non-expired quotation already exists the existing ID is returned.
+func (r *QuotationRepository) Create(ctx context.Context, record port.QuotationRecord) (string, error) {
 	row := mapQuotationModel(record)
 	now := time.Now().UTC()
+	persistedID := row.ID
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if _, err := deleteExpiredQuotationsTx(tx, now); err != nil {
 			return err
 		}
-		exists, err := quotationDuplicateExistsTx(tx, row, now)
+		existing, err := quotationDuplicateExistsTx(tx, row, now)
 		if err != nil {
 			return err
 		}
-		if exists {
+		if existing != nil {
+			persistedID = existing.ID
 			return nil
 		}
 		if err := tx.Omit(clause.Associations).Create(&row).Error; err != nil {
@@ -485,6 +488,8 @@ func (r *QuotationRepository) Create(ctx context.Context, record port.QuotationR
 
 		return nil
 	})
+
+	return persistedID, err
 }
 
 // GetByID loads one quotation record by identifier.
@@ -583,7 +588,7 @@ func deleteExpiredQuotationsTx(tx *gorm.DB, now time.Time) (int64, error) {
 	return result.RowsAffected, nil
 }
 
-func quotationDuplicateExistsTx(tx *gorm.DB, row quotationModel, now time.Time) (bool, error) {
+func quotationDuplicateExistsTx(tx *gorm.DB, row quotationModel, now time.Time) (*quotationModel, error) {
 	var existing quotationModel
 	err := tx.
 		Where("order_id = ? AND COALESCE(order_identifier, '') = ? AND carrier_id = ? AND origin_city_code = ? AND dest_city_code = ? AND request_snapshot = ? AND expires_at > ?",
@@ -598,13 +603,13 @@ func quotationDuplicateExistsTx(tx *gorm.DB, row quotationModel, now time.Time) 
 		Order("created_at DESC").
 		First(&existing).Error
 	if err == nil {
-		return true, nil
+		return &existing, nil
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+		return nil, nil
 	}
 
-	return false, fmt.Errorf("check quotation duplicate: %w", err)
+	return nil, fmt.Errorf("check quotation duplicate: %w", err)
 }
 
 // listMarkIDs lists mark identifiers belonging to one batch.

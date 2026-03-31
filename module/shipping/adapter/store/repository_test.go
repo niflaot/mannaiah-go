@@ -80,7 +80,7 @@ func TestRepositories(t *testing.T) {
 		t.Fatalf("Close(batch) error = %v", err)
 	}
 
-	if err := quotationRepository.Create(context.Background(), port.QuotationRecord{
+	if _, err := quotationRepository.Create(context.Background(), port.QuotationRecord{
 		ID:              "quote-1",
 		OrderID:         "order-1",
 		CarrierID:       "manual",
@@ -151,12 +151,14 @@ func TestQuotationRepositoryPreventsDuplicateActiveRows(t *testing.T) {
 		Units:           []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
 		CreatedAt:       time.Now().UTC(),
 	}
-	if err := quotationRepository.Create(context.Background(), record); err != nil {
+	if _, err := quotationRepository.Create(context.Background(), record); err != nil {
 		t.Fatalf("Create(first) error = %v", err)
 	}
 	record.ID = "quote-dedup-2"
-	if err := quotationRepository.Create(context.Background(), record); err != nil {
+	if persistedID, err := quotationRepository.Create(context.Background(), record); err != nil {
 		t.Fatalf("Create(duplicate) error = %v", err)
+	} else if persistedID != "quote-dedup-1" {
+		t.Fatalf("Create(duplicate) persistedID = %q, want quote-dedup-1", persistedID)
 	}
 
 	rows, err := quotationRepository.ListByOrderID(context.Background(), "order-dedup")

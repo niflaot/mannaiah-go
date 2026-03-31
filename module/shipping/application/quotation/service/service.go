@@ -194,9 +194,11 @@ func (s *Service) Quote(ctx context.Context, command QuoteCommand) (*domain.Quot
 			RawResponse:                encodedRawResponse,
 			CreatedAt:                  result.CreatedAt,
 		}
-		if err := s.repository.Create(ctx, record); err != nil {
+		persistedID, err := s.repository.Create(ctx, record)
+		if err != nil {
 			return nil, err
 		}
+		result.ID = persistedID
 	}
 
 	return result, nil

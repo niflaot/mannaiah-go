@@ -103,8 +103,9 @@ type DispatchBatchRepository interface {
 
 // QuotationRepository defines quotation persistence behavior.
 type QuotationRepository interface {
-	// Create creates one quotation audit record.
-	Create(ctx context.Context, record QuotationRecord) error
+	// Create creates one quotation audit record and returns the persisted record ID.
+	// If an equivalent non-expired quotation already exists the existing ID is returned.
+	Create(ctx context.Context, record QuotationRecord) (string, error)
 	// GetByID loads one quotation record by identifier.
 	GetByID(ctx context.Context, id string) (*QuotationRecord, error)
 	// ListByOrderID lists quotation records by order identifier.

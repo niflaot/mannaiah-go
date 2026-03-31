@@ -192,9 +192,9 @@ func newDispatchQuotationRepositoryStub() *dispatchQuotationRepositoryStub {
 	return &dispatchQuotationRepositoryStub{rows: map[string]port.QuotationRecord{}}
 }
 
-func (s *dispatchQuotationRepositoryStub) Create(ctx context.Context, record port.QuotationRecord) error {
+func (s *dispatchQuotationRepositoryStub) Create(ctx context.Context, record port.QuotationRecord) (string, error) {
 	s.rows[record.ID] = record
-	return nil
+	return record.ID, nil
 }
 
 func (s *dispatchQuotationRepositoryStub) GetByID(ctx context.Context, id string) (*port.QuotationRecord, error) {
