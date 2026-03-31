@@ -207,6 +207,7 @@ func (r *MarkRepository) Update(ctx context.Context, mark *domain.ShippingMark) 
 			"quotation_id":                       row.QuotationID,
 			"quoted_freight_cost":                row.QuotedFreightCost,
 			"draft_snapshot":                     row.DraftSnapshot,
+			"request_snapshot":                   row.RequestSnapshot,
 			"response_snapshot":                  row.ResponseSnapshot,
 			"shipment_mode":                      row.ShipmentMode,
 			"failure_reason":                     row.FailureReason,
