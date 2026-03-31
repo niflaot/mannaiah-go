@@ -18,17 +18,16 @@ var (
 
 // campaignSearchRecord mirrors the campaigns table for search reads.
 type campaignSearchRecord struct {
-	ID        string         `gorm:"primaryKey;size:64"`
-	Name      string         `gorm:"size:255"`
-	Slug      string         `gorm:"size:255"`
-	Channel   string         `gorm:"size:64"`
-	SegmentID string         `gorm:"size:64"`
-	Subject   string         `gorm:"size:512"`
-	Status    string         `gorm:"size:32"`
+	ID        string `gorm:"primaryKey;size:64"`
+	Name      string `gorm:"size:255"`
+	Slug      string `gorm:"size:255"`
+	Channel   string `gorm:"size:64"`
+	SegmentID string `gorm:"size:64"`
+	Subject   string `gorm:"size:512"`
+	Status    string `gorm:"size:32"`
 	SentCount int
 	CreatedAt string
 	UpdatedAt string
-	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 func (campaignSearchRecord) TableName() string { return "campaigns" }

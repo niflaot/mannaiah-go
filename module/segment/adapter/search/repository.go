@@ -18,14 +18,13 @@ var (
 
 // segmentSearchRecord mirrors the segments table for search reads.
 type segmentSearchRecord struct {
-	ID              string         `gorm:"primaryKey;size:64"`
-	Name            string         `gorm:"size:255"`
-	Slug            string         `gorm:"size:255"`
-	Channel         string         `gorm:"size:64"`
-	ParentSegmentID *string        `gorm:"size:64"`
+	ID              string  `gorm:"primaryKey;size:64"`
+	Name            string  `gorm:"size:255"`
+	Slug            string  `gorm:"size:255"`
+	Channel         string  `gorm:"size:64"`
+	ParentSegmentID *string `gorm:"size:64"`
 	CreatedAt       string
 	UpdatedAt       string
-	DeletedAt       gorm.DeletedAt `gorm:"index"`
 }
 
 func (segmentSearchRecord) TableName() string { return "segments" }

@@ -18,18 +18,17 @@ var (
 
 // markSearchRecord mirrors the shipping_marks table for search reads.
 type markSearchRecord struct {
-	ID              string         `gorm:"primaryKey;size:64"`
-	OrderID         string         `gorm:"size:64"`
-	CarrierID       string         `gorm:"size:64"`
-	TrackingNumber  string         `gorm:"size:255"`
-	Status          string         `gorm:"size:32"`
-	DispatchBatchID *string        `gorm:"size:64"`
-	ShipmentMode    string         `gorm:"size:32"`
+	ID              string  `gorm:"primaryKey;size:64"`
+	OrderID         string  `gorm:"size:64"`
+	CarrierID       string  `gorm:"size:64"`
+	TrackingNumber  string  `gorm:"size:255"`
+	Status          string  `gorm:"size:32"`
+	DispatchBatchID *string `gorm:"size:64"`
+	ShipmentMode    string  `gorm:"size:32"`
 	DeclaredValue   float64
-	Observations    string         `gorm:"type:text"`
+	Observations    string  `gorm:"type:text"`
 	CreatedAt       string
 	UpdatedAt       string
-	DeletedAt       gorm.DeletedAt `gorm:"index"`
 }
 
 func (markSearchRecord) TableName() string { return "shipping_marks" }
