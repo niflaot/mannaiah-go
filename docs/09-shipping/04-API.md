@@ -402,6 +402,20 @@ Returns a merged PDF of all `CREATED` mark labels plus a summary page. Result is
 
 ---
 
+### Get Mark Rotulus Document
+
+```
+GET /shipping/marks/:id/rotulus-document
+```
+
+Returns a half-letter PDF rotulus for the mark. The QR payload is signed with HMAC and the rendered PDF is cacheable.
+
+**Permissions:** any of `shipping:generate`, `shipping:quotations`, or `order:view`.
+
+**Response** `200 OK` with `Content-Type: application/pdf` body.
+
+---
+
 ## Tracking Endpoint
 
 ### Get Tracking History

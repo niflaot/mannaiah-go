@@ -58,6 +58,8 @@ type MarkService interface {
 	QueryDispatch(ctx context.Context, query markservice.DispatchQuery) (*markservice.DispatchResult, error)
 	// Related resolves related shipping marks by mark identifier.
 	Related(ctx context.Context, id string) ([]domain.ShippingMark, error)
+	// RotulusDocument builds one rotulus PDF document for one mark.
+	RotulusDocument(ctx context.Context, id string) ([]byte, error)
 }
 
 // DispatchService defines dispatch batch behavior required by HTTP handlers.
@@ -145,6 +147,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/marks", h.protect("shipping:generate", h.createMark))
 	router.Get("/shipping/marks/:id", h.protect("shipping:quotations", h.getMark))
 	router.Get("/shipping/marks/:id/related", h.protect("shipping:quotations", h.listRelatedMarks))
+	router.Get("/shipping/marks/:id/rotulus-document", h.protectAny([]string{"shipping:generate", "shipping:quotations", "order:view"}, h.rotulusDocument))
 	router.Get("/shipping/marks", h.protect("shipping:quotations", h.listMarks))
 	router.Patch("/shipping/marks/:id/void", h.protect("shipping:manage", h.voidMark))
 	router.Get("/shipping/orders/:orderID/dispatch", h.protect("shipping:quotations", h.getOrderDispatch))
@@ -174,6 +177,43 @@ func (h *Handler) protect(permission string, next corehttp.Handler) corehttp.Han
 		}
 
 		return next(ctx)
+	}
+}
+
+// protectAny wraps endpoint handlers with optional authentication and "any-of" permission checks.
+func (h *Handler) protectAny(permissions []string, next corehttp.Handler) corehttp.Handler {
+	if h == nil || h.authorizer == nil || len(permissions) == 0 {
+		return next
+	}
+
+	return func(ctx corehttp.Context) error {
+		authorizationHeader := ctx.GetHeader("Authorization")
+		var firstErr error
+		var unauthorizedErr error
+		var forbiddenErr error
+		for _, permission := range permissions {
+			err := h.authorizer.Require(ctx.Context(), authorizationHeader, permission)
+			if err == nil {
+				return next(ctx)
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			if h.authorizer.IsUnauthorized(err) && unauthorizedErr == nil {
+				unauthorizedErr = err
+			}
+			if h.authorizer.IsForbidden(err) && forbiddenErr == nil {
+				forbiddenErr = err
+			}
+		}
+		if forbiddenErr != nil {
+			return h.mapError(forbiddenErr)
+		}
+		if unauthorizedErr != nil {
+			return h.mapError(unauthorizedErr)
+		}
+
+		return h.mapError(firstErr)
 	}
 }
 
@@ -219,6 +259,9 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, domain.ErrBatchMarkStatusMismatch) {
 		return corehttp.NewAppError(409, "batch_mark_status_mismatch", err)
+	}
+	if errors.Is(err, domain.ErrBatchOpenForCarrier) {
+		return corehttp.NewAppError(409, "batch_open_for_carrier", err)
 	}
 	if errors.Is(err, domain.ErrMarkNotDraft) {
 		return corehttp.NewAppError(409, "mark_not_draft", err)

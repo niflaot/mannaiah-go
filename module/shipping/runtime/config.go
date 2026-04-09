@@ -10,6 +10,12 @@ type Config struct {
 	BatchManifestCacheTTLSeconds int `mapstructure:"SHIPPING_BATCH_MANIFEST_CACHE_TTL_SECONDS" default:"300"`
 	// BatchManifestTemplatePath defines optional JSON template file path for manifest cover rendering.
 	BatchManifestTemplatePath string `mapstructure:"SHIPPING_BATCH_MANIFEST_TEMPLATE_PATH" default:""`
+	// RotulusCacheTTLSeconds defines rotulus-document cache TTL values in seconds.
+	RotulusCacheTTLSeconds int `mapstructure:"SHIPPING_ROTULUS_CACHE_TTL_SECONDS" default:"300"`
+	// RotulusTemplatePath defines optional JSON template file path for rotulus rendering.
+	RotulusTemplatePath string `mapstructure:"SHIPPING_ROTULUS_TEMPLATE_PATH" default:""`
+	// RotulusSigningSecret defines HMAC secret values used to sign rotulus QR payloads.
+	RotulusSigningSecret string `mapstructure:"SHIPPING_ROTULUS_SIGNING_SECRET" default:""`
 	// TransactionalTrackingBaseURL defines the base URL for shipping tracking links in transactional emails.
 	TransactionalTrackingBaseURL string `mapstructure:"SHIPPING_TRANSACTIONAL_TRACKING_BASE_URL" default:"https://rastreo.flockstore.co"`
 	// TransactionalHelpPhoneURL defines the WhatsApp help URL for transactional shipping emails.

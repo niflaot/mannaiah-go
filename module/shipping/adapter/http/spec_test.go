@@ -23,6 +23,9 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/marks/{id}/related") == nil {
 		t.Fatalf("missing /shipping/marks/{id}/related path")
 	}
+	if paths.Find("/shipping/marks/{id}/rotulus-document") == nil {
+		t.Fatalf("missing /shipping/marks/{id}/rotulus-document path")
+	}
 	if paths.Find("/shipping/batches/marks") == nil {
 		t.Fatalf("missing /shipping/batches/marks path")
 	}
@@ -261,6 +264,14 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	getRelatedResponse := getRelated.Responses.Value("200")
 	if getRelatedResponse.Value == nil || getRelatedResponse.Value.Content.Get("application/json") == nil {
 		t.Fatalf("expected /shipping/marks/{id}/related GET 200 JSON schema")
+	}
+	getMarkRotulusDocument := paths.Find("/shipping/marks/{id}/rotulus-document").Get
+	if getMarkRotulusDocument == nil || getMarkRotulusDocument.Responses == nil || getMarkRotulusDocument.Responses.Value("200") == nil {
+		t.Fatalf("expected /shipping/marks/{id}/rotulus-document GET 200 response")
+	}
+	getMarkRotulusDocumentResponse := getMarkRotulusDocument.Responses.Value("200")
+	if getMarkRotulusDocumentResponse.Value == nil || getMarkRotulusDocumentResponse.Value.Content.Get("application/pdf") == nil {
+		t.Fatalf("expected /shipping/marks/{id}/rotulus-document GET 200 application/pdf response")
 	}
 
 	getTracking := paths.Find("/shipping/tracking/{trackingNumber}").Get

@@ -11,6 +11,7 @@
 - Carrier artifact persistence for both shipping mark documents and shipping manifests.
 - Dispatch batch grouping (create/add/remove/close).
 - On-demand merged batch manifest PDF generation (cover summary page + carrier manifest pages) with 5-minute cache (Redis when configured + in-memory fallback).
+- On-demand per-mark rotulus PDF generation with signed QR payloads and cacheable rendering.
 - JSON-based batch-manifest cover template for editable labels/headers without code changes.
 - Homogenized tracking API.
 - Integration event publication for mark/batch/tracking lifecycle updates.
@@ -35,7 +36,7 @@
   - `POST /shipping/quotations/order` — auto-build packages from order products and request a quotation
   - `POST /shipping/quotations/order-packaging` — preview package allocation, COD value, destination city, and resolved shipment mode without carrier calls or persistence
   - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
-  - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
+  - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks/:id/rotulus-document`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
   - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
   - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
@@ -59,6 +60,12 @@
 - `SHIPPING_BATCH_MANIFEST_CACHE_TTL_SECONDS` controls merged manifest cache TTL (default `300`).
 - `SHIPPING_BATCH_MANIFEST_TEMPLATE_PATH` optionally points to a JSON template file for cover-page labels/headers.
 - Default template source: `application/dispatch/service/templates/batch_manifest_cover.es.json`.
+
+## Rotulus Document
+- `SHIPPING_ROTULUS_CACHE_TTL_SECONDS` controls per-mark rotulus cache TTL (default `300`).
+- `SHIPPING_ROTULUS_TEMPLATE_PATH` optionally points to a JSON template file for Spanish rotulus labels.
+- `SHIPPING_ROTULUS_SIGNING_SECRET` defines the HMAC secret used to sign QR payloads embedded in rotulus PDFs.
+- Default template source: `application/mark/service/templates/rotulus.es.json`.
 
 ## Quotation Discount
 - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` applies a global percentage discount to all carrier quotations.
@@ -113,6 +120,7 @@
 - During `direct=true` materialization and during `PATCH /shipping/batches/:id/close`, carrier guardrails run immediately before outbound carrier dispatch.
 - Guardrail violations return HTTP `500` (`message=shipping_guardrail_violation`) and include `mark_id`, `order_id`, `rule`, and `request_preview` in the `error` field.
 - `POST /shipping/batches/:id/marks` accepts optional manual fields `trackingNumber` and `customTrackingUrl` so operators can attach manual guide references and custom tracking links before batch close/materialization.
+- Manual carrier labels are normalized to lowercase slugs without spaces before they are persisted or used in tracking URLs.
 
 ## COD Collection
 - Mark create requests accept `collectOnDeliveryAmount`.

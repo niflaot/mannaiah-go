@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,12 @@ func (s *dispatchBatchRepositoryStub) RemoveMark(ctx context.Context, batchID st
 func (s *dispatchBatchRepositoryStub) List(ctx context.Context, query port.BatchListQuery) ([]domain.DispatchBatch, int64, error) {
 	rows := make([]domain.DispatchBatch, 0, len(s.batches))
 	for _, row := range s.batches {
+		if query.CarrierID != "" && !strings.EqualFold(row.CarrierID, query.CarrierID) {
+			continue
+		}
+		if query.Status != "" && row.Status != query.Status {
+			continue
+		}
 		rows = append(rows, row)
 	}
 
@@ -242,6 +249,23 @@ func TestCreateBatch(t *testing.T) {
 	}
 	if len(publisher.events) == 0 || publisher.events[0].Topic != port.TopicBatchCreated {
 		t.Fatalf("missing batch created event")
+	}
+}
+
+// TestCreateBatchRejectsSecondOpenBatchForSameCarrier verifies one carrier cannot keep multiple open batches.
+func TestCreateBatchRejectsSecondOpenBatchForSameCarrier(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	service := NewService(batchRepository, markRepository, &dispatchPublisherStub{})
+
+	if _, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-1"}); err != nil {
+		t.Fatalf("Create(first) error = %v", err)
+	}
+	if _, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-2"}); !errors.Is(err, domain.ErrBatchOpenForCarrier) {
+		t.Fatalf("Create(second) error = %v, want ErrBatchOpenForCarrier", err)
+	}
+	if _, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "tcc", CreatedBy: "user-3"}); err != nil {
+		t.Fatalf("Create(other carrier) error = %v", err)
 	}
 }
 

@@ -113,6 +113,11 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 		ExpirationTTLMinutes: cfg.Quotation.ExpirationTTLMinutes,
 	})
 	markSvc := markservice.NewService(markRepository, registry, publisher)
+	markSvc.SetRotulusDocumentCacheTTL(time.Duration(cfg.RotulusCacheTTLSeconds) * time.Second)
+	markSvc.SetRotulusDocumentSigningSecret(strings.TrimSpace(cfg.RotulusSigningSecret))
+	if err := markSvc.SetRotulusDocumentTemplateFromFile(cfg.RotulusTemplatePath); err != nil {
+		return nil, fmt.Errorf("configure rotulus template: %w", err)
+	}
 	dispatchSvc := dispatchservice.NewService(batchRepository, markRepository, publisher, markSvc)
 	dispatchSvc.SetQuotationRepository(quotationRepository)
 	dispatchSvc.SetDefaultSender(domain.Address{
@@ -183,6 +188,9 @@ func (m *Module) SetQuotationOrderSource(source port.OrderQuotationSource) {
 	m.quotationService.SetOrderSource(source)
 	if m.dispatchService != nil {
 		m.dispatchService.SetOrderSource(source)
+	}
+	if m.markService != nil {
+		m.markService.SetOrderSource(source)
 	}
 }
 

@@ -29,6 +29,8 @@ var (
 	ErrBatchCarrierMismatch = errors.New("shipping batch carrier mismatch")
 	// ErrBatchMarkStatusMismatch is returned when one mark is not generated before assignment.
 	ErrBatchMarkStatusMismatch = errors.New("shipping batch mark status mismatch")
+	// ErrBatchOpenForCarrier is returned when one carrier already has an open batch.
+	ErrBatchOpenForCarrier = errors.New("shipping open batch already exists for carrier")
 	// ErrMarkNotDraft is returned when a non-QUOTED mark is operated on as a draft.
 	ErrMarkNotDraft = errors.New("shipping mark is not a draft")
 	// ErrInvalidShipmentMode is returned when a shipment mode is not parcel or express.

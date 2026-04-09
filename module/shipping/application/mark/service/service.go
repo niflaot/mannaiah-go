@@ -71,11 +71,29 @@ type Service struct {
 	registry port.ProviderRegistry
 	// publisher defines integration event publisher dependencies.
 	publisher port.IntegrationEventPublisher
+	// orderSource defines optional order lookup dependencies used by rotulus rendering.
+	orderSource port.OrderQuotationSource
+	// rotulusDocuments defines on-demand rotulus document generation dependencies.
+	rotulusDocuments *markRotulusDocumentBuilder
 }
 
 // NewService creates shipping-mark services.
 func NewService(repository port.ShippingMarkRepository, registry port.ProviderRegistry, publisher port.IntegrationEventPublisher) *Service {
-	return &Service{repository: repository, registry: registry, publisher: publisher}
+	return &Service{
+		repository:       repository,
+		registry:         registry,
+		publisher:        publisher,
+		rotulusDocuments: newMarkRotulusDocumentBuilder(),
+	}
+}
+
+// SetOrderSource configures optional order lookup dependencies used by mark adjunct documents.
+func (s *Service) SetOrderSource(source port.OrderQuotationSource) {
+	if s == nil {
+		return
+	}
+
+	s.orderSource = source
 }
 
 // Generate creates one shipping mark through the configured carrier provider.
@@ -105,7 +123,7 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 		PaymentForm:             strings.TrimSpace(command.PaymentForm),
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 		ShipmentMode:            command.ShipmentMode,
-		Observations:            strings.TrimSpace(command.Observations),
+		Observations:            normalizeManualCarrierObservations(command.CarrierID, command.Observations),
 		CustomTrackingURL:       command.CustomTrackingURL,
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),
@@ -149,6 +167,16 @@ func (s *Service) Generate(ctx context.Context, command GenerateCommand) (*domai
 	s.publish(ctx, markevent.BuildMarkGenerated(mark))
 
 	return &mark, nil
+}
+
+// normalizeManualCarrierObservations normalizes manual carrier observations into stable slug values.
+func normalizeManualCarrierObservations(carrierID string, value string) string {
+	trimmed := strings.TrimSpace(value)
+	if !domain.IsManualCarrierID(carrierID) {
+		return trimmed
+	}
+
+	return domain.NormalizeCarrierSlug(trimmed)
 }
 
 // Get resolves one shipping mark by identifier.

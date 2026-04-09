@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"strings"
 
 	corehttp "mannaiah/module/core/http"
@@ -132,7 +133,7 @@ func (h *Handler) createMark(ctx corehttp.Context) error {
 		PaymentForm:             strings.TrimSpace(request.PaymentForm),
 		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
 		ShipmentMode:            request.ShipmentMode,
-		Observations:            strings.TrimSpace(request.Observations),
+		Observations:            normalizeManualCarrierObservation(strings.TrimSpace(request.CarrierID), request.Observations),
 		TrackingNumber:          strings.TrimSpace(request.TrackingNumber),
 		DocumentType:            request.DocumentType,
 		DocumentRef:             strings.TrimSpace(request.DocumentRef),
@@ -155,6 +156,21 @@ func (h *Handler) getMark(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(200).JSON(mark)
+}
+
+// rotulusDocument handles rotulus document downloads for one mark.
+func (h *Handler) rotulusDocument(ctx corehttp.Context) error {
+	markID := strings.TrimSpace(ctx.Params("id"))
+	payload, err := h.marks.RotulusDocument(ctx.Context(), markID)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	ctx.SetHeader("Content-Type", "application/pdf")
+	ctx.SetHeader("Content-Disposition", fmt.Sprintf("inline; filename=\"mark-%s-rotulus.pdf\"", markID))
+	ctx.SetHeader("Cache-Control", "private, max-age=300")
+
+	return ctx.Status(200).SendBytes(payload)
 }
 
 // listMarks handles shipping mark listing requests.
@@ -207,4 +223,14 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+// normalizeManualCarrierObservation normalizes manual carrier labels entered by operators.
+func normalizeManualCarrierObservation(carrierID string, observation string) string {
+	trimmed := strings.TrimSpace(observation)
+	if !domain.IsManualCarrierID(carrierID) {
+		return trimmed
+	}
+
+	return domain.NormalizeCarrierSlug(trimmed)
 }

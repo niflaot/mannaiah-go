@@ -470,6 +470,7 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("initialize shipping module: %w", err)
 	}
 	shippingModule.DispatchService().SetBatchManifestDocumentCacheStore(sharedRedisCacheStore)
+	shippingModule.MarkService().SetRotulusDocumentCacheStore(sharedRedisCacheStore)
 	shippingModule.SetAuthorizer(authModule)
 	if err := shippingModule.Load(runtime); err != nil {
 		return fmt.Errorf("load shipping module: %w", err)

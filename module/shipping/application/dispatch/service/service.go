@@ -202,6 +202,18 @@ func (s *Service) Create(ctx context.Context, command CreateBatchCommand) (*doma
 	if s == nil || s.batchRepository == nil {
 		return nil, domain.ErrInvalidID
 	}
+	existingOpenBatches, _, err := s.batchRepository.List(ctx, port.BatchListQuery{
+		CarrierID: strings.TrimSpace(command.CarrierID),
+		Status:    domain.BatchStatusOpen,
+		Page:      1,
+		Limit:     1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(existingOpenBatches) > 0 {
+		return nil, domain.ErrBatchOpenForCarrier
+	}
 	batch := domain.DispatchBatch{
 		ID:        uuid.NewString(),
 		CarrierID: strings.TrimSpace(command.CarrierID),
@@ -661,10 +673,11 @@ func normalizeOptionalURLPointer(value *string) *string {
 }
 
 func normalizeDraftMarkCommandForCarrier(command DraftMarkCommand, carrierID string) DraftMarkCommand {
-	if !isManualCarrierID(carrierID) {
+	if !domain.IsManualCarrierID(carrierID) {
 		return command
 	}
 	result := command
+	result.Observations = domain.NormalizeCarrierSlug(result.Observations)
 	if len(result.Units) == 0 {
 		result.Units = []domain.PackageUnit{buildManualPlaceholderUnit()}
 	}
@@ -676,10 +689,11 @@ func normalizeDraftMarkCommandForCarrier(command DraftMarkCommand, carrierID str
 }
 
 func normalizeCreateBatchMarkCommandForCarrier(command CreateBatchMarkCommand, carrierID string) CreateBatchMarkCommand {
-	if !isManualCarrierID(carrierID) {
+	if !domain.IsManualCarrierID(carrierID) {
 		return command
 	}
 	result := command
+	result.Observations = domain.NormalizeCarrierSlug(result.Observations)
 	if len(result.Units) == 0 {
 		result.Units = []domain.PackageUnit{buildManualPlaceholderUnit()}
 	}
@@ -701,10 +715,6 @@ func buildManualPlaceholderUnit() domain.PackageUnit {
 			RealWeightKG: 0.1,
 		},
 	}
-}
-
-func isManualCarrierID(carrierID string) bool {
-	return strings.EqualFold(strings.TrimSpace(carrierID), "manual")
 }
 
 // RemoveDraftMark permanently deletes one QUOTED draft mark from a batch.

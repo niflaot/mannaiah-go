@@ -51,6 +51,9 @@ func (markServiceStub) QueryDispatch(ctx context.Context, query markservice.Disp
 func (markServiceStub) Related(ctx context.Context, id string) ([]domain.ShippingMark, error) {
 	return nil, nil
 }
+func (markServiceStub) RotulusDocument(ctx context.Context, id string) ([]byte, error) {
+	return []byte("%PDF"), nil
+}
 
 type dispatchServiceStub struct{}
 
@@ -110,6 +113,7 @@ func TestMapError(t *testing.T) {
 		{err: domain.ErrInvalidCityCode, statusCode: 400, code: "invalid_city_code"},
 		{err: domain.ErrBatchClosed, statusCode: 409, code: "batch_closed"},
 		{err: domain.ErrInvalidBatchStatus, statusCode: 409, code: "batch_status_invalid"},
+		{err: domain.ErrBatchOpenForCarrier, statusCode: 409, code: "batch_open_for_carrier"},
 		{err: domain.ErrNotFound, statusCode: 404, code: "shipping_resource_not_found"},
 		{err: &domain.GuardrailViolationError{CarrierID: "tcc", MarkID: "m-1", OrderID: "o-1", Rule: "r-1"}, statusCode: 500, code: "shipping_guardrail_violation"},
 		{err: errors.New("boom"), statusCode: 500, code: "internal_server_error"},

@@ -1,0 +1,10 @@
+{
+  "title": "Rótulo de despacho",
+  "orderLabel": "Pedido",
+  "trackingLabel": "Guía",
+  "carrierLabel": "Transportadora",
+  "recipientLabel": "Destinatario",
+  "generatedLabel": "Generado",
+  "footerLabel": "Emitido",
+  "emptyValueFallback": "-"
+}

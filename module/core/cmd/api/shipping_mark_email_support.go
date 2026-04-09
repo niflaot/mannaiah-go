@@ -319,7 +319,12 @@ func resolveShippingTrackingURL(deps shippingEmailConsumerDependencies, mark shi
 	if mark.CustomTrackingURL != nil && strings.TrimSpace(*mark.CustomTrackingURL) != "" {
 		return strings.TrimSpace(*mark.CustomTrackingURL)
 	}
-	return buildShippingTrackingURL(deps.trackingBaseURL, trackingNumber, mark.CarrierID, orderNumber)
+	return buildShippingTrackingURL(
+		deps.trackingBaseURL,
+		trackingNumber,
+		shippingdomain.ResolveTrackingCarrierSlug(mark.CarrierID, mark.Observations),
+		orderNumber,
+	)
 }
 
 // buildShippingTrackingURL builds the tracking call-to-action URL.
