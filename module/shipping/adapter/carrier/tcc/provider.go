@@ -390,6 +390,20 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 			latestDate = eventDate
 		}
 	}
+	for _, novelty := range remittanceTrackingNovelties(remittance) {
+		status := MapTrackingNoveltyStatus(novelty.Code, novelty.Description)
+		eventDate := ParseTrackingDate(novelty.Date)
+		history = append(history, domain.TrackingEvent{
+			Date:   eventDate,
+			Code:   strings.TrimSpace(novelty.Code),
+			Text:   buildTrackingNoveltyText(novelty.Description, novelty.Observation),
+			City:   strings.TrimSpace(remittance.DestCity.Description),
+			Status: status,
+		})
+		if eventDate.After(latestDate) {
+			latestDate = eventDate
+		}
+	}
 	if latestDate.IsZero() {
 		latestDate = time.Now().UTC()
 	}
@@ -401,6 +415,57 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 		LastUpdate:     latestDate,
 		History:        history,
 	}, nil
+}
+
+type trackingNoveltyEvent struct {
+	Code        string
+	Date        string
+	Description string
+	Observation string
+}
+
+func remittanceTrackingNovelties(remittance TrackingRemittanceResponse) []trackingNoveltyEvent {
+	events := make([]trackingNoveltyEvent, 0, len(remittance.Novelties)+1)
+	for _, novelty := range remittance.Novelties {
+		events = append(events, trackingNoveltyEvent{
+			Code:        novelty.Code,
+			Date:        novelty.Date,
+			Description: novelty.Description,
+			Observation: novelty.Observation,
+		})
+	}
+	if len(events) > 0 {
+		return events
+	}
+	if strings.TrimSpace(remittance.Novelty.Date) == "" &&
+		strings.TrimSpace(remittance.Novelty.Description) == "" &&
+		strings.TrimSpace(remittance.Novelty.Complement) == "" &&
+		strings.TrimSpace(remittance.Novelty.Observation) == "" {
+		return events
+	}
+
+	return append(events, trackingNoveltyEvent{
+		Code: remittance.Novelty.Code,
+		Date: remittance.Novelty.Date,
+		Description: strings.TrimSpace(strings.Join([]string{
+			remittance.Novelty.Description,
+			remittance.Novelty.Complement,
+		}, " - ")),
+		Observation: remittance.Novelty.Observation,
+	})
+}
+
+func buildTrackingNoveltyText(description string, observation string) string {
+	trimmedDescription := strings.TrimSpace(description)
+	trimmedObservation := strings.TrimSpace(observation)
+	switch {
+	case trimmedDescription == "":
+		return trimmedObservation
+	case trimmedObservation == "":
+		return trimmedDescription
+	default:
+		return trimmedDescription + " - " + trimmedObservation
+	}
 }
 
 func splitName(value string, index int) string {

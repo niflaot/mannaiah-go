@@ -195,12 +195,37 @@ type TrackingState struct {
 	Date        string `json:"fecha"`
 }
 
+// TrackingNovelty defines TCC incident payload values.
+type TrackingNovelty struct {
+	Code        string `json:"codigo"`
+	Date        string `json:"fecha"`
+	Description string `json:"descripcion"`
+	State       string `json:"estado"`
+	Observation string `json:"observacion"`
+	IsRejection string `json:"esrechazo"`
+	RejectedAt  string `json:"fecharechazo"`
+}
+
+// TrackingSingleNovelty defines the legacy singular novelty payload in TCC responses.
+type TrackingSingleNovelty struct {
+	Code           string `json:"idtiponovedad"`
+	Date           string `json:"fechanovedad"`
+	Description    string `json:"novedad"`
+	Observation    string `json:"observaciones"`
+	Complement     string `json:"complementonovedad"`
+	State          string `json:"estadonovedad"`
+	SolutionKinds  string `json:"tiposolucion"`
+	ManagementType string `json:"tipogestion"`
+}
+
 // TrackingRemittanceResponse defines per-remittance tracking payload values.
 type TrackingRemittanceResponse struct {
-	ShipmentNumber string               `json:"numeroremesa"`
-	States         []TrackingState      `json:"estados"`
-	OriginCity     trackingCityResponse `json:"ciudadorigen"`
-	DestCity       trackingCityResponse `json:"ciudaddestino"`
+	ShipmentNumber string                `json:"numeroremesa"`
+	States         []TrackingState       `json:"estados"`
+	Novelty        TrackingSingleNovelty `json:"novedad"`
+	Novelties      []TrackingNovelty     `json:"novedades"`
+	OriginCity     trackingCityResponse  `json:"ciudadorigen"`
+	DestCity       trackingCityResponse  `json:"ciudaddestino"`
 }
 
 // TrackingResultResponse defines TCC tracking response result values.
@@ -299,21 +324,48 @@ func MapTrackingStatus(code string, description string) domain.TrackingStatus {
 	return domain.TrackingStatusProcessing
 }
 
+// MapTrackingNoveltyStatus maps TCC novelty payloads into normalized tracking statuses.
+func MapTrackingNoveltyStatus(code string, description string) domain.TrackingStatus {
+	switch strings.TrimSpace(code) {
+	case "252":
+		return domain.TrackingStatusIncidence
+	}
+
+	status := MapTrackingStatus(code, description)
+	if status == domain.TrackingStatusProcessing || status == domain.TrackingStatusOrigin {
+		lowerDescription := strings.ToLower(strings.TrimSpace(description))
+		if strings.Contains(lowerDescription, "entregad") || strings.Contains(lowerDescription, "destinatario") {
+			return domain.TrackingStatusIncidence
+		}
+		return domain.TrackingStatusIncidence
+	}
+
+	return status
+}
+
 // ParseTrackingDate parses TCC tracking date values.
 func ParseTrackingDate(value string) time.Time {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return time.Now().UTC()
 	}
+	normalized := strings.NewReplacer(
+		"a. m.", "AM",
+		"p. m.", "PM",
+		"a.m.", "AM",
+		"p.m.", "PM",
+		"a. m", "AM",
+		"p. m", "PM",
+	).Replace(trimmed)
+	normalized = strings.Join(strings.Fields(normalized), " ")
 	layouts := []string{
-		"2/01/2006 3:04:05 p. m.",
-		"2/01/2006 3:04:05 a. m.",
 		"2/01/2006 3:04:05 PM",
 		"2/01/2006 3:04:05 AM",
+		"2/01/2006 15:04:05",
 		time.RFC3339,
 	}
 	for _, layout := range layouts {
-		if parsed, err := time.ParseInLocation(layout, trimmed, time.Local); err == nil {
+		if parsed, err := time.ParseInLocation(layout, normalized, time.Local); err == nil {
 			return parsed.UTC()
 		}
 	}

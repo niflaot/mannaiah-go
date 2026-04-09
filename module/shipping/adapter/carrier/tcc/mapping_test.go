@@ -2,6 +2,7 @@ package tcc
 
 import (
 	"testing"
+	"time"
 
 	"mannaiah/module/shipping/domain"
 )
@@ -68,5 +69,32 @@ func TestMapTrackingStatus(t *testing.T) {
 	}
 	if status := MapTrackingStatus("9999", "Devolucion a origen"); status != domain.TrackingStatusReturn {
 		t.Fatalf("status = %q", status)
+	}
+}
+
+// TestMapTrackingNoveltyStatus verifies TCC novelty mapping behavior.
+func TestMapTrackingNoveltyStatus(t *testing.T) {
+	if status := MapTrackingNoveltyStatus("252", "MERCANCÍA NO ENTREGADA A DESTINATARIO"); status != domain.TrackingStatusIncidence {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingNoveltyStatus("4000", "Mercancía en procesos de devolución a origen"); status != domain.TrackingStatusReturn {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingNoveltyStatus("4300", "Mercancía no despachada por el remitente"); status != domain.TrackingStatusVoided {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingNoveltyStatus("9999", "MERCANCÍA NO ENTREGADA A DESTINATARIO"); status != domain.TrackingStatusIncidence {
+		t.Fatalf("status = %q", status)
+	}
+}
+
+// TestParseTrackingDate verifies Spanish AM/PM tracking dates are parsed correctly.
+func TestParseTrackingDate(t *testing.T) {
+	parsed := ParseTrackingDate("8/04/2026 7:23:39 p. m.")
+	if parsed.IsZero() {
+		t.Fatal("parsed is zero")
+	}
+	if parsed.Hour() != 0 || parsed.Day() != 9 {
+		t.Fatalf("parsed = %s", parsed.Format(time.RFC3339))
 	}
 }

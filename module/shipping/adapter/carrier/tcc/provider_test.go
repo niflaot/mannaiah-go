@@ -272,6 +272,81 @@ func TestProviderTrackingGlobalStatusPriorityReturn(t *testing.T) {
 	}
 }
 
+// TestProviderTrackingIncludesNovelties verifies TCC incidents are appended as normalized history events.
+func TestProviderTrackingIncludesNovelties(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/consultarestatusremesasv3":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesas": []any{
+					map[string]any{
+						"numeroremesa": "615193194",
+						"estados": []any{
+							map[string]any{"codigo": "901", "descripcion": "Envio programado", "fecha": "7/04/2026 3:45:00 p. m."},
+							map[string]any{"codigo": "2000", "descripcion": "Envio en proceso de entrega", "fecha": "8/04/2026 10:08:41 a. m."},
+						},
+						"novedades": []any{
+							map[string]any{
+								"codigo":      "252",
+								"fecha":       "8/04/2026 7:23:39 p. m.",
+								"descripcion": "MERCANCÍA NO ENTREGADA A DESTINATARIO - NO SE ENCUENTRA EL DESTINATARIO O NO HAY NADIE EN LA DIRECCIÓN",
+								"estado":      "Ejecutada",
+								"observacion": "El destinatario no se encuentra, pasar nuevamente mañana",
+							},
+						},
+						"ciudadorigen":  map[string]any{"descripcion": "MEDELLIN"},
+						"ciudaddestino": map[string]any{"descripcion": "BOGOTA"},
+					},
+				},
+				"respuesta": map[string]any{"codigo": "0", "mensaje": "OK"},
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	history, err := provider.GetTrackingHistory(context.Background(), "615193194")
+	if err != nil {
+		t.Fatalf("GetTrackingHistory() error = %v", err)
+	}
+	if len(history.History) != 3 {
+		t.Fatalf("len(history.History) = %d", len(history.History))
+	}
+	noveltyEvent := history.History[2]
+	if noveltyEvent.Status != domain.TrackingStatusIncidence {
+		t.Fatalf("noveltyEvent.Status = %q", noveltyEvent.Status)
+	}
+	if noveltyEvent.Code != "252" {
+		t.Fatalf("noveltyEvent.Code = %q", noveltyEvent.Code)
+	}
+	if !strings.Contains(noveltyEvent.Text, "El destinatario no se encuentra") {
+		t.Fatalf("noveltyEvent.Text = %q", noveltyEvent.Text)
+	}
+	if noveltyEvent.City != "BOGOTA" {
+		t.Fatalf("noveltyEvent.City = %q", noveltyEvent.City)
+	}
+	if history.LastUpdate.Format(time.RFC3339) != "2026-04-09T00:23:39Z" {
+		t.Fatalf("history.LastUpdate = %s", history.LastUpdate.Format(time.RFC3339))
+	}
+	if history.GlobalStatus != domain.TrackingStatusProcessing {
+		t.Fatalf("history.GlobalStatus = %q", history.GlobalStatus)
+	}
+}
+
 // TestProviderGrabardespacho7RealFieldNames verifies that the provider correctly reads
 // the real grabardespacho7 production response field names ("remesa", "respuesta", "mensaje").
 func TestProviderGrabardespacho7RealFieldNames(t *testing.T) {
