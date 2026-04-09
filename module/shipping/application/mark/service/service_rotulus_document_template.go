@@ -18,8 +18,8 @@ var (
 
 // markRotulusTemplate defines user-facing strings rendered in rotulus PDFs.
 type markRotulusTemplate struct {
-	// Title defines document title values.
-	Title string `json:"title"`
+	// OrderTitlePrefix defines document title prefix values.
+	OrderTitlePrefix string `json:"orderTitlePrefix"`
 	// OrderLabel defines order identifier label values.
 	OrderLabel string `json:"orderLabel"`
 	// TrackingLabel defines tracking identifier label values.
@@ -28,8 +28,14 @@ type markRotulusTemplate struct {
 	CarrierLabel string `json:"carrierLabel"`
 	// RecipientLabel defines recipient label values.
 	RecipientLabel string `json:"recipientLabel"`
-	// GeneratedLabel defines generated timestamp label values.
-	GeneratedLabel string `json:"generatedLabel"`
+	// AddressLabel defines address label values.
+	AddressLabel string `json:"addressLabel"`
+	// Address2Label defines address-line-2 label values.
+	Address2Label string `json:"address2Label"`
+	// PhoneLabel defines phone label values.
+	PhoneLabel string `json:"phoneLabel"`
+	// CityLabel defines city label values.
+	CityLabel string `json:"cityLabel"`
 	// FooterLabel defines footer timestamp label values.
 	FooterLabel string `json:"footerLabel"`
 	// EmptyValueFallback defines fallback values for empty fields.
@@ -41,12 +47,15 @@ func loadDefaultRotulusTemplate() markRotulusTemplate {
 	template, err := parseRotulusTemplate(defaultRotulusTemplateJSON)
 	if err != nil {
 		return markRotulusTemplate{
-			Title:              "Rótulo de despacho",
+			OrderTitlePrefix:   "Pedido #",
 			OrderLabel:         "Pedido",
 			TrackingLabel:      "Guía",
 			CarrierLabel:       "Transportadora",
 			RecipientLabel:     "Destinatario",
-			GeneratedLabel:     "Generado",
+			AddressLabel:       "Dirección",
+			Address2Label:      "Dirección 2",
+			PhoneLabel:         "Teléfono",
+			CityLabel:          "Ciudad",
 			FooterLabel:        "Emitido",
 			EmptyValueFallback: "-",
 		}
@@ -103,14 +112,47 @@ func parseRotulusTemplate(rawTemplate []byte) (markRotulusTemplate, error) {
 
 // normalize trims template values and applies fallback defaults.
 func (t markRotulusTemplate) normalize() markRotulusTemplate {
-	t.Title = strings.TrimSpace(t.Title)
+	t.OrderTitlePrefix = strings.TrimSpace(t.OrderTitlePrefix)
 	t.OrderLabel = strings.TrimSpace(t.OrderLabel)
 	t.TrackingLabel = strings.TrimSpace(t.TrackingLabel)
 	t.CarrierLabel = strings.TrimSpace(t.CarrierLabel)
 	t.RecipientLabel = strings.TrimSpace(t.RecipientLabel)
-	t.GeneratedLabel = strings.TrimSpace(t.GeneratedLabel)
+	t.AddressLabel = strings.TrimSpace(t.AddressLabel)
+	t.Address2Label = strings.TrimSpace(t.Address2Label)
+	t.PhoneLabel = strings.TrimSpace(t.PhoneLabel)
+	t.CityLabel = strings.TrimSpace(t.CityLabel)
 	t.FooterLabel = strings.TrimSpace(t.FooterLabel)
 	t.EmptyValueFallback = strings.TrimSpace(t.EmptyValueFallback)
+	if t.OrderTitlePrefix == "" {
+		t.OrderTitlePrefix = "Pedido #"
+	}
+	if t.OrderLabel == "" {
+		t.OrderLabel = "Pedido"
+	}
+	if t.TrackingLabel == "" {
+		t.TrackingLabel = "Guía"
+	}
+	if t.CarrierLabel == "" {
+		t.CarrierLabel = "Transportadora"
+	}
+	if t.RecipientLabel == "" {
+		t.RecipientLabel = "Destinatario"
+	}
+	if t.AddressLabel == "" {
+		t.AddressLabel = "Dirección"
+	}
+	if t.Address2Label == "" {
+		t.Address2Label = "Dirección 2"
+	}
+	if t.PhoneLabel == "" {
+		t.PhoneLabel = "Teléfono"
+	}
+	if t.CityLabel == "" {
+		t.CityLabel = "Ciudad"
+	}
+	if t.FooterLabel == "" {
+		t.FooterLabel = "Emitido"
+	}
 	if t.EmptyValueFallback == "" {
 		t.EmptyValueFallback = "-"
 	}
@@ -121,12 +163,15 @@ func (t markRotulusTemplate) normalize() markRotulusTemplate {
 // validate ensures all required template fields are present.
 func (t markRotulusTemplate) validate() error {
 	requiredValues := []string{
-		t.Title,
+		t.OrderTitlePrefix,
 		t.OrderLabel,
 		t.TrackingLabel,
 		t.CarrierLabel,
 		t.RecipientLabel,
-		t.GeneratedLabel,
+		t.AddressLabel,
+		t.Address2Label,
+		t.PhoneLabel,
+		t.CityLabel,
 		t.FooterLabel,
 	}
 	for _, value := range requiredValues {

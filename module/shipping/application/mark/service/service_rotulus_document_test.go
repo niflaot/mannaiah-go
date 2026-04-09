@@ -35,7 +35,14 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	}
 
 	service := NewService(repository, markRegistryStub{}, &publisherStub{})
-	service.SetOrderSource(rotulusOrderSourceStub{row: &port.OrderQuotationData{OrderID: "order-1", OrderIdentifier: "1024751"}})
+	service.SetOrderSource(rotulusOrderSourceStub{row: &port.OrderQuotationData{
+		OrderID:               "order-1",
+		OrderIdentifier:       "1024751",
+		RecipientAddressLine:  "Calle 18 Sur # 24d - 46",
+		RecipientAddressLine2: "Piso 2",
+		RecipientPhone:        "3057901484",
+		RecipientCity:         "11001",
+	}})
 	service.SetRotulusDocumentSigningSecret("secret-123")
 
 	firstPayload, err := service.RotulusDocument(context.Background(), "mark-1")
@@ -47,6 +54,30 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	}
 	if len(service.rotulusDocuments.cache) != 1 {
 		t.Fatalf("expected one cached rotulus payload, got %d", len(service.rotulusDocuments.cache))
+	}
+	if !strings.Contains(string(firstPayload), "Pedido #1024751") {
+		t.Fatalf("RotulusDocument(first) missing dynamic order title")
+	}
+	if !strings.Contains(string(firstPayload), "Calle 18 Sur # 24d - 46") {
+		t.Fatalf("RotulusDocument(first) missing shipping address")
+	}
+	if !strings.Contains(string(firstPayload), "Piso 2") {
+		t.Fatalf("RotulusDocument(first) missing shipping address 2")
+	}
+	if !strings.Contains(string(firstPayload), "3057901484") {
+		t.Fatalf("RotulusDocument(first) missing shipping phone")
+	}
+	if !strings.Contains(string(firstPayload), "11001") {
+		t.Fatalf("RotulusDocument(first) missing shipping city")
+	}
+	if !strings.Contains(string(firstPayload), "Emitido: ") {
+		t.Fatalf("RotulusDocument(first) missing emitted footer")
+	}
+	if strings.Contains(string(firstPayload), "despacho") {
+		t.Fatalf("RotulusDocument(first) includes deprecated title")
+	}
+	if strings.Contains(string(firstPayload), "Generado: ") {
+		t.Fatalf("RotulusDocument(first) includes deprecated generated label")
 	}
 
 	secondPayload, err := service.RotulusDocument(context.Background(), "mark-1")

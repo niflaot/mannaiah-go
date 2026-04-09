@@ -56,6 +56,7 @@ Keep newest entries on top. Add one section per version.
 - Shipping manual flow: operator-entered tracking details can now be staged in manual batches without quotation-derived payloads.
   - `POST /shipping/batches/{id}/marks` already accepts `trackingNumber`, `customTrackingUrl`, and `observations`; manual batches now also tolerate sparse payloads by defaulting shipment mode and a placeholder package unit server-side.
   - Manual carrier labels stored in `observations` are now preferred in transactional shipping emails, while structured carriers keep their existing lookup behavior.
+- Shipping rotulus: the on-demand label now renders in the top half of a letter sheet with a dynamic `Pedido #...` title, a non-cropped signed QR, and expanded recipient shipping fields (`address`, `address 2`, `phone`, `city`) sourced from the order adapter when available.
 - Release metadata updated to `v1.2.0`.
 
 ### [v1.0.0] - 2026-03-26

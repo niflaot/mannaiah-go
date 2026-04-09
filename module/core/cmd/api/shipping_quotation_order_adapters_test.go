@@ -172,14 +172,20 @@ func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientEnrichme
 	if row.RecipientEmail != "coccostoreco@gmail.com" {
 		t.Fatalf("row.RecipientEmail = %q, want %q", row.RecipientEmail, "coccostoreco@gmail.com")
 	}
-	if row.RecipientAddressLine != "Calle 18 Sur # 24d - 46 Piso 2" {
+	if row.RecipientAddressLine != "Calle 18 Sur # 24d - 46" {
 		t.Fatalf("row.RecipientAddressLine = %q, want shipping address", row.RecipientAddressLine)
+	}
+	if row.RecipientAddressLine2 != "Piso 2" {
+		t.Fatalf("row.RecipientAddressLine2 = %q, want %q", row.RecipientAddressLine2, "Piso 2")
 	}
 	if row.RecipientPhone != "3057901484" {
 		t.Fatalf("row.RecipientPhone = %q, want shipping phone", row.RecipientPhone)
 	}
 	if row.DestCityCode != "11001" {
 		t.Fatalf("row.DestCityCode = %q, want shipping city", row.DestCityCode)
+	}
+	if row.RecipientCity != "11001" {
+		t.Fatalf("row.RecipientCity = %q, want shipping city", row.RecipientCity)
 	}
 }
 
@@ -224,14 +230,20 @@ func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientShipping
 	if row == nil {
 		t.Fatal("GetByIDOrIdentifier() returned nil row")
 	}
-	if row.RecipientAddressLine != "Carrera 1 # 2-3 Apto 4" {
+	if row.RecipientAddressLine != "Carrera 1 # 2-3" {
 		t.Fatalf("row.RecipientAddressLine = %q, want contact fallback address", row.RecipientAddressLine)
+	}
+	if row.RecipientAddressLine2 != "Apto 4" {
+		t.Fatalf("row.RecipientAddressLine2 = %q, want contact fallback address 2", row.RecipientAddressLine2)
 	}
 	if row.RecipientPhone != "3009991122" {
 		t.Fatalf("row.RecipientPhone = %q, want contact fallback phone", row.RecipientPhone)
 	}
 	if row.DestCityCode != "05001" {
 		t.Fatalf("row.DestCityCode = %q, want contact fallback city", row.DestCityCode)
+	}
+	if row.RecipientCity != "05001" {
+		t.Fatalf("row.RecipientCity = %q, want contact fallback city", row.RecipientCity)
 	}
 }
 

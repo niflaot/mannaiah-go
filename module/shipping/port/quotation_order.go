@@ -16,6 +16,8 @@ type OrderQuotationData struct {
 	OrderIdentifier string
 	// DestCityCode defines the destination city code from the order shipping address.
 	DestCityCode string
+	// RecipientCity defines recipient city label values resolved from order/contact data.
+	RecipientCity string
 	// TotalValue defines the monetary total of all order items (used as COD amount).
 	TotalValue float64
 	// CollectOnDeliveryAmount defines COD amount resolved from the order payment method.
@@ -29,6 +31,8 @@ type OrderQuotationData struct {
 	RecipientIDType string
 	// RecipientAddressLine defines recipient address-line values resolved from the order shipping address.
 	RecipientAddressLine string
+	// RecipientAddressLine2 defines recipient address-line-2 values resolved from the order shipping address.
+	RecipientAddressLine2 string
 	// RecipientPhone defines recipient phone values resolved from the order shipping address.
 	RecipientPhone string
 	// RecipientEmail defines optional recipient email values resolved from the order context.

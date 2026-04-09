@@ -74,6 +74,14 @@ type markRotulusMeta struct {
 	CarrierLabel string
 	// RecipientName defines recipient display-name values.
 	RecipientName string
+	// RecipientAddressLine defines recipient address-line values.
+	RecipientAddressLine string
+	// RecipientAddressLine2 defines recipient address-line-2 values.
+	RecipientAddressLine2 string
+	// RecipientPhone defines recipient phone values.
+	RecipientPhone string
+	// RecipientCity defines recipient city label values.
+	RecipientCity string
 	// GeneratedAt defines generation timestamp values.
 	GeneratedAt time.Time
 }
@@ -124,21 +132,35 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 
 	now := time.Now().UTC()
 	orderNumber := strings.TrimSpace(mark.OrderID)
+	recipientAddressLine := strings.TrimSpace(mark.Recipient.AddressLine)
+	recipientAddressLine2 := ""
+	recipientPhone := strings.TrimSpace(mark.Recipient.Phone)
+	recipientCity := strings.TrimSpace(mark.Recipient.CityCode)
 	if s.orderSource != nil {
 		orderData, orderErr := s.orderSource.GetByIDOrIdentifier(ctx, strings.TrimSpace(mark.OrderID))
 		if orderErr == nil && orderData != nil && strings.TrimSpace(orderData.OrderIdentifier) != "" {
 			orderNumber = strings.TrimSpace(orderData.OrderIdentifier)
 		}
+		if orderErr == nil && orderData != nil {
+			recipientAddressLine = firstNonEmptyString(strings.TrimSpace(orderData.RecipientAddressLine), recipientAddressLine)
+			recipientAddressLine2 = firstNonEmptyString(strings.TrimSpace(orderData.RecipientAddressLine2), recipientAddressLine2)
+			recipientPhone = firstNonEmptyString(strings.TrimSpace(orderData.RecipientPhone), recipientPhone)
+			recipientCity = firstNonEmptyString(strings.TrimSpace(orderData.RecipientCity), strings.TrimSpace(orderData.DestCityCode), recipientCity)
+		}
 	}
 
 	payload, err := s.buildRotulusPDF(ctx, markRotulusMeta{
-		MarkID:         mark.ID,
-		OrderID:        mark.OrderID,
-		OrderNumber:    firstNonEmptyString(orderNumber, mark.OrderID),
-		TrackingNumber: firstNonEmptyString(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(mark.DocumentRef), mark.ID),
-		CarrierLabel:   resolveRotulusCarrierLabel(*mark),
-		RecipientName:  firstNonEmptyString(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName)),
-		GeneratedAt:    now,
+		MarkID:                mark.ID,
+		OrderID:               mark.OrderID,
+		OrderNumber:           firstNonEmptyString(orderNumber, mark.OrderID),
+		TrackingNumber:        firstNonEmptyString(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(mark.DocumentRef), mark.ID),
+		CarrierLabel:          resolveRotulusCarrierLabel(*mark),
+		RecipientName:         firstNonEmptyString(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName)),
+		RecipientAddressLine:  recipientAddressLine,
+		RecipientAddressLine2: recipientAddressLine2,
+		RecipientPhone:        recipientPhone,
+		RecipientCity:         recipientCity,
+		GeneratedAt:           now,
 	})
 	if err != nil {
 		return nil, err

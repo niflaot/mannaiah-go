@@ -16,14 +16,20 @@ import (
 )
 
 const (
-	// rotulusPageWidthMM defines half-letter landscape width values.
+	// rotulusPageWidthMM defines letter portrait width values.
 	rotulusPageWidthMM = 215.9
-	// rotulusPageHeightMM defines half-letter landscape height values.
-	rotulusPageHeightMM = 139.7
+	// rotulusPageHeightMM defines letter portrait height values.
+	rotulusPageHeightMM = 279.4
+	// rotulusContentHeightMM defines the top-half printable rotulus height.
+	rotulusContentHeightMM = 139.7
 	// rotulusMarginMM defines page margin values.
 	rotulusMarginMM = 10.0
 	// rotulusColumnGapMM defines gap values between left/right columns.
 	rotulusColumnGapMM = 8.0
+	// rotulusLogoWidthMM defines rendered logo width values.
+	rotulusLogoWidthMM = 46.0
+	// rotulusQRSizeMM defines signed QR code size values.
+	rotulusQRSizeMM = 42.0
 	// rotulusMaxLogoBytes defines maximum logo download size.
 	rotulusMaxLogoBytes = 5 * 1024 * 1024
 )
@@ -39,10 +45,11 @@ func (s *Service) buildRotulusPDF(ctx context.Context, meta markRotulusMeta) ([]
 			Wd: rotulusPageWidthMM,
 			Ht: rotulusPageHeightMM,
 		},
-		OrientationStr: "L",
+		OrientationStr: "P",
 	})
 	pdf.SetMargins(rotulusMarginMM, rotulusMarginMM, rotulusMarginMM)
 	pdf.SetAutoPageBreak(false, rotulusMarginMM)
+	pdf.SetCompression(false)
 	pdf.AddPage()
 
 	s.drawRotulusLeftColumn(ctx, pdf, meta)
@@ -71,30 +78,34 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 		imageName := "rotulus-logo"
 		opts := gofpdf.ImageOptions{ImageType: imageType, ReadDpi: true}
 		pdf.RegisterImageOptionsReader(imageName, opts, bytes.NewReader(logoBytes))
-		pdf.ImageOptions(imageName, rotulusMarginMM, logoY, 34, 0, false, opts, 0, "")
+		pdf.ImageOptions(imageName, rotulusMarginMM, logoY, rotulusLogoWidthMM, 0, false, opts, 0, "")
 	}
 
 	textX := rotulusMarginMM
-	textY := rotulusMarginMM + 30
+	textY := rotulusMarginMM + 32
 	pdf.SetXY(textX, textY)
-	pdf.SetFont("Arial", "B", 16)
-	pdf.CellFormat(leftWidth, 7, encodeRotulusText(template.Title), "", 1, "L", false, 0, "")
+	pdf.SetFont("Arial", "B", 18)
+	pdf.CellFormat(leftWidth, 8, encodeRotulusText(resolveRotulusTitle(template, meta)), "", 1, "L", false, 0, "")
 
 	rows := []struct {
 		label string
 		value string
 	}{
-		{label: template.OrderLabel, value: sanitizeRotulusValue(meta.OrderNumber, template.EmptyValueFallback)},
 		{label: template.TrackingLabel, value: sanitizeRotulusValue(meta.TrackingNumber, template.EmptyValueFallback)},
 		{label: template.CarrierLabel, value: sanitizeRotulusValue(meta.CarrierLabel, template.EmptyValueFallback)},
 		{label: template.RecipientLabel, value: sanitizeRotulusValue(meta.RecipientName, template.EmptyValueFallback)},
-		{label: template.GeneratedLabel, value: meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC")},
+		{label: template.AddressLabel, value: sanitizeRotulusValue(meta.RecipientAddressLine, template.EmptyValueFallback)},
+		{label: template.Address2Label, value: sanitizeRotulusValue(meta.RecipientAddressLine2, template.EmptyValueFallback)},
+		{label: template.PhoneLabel, value: sanitizeRotulusValue(meta.RecipientPhone, template.EmptyValueFallback)},
+		{label: template.CityLabel, value: sanitizeRotulusValue(meta.RecipientCity, template.EmptyValueFallback)},
 	}
 
-	pdf.SetFont("Arial", "", 11)
+	pdf.Ln(2)
+	pdf.SetFont("Arial", "", 10)
 	for _, row := range rows {
 		pdf.SetX(textX)
-		pdf.CellFormat(leftWidth, 7, encodeRotulusText(fmt.Sprintf("%s: %s", row.label, row.value)), "", 1, "L", false, 0, "")
+		pdf.MultiCell(leftWidth, 5.5, encodeRotulusText(fmt.Sprintf("%s: %s", row.label, row.value)), "", "L", false)
+		pdf.Ln(0.7)
 	}
 }
 
@@ -114,9 +125,9 @@ func (s *Service) drawRotulusRightColumn(pdf *gofpdf.Fpdf, meta markRotulusMeta)
 
 	rightX := rotulusMarginMM + ((rotulusPageWidthMM - (2 * rotulusMarginMM) - rotulusColumnGapMM) / 2) + rotulusColumnGapMM
 	rightWidth := (rotulusPageWidthMM - (2 * rotulusMarginMM) - rotulusColumnGapMM) / 2
-	qrSize := 58.0
+	qrSize := rotulusQRSizeMM
 	qrX := rightX + (rightWidth-qrSize)/2
-	qrY := (rotulusPageHeightMM - qrSize) / 2
+	qrY := rotulusMarginMM + ((rotulusContentHeightMM - (2 * rotulusMarginMM) - qrSize) / 2)
 	opts := gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}
 	pdf.RegisterImageOptionsReader("rotulus-qr", opts, bytes.NewReader(qrBytes))
 	pdf.ImageOptions("rotulus-qr", qrX, qrY, qrSize, qrSize, false, opts, 0, "")
@@ -131,8 +142,13 @@ func (s *Service) drawRotulusFooter(pdf *gofpdf.Fpdf, meta markRotulusMeta) {
 	}
 	template := s.rotulusDocuments.template
 	pdf.SetFont("Arial", "", 8)
-	pdf.SetXY(rotulusMarginMM, rotulusPageHeightMM-rotulusMarginMM-4)
+	pdf.SetXY(rotulusMarginMM, rotulusContentHeightMM-rotulusMarginMM-4)
 	pdf.CellFormat(rotulusPageWidthMM-(2*rotulusMarginMM), 4, encodeRotulusText(fmt.Sprintf("%s: %s", template.FooterLabel, meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC"))), "", 0, "L", false, 0, "")
+}
+
+// resolveRotulusTitle resolves one dynamic order title line.
+func resolveRotulusTitle(template markRotulusTemplate, meta markRotulusMeta) string {
+	return strings.TrimSpace(firstNonEmptyString(template.OrderTitlePrefix, "Pedido #")) + sanitizeRotulusValue(meta.OrderNumber, template.EmptyValueFallback)
 }
 
 // downloadRotulusLogo downloads one logo image and resolves image type values for gofpdf.

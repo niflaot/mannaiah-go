@@ -1,10 +1,13 @@
 {
-  "title": "Rótulo de despacho",
+  "orderTitlePrefix": "Pedido #",
   "orderLabel": "Pedido",
   "trackingLabel": "Guía",
   "carrierLabel": "Transportadora",
   "recipientLabel": "Destinatario",
-  "generatedLabel": "Generado",
+  "addressLabel": "Dirección",
+  "address2Label": "Dirección 2",
+  "phoneLabel": "Teléfono",
+  "cityLabel": "Ciudad",
   "footerLabel": "Emitido",
   "emptyValueFallback": "-"
 }

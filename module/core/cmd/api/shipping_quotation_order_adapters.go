@@ -108,26 +108,29 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 	collectOnDeliveryAmount := resolveOrderCollectOnDeliveryAmount(totalValue, order.PaymentMethod)
 	shippingAddressLine := strings.TrimSpace(strings.Join([]string{
 		strings.TrimSpace(order.ShippingAddress.Address),
-		strings.TrimSpace(order.ShippingAddress.Address2),
 	}, " "))
 	shippingAddressLine = strings.Join(strings.Fields(shippingAddressLine), " ")
+	shippingAddressLine2 := strings.Join(strings.Fields(strings.TrimSpace(order.ShippingAddress.Address2)), " ")
 	contactAddressLine := strings.TrimSpace(strings.Join([]string{
 		firstNonEmptyTrimmed(contactAddress(contact)),
-		firstNonEmptyTrimmed(contactAddressExtra(contact)),
 	}, " "))
 	contactAddressLine = strings.Join(strings.Fields(contactAddressLine), " ")
+	contactAddressLine2 := strings.Join(strings.Fields(firstNonEmptyTrimmed(contactAddressExtra(contact))), " ")
+	recipientCity := firstNonEmptyTrimmed(order.ShippingAddress.CityCode, contactCityCode(contact))
 	recipientName := firstNonEmptyTrimmed(resolveContactDisplayName(contact), contactEmail(contact), "Cliente")
 
 	return &shippingport.OrderQuotationData{
 		OrderID:                 order.ID,
 		OrderIdentifier:         order.Identifier,
-		DestCityCode:            firstNonEmptyTrimmed(order.ShippingAddress.CityCode, contactCityCode(contact)),
+		DestCityCode:            recipientCity,
+		RecipientCity:           recipientCity,
 		TotalValue:              totalValue,
 		CollectOnDeliveryAmount: collectOnDeliveryAmount,
 		RecipientName:           recipientName,
 		RecipientID:             contactDocumentNumber(contact),
 		RecipientIDType:         contactDocumentType(contact),
 		RecipientAddressLine:    firstNonEmptyTrimmed(shippingAddressLine, contactAddressLine),
+		RecipientAddressLine2:   firstNonEmptyTrimmed(shippingAddressLine2, contactAddressLine2),
 		RecipientPhone:          firstNonEmptyTrimmed(order.ShippingAddress.Phone, contactPhone(contact)),
 		RecipientEmail:          contactEmail(contact),
 		Items:                   items,
