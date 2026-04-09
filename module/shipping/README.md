@@ -37,7 +37,7 @@
   - `POST /shipping/quotations/order-packaging` — preview package allocation, COD value, destination city, and resolved shipment mode without carrier calls or persistence
   - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
   - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks/:id/rotulus-document`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
-  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
+  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `PATCH /shipping/batches/:id/marks/:markID`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
   - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
 - Events:
@@ -119,7 +119,9 @@
 - `direct=true`: creates and materializes the mark immediately and assigns it to the target batch even if the batch is `CLOSED`.
 - During `direct=true` materialization and during `PATCH /shipping/batches/:id/close`, carrier guardrails run immediately before outbound carrier dispatch.
 - Guardrail violations return HTTP `500` (`message=shipping_guardrail_violation`) and include `mark_id`, `order_id`, `rule`, and `request_preview` in the `error` field.
-- `POST /shipping/batches/:id/marks` accepts optional manual fields `trackingNumber` and `customTrackingUrl` so operators can attach manual guide references and custom tracking links before batch close/materialization.
+- `POST /shipping/batches/:id/marks` accepts sparse manual draft payloads, so operators can add a mark first and complete its manual data later.
+- `PATCH /shipping/batches/:id/marks/:markID` completes one existing manual `QUOTED` draft with `observations` (manual carrier label), `trackingNumber`, `customTrackingUrl`, and `quotedFreightCost`.
+- `PATCH /shipping/batches/:id/close` now rejects manual batches when any `QUOTED` draft is missing carrier label, tracking URL, tracking number, or manual price.
 - Manual carrier labels are normalized to lowercase slugs without spaces before they are persisted or used in tracking URLs.
 
 ## COD Collection

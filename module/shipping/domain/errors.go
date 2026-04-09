@@ -33,6 +33,10 @@ var (
 	ErrBatchOpenForCarrier = errors.New("shipping open batch already exists for carrier")
 	// ErrMarkNotDraft is returned when a non-QUOTED mark is operated on as a draft.
 	ErrMarkNotDraft = errors.New("shipping mark is not a draft")
+	// ErrManualDraftIncomplete is returned when one manual draft lacks required completion fields.
+	ErrManualDraftIncomplete = errors.New("shipping manual draft is incomplete")
+	// ErrManualDraftUpdateNotSupported is returned when manual draft completion is attempted on non-manual batches.
+	ErrManualDraftUpdateNotSupported = errors.New("shipping manual draft completion is only supported for manual batches")
 	// ErrInvalidShipmentMode is returned when a shipment mode is not parcel or express.
 	ErrInvalidShipmentMode = errors.New("shipping shipment mode is invalid")
 	// ErrInvalidCityCode is returned when origin/destination city code values are rejected.

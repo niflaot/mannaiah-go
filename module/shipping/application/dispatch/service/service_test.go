@@ -240,7 +240,7 @@ func TestCreateBatch(t *testing.T) {
 	publisher := &dispatchPublisherStub{}
 	service := NewService(batchRepository, markRepository, publisher)
 
-	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "tcc", CreatedBy: "user-123"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -278,7 +278,7 @@ func TestDraftMarkAndClose(t *testing.T) {
 	materializer := &materializerStub{repository: markRepository}
 	service := NewService(batchRepository, markRepository, publisher, materializer)
 
-	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "tcc", CreatedBy: "user-123"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -513,6 +513,114 @@ func TestDraftMarkManualDefaultsAllowSparsePayload(t *testing.T) {
 	}
 	if mark.TrackingNumber != "MANUAL-TRACK-001" {
 		t.Fatalf("mark.TrackingNumber = %q, want %q", mark.TrackingNumber, "MANUAL-TRACK-001")
+	}
+}
+
+// TestUpdateDraftMarkManualCompletesSparseDraft verifies manual drafts can be completed after they were added to the batch.
+func TestUpdateDraftMarkManualCompletesSparseDraft(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	draft, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID: batch.ID,
+		OrderID: "order-manual-1",
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+	customTrackingURL := "https://rastreo.flockstore.co/?carrier=inter&tracking=11515151"
+	updated, err := service.UpdateDraftMark(context.Background(), UpdateDraftMarkCommand{
+		BatchID:           batch.ID,
+		MarkID:            draft.ID,
+		QuotedFreightCost: 18900,
+		Observations:      "Inter Rapidisimo",
+		TrackingNumber:    "11515151",
+		CustomTrackingURL: &customTrackingURL,
+	})
+	if err != nil {
+		t.Fatalf("UpdateDraftMark() error = %v", err)
+	}
+	if updated.Observations != "interrapidisimo" {
+		t.Fatalf("updated.Observations = %q, want %q", updated.Observations, "interrapidisimo")
+	}
+	if updated.TrackingNumber != "11515151" {
+		t.Fatalf("updated.TrackingNumber = %q, want %q", updated.TrackingNumber, "11515151")
+	}
+	if updated.CustomTrackingURL == nil || *updated.CustomTrackingURL != customTrackingURL {
+		t.Fatalf("updated.CustomTrackingURL = %v, want %q", updated.CustomTrackingURL, customTrackingURL)
+	}
+	if updated.QuotedFreightCost != 18900 {
+		t.Fatalf("updated.QuotedFreightCost = %v, want %v", updated.QuotedFreightCost, 18900)
+	}
+}
+
+// TestUpdateDraftMarkRejectsNonManualBatch verifies post-draft completion stays limited to manual batches.
+func TestUpdateDraftMarkRejectsNonManualBatch(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "tcc", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	draft, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:      batch.ID,
+		OrderID:      "order-tcc-1",
+		Sender:       domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001000"},
+		Recipient:    domain.Address{Name: "Recipient", ID: "800", IDType: "CC", AddressLine: "street", CityCode: "76001000"},
+		Units:        []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode: domain.ShipmentModeParcel,
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+	customTrackingURL := "https://rastreo.flockstore.co/?carrier=tcc&tracking=123"
+	_, err = service.UpdateDraftMark(context.Background(), UpdateDraftMarkCommand{
+		BatchID:           batch.ID,
+		MarkID:            draft.ID,
+		QuotedFreightCost: 10000,
+		Observations:      "tcc",
+		TrackingNumber:    "123",
+		CustomTrackingURL: &customTrackingURL,
+	})
+	if !errors.Is(err, domain.ErrManualDraftUpdateNotSupported) {
+		t.Fatalf("UpdateDraftMark() error = %v, want ErrManualDraftUpdateNotSupported", err)
+	}
+}
+
+// TestCloseRejectsIncompleteManualDraft verifies manual batches cannot close until every draft has operator-supplied carrier, URL, tracking, and price.
+func TestCloseRejectsIncompleteManualDraft(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	_, err = service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID: batch.ID,
+		OrderID: "order-manual-1",
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+
+	closed, err := service.Close(context.Background(), batch.ID)
+	if !errors.Is(err, domain.ErrManualDraftIncomplete) {
+		t.Fatalf("Close() error = %v, want ErrManualDraftIncomplete", err)
+	}
+	if closed != nil {
+		t.Fatalf("Close() batch = %#v, want nil", closed)
 	}
 }
 

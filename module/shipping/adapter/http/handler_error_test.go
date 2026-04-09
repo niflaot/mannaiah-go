@@ -75,6 +75,9 @@ func (dispatchServiceStub) CreateBatchMarkFromQuotation(ctx context.Context, com
 func (dispatchServiceStub) CreateBatchMark(ctx context.Context, command dispatchservice.CreateBatchMarkCommand) (*domain.ShippingMark, error) {
 	return &domain.ShippingMark{}, nil
 }
+func (dispatchServiceStub) UpdateDraftMark(ctx context.Context, command dispatchservice.UpdateDraftMarkCommand) (*domain.ShippingMark, error) {
+	return &domain.ShippingMark{}, nil
+}
 func (dispatchServiceStub) RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error) {
 	return &domain.DispatchBatch{}, nil
 }
@@ -114,6 +117,8 @@ func TestMapError(t *testing.T) {
 		{err: domain.ErrBatchClosed, statusCode: 409, code: "batch_closed"},
 		{err: domain.ErrInvalidBatchStatus, statusCode: 409, code: "batch_status_invalid"},
 		{err: domain.ErrBatchOpenForCarrier, statusCode: 409, code: "batch_open_for_carrier"},
+		{err: domain.ErrManualDraftIncomplete, statusCode: 409, code: "manual_draft_incomplete"},
+		{err: domain.ErrManualDraftUpdateNotSupported, statusCode: 409, code: "manual_draft_update_not_supported"},
 		{err: domain.ErrNotFound, statusCode: 404, code: "shipping_resource_not_found"},
 		{err: &domain.GuardrailViolationError{CarrierID: "tcc", MarkID: "m-1", OrderID: "o-1", Rule: "r-1"}, statusCode: 500, code: "shipping_guardrail_violation"},
 		{err: errors.New("boom"), statusCode: 500, code: "internal_server_error"},

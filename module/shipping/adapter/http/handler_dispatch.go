@@ -53,6 +53,18 @@ type draftMarkRequest struct {
 	CustomTrackingURL string `json:"customTrackingUrl"`
 }
 
+// updateDraftMarkRequest defines manual draft-completion payload values.
+type updateDraftMarkRequest struct {
+	// QuotedFreightCost defines the manual freight cost entered by the operator.
+	QuotedFreightCost float64 `json:"quotedFreightCost"`
+	// Observations defines the manual carrier label stored as a normalized slug.
+	Observations string `json:"observations"`
+	// TrackingNumber defines the manual tracking-number value.
+	TrackingNumber string `json:"trackingNumber"`
+	// CustomTrackingURL defines the operator-provided tracking URL override.
+	CustomTrackingURL string `json:"customTrackingUrl"`
+}
+
 // createBatchMarkRequest defines one payload for quoted/direct batch mark creation from one quotation id.
 type createBatchMarkRequest struct {
 	// Batch defines the target batch identifier.
@@ -182,6 +194,27 @@ func (h *Handler) createBatchMark(ctx corehttp.Context) error {
 	}
 
 	return ctx.Status(201).JSON(mark)
+}
+
+// updateBatchMark handles manual QUOTED draft completion for one open manual batch.
+func (h *Handler) updateBatchMark(ctx corehttp.Context) error {
+	request := updateDraftMarkRequest{}
+	if err := ctx.BodyParser(&request); err != nil {
+		return corehttp.NewAppError(400, "invalid_payload", err)
+	}
+	mark, err := h.batches.UpdateDraftMark(ctx.Context(), dispatchservice.UpdateDraftMarkCommand{
+		BatchID:           strings.TrimSpace(ctx.Params("id")),
+		MarkID:            strings.TrimSpace(ctx.Params("markID")),
+		QuotedFreightCost: request.QuotedFreightCost,
+		Observations:      strings.TrimSpace(request.Observations),
+		TrackingNumber:    strings.TrimSpace(request.TrackingNumber),
+		CustomTrackingURL: optionalString(strings.TrimSpace(request.CustomTrackingURL)),
+	})
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(mark)
 }
 
 // removeBatchMark handles QUOTED mark removal from one batch.

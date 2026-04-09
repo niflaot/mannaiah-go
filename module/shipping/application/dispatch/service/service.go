@@ -743,11 +743,23 @@ func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBa
 		return nil, domain.ErrInvalidID
 	}
 	trimmedID := strings.TrimSpace(batchID)
-	if s.materializer != nil {
-		marks, err := s.markRepository.ListByBatchID(ctx, trimmedID)
-		if err != nil {
+	batch, err := s.batchRepository.GetByID(ctx, trimmedID)
+	if err != nil {
+		return nil, err
+	}
+	if batch.Status == domain.BatchStatusClosed {
+		return nil, domain.ErrBatchClosed
+	}
+	marks, err := s.markRepository.ListByBatchID(ctx, trimmedID)
+	if err != nil {
+		return nil, err
+	}
+	if domain.IsManualCarrierID(batch.CarrierID) {
+		if err := s.ValidateManualDraftsBeforeClose(marks); err != nil {
 			return nil, err
 		}
+	}
+	if s.materializer != nil {
 		for i := range marks {
 			if marks[i].Status != domain.MarkStatusQuoted {
 				continue
@@ -765,7 +777,7 @@ func (s *Service) Close(ctx context.Context, batchID string) (*domain.DispatchBa
 		return nil, err
 	}
 	s.invalidateBatchManifestDocumentCache(ctx, trimmedID)
-	batch, err := s.batchRepository.GetByID(ctx, trimmedID)
+	batch, err = s.batchRepository.GetByID(ctx, trimmedID)
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,9 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/batches/marks") == nil {
 		t.Fatalf("missing /shipping/batches/marks path")
 	}
+	if paths.Find("/shipping/batches/{id}/marks/{markID}") == nil {
+		t.Fatalf("missing /shipping/batches/{id}/marks/{markID} path")
+	}
 	if paths.Find("/shipping/quotations/order-packaging") == nil {
 		t.Fatalf("missing /shipping/quotations/order-packaging path")
 	}
@@ -218,6 +221,42 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	}
 	if postCreateBatchMark.Responses == nil || postCreateBatchMark.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/batches/marks POST 201 response")
+	}
+	patchBatchMark := paths.Find("/shipping/batches/{id}/marks/{markID}").Patch
+	if patchBatchMark == nil || patchBatchMark.RequestBody == nil {
+		t.Fatalf("expected /shipping/batches/{id}/marks/{markID} PATCH request body")
+	}
+	patchBatchMarkRequest := patchBatchMark.RequestBody.Value.Content.Get("application/json")
+	if patchBatchMarkRequest == nil || patchBatchMarkRequest.Schema == nil || patchBatchMarkRequest.Schema.Value == nil {
+		t.Fatalf("expected /shipping/batches/{id}/marks/{markID} PATCH JSON request schema")
+	}
+	if patchBatchMarkRequest.Schema.Value.Properties["quotedFreightCost"] == nil {
+		t.Fatalf("expected quotedFreightCost in /shipping/batches/{id}/marks/{markID} PATCH request schema")
+	}
+	if patchBatchMarkRequest.Schema.Value.Properties["observations"] == nil {
+		t.Fatalf("expected observations in /shipping/batches/{id}/marks/{markID} PATCH request schema")
+	}
+	if patchBatchMarkRequest.Schema.Value.Properties["trackingNumber"] == nil {
+		t.Fatalf("expected trackingNumber in /shipping/batches/{id}/marks/{markID} PATCH request schema")
+	}
+	if patchBatchMarkRequest.Schema.Value.Properties["customTrackingUrl"] == nil {
+		t.Fatalf("expected customTrackingUrl in /shipping/batches/{id}/marks/{markID} PATCH request schema")
+	}
+	if patchBatchMark.Responses == nil || patchBatchMark.Responses.Value("200") == nil {
+		t.Fatalf("expected /shipping/batches/{id}/marks/{markID} PATCH 200 response")
+	}
+	for _, status := range []string{"400", "401", "403", "404", "409", "500"} {
+		errorResponse := patchBatchMark.Responses.Value(status)
+		if errorResponse == nil || errorResponse.Value == nil {
+			t.Fatalf("expected /shipping/batches/{id}/marks/{markID} PATCH %s response", status)
+		}
+		content := errorResponse.Value.Content.Get("application/json")
+		if content == nil || content.Schema == nil || content.Schema.Value == nil {
+			t.Fatalf("expected /shipping/batches/{id}/marks/{markID} PATCH %s JSON error schema", status)
+		}
+		if content.Schema.Value.Properties["message"] == nil || content.Schema.Value.Properties["error"] == nil {
+			t.Fatalf("expected /shipping/batches/{id}/marks/{markID} PATCH %s error schema properties", status)
+		}
 	}
 	for _, status := range []string{"400", "401", "403", "404", "409", "500"} {
 		errorResponse := postCreateBatchMark.Responses.Value(status)

@@ -76,6 +76,8 @@ type DispatchService interface {
 	CreateBatchMarkFromQuotation(ctx context.Context, command dispatchservice.CreateBatchMarkFromQuotationCommand) (*domain.ShippingMark, error)
 	// CreateBatchMark creates one batch mark as draft (quoted) or direct (materialized immediately).
 	CreateBatchMark(ctx context.Context, command dispatchservice.CreateBatchMarkCommand) (*domain.ShippingMark, error)
+	// UpdateDraftMark completes one existing manual QUOTED draft mark inside an open batch.
+	UpdateDraftMark(ctx context.Context, command dispatchservice.UpdateDraftMarkCommand) (*domain.ShippingMark, error)
 	// RemoveDraftMark removes one QUOTED draft mark from a batch and sets it to REMOVED.
 	RemoveDraftMark(ctx context.Context, batchID string, markID string) (*domain.DispatchBatch, error)
 	// Close closes one dispatch batch.
@@ -156,6 +158,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/shipping/batches", h.protect("shipping:quotations", h.listBatches))
 	router.Post("/shipping/batches/:id/marks", h.protect("shipping:generate", h.addBatchMark))
 	router.Post("/shipping/batches/marks", h.protect("shipping:generate", h.createBatchMark))
+	router.Patch("/shipping/batches/:id/marks/:markID", h.protect("shipping:generate", h.updateBatchMark))
 	router.Delete("/shipping/batches/:id/marks/:markID", h.protect("shipping:generate", h.removeBatchMark))
 	router.Patch("/shipping/batches/:id/close", h.protect("shipping:generate", h.closeBatch))
 	router.Get("/shipping/batches/:id/manifest-document", h.protect("shipping:generate", h.batchManifestDocument))
@@ -265,6 +268,12 @@ func (h *Handler) mapError(err error) error {
 	}
 	if errors.Is(err, domain.ErrMarkNotDraft) {
 		return corehttp.NewAppError(409, "mark_not_draft", err)
+	}
+	if errors.Is(err, domain.ErrManualDraftIncomplete) {
+		return corehttp.NewAppError(409, "manual_draft_incomplete", err)
+	}
+	if errors.Is(err, domain.ErrManualDraftUpdateNotSupported) {
+		return corehttp.NewAppError(409, "manual_draft_update_not_supported", err)
 	}
 	if errors.Is(err, domain.ErrNotFound) {
 		return corehttp.NewAppError(404, "shipping_resource_not_found", err)

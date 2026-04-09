@@ -25,7 +25,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/batches/{id}", &openapi3.PathItem{Get: batchGetOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/marks", &openapi3.PathItem{Post: batchAddMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/marks", &openapi3.PathItem{Post: batchCreateMarkOperation()}),
-		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Delete: batchRemoveMarkOperation()}),
+		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Patch: batchUpdateMarkOperation(), Delete: batchRemoveMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/manifest-document", &openapi3.PathItem{Get: batchManifestDocumentOperation()}),
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
@@ -398,6 +398,30 @@ func batchCreateMarkOperation() *openapi3.Operation {
 	}
 }
 
+// batchUpdateMarkOperation defines the OpenAPI operation for manual draft completion in one batch.
+func batchUpdateMarkOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_updateBatchMark",
+		Summary:     "Complete one manual draft mark in a batch",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Dispatch batch identifier."),
+			pathStringParameter("markID", "Shipping mark identifier."),
+		},
+		RequestBody: jsonRequestBody(updateDraftMarkRequestSchema(), true),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, jsonResponse("Draft shipping mark completed.", shippingMarkSchema())),
+			openapi3.WithStatus(400, errorResponse("Bad request. Possible message codes: invalid_payload.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(409, errorResponse("Conflict. Possible message codes: batch_closed, mark_not_draft, manual_draft_update_not_supported.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
+		),
+	}
+}
+
 // batchRemoveMarkOperation defines the OpenAPI operation for mark removal.
 func batchRemoveMarkOperation() *openapi3.Operation {
 	return &openapi3.Operation{
@@ -686,6 +710,18 @@ func draftMarkRequestSchema() *openapi3.Schema {
 		WithProperty("customTrackingUrl", openapi3.NewStringSchema()).
 		WithProperty("shipmentMode", shipmentModeSchema())
 	schema.Required = []string{"orderId", "sender", "recipient", "units", "shipmentMode"}
+
+	return schema
+}
+
+// updateDraftMarkRequestSchema defines schema for manual draft completion payloads.
+func updateDraftMarkRequestSchema() *openapi3.Schema {
+	schema := openapi3.NewObjectSchema().
+		WithProperty("quotedFreightCost", openapi3.NewFloat64Schema()).
+		WithProperty("observations", openapi3.NewStringSchema()).
+		WithProperty("trackingNumber", openapi3.NewStringSchema()).
+		WithProperty("customTrackingUrl", openapi3.NewStringSchema())
+	schema.Required = []string{"quotedFreightCost", "observations", "trackingNumber", "customTrackingUrl"}
 
 	return schema
 }
