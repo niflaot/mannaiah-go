@@ -85,7 +85,7 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 	textY := rotulusMarginMM + 32
 	pdf.SetXY(textX, textY)
 	pdf.SetFont("Arial", "B", 18)
-	pdf.CellFormat(leftWidth, 8, encodeRotulusText(resolveRotulusTitle(template, meta)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(leftWidth, 8, encodeRotulusText(strings.ToUpper(resolveRotulusTitle(template, meta))), "", 1, "L", false, 0, "")
 
 	rows := []struct {
 		label string
@@ -101,11 +101,8 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 	}
 
 	pdf.Ln(2)
-	pdf.SetFont("Arial", "", 10)
 	for _, row := range rows {
-		pdf.SetX(textX)
-		pdf.MultiCell(leftWidth, 5.5, encodeRotulusText(fmt.Sprintf("%s: %s", row.label, row.value)), "", "L", false)
-		pdf.Ln(0.7)
+		drawRotulusLabelValueRow(pdf, textX, leftWidth, formatRotulusLabel(row.label), row.value)
 	}
 }
 
@@ -141,14 +138,59 @@ func (s *Service) drawRotulusFooter(pdf *gofpdf.Fpdf, meta markRotulusMeta) {
 		return
 	}
 	template := s.rotulusDocuments.template
-	pdf.SetFont("Arial", "", 8)
 	pdf.SetXY(rotulusMarginMM, rotulusContentHeightMM-rotulusMarginMM-4)
-	pdf.CellFormat(rotulusPageWidthMM-(2*rotulusMarginMM), 4, encodeRotulusText(fmt.Sprintf("%s: %s", template.FooterLabel, meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC"))), "", 0, "L", false, 0, "")
+	drawRotulusInlineLabelValue(
+		pdf,
+		rotulusMarginMM,
+		rotulusContentHeightMM-rotulusMarginMM-4,
+		rotulusPageWidthMM-(2*rotulusMarginMM),
+		4,
+		8,
+		formatRotulusLabel(template.FooterLabel),
+		meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC"),
+	)
 }
 
 // resolveRotulusTitle resolves one dynamic order title line.
 func resolveRotulusTitle(template markRotulusTemplate, meta markRotulusMeta) string {
 	return strings.TrimSpace(firstNonEmptyString(template.OrderTitlePrefix, "Pedido #")) + sanitizeRotulusValue(meta.OrderNumber, template.EmptyValueFallback)
+}
+
+// formatRotulusLabel normalizes one label prefix for uppercase bold rendering.
+func formatRotulusLabel(label string) string {
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		return ""
+	}
+
+	return strings.ToUpper(trimmed) + ":"
+}
+
+// drawRotulusLabelValueRow renders one two-style label/value row with a bold uppercase prefix.
+func drawRotulusLabelValueRow(pdf *gofpdf.Fpdf, x float64, width float64, label string, value string) {
+	if pdf == nil {
+		return
+	}
+	drawRotulusInlineLabelValue(pdf, x, pdf.GetY(), width, 5.5, 10, label, value)
+	pdf.Ln(0.7)
+}
+
+// drawRotulusInlineLabelValue renders a bold prefix and normal value on the same baseline.
+func drawRotulusInlineLabelValue(pdf *gofpdf.Fpdf, x float64, y float64, width float64, lineHeight float64, fontSize float64, label string, value string) {
+	if pdf == nil {
+		return
+	}
+	labelText := encodeRotulusText(strings.TrimSpace(label))
+	valueText := encodeRotulusText(strings.TrimSpace(value))
+
+	pdf.SetXY(x, y)
+	pdf.SetFont("Arial", "B", fontSize)
+	pdf.CellFormat(0, lineHeight, labelText, "", 0, "L", false, 0, "")
+
+	labelWidth := pdf.GetStringWidth(labelText + " ")
+	pdf.SetXY(x+labelWidth, y)
+	pdf.SetFont("Arial", "", fontSize)
+	pdf.MultiCell(width-labelWidth, lineHeight, valueText, "", "L", false)
 }
 
 // downloadRotulusLogo downloads one logo image and resolves image type values for gofpdf.

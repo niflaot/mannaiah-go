@@ -135,7 +135,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 	recipientAddressLine := strings.TrimSpace(mark.Recipient.AddressLine)
 	recipientAddressLine2 := ""
 	recipientPhone := strings.TrimSpace(mark.Recipient.Phone)
-	recipientCity := strings.TrimSpace(mark.Recipient.CityCode)
+	recipientCity := resolveRotulusCityDisplayName(strings.TrimSpace(mark.Recipient.CityCode))
 	if s.orderSource != nil {
 		orderData, orderErr := s.orderSource.GetByIDOrIdentifier(ctx, strings.TrimSpace(mark.OrderID))
 		if orderErr == nil && orderData != nil && strings.TrimSpace(orderData.OrderIdentifier) != "" {
@@ -145,7 +145,11 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 			recipientAddressLine = firstNonEmptyString(strings.TrimSpace(orderData.RecipientAddressLine), recipientAddressLine)
 			recipientAddressLine2 = firstNonEmptyString(strings.TrimSpace(orderData.RecipientAddressLine2), recipientAddressLine2)
 			recipientPhone = firstNonEmptyString(strings.TrimSpace(orderData.RecipientPhone), recipientPhone)
-			recipientCity = firstNonEmptyString(strings.TrimSpace(orderData.RecipientCity), strings.TrimSpace(orderData.DestCityCode), recipientCity)
+			recipientCity = firstNonEmptyString(
+				resolveRotulusCityDisplayName(strings.TrimSpace(orderData.RecipientCity)),
+				resolveRotulusCityDisplayName(strings.TrimSpace(orderData.DestCityCode)),
+				recipientCity,
+			)
 		}
 	}
 
