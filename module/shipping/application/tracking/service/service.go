@@ -13,6 +13,8 @@ import (
 
 // Service defines tracking orchestration behavior.
 type Service struct {
+	// repository defines shipping mark lookup/list dependencies.
+	repository port.ShippingMarkRepository
 	// registry defines tracking provider lookup dependencies.
 	registry port.ProviderRegistry
 	// publisher defines integration event publisher dependencies.
@@ -32,8 +34,8 @@ type TrackingUpdatedPayload struct {
 }
 
 // NewService creates tracking services.
-func NewService(registry port.ProviderRegistry, publisher port.IntegrationEventPublisher) *Service {
-	return &Service{registry: registry, publisher: publisher}
+func NewService(repository port.ShippingMarkRepository, registry port.ProviderRegistry, publisher port.IntegrationEventPublisher) *Service {
+	return &Service{repository: repository, registry: registry, publisher: publisher}
 }
 
 // Get resolves normalized tracking history for one tracking number and carrier identifier.

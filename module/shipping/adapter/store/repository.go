@@ -273,6 +273,23 @@ func (r *MarkRepository) List(ctx context.Context, query port.MarkListQuery) ([]
 	if strings.TrimSpace(query.BatchID) != "" {
 		builder = builder.Where("dispatch_batch_id = ?", strings.TrimSpace(query.BatchID))
 	}
+	if query.RequireTracking {
+		builder = builder.Where("tracking_number IS NOT NULL AND TRIM(tracking_number) <> ''")
+	}
+	if len(query.ExcludedStatuses) > 0 {
+		excludedStatuses := make([]string, 0, len(query.ExcludedStatuses))
+		for _, status := range query.ExcludedStatuses {
+			trimmedStatus := strings.TrimSpace(string(status))
+			if trimmedStatus == "" {
+				continue
+			}
+			excludedStatuses = append(excludedStatuses, trimmedStatus)
+		}
+		if len(excludedStatuses) > 0 {
+			builder = builder.Where("status NOT IN ?", excludedStatuses)
+		}
+	}
+	builder = applyMarkSearchTerm(builder, query.SearchTerm)
 	var total int64
 	if err := builder.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count shipping marks: %w", err)

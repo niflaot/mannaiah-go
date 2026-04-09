@@ -28,6 +28,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Patch: batchUpdateMarkOperation(), Delete: batchRemoveMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/manifest-document", &openapi3.PathItem{Get: batchManifestDocumentOperation()}),
+		openapi3.WithPath("/shipping/tracking", &openapi3.PathItem{Get: trackingListOperation()}),
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
 		openapi3.WithPath("/shipping/carriers", &openapi3.PathItem{Get: carrierListOperation()}),
 		openapi3.WithPath("/shipping/carriers/{id}", &openapi3.PathItem{Get: carrierGetOperation()}),

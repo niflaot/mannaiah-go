@@ -321,6 +321,14 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if getTrackingResponse.Value == nil || getTrackingResponse.Value.Content.Get("application/json") == nil {
 		t.Fatalf("expected /shipping/tracking/{trackingNumber} GET 200 JSON schema")
 	}
+	listTracking := paths.Find("/shipping/tracking").Get
+	if listTracking == nil || listTracking.Responses == nil || listTracking.Responses.Value("200") == nil {
+		t.Fatalf("expected /shipping/tracking GET 200 response")
+	}
+	listTrackingResponse := listTracking.Responses.Value("200")
+	if listTrackingResponse.Value == nil || listTrackingResponse.Value.Content.Get("application/json") == nil {
+		t.Fatalf("expected /shipping/tracking GET 200 JSON schema")
+	}
 
 	getBatchManifestDocument := paths.Find("/shipping/batches/{id}/manifest-document").Get
 	if getBatchManifestDocument == nil || getBatchManifestDocument.Responses == nil || getBatchManifestDocument.Responses.Value("200") == nil {

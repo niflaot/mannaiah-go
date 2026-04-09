@@ -9,6 +9,7 @@ import (
 	dispatchservice "mannaiah/module/shipping/application/dispatch/service"
 	markservice "mannaiah/module/shipping/application/mark/service"
 	quotationservice "mannaiah/module/shipping/application/quotation/service"
+	trackingservice "mannaiah/module/shipping/application/tracking/service"
 	"mannaiah/module/shipping/domain"
 	"mannaiah/module/shipping/port"
 )
@@ -92,6 +93,9 @@ type trackingServiceStub struct{}
 
 func (trackingServiceStub) Get(ctx context.Context, carrierID string, trackingNumber string) (*domain.TrackingHistory, error) {
 	return &domain.TrackingHistory{}, nil
+}
+func (trackingServiceStub) List(ctx context.Context, query trackingservice.ListQuery) ([]trackingservice.ListItem, int64, error) {
+	return nil, 0, nil
 }
 
 type carrierServiceStub struct{}

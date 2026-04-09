@@ -38,7 +38,7 @@
   - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
   - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks/:id/rotulus-document`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
   - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `PATCH /shipping/batches/:id/marks/:markID`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
-  - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
+  - `GET /shipping/tracking`, `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
 - Events:
   - `shipping.v1.mark.generated`
@@ -125,6 +125,8 @@
 - Manual carrier labels are normalized to lowercase slugs without spaces before they are persisted or used in tracking URLs.
 
 ## Tracking Normalization
+- `GET /shipping/tracking` lists paginated non-draft marks with tracking numbers, supports free-text filtering by recipient name, order id, or tracking number, and supports `status` filtering over the resolved last tracking status.
+- Manual rows in `GET /shipping/tracking` expose `lastStatus=MANUAL` and use `carrierId=manual_{carrierSlug}` when a custom manual carrier label exists.
 - `GET /shipping/tracking/:trackingNumber?carrier={carrierID}` returns normalized statuses: `PROCESSING`, `ORIGIN`, `COMPLETED`, `RETURN`, `INCIDENCE`, `VOIDED`.
 - TCC explicit mappings include `4000 -> RETURN`, `4100 -> PROCESSING`, `4200 -> INCIDENCE`, `4300 -> VOIDED`, with the existing text-based fallback for unmapped descriptions.
 - Manual tracking responses keep the provider route as `manual`, but the response `carrierId` is enriched as `manual_{carrierSlug}` when the stored manual carrier label is available.

@@ -133,7 +133,7 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 	if err := dispatchSvc.SetBatchManifestDocumentCoverTemplateFromFile(cfg.BatchManifestTemplatePath); err != nil {
 		return nil, fmt.Errorf("configure batch manifest cover template: %w", err)
 	}
-	trackingSvc := trackingservice.NewService(registry, publisher)
+	trackingSvc := trackingservice.NewService(markRepository, registry, publisher)
 	carrierSvc := &carrierService{registry: registry}
 
 	handler, err := shippinghttp.NewHandler(quotationSvc, markSvc, dispatchSvc, trackingSvc, carrierSvc)

@@ -13,6 +13,12 @@ type MarkListQuery struct {
 	OrderID string
 	// BatchID filters rows by batch identifier.
 	BatchID string
+	// SearchTerm filters rows by tracking number, order id, and recipient labels.
+	SearchTerm string
+	// ExcludedStatuses removes rows whose mark status belongs to the provided set.
+	ExcludedStatuses []domain.MarkStatus
+	// RequireTracking limits rows to marks with a non-empty tracking number.
+	RequireTracking bool
 	// Page defines 1-based page values.
 	Page int
 	// Limit defines page-size values.

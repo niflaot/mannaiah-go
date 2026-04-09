@@ -8,6 +8,7 @@ import (
 	dispatchservice "mannaiah/module/shipping/application/dispatch/service"
 	markservice "mannaiah/module/shipping/application/mark/service"
 	quotationservice "mannaiah/module/shipping/application/quotation/service"
+	trackingservice "mannaiah/module/shipping/application/tracking/service"
 	"mannaiah/module/shipping/domain"
 	"mannaiah/module/shipping/port"
 )
@@ -90,6 +91,8 @@ type DispatchService interface {
 type TrackingService interface {
 	// Get resolves tracking history by carrier and tracking number.
 	Get(ctx context.Context, carrierID string, trackingNumber string) (*domain.TrackingHistory, error)
+	// List resolves paginated tracking summaries.
+	List(ctx context.Context, query trackingservice.ListQuery) ([]trackingservice.ListItem, int64, error)
 }
 
 // CarrierService defines carrier listing behavior required by HTTP handlers.
@@ -162,7 +165,8 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Delete("/shipping/batches/:id/marks/:markID", h.protect("shipping:generate", h.removeBatchMark))
 	router.Patch("/shipping/batches/:id/close", h.protect("shipping:generate", h.closeBatch))
 	router.Get("/shipping/batches/:id/manifest-document", h.protect("shipping:generate", h.batchManifestDocument))
-	router.Get("/shipping/tracking/:trackingNumber", h.protect("shipping:quotations", h.getTracking))
+	router.Get("/shipping/tracking", h.protectAny([]string{"shipping:quotations", "shipping:generate", "shipping:manage"}, h.listTracking))
+	router.Get("/shipping/tracking/:trackingNumber", h.protectAny([]string{"shipping:quotations", "shipping:generate", "shipping:manage"}, h.getTracking))
 	router.Get("/shipping/carriers", h.protect("shipping:quotations", h.listCarriers))
 	router.Get("/shipping/carriers/:id", h.protect("shipping:quotations", h.getCarrier))
 }
