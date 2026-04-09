@@ -52,6 +52,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.2.0] - 2026-04-08
+- Shipping manual flow: operator-entered tracking details can now be staged in manual batches without quotation-derived payloads.
+  - `POST /shipping/batches/{id}/marks` already accepts `trackingNumber`, `customTrackingUrl`, and `observations`; manual batches now also tolerate sparse payloads by defaulting shipment mode and a placeholder package unit server-side.
+  - Manual carrier labels stored in `observations` are now preferred in transactional shipping emails, while structured carriers keep their existing lookup behavior.
+- Release metadata updated to `v1.2.0`.
+
 ### [v1.0.0] - 2026-03-26
 - Shipping batches: merged manifest print document added.
   - New endpoint: `GET /shipping/batches/{id}/manifest-document`.

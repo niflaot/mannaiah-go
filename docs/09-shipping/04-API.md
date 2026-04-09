@@ -318,6 +318,9 @@ POST /shipping/batches/:id/marks
 ```
 
 Body is the same as `POST /shipping/marks` minus `carrierId` (inherited from batch).
+For manual carriers, you can also provide:
+- `trackingNumber` (optional): operator-provided guide/reference.
+- `customTrackingUrl` (optional): full tracking link override used in customer communications.
 
 Creates a mark with `status = QUOTED` and `DispatchBatchID = batch.ID`.
 

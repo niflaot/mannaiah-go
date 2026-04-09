@@ -56,6 +56,18 @@ type DraftMarkCommand struct {
 	ShipmentMode domain.ShipmentMode
 	// Observations defines optional observation values.
 	Observations string
+	// TrackingNumber defines optional manual tracking-number values.
+	TrackingNumber string
+	// DocumentType defines optional manual document-type values.
+	DocumentType domain.MarkDocumentType
+	// DocumentRef defines optional manual document-reference values.
+	DocumentRef string
+	// ManifestType defines optional manual manifest document-type values.
+	ManifestType domain.MarkDocumentType
+	// ManifestRef defines optional manual manifest document-reference values.
+	ManifestRef string
+	// CustomTrackingURL defines an optional operator-provided tracking URL override for this mark.
+	CustomTrackingURL *string
 }
 
 // CreateBatchMarkCommand defines one batch mark creation input values for quoted or direct flows.
@@ -86,6 +98,18 @@ type CreateBatchMarkCommand struct {
 	ShipmentMode domain.ShipmentMode
 	// Observations defines optional observation values.
 	Observations string
+	// TrackingNumber defines optional manual tracking-number values.
+	TrackingNumber string
+	// DocumentType defines optional manual document-type values.
+	DocumentType domain.MarkDocumentType
+	// DocumentRef defines optional manual document-reference values.
+	DocumentRef string
+	// ManifestType defines optional manual manifest document-type values.
+	ManifestType domain.MarkDocumentType
+	// ManifestRef defines optional manual manifest document-reference values.
+	ManifestRef string
+	// CustomTrackingURL defines an optional operator-provided tracking URL override for this mark.
+	CustomTrackingURL *string
 }
 
 // CreateBatchMarkFromQuotationCommand defines batch-mark creation values resolved from one quotation.
@@ -231,7 +255,11 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 	if batch.Status != domain.BatchStatusOpen {
 		return nil, domain.ErrBatchClosed
 	}
-	existingMark, err := s.findExistingActiveMark(ctx, batch.ID, strings.TrimSpace(command.OrderID), strings.TrimSpace(command.QuotationID))
+	enrichedCommand := normalizeDraftMarkCommandForCarrier(
+		s.enrichDraftMarkCommand(ctx, command),
+		batch.CarrierID,
+	)
+	existingMark, err := s.findExistingActiveMark(ctx, batch.ID, strings.TrimSpace(enrichedCommand.OrderID), strings.TrimSpace(enrichedCommand.QuotationID))
 	if err != nil {
 		return nil, err
 	}
@@ -239,25 +267,31 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 		return existingMark, nil
 	}
 	var quotationID *string
-	if trimmed := strings.TrimSpace(command.QuotationID); trimmed != "" {
+	if trimmed := strings.TrimSpace(enrichedCommand.QuotationID); trimmed != "" {
 		quotationID = &trimmed
 	}
 	batchID := batch.ID
 	mark := domain.ShippingMark{
 		ID:                      uuid.NewString(),
-		OrderID:                 strings.TrimSpace(command.OrderID),
+		OrderID:                 strings.TrimSpace(enrichedCommand.OrderID),
 		CarrierID:               batch.CarrierID,
 		Status:                  domain.MarkStatusQuoted,
-		Sender:                  command.Sender,
-		Recipient:               command.Recipient,
-		Units:                   command.Units,
-		DeclaredValue:           command.DeclaredValue,
-		PaymentForm:             strings.TrimSpace(command.PaymentForm),
-		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
-		ShipmentMode:            command.ShipmentMode,
-		Observations:            strings.TrimSpace(command.Observations),
+		Sender:                  enrichedCommand.Sender,
+		Recipient:               enrichedCommand.Recipient,
+		Units:                   enrichedCommand.Units,
+		DeclaredValue:           enrichedCommand.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(enrichedCommand.PaymentForm),
+		CollectOnDeliveryAmount: enrichedCommand.CollectOnDeliveryAmount,
+		ShipmentMode:            enrichedCommand.ShipmentMode,
+		Observations:            strings.TrimSpace(enrichedCommand.Observations),
+		TrackingNumber:          strings.TrimSpace(enrichedCommand.TrackingNumber),
+		DocumentType:            enrichedCommand.DocumentType,
+		DocumentRef:             strings.TrimSpace(enrichedCommand.DocumentRef),
+		ManifestType:            enrichedCommand.ManifestType,
+		ManifestRef:             strings.TrimSpace(enrichedCommand.ManifestRef),
+		CustomTrackingURL:       normalizeOptionalURLPointer(enrichedCommand.CustomTrackingURL),
 		QuotationID:             quotationID,
-		QuotedFreightCost:       command.QuotedFreightCost,
+		QuotedFreightCost:       enrichedCommand.QuotedFreightCost,
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),
 	}.Normalize()
@@ -326,6 +360,12 @@ func (s *Service) CreateBatchMark(ctx context.Context, command CreateBatchMarkCo
 		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
 		ShipmentMode:            command.ShipmentMode,
 		Observations:            strings.TrimSpace(command.Observations),
+		TrackingNumber:          strings.TrimSpace(command.TrackingNumber),
+		DocumentType:            command.DocumentType,
+		DocumentRef:             strings.TrimSpace(command.DocumentRef),
+		ManifestType:            command.ManifestType,
+		ManifestRef:             strings.TrimSpace(command.ManifestRef),
+		CustomTrackingURL:       normalizeOptionalURLPointer(command.CustomTrackingURL),
 	})
 }
 
@@ -429,26 +469,36 @@ func (s *Service) createDirectBatchMark(ctx context.Context, command CreateBatch
 	if err != nil {
 		return nil, err
 	}
+	enrichedCommand := normalizeCreateBatchMarkCommandForCarrier(
+		s.enrichCreateBatchMarkCommand(ctx, command),
+		batch.CarrierID,
+	)
 	var quotationID *string
-	if trimmed := strings.TrimSpace(command.QuotationID); trimmed != "" {
+	if trimmed := strings.TrimSpace(enrichedCommand.QuotationID); trimmed != "" {
 		quotationID = &trimmed
 	}
 	batchID := batch.ID
 	mark := domain.ShippingMark{
 		ID:                      uuid.NewString(),
-		OrderID:                 strings.TrimSpace(command.OrderID),
+		OrderID:                 strings.TrimSpace(enrichedCommand.OrderID),
 		CarrierID:               batch.CarrierID,
 		Status:                  domain.MarkStatusQuoted,
-		Sender:                  command.Sender,
-		Recipient:               command.Recipient,
-		Units:                   command.Units,
-		DeclaredValue:           command.DeclaredValue,
-		PaymentForm:             strings.TrimSpace(command.PaymentForm),
-		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
-		ShipmentMode:            command.ShipmentMode,
-		Observations:            strings.TrimSpace(command.Observations),
+		Sender:                  enrichedCommand.Sender,
+		Recipient:               enrichedCommand.Recipient,
+		Units:                   enrichedCommand.Units,
+		DeclaredValue:           enrichedCommand.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(enrichedCommand.PaymentForm),
+		CollectOnDeliveryAmount: enrichedCommand.CollectOnDeliveryAmount,
+		ShipmentMode:            enrichedCommand.ShipmentMode,
+		Observations:            strings.TrimSpace(enrichedCommand.Observations),
+		TrackingNumber:          strings.TrimSpace(enrichedCommand.TrackingNumber),
+		DocumentType:            enrichedCommand.DocumentType,
+		DocumentRef:             strings.TrimSpace(enrichedCommand.DocumentRef),
+		ManifestType:            enrichedCommand.ManifestType,
+		ManifestRef:             strings.TrimSpace(enrichedCommand.ManifestRef),
+		CustomTrackingURL:       normalizeOptionalURLPointer(enrichedCommand.CustomTrackingURL),
 		QuotationID:             quotationID,
-		QuotedFreightCost:       command.QuotedFreightCost,
+		QuotedFreightCost:       enrichedCommand.QuotedFreightCost,
 		DispatchBatchID:         &batchID,
 		CreatedAt:               time.Now().UTC(),
 		UpdatedAt:               time.Now().UTC(),
@@ -471,6 +521,190 @@ func (s *Service) createDirectBatchMark(ctx context.Context, command CreateBatch
 	}
 
 	return persisted, nil
+}
+
+func (s *Service) enrichCreateBatchMarkCommand(ctx context.Context, command CreateBatchMarkCommand) CreateBatchMarkCommand {
+	base := CreateBatchMarkCommand{
+		BatchID:                 strings.TrimSpace(command.BatchID),
+		Direct:                  command.Direct,
+		QuotationID:             strings.TrimSpace(command.QuotationID),
+		QuotedFreightCost:       command.QuotedFreightCost,
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		Sender:                  command.Sender,
+		Recipient:               command.Recipient,
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(command.PaymentForm),
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
+		Observations:            strings.TrimSpace(command.Observations),
+		TrackingNumber:          strings.TrimSpace(command.TrackingNumber),
+		DocumentType:            command.DocumentType,
+		DocumentRef:             strings.TrimSpace(command.DocumentRef),
+		ManifestType:            command.ManifestType,
+		ManifestRef:             strings.TrimSpace(command.ManifestRef),
+		CustomTrackingURL:       normalizeOptionalURLPointer(command.CustomTrackingURL),
+	}
+	enrichedDraft := DraftMarkCommand{
+		OrderID:                 base.OrderID,
+		Sender:                  base.Sender,
+		Recipient:               base.Recipient,
+		DeclaredValue:           base.DeclaredValue,
+		CollectOnDeliveryAmount: base.CollectOnDeliveryAmount,
+	}.enrichWithOrderData(ctx, s)
+	base.OrderID = enrichedDraft.OrderID
+	base.Sender = enrichedDraft.Sender
+	base.Recipient = enrichedDraft.Recipient
+	base.DeclaredValue = enrichedDraft.DeclaredValue
+	base.CollectOnDeliveryAmount = enrichedDraft.CollectOnDeliveryAmount
+
+	return base
+}
+
+func (s *Service) enrichDraftMarkCommand(ctx context.Context, command DraftMarkCommand) DraftMarkCommand {
+	return DraftMarkCommand{
+		BatchID:                 strings.TrimSpace(command.BatchID),
+		QuotationID:             strings.TrimSpace(command.QuotationID),
+		QuotedFreightCost:       command.QuotedFreightCost,
+		OrderID:                 strings.TrimSpace(command.OrderID),
+		Sender:                  command.Sender,
+		Recipient:               command.Recipient,
+		Units:                   command.Units,
+		DeclaredValue:           command.DeclaredValue,
+		PaymentForm:             strings.TrimSpace(command.PaymentForm),
+		CollectOnDeliveryAmount: command.CollectOnDeliveryAmount,
+		ShipmentMode:            command.ShipmentMode,
+		Observations:            strings.TrimSpace(command.Observations),
+		TrackingNumber:          strings.TrimSpace(command.TrackingNumber),
+		DocumentType:            command.DocumentType,
+		DocumentRef:             strings.TrimSpace(command.DocumentRef),
+		ManifestType:            command.ManifestType,
+		ManifestRef:             strings.TrimSpace(command.ManifestRef),
+		CustomTrackingURL:       normalizeOptionalURLPointer(command.CustomTrackingURL),
+	}.enrichWithOrderData(ctx, s)
+}
+
+func (c DraftMarkCommand) enrichWithOrderData(ctx context.Context, service *Service) DraftMarkCommand {
+	result := c
+	result.Sender = resolveSenderWithDefault(c.Sender.Normalize(), service)
+	result.Recipient = c.Recipient.Normalize()
+	if service == nil || service.orderSource == nil || strings.TrimSpace(result.OrderID) == "" {
+		return result
+	}
+	orderData, err := service.orderSource.GetByIDOrIdentifier(ctx, strings.TrimSpace(result.OrderID))
+	if err != nil || orderData == nil {
+		return result
+	}
+	if trimmedOrderID := strings.TrimSpace(orderData.OrderID); trimmedOrderID != "" {
+		result.OrderID = trimmedOrderID
+	}
+	result.Recipient = mergeRecipientWithOrderData(result.Recipient, orderData)
+	if result.CollectOnDeliveryAmount <= 0 {
+		result.CollectOnDeliveryAmount = maxZero(orderData.CollectOnDeliveryAmount)
+	}
+	if result.DeclaredValue <= 0 {
+		result.DeclaredValue = maxZero(orderData.TotalValue)
+	}
+
+	return result
+}
+
+func resolveSenderWithDefault(sender domain.Address, service *Service) domain.Address {
+	if !isAddressEmpty(sender) {
+		return sender
+	}
+	if service == nil || isAddressEmpty(service.defaultSender) {
+		return sender
+	}
+
+	return service.defaultSender.Normalize()
+}
+
+func mergeRecipientWithOrderData(recipient domain.Address, orderData *port.OrderQuotationData) domain.Address {
+	if orderData == nil {
+		return recipient.Normalize()
+	}
+	normalized := recipient.Normalize()
+	normalized.Name = firstNonEmptyString(normalized.Name, strings.TrimSpace(orderData.RecipientName), "Cliente")
+	normalized.ID = firstNonEmptyString(normalized.ID, strings.TrimSpace(orderData.RecipientID))
+	normalized.IDType = firstNonEmptyString(normalized.IDType, strings.TrimSpace(orderData.RecipientIDType))
+	normalized.AddressLine = firstNonEmptyString(normalized.AddressLine, strings.TrimSpace(orderData.RecipientAddressLine))
+	normalized.CityCode = firstNonEmptyString(normalized.CityCode, strings.TrimSpace(orderData.DestCityCode))
+	normalized.Phone = firstNonEmptyString(normalized.Phone, strings.TrimSpace(orderData.RecipientPhone))
+	normalized.Email = firstNonEmptyString(normalized.Email, strings.TrimSpace(orderData.RecipientEmail))
+
+	return normalized.Normalize()
+}
+
+func isAddressEmpty(address domain.Address) bool {
+	normalized := address.Normalize()
+	return strings.TrimSpace(normalized.Name) == "" &&
+		strings.TrimSpace(normalized.LegalName) == "" &&
+		strings.TrimSpace(normalized.ID) == "" &&
+		strings.TrimSpace(normalized.IDType) == "" &&
+		strings.TrimSpace(normalized.AddressLine) == "" &&
+		strings.TrimSpace(normalized.CityCode) == "" &&
+		strings.TrimSpace(normalized.Phone) == "" &&
+		strings.TrimSpace(normalized.Email) == ""
+}
+
+func normalizeOptionalURLPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func normalizeDraftMarkCommandForCarrier(command DraftMarkCommand, carrierID string) DraftMarkCommand {
+	if !isManualCarrierID(carrierID) {
+		return command
+	}
+	result := command
+	if len(result.Units) == 0 {
+		result.Units = []domain.PackageUnit{buildManualPlaceholderUnit()}
+	}
+	if result.ShipmentMode != domain.ShipmentModeParcel && result.ShipmentMode != domain.ShipmentModeExpress {
+		result.ShipmentMode = domain.ShipmentModeExpress
+	}
+
+	return result
+}
+
+func normalizeCreateBatchMarkCommandForCarrier(command CreateBatchMarkCommand, carrierID string) CreateBatchMarkCommand {
+	if !isManualCarrierID(carrierID) {
+		return command
+	}
+	result := command
+	if len(result.Units) == 0 {
+		result.Units = []domain.PackageUnit{buildManualPlaceholderUnit()}
+	}
+	if result.ShipmentMode != domain.ShipmentModeParcel && result.ShipmentMode != domain.ShipmentModeExpress {
+		result.ShipmentMode = domain.ShipmentModeExpress
+	}
+
+	return result
+}
+
+func buildManualPlaceholderUnit() domain.PackageUnit {
+	return domain.PackageUnit{
+		Description: "Manual tracking entry",
+		PackageType: "CAJA",
+		Dimensions: domain.Dimensions{
+			HeightCM:     1,
+			WidthCM:      1,
+			DepthCM:      1,
+			RealWeightKG: 0.1,
+		},
+	}
+}
+
+func isManualCarrierID(carrierID string) bool {
+	return strings.EqualFold(strings.TrimSpace(carrierID), "manual")
 }
 
 // RemoveDraftMark permanently deletes one QUOTED draft mark from a batch.

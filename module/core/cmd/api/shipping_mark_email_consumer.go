@@ -186,7 +186,7 @@ func buildShippingDispatchedEmailCommand(
 	trackingNumber := firstNonEmpty(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(payload.TrackingNumber), strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.ID))
 	shippingNumber := firstNonEmpty(strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(payload.DocumentRef), strings.TrimSpace(mark.ID))
 	orderNumber := firstNonEmpty(strings.TrimSpace(order.Identifier), strings.TrimSpace(order.ID))
-	carrierName := resolveCarrierName(ctx, deps.carriers, mark.CarrierID)
+	carrierName := resolveCarrierName(ctx, deps.carriers, *mark)
 
 	templateData := buildShippingDispatchedTemplateData(ctx, deps, *order, *contact, *mark, shippingDispatchedRenderMeta{
 		OrderNumber:    orderNumber,
@@ -235,7 +235,7 @@ func buildShippingMarkVoidedEmailCommand(
 	trackingNumber := firstNonEmpty(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(payload.TrackingNumber), strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.ID))
 	shippingNumber := firstNonEmpty(strings.TrimSpace(mark.DocumentRef), strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(payload.DocumentRef), strings.TrimSpace(mark.ID))
 	orderNumber := firstNonEmpty(strings.TrimSpace(order.Identifier), strings.TrimSpace(order.ID))
-	carrierName := resolveCarrierName(ctx, deps.carriers, mark.CarrierID)
+	carrierName := resolveCarrierName(ctx, deps.carriers, *mark)
 
 	templateData := buildShippingDispatchedTemplateData(ctx, deps, *order, *contact, *mark, shippingDispatchedRenderMeta{
 		OrderNumber:    orderNumber,
@@ -259,8 +259,11 @@ func buildShippingMarkVoidedEmailCommand(
 }
 
 // resolveCarrierName resolves one carrier display name by id.
-func resolveCarrierName(ctx context.Context, service shippingCarrierLookupService, carrierID string) string {
-	trimmedCarrierID := strings.TrimSpace(carrierID)
+func resolveCarrierName(ctx context.Context, service shippingCarrierLookupService, mark shippingdomain.ShippingMark) string {
+	trimmedCarrierID := strings.TrimSpace(mark.CarrierID)
+	if strings.EqualFold(trimmedCarrierID, "manual") && strings.TrimSpace(mark.Observations) != "" {
+		return strings.TrimSpace(mark.Observations)
+	}
 	if service == nil || trimmedCarrierID == "" {
 		return trimmedCarrierID
 	}

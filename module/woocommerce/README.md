@@ -1,6 +1,6 @@
 # WooCommerce Module
 
-![Latest Version](https://img.shields.io/badge/latest-v1.0.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v1.2.0-0A66C2)
 
 `module/woocommerce` provides WooCommerce integration capabilities for the monolith with DDD + hexagonal boundaries and future microservice extraction in mind.
 

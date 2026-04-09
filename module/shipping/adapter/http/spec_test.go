@@ -131,6 +131,13 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	if postMark == nil || postMark.RequestBody == nil {
 		t.Fatalf("expected /shipping/marks POST request body")
 	}
+	postMarkRequest := postMark.RequestBody.Value.Content.Get("application/json")
+	if postMarkRequest == nil || postMarkRequest.Schema == nil || postMarkRequest.Schema.Value == nil {
+		t.Fatalf("expected /shipping/marks POST JSON request schema")
+	}
+	if postMarkRequest.Schema.Value.Properties["customTrackingUrl"] == nil {
+		t.Fatalf("expected customTrackingUrl in /shipping/marks POST request schema")
+	}
 	if postMark.Responses == nil || postMark.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/marks POST 201 response")
 	}
@@ -175,6 +182,16 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	postBatchMarks := paths.Find("/shipping/batches/{id}/marks").Post
 	if postBatchMarks == nil || postBatchMarks.RequestBody == nil {
 		t.Fatalf("expected /shipping/batches/{id}/marks POST request body")
+	}
+	postBatchMarksRequest := postBatchMarks.RequestBody.Value.Content.Get("application/json")
+	if postBatchMarksRequest == nil || postBatchMarksRequest.Schema == nil || postBatchMarksRequest.Schema.Value == nil {
+		t.Fatalf("expected /shipping/batches/{id}/marks POST JSON request schema")
+	}
+	if postBatchMarksRequest.Schema.Value.Properties["trackingNumber"] == nil {
+		t.Fatalf("expected trackingNumber in /shipping/batches/{id}/marks POST request schema")
+	}
+	if postBatchMarksRequest.Schema.Value.Properties["customTrackingUrl"] == nil {
+		t.Fatalf("expected customTrackingUrl in /shipping/batches/{id}/marks POST request schema")
 	}
 	if postBatchMarks.Responses == nil || postBatchMarks.Responses.Value("201") == nil {
 		t.Fatalf("expected /shipping/batches/{id}/marks POST 201 response")

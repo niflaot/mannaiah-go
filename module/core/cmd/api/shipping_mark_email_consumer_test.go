@@ -259,6 +259,19 @@ func TestRegisterShippingMarkTransactionalEmailConsumerVoided(t *testing.T) {
 	}
 }
 
+// TestResolveCarrierNamePrefersManualObservation verifies manual marks can expose operator-provided carrier labels in customer emails.
+func TestResolveCarrierNamePrefersManualObservation(t *testing.T) {
+	carrierName := resolveCarrierName(context.Background(), shippingEmailCarrierServiceMock{
+		carrier: &shippingdomain.Carrier{ID: "manual", Name: "Manual"},
+	}, shippingdomain.ShippingMark{
+		CarrierID:    "manual",
+		Observations: "Servientrega",
+	})
+	if carrierName != "Servientrega" {
+		t.Fatalf("resolveCarrierName() = %q, want %q", carrierName, "Servientrega")
+	}
+}
+
 // TestRegisterShippingMarkTransactionalEmailConsumerErrorPaths verifies non-retriable decode and duplicate idempotency paths.
 func TestRegisterShippingMarkTransactionalEmailConsumerErrorPaths(t *testing.T) {
 	registrar := &shippingEmailRegistrarMock{}

@@ -6,6 +6,9 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
+	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,7 +128,7 @@ func Run(ctx context.Context, db *gorm.DB, cfg Config, options RunOptions, provi
 		return nil, fmt.Errorf("access sql db handle for migrations: %w", err)
 	}
 
-	runner, migrationCtx, cancel, err := buildRunner(ctx, sqlDB, cfg)
+	runner, sourcePath, migrationCtx, cancel, err := buildRunner(ctx, sqlDB, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +143,15 @@ func Run(ctx context.Context, db *gorm.DB, cfg Config, options RunOptions, provi
 
 	result, runErr := runOperation(runner, options)
 	if runErr != nil {
+		toleratedResult, tolerated := tolerateMissingCurrentDownMigrationError(runner, sourcePath, options, runErr)
+		if tolerated {
+			logger.Warn(
+				"tolerating missing current down migration for latest clean schema version",
+				zap.String("operation", string(normalizeOperation(options.Operation))),
+				zap.Uint("version", toleratedResult.Version),
+			)
+			return toleratedResult, nil
+		}
 		if errors.Is(runErr, migrate.ErrNoChange) {
 			logger.Debug("database migrations have no changes")
 			return result, nil
@@ -157,20 +169,50 @@ func Run(ctx context.Context, db *gorm.DB, cfg Config, options RunOptions, provi
 	return result, nil
 }
 
+func tolerateMissingCurrentDownMigrationError(
+	runner *migrate.Migrate,
+	sourcePath string,
+	options RunOptions,
+	runErr error,
+) (*Result, bool) {
+	if runner == nil {
+		return nil, false
+	}
+	if normalizeOperation(options.Operation) != OperationUp {
+		return nil, false
+	}
+
+	version, dirty, err := currentVersion(runner)
+	if err != nil || dirty || version == 0 {
+		return nil, false
+	}
+
+	latestVersion, err := latestEmbeddedMigrationVersion(sourcePath)
+	if err != nil || latestVersion == 0 || latestVersion != version {
+		return nil, false
+	}
+
+	if !isMissingCurrentDownMigrationError(runErr, version) {
+		return nil, false
+	}
+
+	return &Result{Version: version, Dirty: false}, true
+}
+
 // buildRunner resolves database and source drivers and builds migration runners with timeout context.
-func buildRunner(ctx context.Context, sqlDB *sql.DB, cfg Config) (*migrate.Migrate, context.Context, context.CancelFunc, error) {
+func buildRunner(ctx context.Context, sqlDB *sql.DB, cfg Config) (*migrate.Migrate, string, context.Context, context.CancelFunc, error) {
 	databaseDriver, driverName, sourcePath, err := resolveDatabaseDriver(sqlDB, cfg)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, "", nil, nil, err
 	}
 	sourceDriver, err := iofs.New(migrationFiles, sourcePath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("create migration source driver: %w", err)
+		return nil, "", nil, nil, fmt.Errorf("create migration source driver: %w", err)
 	}
 
 	runner, err := migrate.NewWithInstance("iofs", sourceDriver, driverName, databaseDriver)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("create migration runner: %w", err)
+		return nil, "", nil, nil, fmt.Errorf("create migration runner: %w", err)
 	}
 
 	migrationCtx := ctx
@@ -183,7 +225,53 @@ func buildRunner(ctx context.Context, sqlDB *sql.DB, cfg Config) (*migrate.Migra
 	}
 	migrationCtx, cancel := context.WithTimeout(migrationCtx, timeout)
 
-	return runner, migrationCtx, cancel, nil
+	return runner, sourcePath, migrationCtx, cancel, nil
+}
+
+func latestEmbeddedMigrationVersion(sourcePath string) (uint, error) {
+	entries, err := fs.ReadDir(migrationFiles, sourcePath)
+	if err != nil {
+		return 0, fmt.Errorf("read embedded migration directory %q: %w", sourcePath, err)
+	}
+
+	var latest uint
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".up.sql") {
+			continue
+		}
+
+		base := strings.TrimSuffix(path.Base(name), ".up.sql")
+		versionToken := base
+		if underscoreIndex := strings.Index(versionToken, "_"); underscoreIndex >= 0 {
+			versionToken = versionToken[:underscoreIndex]
+		}
+
+		parsed, parseErr := strconv.ParseUint(versionToken, 10, 64)
+		if parseErr != nil {
+			return 0, fmt.Errorf("parse embedded migration version from %q: %w", name, parseErr)
+		}
+		if uint(parsed) > latest {
+			latest = uint(parsed)
+		}
+	}
+
+	return latest, nil
+}
+
+func isMissingCurrentDownMigrationError(err error, version uint) bool {
+	if err == nil || version == 0 {
+		return false
+	}
+
+	return strings.Contains(
+		err.Error(),
+		fmt.Sprintf("no migration found for version %d: read down", version),
+	)
 }
 
 // normalizeOperation normalizes empty operations to up.

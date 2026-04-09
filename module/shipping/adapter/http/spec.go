@@ -613,6 +613,7 @@ func markRequestSchema() *openapi3.Schema {
 		WithProperty("documentRef", openapi3.NewStringSchema()).
 		WithProperty("manifestType", openapi3.NewStringSchema()).
 		WithProperty("manifestRef", openapi3.NewStringSchema()).
+		WithProperty("customTrackingUrl", openapi3.NewStringSchema()).
 		WithProperty("shipmentMode", shipmentModeSchema())
 	schema.Required = []string{"orderId", "carrierId", "sender", "recipient", "units", "shipmentMode"}
 
@@ -655,6 +656,12 @@ func draftMarkRequestSchema() *openapi3.Schema {
 		WithProperty("paymentForm", openapi3.NewStringSchema()).
 		WithProperty("collectOnDeliveryAmount", openapi3.NewFloat64Schema()).
 		WithProperty("observations", openapi3.NewStringSchema()).
+		WithProperty("trackingNumber", openapi3.NewStringSchema()).
+		WithProperty("documentType", openapi3.NewStringSchema()).
+		WithProperty("documentRef", openapi3.NewStringSchema()).
+		WithProperty("manifestType", openapi3.NewStringSchema()).
+		WithProperty("manifestRef", openapi3.NewStringSchema()).
+		WithProperty("customTrackingUrl", openapi3.NewStringSchema()).
 		WithProperty("shipmentMode", shipmentModeSchema())
 	schema.Required = []string{"orderId", "sender", "recipient", "units", "shipmentMode"}
 
@@ -708,7 +715,11 @@ func carrierSchema() *openapi3.Schema {
 		WithProperty("name", openapi3.NewStringSchema()).
 		WithProperty("type", openapi3.NewStringSchema()).
 		WithProperty("active", openapi3.NewBoolSchema()).
-		WithProperty("requiresBalanceCheck", openapi3.NewBoolSchema())
+		WithProperty("requiresBalanceCheck", openapi3.NewBoolSchema()).
+		WithProperty("hasQuotation", openapi3.NewBoolSchema()).
+		WithProperty("hasManifestDocument", openapi3.NewBoolSchema()).
+		WithProperty("hasTracking", openapi3.NewBoolSchema()).
+		WithProperty("needsUrl", openapi3.NewBoolSchema())
 }
 
 // carrierListResponseSchema defines schema for carrier list payloads.
@@ -753,6 +764,7 @@ func shippingMarkSchema() *openapi3.Schema {
 		WithProperty("responseSnapshot", responseSnapshotSchema).
 		WithProperty("shipmentMode", shipmentModeSchema()).
 		WithProperty("failureReason", openapi3.NewStringSchema()).
+		WithProperty("customTrackingUrl", openapi3.NewStringSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
 }

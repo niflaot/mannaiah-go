@@ -112,6 +112,7 @@
 - `direct=true`: creates and materializes the mark immediately and assigns it to the target batch even if the batch is `CLOSED`.
 - During `direct=true` materialization and during `PATCH /shipping/batches/:id/close`, carrier guardrails run immediately before outbound carrier dispatch.
 - Guardrail violations return HTTP `500` (`message=shipping_guardrail_violation`) and include `mark_id`, `order_id`, `rule`, and `request_preview` in the `error` field.
+- `POST /shipping/batches/:id/marks` accepts optional manual fields `trackingNumber` and `customTrackingUrl` so operators can attach manual guide references and custom tracking links before batch close/materialization.
 
 ## COD Collection
 - Mark create requests accept `collectOnDeliveryAmount`.

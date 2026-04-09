@@ -39,10 +39,10 @@ import (
 	coremsgplatform "mannaiah/module/core/messaging/platform"
 	corewatermill "mannaiah/module/core/messaging/watermill"
 	coreredis "mannaiah/module/core/redis"
+	coresearch "mannaiah/module/core/search"
 	"mannaiah/module/core/startup"
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
-	coresearch "mannaiah/module/core/search"
 	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/email"
 	emailapplication "mannaiah/module/email/application"
@@ -60,13 +60,13 @@ import (
 	orderproducts "mannaiah/module/orders/adapter/products"
 	ordersearch "mannaiah/module/orders/adapter/search"
 	"mannaiah/module/products"
-	productsearch "mannaiah/module/products/adapter/search/product"
 	categorysearch "mannaiah/module/products/adapter/search/category"
-	variationsearch "mannaiah/module/products/adapter/search/variation"
+	productsearch "mannaiah/module/products/adapter/search/product"
 	tagsearch "mannaiah/module/products/adapter/search/tag"
+	variationsearch "mannaiah/module/products/adapter/search/variation"
 	"mannaiah/module/segment"
-	segmentapplication "mannaiah/module/segment/application"
 	segmentsearch "mannaiah/module/segment/adapter/search"
+	segmentapplication "mannaiah/module/segment/application"
 	"mannaiah/module/shipping"
 	shippingevent "mannaiah/module/shipping/adapter/event"
 	shippingsearch "mannaiah/module/shipping/adapter/search"
@@ -221,7 +221,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "1.0.0",
+		Version:     "1.2.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)

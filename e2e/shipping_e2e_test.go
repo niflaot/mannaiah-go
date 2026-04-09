@@ -143,6 +143,8 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	  "sender":{"name":"Flock","id":"901599500","idType":"NIT","addressLine":"Sender street 123","cityCode":"11001000","phone":"3000000000","email":"contacto@flockstore.co"},
 	  "recipient":{"name":"Marylu","id":"83395cf06d6837104f19a7c9a99a2517","idType":"CC","addressLine":"Recipient street 456","cityCode":"76001000","phone":"3110000000","email":"coccostoreco@gmail.com"},
 	  "declaredValue":162000,
+	  "trackingNumber":"MANUAL-ORDER-2",
+	  "customTrackingUrl":"https://rastreo.flockstore.co/guide/MANUAL-ORDER-2",
 	  "shipmentMode":"parcel",
 	  "units":[{"description":"morral","packageType":"CAJA","dimensions":{"heightCm":20,"widthCm":18,"depthCm":12,"realWeightKg":1.4}}]
 	}`))
@@ -160,6 +162,23 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	}
 	if payload["status"] != "CLOSED" {
 		t.Fatalf("payload.status = %v, want %q", payload["status"], "CLOSED")
+	}
+
+	harness.tracer.Step("verify manual draft mark preserves tracking fields after batch close")
+	status, payload = harness.DoJSONRequest(t, http.MethodGet, "/shipping/marks?orderID=order-shipping-2", manageToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	rows, ok = payload["data"].([]any)
+	if !ok || len(rows) == 0 {
+		t.Fatalf("payload.data = %v, want at least one mark", payload["data"])
+	}
+	markPayload, _ := rows[0].(map[string]any)
+	if markPayload["trackingNumber"] != "MANUAL-ORDER-2" {
+		t.Fatalf("payload.trackingNumber = %v, want %q", markPayload["trackingNumber"], "MANUAL-ORDER-2")
+	}
+	if markPayload["customTrackingUrl"] != "https://rastreo.flockstore.co/guide/MANUAL-ORDER-2" {
+		t.Fatalf("payload.customTrackingUrl = %v, want %q", markPayload["customTrackingUrl"], "https://rastreo.flockstore.co/guide/MANUAL-ORDER-2")
 	}
 
 	harness.tracer.Step("resolve manual tracking history")
@@ -193,5 +212,5 @@ func TestShippingManualFlowE2E(t *testing.T) {
 	}
 
 	harness.tracer.Step("assert e2e trace logs")
-	harness.tracer.AssertStepCount(13)
+	harness.tracer.AssertStepCount(14)
 }

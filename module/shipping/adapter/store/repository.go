@@ -211,6 +211,7 @@ func (r *MarkRepository) Update(ctx context.Context, mark *domain.ShippingMark) 
 			"response_snapshot":                  row.ResponseSnapshot,
 			"shipment_mode":                      row.ShipmentMode,
 			"failure_reason":                     row.FailureReason,
+			"custom_tracking_url":                row.CustomTrackingURL,
 			"updated_at":                         row.UpdatedAt,
 		})
 		if result.Error != nil {

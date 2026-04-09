@@ -39,6 +39,18 @@ type draftMarkRequest struct {
 	ShipmentMode domain.ShipmentMode `json:"shipmentMode"`
 	// Observations defines observation values.
 	Observations string `json:"observations"`
+	// TrackingNumber defines optional manual tracking-number values.
+	TrackingNumber string `json:"trackingNumber"`
+	// DocumentType defines optional manual document-type values.
+	DocumentType domain.MarkDocumentType `json:"documentType"`
+	// DocumentRef defines optional manual document-reference values.
+	DocumentRef string `json:"documentRef"`
+	// ManifestType defines optional manual manifest document-type values.
+	ManifestType domain.MarkDocumentType `json:"manifestType"`
+	// ManifestRef defines optional manual manifest document-reference values.
+	ManifestRef string `json:"manifestRef"`
+	// CustomTrackingURL defines an optional operator-provided tracking URL override for this mark.
+	CustomTrackingURL string `json:"customTrackingUrl"`
 }
 
 // createBatchMarkRequest defines one payload for quoted/direct batch mark creation from one quotation id.
@@ -140,6 +152,12 @@ func (h *Handler) addBatchMark(ctx corehttp.Context) error {
 		CollectOnDeliveryAmount: request.CollectOnDeliveryAmount,
 		ShipmentMode:            request.ShipmentMode,
 		Observations:            strings.TrimSpace(request.Observations),
+		TrackingNumber:          strings.TrimSpace(request.TrackingNumber),
+		DocumentType:            request.DocumentType,
+		DocumentRef:             strings.TrimSpace(request.DocumentRef),
+		ManifestType:            request.ManifestType,
+		ManifestRef:             strings.TrimSpace(request.ManifestRef),
+		CustomTrackingURL:       optionalString(strings.TrimSpace(request.CustomTrackingURL)),
 	})
 	if err != nil {
 		return h.mapError(err)

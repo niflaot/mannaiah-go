@@ -3,6 +3,9 @@ package migration
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
+	"path"
 	"strings"
 	"testing"
 
@@ -10,6 +13,62 @@ import (
 
 	"go.uber.org/zap"
 )
+
+// TestEmbeddedMigrationPairs verifies every embedded migration has both up/down files per driver directory.
+func TestEmbeddedMigrationPairs(t *testing.T) {
+	driverDirectories := []string{
+		"migrations/mysql",
+		"migrations/sqlite",
+	}
+
+	for _, driverDirectory := range driverDirectories {
+		entries, err := fs.ReadDir(migrationFiles, driverDirectory)
+		if err != nil {
+			t.Fatalf("ReadDir(%q) error = %v", driverDirectory, err)
+		}
+
+		pairs := map[string]map[string]bool{}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			name := entry.Name()
+			switch {
+			case strings.HasSuffix(name, ".up.sql"):
+				base := strings.TrimSuffix(name, ".up.sql")
+				if pairs[base] == nil {
+					pairs[base] = map[string]bool{}
+				}
+				pairs[base]["up"] = true
+			case strings.HasSuffix(name, ".down.sql"):
+				base := strings.TrimSuffix(name, ".down.sql")
+				if pairs[base] == nil {
+					pairs[base] = map[string]bool{}
+				}
+				pairs[base]["down"] = true
+			default:
+				t.Fatalf("unexpected migration file %q in %q", name, driverDirectory)
+			}
+		}
+
+		for base, directions := range pairs {
+			if !directions["up"] {
+				t.Fatalf("missing up migration for %q in %q", base, driverDirectory)
+			}
+			if !directions["down"] {
+				t.Fatalf("missing down migration for %q in %q", base, driverDirectory)
+			}
+
+			if _, err := migrationFiles.Open(path.Join(driverDirectory, base+".up.sql")); err != nil {
+				t.Fatalf("Open(%q) error = %v", path.Join(driverDirectory, base+".up.sql"), err)
+			}
+			if _, err := migrationFiles.Open(path.Join(driverDirectory, base+".down.sql")); err != nil {
+				t.Fatalf("Open(%q) error = %v", path.Join(driverDirectory, base+".down.sql"), err)
+			}
+		}
+	}
+}
 
 // TestFromDatabaseConfig verifies migration config mapping behavior from core database config.
 func TestFromDatabaseConfig(t *testing.T) {
@@ -62,5 +121,35 @@ func TestRunForceRequiresVersion(t *testing.T) {
 	_, runErr := runOperation(nil, RunOptions{Operation: OperationForce, ForceVersion: -1})
 	if runErr == nil {
 		t.Fatalf("runOperation(force without version) expected error")
+	}
+}
+
+// TestLatestEmbeddedMigrationVersion verifies embedded latest-version discovery per driver directory.
+func TestLatestEmbeddedMigrationVersion(t *testing.T) {
+	version, err := latestEmbeddedMigrationVersion("migrations/mysql")
+	if err != nil {
+		t.Fatalf("latestEmbeddedMigrationVersion(mysql) error = %v", err)
+	}
+	if version != 43 {
+		t.Fatalf("latestEmbeddedMigrationVersion(mysql) = %d, want 43", version)
+	}
+
+	version, err = latestEmbeddedMigrationVersion("migrations/sqlite")
+	if err != nil {
+		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) error = %v", err)
+	}
+	if version != 42 {
+		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) = %d, want 42", version)
+	}
+}
+
+// TestIsMissingCurrentDownMigrationError verifies matching of the tolerated startup migration error.
+func TestIsMissingCurrentDownMigrationError(t *testing.T) {
+	err := fmt.Errorf("apply database migrations: no migration found for version 43: read down for version 43 migrations/mysql: file does not exist")
+	if !isMissingCurrentDownMigrationError(err, 43) {
+		t.Fatalf("isMissingCurrentDownMigrationError() = false, want true")
+	}
+	if isMissingCurrentDownMigrationError(err, 42) {
+		t.Fatalf("isMissingCurrentDownMigrationError() = true for wrong version, want false")
 	}
 }

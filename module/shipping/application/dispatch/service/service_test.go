@@ -386,6 +386,112 @@ func TestCreateBatchMarkDraft(t *testing.T) {
 	}
 }
 
+// TestDraftMarkEnrichesFromOrderData verifies draft-mark creation can enrich sender/recipient/COD defaults from order data.
+func TestDraftMarkEnrichesFromOrderData(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil)
+	service.SetDefaultSender(domain.Address{
+		Name:        "Flock",
+		ID:          "901599500",
+		IDType:      "NIT",
+		AddressLine: "Calle 18 Sur 24D 46 P2",
+		CityCode:    "11001000",
+		Phone:       "3057901484",
+		Email:       "coccostoreco@gmail.com",
+	})
+	service.SetOrderSource(dispatchOrderQuotationSourceStub{row: &port.OrderQuotationData{
+		OrderID:                 "order-internal-1",
+		DestCityCode:            "76001000",
+		TotalValue:              162000,
+		CollectOnDeliveryAmount: 162000,
+		RecipientName:           "Marylu",
+		RecipientID:             "83395cf06d6837104f19a7c9a99a2517",
+		RecipientIDType:         "CC",
+		RecipientAddressLine:    "Recipient street 456",
+		RecipientPhone:          "3110000000",
+		RecipientEmail:          "coccostoreco@gmail.com",
+	}})
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	customTrackingURL := "https://rastreo.flockstore.co/guide/manual-001"
+	mark, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:           batch.ID,
+		OrderID:           "1024554",
+		Sender:            domain.Address{},
+		Recipient:         domain.Address{},
+		Units:             []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		ShipmentMode:      domain.ShipmentModeParcel,
+		TrackingNumber:    "MANUAL-001",
+		CustomTrackingURL: &customTrackingURL,
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+	if mark.OrderID != "order-internal-1" {
+		t.Fatalf("mark.OrderID = %q, want %q", mark.OrderID, "order-internal-1")
+	}
+	if mark.Sender.Name != "Flock" {
+		t.Fatalf("mark.Sender.Name = %q, want %q", mark.Sender.Name, "Flock")
+	}
+	if mark.Recipient.Name != "Marylu" {
+		t.Fatalf("mark.Recipient.Name = %q, want %q", mark.Recipient.Name, "Marylu")
+	}
+	if mark.Recipient.CityCode != "76001000" {
+		t.Fatalf("mark.Recipient.CityCode = %q, want %q", mark.Recipient.CityCode, "76001000")
+	}
+	if mark.CollectOnDeliveryAmount != 162000 {
+		t.Fatalf("mark.CollectOnDeliveryAmount = %v, want %v", mark.CollectOnDeliveryAmount, 162000)
+	}
+	if mark.DeclaredValue != 162000 {
+		t.Fatalf("mark.DeclaredValue = %v, want %v", mark.DeclaredValue, 162000)
+	}
+	if mark.TrackingNumber != "MANUAL-001" {
+		t.Fatalf("mark.TrackingNumber = %q, want %q", mark.TrackingNumber, "MANUAL-001")
+	}
+	if mark.CustomTrackingURL == nil || *mark.CustomTrackingURL != customTrackingURL {
+		t.Fatalf("mark.CustomTrackingURL = %v, want %q", mark.CustomTrackingURL, customTrackingURL)
+	}
+}
+
+// TestDraftMarkManualDefaultsAllowSparsePayload verifies manual draft marks can be created without quotation-derived units or shipment mode.
+func TestDraftMarkManualDefaultsAllowSparsePayload(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	mark, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:        batch.ID,
+		OrderID:        "order-manual-1",
+		TrackingNumber: "MANUAL-TRACK-001",
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+	if len(mark.Units) != 1 {
+		t.Fatalf("len(mark.Units) = %d, want 1", len(mark.Units))
+	}
+	if mark.Units[0].PackageType != "CAJA" {
+		t.Fatalf("mark.Units[0].PackageType = %q, want %q", mark.Units[0].PackageType, "CAJA")
+	}
+	if mark.ShipmentMode != domain.ShipmentModeExpress {
+		t.Fatalf("mark.ShipmentMode = %q, want %q", mark.ShipmentMode, domain.ShipmentModeExpress)
+	}
+	if mark.TrackingNumber != "MANUAL-TRACK-001" {
+		t.Fatalf("mark.TrackingNumber = %q, want %q", mark.TrackingNumber, "MANUAL-TRACK-001")
+	}
+}
+
 // TestCreateBatchMarkDirectAllowsClosedBatch verifies direct creation materializes marks even when the batch is closed.
 func TestCreateBatchMarkDirectAllowsClosedBatch(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()
@@ -425,6 +531,48 @@ func TestCreateBatchMarkDirectAllowsClosedBatch(t *testing.T) {
 	}
 	if mark.DispatchBatchID == nil || *mark.DispatchBatchID != batch.ID {
 		t.Fatalf("dispatch batch id = %v", mark.DispatchBatchID)
+	}
+}
+
+// TestCreateBatchMarkDirectManualDefaultsAllowSparsePayload verifies direct manual marks can materialize with sparse operator input.
+func TestCreateBatchMarkDirectManualDefaultsAllowSparsePayload(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	materializer := &materializerStub{repository: markRepository}
+	service := NewService(batchRepository, markRepository, nil, materializer)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	customTrackingURL := "https://rastreo.flockstore.co/manual-track-2"
+	mark, err := service.CreateBatchMark(context.Background(), CreateBatchMarkCommand{
+		BatchID:           batch.ID,
+		Direct:            true,
+		OrderID:           "order-manual-2",
+		TrackingNumber:    "MANUAL-TRACK-002",
+		Observations:      "Servientrega",
+		CustomTrackingURL: &customTrackingURL,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMark() error = %v", err)
+	}
+	if materializer.calls != 1 {
+		t.Fatalf("materializer calls = %d, want 1", materializer.calls)
+	}
+	if mark.Status != domain.MarkStatusCreated {
+		t.Fatalf("mark.Status = %q, want %q", mark.Status, domain.MarkStatusCreated)
+	}
+	if len(mark.Units) != 1 {
+		t.Fatalf("len(mark.Units) = %d, want 1", len(mark.Units))
+	}
+	if mark.ShipmentMode != domain.ShipmentModeExpress {
+		t.Fatalf("mark.ShipmentMode = %q, want %q", mark.ShipmentMode, domain.ShipmentModeExpress)
+	}
+	if mark.CustomTrackingURL == nil || *mark.CustomTrackingURL != customTrackingURL {
+		t.Fatalf("mark.CustomTrackingURL = %v, want %q", mark.CustomTrackingURL, customTrackingURL)
 	}
 }
 
