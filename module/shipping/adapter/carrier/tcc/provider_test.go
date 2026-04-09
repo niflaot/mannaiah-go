@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"mannaiah/module/shipping/domain"
 )
@@ -170,6 +171,104 @@ func TestProviderLifecycle(t *testing.T) {
 	}
 	if history.GlobalStatus != domain.TrackingStatusCompleted {
 		t.Fatalf("history status = %q", history.GlobalStatus)
+	}
+}
+
+// TestProviderTrackingGlobalStatusPriority prefers business priority over later low-priority events.
+func TestProviderTrackingGlobalStatusPriority(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/consultarestatusremesasv3":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesas": []any{
+					map[string]any{
+						"numeroremesa": "1001",
+						"estados": []any{
+							map[string]any{"codigo": "3000", "descripcion": "Entregado", "fecha": "2026-03-27T01:09:43Z"},
+							map[string]any{"codigo": "2000", "descripcion": "Envio en proceso de entrega", "fecha": "2026-03-27T04:13:43Z"},
+						},
+						"ciudadorigen":  map[string]any{"descripcion": "MEDELLIN"},
+						"ciudaddestino": map[string]any{"descripcion": "BOGOTA"},
+					},
+				},
+				"respuesta": map[string]any{"codigo": "0", "mensaje": "OK"},
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	history, err := provider.GetTrackingHistory(context.Background(), "1001")
+	if err != nil {
+		t.Fatalf("GetTrackingHistory() error = %v", err)
+	}
+	if history.GlobalStatus != domain.TrackingStatusCompleted {
+		t.Fatalf("history.GlobalStatus = %q, want %q", history.GlobalStatus, domain.TrackingStatusCompleted)
+	}
+	if history.LastUpdate.Format(time.RFC3339) != "2026-03-27T04:13:43Z" {
+		t.Fatalf("history.LastUpdate = %s", history.LastUpdate.Format(time.RFC3339))
+	}
+}
+
+// TestProviderTrackingGlobalStatusPriorityReturn verifies return statuses win over delivered ones.
+func TestProviderTrackingGlobalStatusPriorityReturn(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/clientes/remesas/consultarestatusremesasv3":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"remesas": []any{
+					map[string]any{
+						"numeroremesa": "1002",
+						"estados": []any{
+							map[string]any{"codigo": "3000", "descripcion": "Entregado", "fecha": "2026-03-27T01:09:43Z"},
+							map[string]any{"codigo": "4000", "descripcion": "En devolucion", "fecha": "2026-03-26T20:00:00Z"},
+							map[string]any{"codigo": "4200", "descripcion": "Reemplazada", "fecha": "2026-03-27T07:00:00Z"},
+						},
+						"ciudadorigen":  map[string]any{"descripcion": "MEDELLIN"},
+						"ciudaddestino": map[string]any{"descripcion": "BOGOTA"},
+					},
+				},
+				"respuesta": map[string]any{"codigo": "0", "mensaje": "OK"},
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(ProviderConfig{
+		Enabled:             true,
+		IsSandbox:           true,
+		BaseURLOverride:     server.URL,
+		AccessToken:         "token",
+		ParcelAccountNumber: "7000880",
+		PaymentForm:         1,
+		Sender:              domain.Address{Name: "Sender", ID: "900", IDType: "NIT", AddressLine: "street", CityCode: "11001"},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	history, err := provider.GetTrackingHistory(context.Background(), "1002")
+	if err != nil {
+		t.Fatalf("GetTrackingHistory() error = %v", err)
+	}
+	if history.GlobalStatus != domain.TrackingStatusReturn {
+		t.Fatalf("history.GlobalStatus = %q, want %q", history.GlobalStatus, domain.TrackingStatusReturn)
 	}
 }
 

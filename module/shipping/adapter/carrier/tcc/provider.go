@@ -371,7 +371,6 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 	}
 	remittance := response.Remittances[0]
 	history := make([]domain.TrackingEvent, 0, len(remittance.States))
-	latestStatus := domain.TrackingStatusProcessing
 	latestDate := time.Time{}
 	for _, state := range remittance.States {
 		status := MapTrackingStatus(state.Code, state.Description)
@@ -389,7 +388,6 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 		})
 		if eventDate.After(latestDate) {
 			latestDate = eventDate
-			latestStatus = status
 		}
 	}
 	if latestDate.IsZero() {
@@ -399,7 +397,7 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 	return &domain.TrackingHistory{
 		CarrierID:      p.CarrierID(),
 		TrackingNumber: trimmedTracking,
-		GlobalStatus:   latestStatus,
+		GlobalStatus:   resolveGlobalTrackingStatus(history),
 		LastUpdate:     latestDate,
 		History:        history,
 	}, nil
