@@ -120,8 +120,8 @@
 - During `direct=true` materialization and during `PATCH /shipping/batches/:id/close`, carrier guardrails run immediately before outbound carrier dispatch.
 - Guardrail violations return HTTP `500` (`message=shipping_guardrail_violation`) and include `mark_id`, `order_id`, `rule`, and `request_preview` in the `error` field.
 - `POST /shipping/batches/:id/marks` accepts sparse manual draft payloads, so operators can add a mark first and complete its manual data later.
-- `PATCH /shipping/batches/:id/marks/:markID` completes one existing manual `QUOTED` draft with `observations` (manual carrier label), `trackingNumber`, `customTrackingUrl`, and `quotedFreightCost`.
-- `PATCH /shipping/batches/:id/close` now rejects manual batches when any `QUOTED` draft is missing carrier label, tracking URL, tracking number, or manual price.
+- `PATCH /shipping/batches/:id/marks/:markID` completes one existing manual `QUOTED` draft with `observations` (manual carrier label), `trackingNumber`, optional `customTrackingUrl`, and `quotedFreightCost`.
+- `PATCH /shipping/batches/:id/close` now rejects manual batches when any `QUOTED` draft is missing carrier label, tracking number, or manual price.
 - Manual carrier labels are normalized to lowercase slugs without spaces before they are persisted or used in tracking URLs.
 
 ## COD Collection

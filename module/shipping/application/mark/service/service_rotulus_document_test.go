@@ -58,6 +58,9 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	if !strings.Contains(string(firstPayload), "PEDIDO #1024751") {
 		t.Fatalf("RotulusDocument(first) missing dynamic order title")
 	}
+	if strings.Contains(string(firstPayload), "11515151") {
+		t.Fatalf("RotulusDocument(first) should not include tracking number text")
+	}
 	if !strings.Contains(string(firstPayload), "Calle 18 Sur # 24d - 46") {
 		t.Fatalf("RotulusDocument(first) missing shipping address")
 	}

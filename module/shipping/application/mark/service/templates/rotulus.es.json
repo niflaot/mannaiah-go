@@ -1,7 +1,6 @@
 {
   "orderTitlePrefix": "Pedido #",
   "orderLabel": "Pedido",
-  "trackingLabel": "Guía",
   "carrierLabel": "Transportadora",
   "recipientLabel": "Destinatario",
   "addressLabel": "Dirección",

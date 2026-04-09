@@ -624,6 +624,48 @@ func TestCloseRejectsIncompleteManualDraft(t *testing.T) {
 	}
 }
 
+// TestCloseAllowsManualDraftWithoutCustomTrackingURL verifies manual drafts can rely on the default tracking URL when no custom link is provided.
+func TestCloseAllowsManualDraftWithoutCustomTrackingURL(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	materializer := &materializerStub{repository: markRepository}
+	service := NewService(batchRepository, markRepository, nil, materializer)
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	draft, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID: batch.ID,
+		OrderID: "order-manual-1",
+	})
+	if err != nil {
+		t.Fatalf("DraftMark() error = %v", err)
+	}
+	updated, err := service.UpdateDraftMark(context.Background(), UpdateDraftMarkCommand{
+		BatchID:           batch.ID,
+		MarkID:            draft.ID,
+		QuotedFreightCost: 18900,
+		Observations:      "Inter Rapidisimo",
+		TrackingNumber:    "11515151",
+	})
+	if err != nil {
+		t.Fatalf("UpdateDraftMark() error = %v", err)
+	}
+	if updated.CustomTrackingURL != nil {
+		t.Fatalf("updated.CustomTrackingURL = %v, want nil", updated.CustomTrackingURL)
+	}
+
+	closed, err := service.Close(context.Background(), batch.ID)
+	if err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if closed.Status != domain.BatchStatusClosed {
+		t.Fatalf("closed.Status = %q, want %q", closed.Status, domain.BatchStatusClosed)
+	}
+}
+
 // TestCreateBatchMarkDirectAllowsClosedBatch verifies direct creation materializes marks even when the batch is closed.
 func TestCreateBatchMarkDirectAllowsClosedBatch(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()

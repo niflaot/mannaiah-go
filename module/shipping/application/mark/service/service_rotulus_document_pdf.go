@@ -91,7 +91,6 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 		label string
 		value string
 	}{
-		{label: template.TrackingLabel, value: sanitizeRotulusValue(meta.TrackingNumber, template.EmptyValueFallback)},
 		{label: template.CarrierLabel, value: sanitizeRotulusValue(meta.CarrierLabel, template.EmptyValueFallback)},
 		{label: template.RecipientLabel, value: sanitizeRotulusValue(meta.RecipientName, template.EmptyValueFallback)},
 		{label: template.AddressLabel, value: sanitizeRotulusValue(meta.RecipientAddressLine, template.EmptyValueFallback)},

@@ -721,7 +721,7 @@ func updateDraftMarkRequestSchema() *openapi3.Schema {
 		WithProperty("observations", openapi3.NewStringSchema()).
 		WithProperty("trackingNumber", openapi3.NewStringSchema()).
 		WithProperty("customTrackingUrl", openapi3.NewStringSchema())
-	schema.Required = []string{"quotedFreightCost", "observations", "trackingNumber", "customTrackingUrl"}
+	schema.Required = []string{"quotedFreightCost", "observations", "trackingNumber"}
 
 	return schema
 }

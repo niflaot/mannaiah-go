@@ -78,9 +78,6 @@ func (s *Service) ValidateManualDraftsBeforeClose(marks []domain.ShippingMark) e
 		if strings.TrimSpace(mark.TrackingNumber) == "" {
 			return domain.ErrManualDraftIncomplete
 		}
-		if mark.CustomTrackingURL == nil || strings.TrimSpace(*mark.CustomTrackingURL) == "" {
-			return domain.ErrManualDraftIncomplete
-		}
 		if mark.QuotedFreightCost <= 0 {
 			return domain.ErrManualDraftIncomplete
 		}
