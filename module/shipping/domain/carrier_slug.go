@@ -29,7 +29,9 @@ func NormalizeCarrierSlug(value string) string {
 
 // IsManualCarrierID reports whether the provided carrier identifier belongs to the manual carrier.
 func IsManualCarrierID(carrierID string) bool {
-	return strings.EqualFold(strings.TrimSpace(carrierID), "manual")
+	normalized := strings.ToLower(strings.TrimSpace(carrierID))
+
+	return normalized == "manual" || strings.HasPrefix(normalized, "manual_")
 }
 
 // ResolveTrackingCarrierSlug resolves the tracking carrier slug used in public tracking URLs.

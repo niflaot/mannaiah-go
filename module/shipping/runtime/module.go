@@ -74,7 +74,7 @@ func New(cfg Config, db *gorm.DB, publishers ...port.IntegrationEventPublisher) 
 
 	providers := make([]port.CarrierProvider, 0)
 	trackingProviders := make([]port.TrackingProvider, 0)
-	manualProvider := manual.NewProvider()
+	manualProvider := manual.NewProvider(markRepository)
 	providers = append(providers, manualProvider)
 	trackingProviders = append(trackingProviders, manualProvider)
 

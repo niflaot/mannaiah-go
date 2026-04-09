@@ -16,6 +16,8 @@ const (
 	TrackingStatusReturn TrackingStatus = "RETURN"
 	// TrackingStatusIncidence defines incident statuses.
 	TrackingStatusIncidence TrackingStatus = "INCIDENCE"
+	// TrackingStatusVoided defines voided or canceled statuses.
+	TrackingStatusVoided TrackingStatus = "VOIDED"
 )
 
 // TrackingEvent defines one tracking checkpoint.

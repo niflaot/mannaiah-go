@@ -2,20 +2,24 @@ package manual
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	"mannaiah/module/shipping/domain"
+	"mannaiah/module/shipping/port"
 )
 
 // Provider defines manual carrier-provider behavior.
 type Provider struct {
 	// carrier defines static manual-carrier metadata.
 	carrier domain.Carrier
+	// repository defines shipping mark lookup dependencies for tracking responses.
+	repository port.ShippingMarkRepository
 }
 
 // NewProvider creates manual carrier providers.
-func NewProvider() *Provider {
+func NewProvider(repository port.ShippingMarkRepository) *Provider {
 	return &Provider{carrier: domain.Carrier{
 		ID:                   "manual",
 		Name:                 "Manual",
@@ -26,7 +30,7 @@ func NewProvider() *Provider {
 		HasManifestDocument:  false,
 		HasTracking:          false,
 		NeedsURL:             true,
-	}}
+	}, repository: repository}
 }
 
 // CarrierID returns the manual carrier identifier.
@@ -82,7 +86,7 @@ func (p *Provider) SupportsQuotation() bool {
 
 // SupportsCourier reports whether manual providers support one carrier identifier.
 func (p *Provider) SupportsCourier(carrierID string) bool {
-	return strings.EqualFold(strings.TrimSpace(carrierID), p.carrier.ID)
+	return domain.IsManualCarrierID(carrierID)
 }
 
 // GetTrackingHistory returns placeholder tracking history for manual carriers.
@@ -92,9 +96,13 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 		return nil, domain.ErrInvalidID
 	}
 	now := time.Now().UTC()
+	resolvedCarrierID, err := p.resolveTrackingCarrierID(ctx, trimmedTracking)
+	if err != nil {
+		return nil, err
+	}
 
 	return &domain.TrackingHistory{
-		CarrierID:      p.carrier.ID,
+		CarrierID:      resolvedCarrierID,
 		TrackingNumber: trimmedTracking,
 		GlobalStatus:   domain.TrackingStatusProcessing,
 		LastUpdate:     now,
@@ -102,4 +110,28 @@ func (p *Provider) GetTrackingHistory(ctx context.Context, trackingNumber string
 			{Date: now, Code: "MANUAL", Text: "Manual tracking only", Status: domain.TrackingStatusProcessing},
 		},
 	}, nil
+}
+
+// resolveTrackingCarrierID resolves the manual tracking carrier identifier for response payloads.
+func (p *Provider) resolveTrackingCarrierID(ctx context.Context, trackingNumber string) (string, error) {
+	if p == nil || p.repository == nil {
+		return p.carrier.ID, nil
+	}
+	mark, err := p.repository.GetByTrackingNumber(ctx, trackingNumber)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return p.carrier.ID, nil
+		}
+
+		return "", fmt.Errorf("load manual tracking mark: %w", err)
+	}
+	if mark == nil {
+		return p.carrier.ID, nil
+	}
+	slug := domain.NormalizeCarrierSlug(mark.Observations)
+	if slug == "" {
+		return p.carrier.ID, nil
+	}
+
+	return "manual_" + slug, nil
 }

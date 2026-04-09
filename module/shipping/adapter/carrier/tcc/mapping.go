@@ -279,6 +279,14 @@ func MapTrackingStatus(code string, description string) domain.TrackingStatus {
 		return domain.TrackingStatusOrigin
 	case "3000":
 		return domain.TrackingStatusCompleted
+	case "4000":
+		return domain.TrackingStatusReturn
+	case "4100":
+		return domain.TrackingStatusProcessing
+	case "4200":
+		return domain.TrackingStatusIncidence
+	case "4300":
+		return domain.TrackingStatusVoided
 	}
 	lowerDescription := strings.ToLower(strings.TrimSpace(description))
 	if strings.Contains(lowerDescription, "devol") {

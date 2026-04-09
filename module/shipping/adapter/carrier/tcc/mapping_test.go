@@ -51,4 +51,22 @@ func TestMapTrackingStatus(t *testing.T) {
 	if status := MapTrackingStatus("500", "Origen"); status != domain.TrackingStatusOrigin {
 		t.Fatalf("status = %q", status)
 	}
+	if status := MapTrackingStatus("4000", "En devolucion"); status != domain.TrackingStatusReturn {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingStatus("4100", "En continuacion"); status != domain.TrackingStatusProcessing {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingStatus("4200", "Reemplazada"); status != domain.TrackingStatusIncidence {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingStatus("4300", "Anulada"); status != domain.TrackingStatusVoided {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingStatus("9999", "Novedad reportada"); status != domain.TrackingStatusIncidence {
+		t.Fatalf("status = %q", status)
+	}
+	if status := MapTrackingStatus("9999", "Devolucion a origen"); status != domain.TrackingStatusReturn {
+		t.Fatalf("status = %q", status)
+	}
 }

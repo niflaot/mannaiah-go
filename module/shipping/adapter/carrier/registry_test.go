@@ -9,7 +9,7 @@ import (
 
 // TestNewRegistry verifies provider lookup behavior.
 func TestNewRegistry(t *testing.T) {
-	provider := manual.NewProvider()
+	provider := manual.NewProvider(nil)
 	registry := NewRegistry([]port.CarrierProvider{provider}, []port.TrackingProvider{provider})
 	if _, ok := registry.CarrierProvider("manual"); !ok {
 		t.Fatalf("manual carrier provider not found")

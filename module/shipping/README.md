@@ -124,6 +124,11 @@
 - `PATCH /shipping/batches/:id/close` now rejects manual batches when any `QUOTED` draft is missing carrier label, tracking number, or manual price.
 - Manual carrier labels are normalized to lowercase slugs without spaces before they are persisted or used in tracking URLs.
 
+## Tracking Normalization
+- `GET /shipping/tracking/:trackingNumber?carrier={carrierID}` returns normalized statuses: `PROCESSING`, `ORIGIN`, `COMPLETED`, `RETURN`, `INCIDENCE`, `VOIDED`.
+- TCC explicit mappings include `4000 -> RETURN`, `4100 -> PROCESSING`, `4200 -> INCIDENCE`, `4300 -> VOIDED`, with the existing text-based fallback for unmapped descriptions.
+- Manual tracking responses keep the provider route as `manual`, but the response `carrierId` is enriched as `manual_{carrierSlug}` when the stored manual carrier label is available.
+
 ## COD Collection
 - Mark create requests accept `collectOnDeliveryAmount`.
 - Mark responses expose:
