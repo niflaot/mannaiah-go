@@ -9,6 +9,15 @@ import (
 	"mannaiah/module/shipping/domain"
 )
 
+var colombiaLocation = func() *time.Location {
+	location, err := time.LoadLocation("America/Bogota")
+	if err == nil {
+		return location
+	}
+
+	return time.FixedZone("America/Bogota", -5*60*60)
+}()
+
 // QuoteRequest defines TCC quotation request payload values.
 type QuoteRequest struct {
 	TipoEnvio      string             `json:"tipoenvio"`
@@ -365,7 +374,7 @@ func ParseTrackingDate(value string) time.Time {
 		time.RFC3339,
 	}
 	for _, layout := range layouts {
-		if parsed, err := time.ParseInLocation(layout, normalized, time.Local); err == nil {
+		if parsed, err := time.ParseInLocation(layout, normalized, colombiaLocation); err == nil {
 			return parsed.UTC()
 		}
 	}
