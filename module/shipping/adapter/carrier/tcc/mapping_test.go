@@ -1,6 +1,7 @@
 package tcc
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -96,5 +97,63 @@ func TestParseTrackingDate(t *testing.T) {
 	}
 	if parsed.Hour() != 0 || parsed.Day() != 9 {
 		t.Fatalf("parsed = %s", parsed.Format(time.RFC3339))
+	}
+}
+
+// TestTrackingResponseUnmarshalWithNovelties verifies real TCC novelty payloads decode correctly.
+func TestTrackingResponseUnmarshalWithNovelties(t *testing.T) {
+	raw := []byte(`{
+		"remesas": [
+			{
+				"numeroremesa": "615193194",
+				"novedad": {
+					"codigonovedad": "121811087",
+					"observaciones": "El destinatario no se encuentra, pasar nuevamente mañana",
+					"complementonovedad": "NO SE ENCUENTRA EL DESTINATARIO O NO HAY NADIE EN LA DIRECCIÓN",
+					"estadonovedad": "EJECUTADA",
+					"fechanovedad": "8/04/2026 7:23:39 p. m.",
+					"idtiponovedad": "252",
+					"novedad": "MERCANCÍA NO ENTREGADA A DESTINATARIO"
+				},
+				"estados": [
+					{
+						"codigo": "2000",
+						"descripcion": "Envío en proceso de entrega",
+						"fecha": "8/04/2026 10:08:41 a. m."
+					}
+				],
+				"novedades": [
+					{
+						"codigo": "252",
+						"fecha": "8/04/2026 7:23:39 p. m.",
+						"descripcion": "MERCANCÍA NO ENTREGADA A DESTINATARIO - NO SE ENCUENTRA EL DESTINATARIO O NO HAY NADIE EN LA DIRECCIÓN",
+						"estado": "Ejecutada",
+						"observacion": "El destinatario no se encuentra, pasar nuevamente mañana",
+						"esrechazo": "False",
+						"fecharechazo": null
+					}
+				],
+				"ciudadorigen": { "descripcion": "MEDELLIN" },
+				"ciudaddestino": { "descripcion": "BOGOTA" }
+			}
+		],
+		"respuesta": { "codigo": "0", "mensaje": "OK" }
+	}`)
+
+	var response TrackingResponse
+	if err := json.Unmarshal(raw, &response); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(response.Remittances) != 1 {
+		t.Fatalf("len(response.Remittances) = %d", len(response.Remittances))
+	}
+	if len(response.Remittances[0].Novelties) != 1 {
+		t.Fatalf("len(response.Remittances[0].Novelties) = %d", len(response.Remittances[0].Novelties))
+	}
+	if response.Remittances[0].Novelties[0].Code != "252" {
+		t.Fatalf("response.Remittances[0].Novelties[0].Code = %q", response.Remittances[0].Novelties[0].Code)
+	}
+	if response.Remittances[0].Novelty.Code != "252" {
+		t.Fatalf("response.Remittances[0].Novelty.Code = %q", response.Remittances[0].Novelty.Code)
 	}
 }

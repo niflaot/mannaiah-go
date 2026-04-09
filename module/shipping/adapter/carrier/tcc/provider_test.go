@@ -342,7 +342,7 @@ func TestProviderTrackingIncludesNovelties(t *testing.T) {
 	if history.LastUpdate.Format(time.RFC3339) != "2026-04-09T00:23:39Z" {
 		t.Fatalf("history.LastUpdate = %s", history.LastUpdate.Format(time.RFC3339))
 	}
-	if history.GlobalStatus != domain.TrackingStatusProcessing {
+	if history.GlobalStatus != domain.TrackingStatusIncidence {
 		t.Fatalf("history.GlobalStatus = %q", history.GlobalStatus)
 	}
 }

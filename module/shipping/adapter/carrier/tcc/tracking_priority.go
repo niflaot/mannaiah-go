@@ -33,12 +33,12 @@ func trackingStatusPriority(status domain.TrackingStatus) int {
 		return 550
 	case domain.TrackingStatusCompleted:
 		return 500
+	case domain.TrackingStatusIncidence:
+		return 450
 	case domain.TrackingStatusProcessing:
 		return 400
 	case domain.TrackingStatusOrigin:
 		return 300
-	case domain.TrackingStatusIncidence:
-		return 200
 	default:
 		return 100
 	}
