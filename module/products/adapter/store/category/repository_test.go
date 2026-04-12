@@ -299,16 +299,22 @@ func TestCategoryRepository_ListProducts_Pinned(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	product := &productdomain.Product{SKU: "PINNED-1"}
-	if err := prodRepo.Create(ctx, product); err != nil {
-		t.Fatalf("product.Create() error = %v", err)
+	firstProduct := &productdomain.Product{SKU: "PINNED-1"}
+	firstProduct.Normalize()
+	if err := prodRepo.Create(ctx, firstProduct); err != nil {
+		t.Fatalf("product.Create(firstProduct) error = %v", err)
+	}
+	secondProduct := &productdomain.Product{SKU: "PINNED-2"}
+	secondProduct.Normalize()
+	if err := prodRepo.Create(ctx, secondProduct); err != nil {
+		t.Fatalf("product.Create(secondProduct) error = %v", err)
 	}
 
 	cat := &categorydomain.Category{
 		ID:         "pinned-cat",
 		Slug:       "pinned",
 		Name:       "Pinned",
-		ProductIDs: []string{product.ID},
+		ProductIDs: []string{secondProduct.ID, firstProduct.ID},
 	}
 	if err := catRepo.Create(ctx, cat); err != nil {
 		t.Fatalf("Create(category) error = %v", err)
@@ -318,11 +324,14 @@ func TestCategoryRepository_ListProducts_Pinned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListProducts() error = %v", err)
 	}
-	if result.Total != 1 {
-		t.Fatalf("Total = %d, want 1", result.Total)
+	if result.Total != 2 {
+		t.Fatalf("Total = %d, want 2", result.Total)
 	}
-	if len(result.Items) != 1 {
-		t.Fatalf("Items len = %d, want 1", len(result.Items))
+	if len(result.Items) != 2 {
+		t.Fatalf("Items len = %d, want 2", len(result.Items))
+	}
+	if result.Items[0].ID != secondProduct.ID || result.Items[1].ID != firstProduct.ID {
+		t.Fatalf("Items order = [%s %s], want [%s %s]", result.Items[0].ID, result.Items[1].ID, secondProduct.ID, firstProduct.ID)
 	}
 }
 
@@ -387,6 +396,91 @@ func TestCategoryRepository_ListProducts_IncludeChildrenPinned(t *testing.T) {
 	}
 	if len(result.Items) != 1 || result.Items[0].ID != product.ID {
 		t.Fatalf("Items = %#v, want child pinned product %q", result.Items, product.ID)
+	}
+}
+
+// TestCategoryRepository_ListProducts_IncludeChildrenPinnedPreservesCategoryOrder verifies child category product order is preserved.
+func TestCategoryRepository_ListProducts_IncludeChildrenPinnedPreservesCategoryOrder(t *testing.T) {
+	db, err := coredb.Open(coredb.Config{Driver: "sqlite", DSN: "file::memory:?cache=shared"}, nil)
+	if err != nil {
+		t.Fatalf("coredb.Open() error = %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB() error = %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	if err := coredbmigration.Apply(context.Background(), db, coredbmigration.Config{Enabled: true, Driver: "sqlite", Table: "schema_migrations"}, nil); err != nil {
+		t.Fatalf("coredbmigration.Apply() error = %v", err)
+	}
+
+	catRepo, err := categorystore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("categorystore.NewRepository() error = %v", err)
+	}
+	prodRepo, err := productstore.NewRepository(db)
+	if err != nil {
+		t.Fatalf("productstore.NewRepository() error = %v", err)
+	}
+
+	ctx := context.Background()
+	urbanFirst := &productdomain.Product{SKU: "URBAN-1"}
+	urbanFirst.Normalize()
+	if err := prodRepo.Create(ctx, urbanFirst); err != nil {
+		t.Fatalf("product.Create(urbanFirst) error = %v", err)
+	}
+	urbanSecond := &productdomain.Product{SKU: "URBAN-2"}
+	urbanSecond.Normalize()
+	if err := prodRepo.Create(ctx, urbanSecond); err != nil {
+		t.Fatalf("product.Create(urbanSecond) error = %v", err)
+	}
+	totepack := &productdomain.Product{SKU: "TOTE-1"}
+	totepack.Normalize()
+	if err := prodRepo.Create(ctx, totepack); err != nil {
+		t.Fatalf("product.Create(totepack) error = %v", err)
+	}
+
+	parent := &categorydomain.Category{
+		ID:              "parent-order-cat",
+		Slug:            "parent-order-cat",
+		Name:            "Parent Order Cat",
+		IncludeChildren: true,
+	}
+	if err := catRepo.Create(ctx, parent); err != nil {
+		t.Fatalf("Create(parent) error = %v", err)
+	}
+	parentID := parent.ID
+	urban := &categorydomain.Category{
+		ID:         "urban-order-cat",
+		Slug:       "urban-order-cat",
+		Name:       "Urban Order Cat",
+		ParentID:   &parentID,
+		ProductIDs: []string{urbanFirst.ID, urbanSecond.ID},
+	}
+	if err := catRepo.Create(ctx, urban); err != nil {
+		t.Fatalf("Create(urban) error = %v", err)
+	}
+	tote := &categorydomain.Category{
+		ID:         "tote-order-cat",
+		Slug:       "tote-order-cat",
+		Name:       "Tote Order Cat",
+		ParentID:   &parentID,
+		ProductIDs: []string{totepack.ID},
+	}
+	if err := catRepo.Create(ctx, tote); err != nil {
+		t.Fatalf("Create(tote) error = %v", err)
+	}
+
+	result, err := catRepo.ListProducts(ctx, categoryport.ListProductsQuery{CategoryID: parent.ID, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListProducts() error = %v", err)
+	}
+	if len(result.Items) != 3 {
+		t.Fatalf("Items len = %d, want 3", len(result.Items))
+	}
+	if result.Items[0].ID != urbanFirst.ID || result.Items[1].ID != urbanSecond.ID || result.Items[2].ID != totepack.ID {
+		t.Fatalf("Items order = [%s %s %s], want [%s %s %s]", result.Items[0].ID, result.Items[1].ID, result.Items[2].ID, urbanFirst.ID, urbanSecond.ID, totepack.ID)
 	}
 }
 

@@ -130,6 +130,35 @@ func TestRepositoryDuplicateSKU(t *testing.T) {
 	}
 }
 
+// TestRepositoryGetByIDsPreservesInputOrder verifies GetByIDs returns products in requested order.
+func TestRepositoryGetByIDsPreservesInputOrder(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	ctx := context.Background()
+
+	first := &productdomain.Product{SKU: "SKU-ORDER-1"}
+	first.Normalize()
+	if err := repository.Create(ctx, first); err != nil {
+		t.Fatalf("Create(first) error = %v", err)
+	}
+
+	second := &productdomain.Product{SKU: "SKU-ORDER-2"}
+	second.Normalize()
+	if err := repository.Create(ctx, second); err != nil {
+		t.Fatalf("Create(second) error = %v", err)
+	}
+
+	items, err := repository.GetByIDs(ctx, []string{second.ID, first.ID})
+	if err != nil {
+		t.Fatalf("GetByIDs() error = %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("len(items) = %d, want 2", len(items))
+	}
+	if items[0].ID != second.ID || items[1].ID != first.ID {
+		t.Fatalf("GetByIDs() order = [%s %s], want [%s %s]", items[0].ID, items[1].ID, second.ID, first.ID)
+	}
+}
+
 // TestRepositoryNotFound verifies not-found behavior.
 func TestRepositoryNotFound(t *testing.T) {
 	repository := newRepositoryForTest(t)

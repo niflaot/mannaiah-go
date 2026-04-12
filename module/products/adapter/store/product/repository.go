@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -368,6 +369,29 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*productdoma
 	if err := r.db.WithContext(ctx).Where("id IN ? AND deleted_at IS NULL", ids).Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("get products by ids: %w", err)
 	}
+
+	requestedOrder := make(map[string]int, len(ids))
+	for index, id := range ids {
+		trimmedID := strings.TrimSpace(id)
+		if trimmedID == "" {
+			continue
+		}
+		if _, exists := requestedOrder[trimmedID]; exists {
+			continue
+		}
+		requestedOrder[trimmedID] = index
+	}
+
+	sort.SliceStable(records, func(left, right int) bool {
+		leftOrder, leftOK := requestedOrder[records[left].ID]
+		rightOrder, rightOK := requestedOrder[records[right].ID]
+
+		if !leftOK || !rightOK {
+			return records[left].ID < records[right].ID
+		}
+
+		return leftOrder < rightOrder
+	})
 
 	result := make([]*productdomain.Product, 0, len(records))
 	for _, record := range records {

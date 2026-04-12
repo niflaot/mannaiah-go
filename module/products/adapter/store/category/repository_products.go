@@ -3,6 +3,7 @@ package category
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	productstore "mannaiah/module/products/adapter/store/product"
 	categorydomain "mannaiah/module/products/domain/category"
@@ -52,14 +53,15 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 		}, nil
 	}
 
-	idSet := make(map[string]struct{})
+	orderedIDs := make([]string, 0)
+	seenIDs := make(map[string]struct{})
 	for _, category := range categories {
-		if err := r.collectCategoryScopedProductIDs(ctx, category, idSet); err != nil {
+		if err := r.collectCategoryScopedProductIDs(ctx, category, &orderedIDs, seenIDs); err != nil {
 			return nil, err
 		}
 	}
 
-	if len(idSet) == 0 {
+	if len(orderedIDs) == 0 {
 		page, pageSize := normalizePagination(q.Page, q.PageSize)
 
 		return &categoryport.ListProductsResult{
@@ -70,13 +72,8 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 		}, nil
 	}
 
-	allIDs := make([]string, 0, len(idSet))
-	for id := range idSet {
-		allIDs = append(allIDs, id)
-	}
-
 	page, pageSize := normalizePagination(q.Page, q.PageSize)
-	total := int64(len(allIDs))
+	total := int64(len(orderedIDs))
 	offset := (page - 1) * pageSize
 	if offset >= int(total) {
 		return &categoryport.ListProductsResult{
@@ -87,16 +84,16 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 		}, nil
 	}
 
-	pagedIDs := allIDs
+	pagedIDs := orderedIDs
 	end := offset + pageSize
-	if offset > 0 || end < len(allIDs) {
-		if offset >= len(allIDs) {
+	if offset > 0 || end < len(orderedIDs) {
+		if offset >= len(orderedIDs) {
 			pagedIDs = nil
 		} else {
-			if end > len(allIDs) {
-				end = len(allIDs)
+			if end > len(orderedIDs) {
+				end = len(orderedIDs)
 			}
-			pagedIDs = allIDs[offset:end]
+			pagedIDs = orderedIDs[offset:end]
 		}
 	}
 
@@ -119,14 +116,17 @@ func (r *Repository) ListProducts(ctx context.Context, q categoryport.ListProduc
 }
 
 // collectCategoryScopedProductIDs resolves one category's product IDs from pinned and filter criteria.
-func (r *Repository) collectCategoryScopedProductIDs(ctx context.Context, cat *categorydomain.Category, idSet map[string]struct{}) error {
+func (r *Repository) collectCategoryScopedProductIDs(
+	ctx context.Context,
+	cat *categorydomain.Category,
+	orderedIDs *[]string,
+	seenIDs map[string]struct{},
+) error {
 	if cat == nil {
 		return nil
 	}
 
-	for _, productID := range cat.ProductIDs {
-		idSet[productID] = struct{}{}
-	}
+	appendUniqueProductIDs(orderedIDs, seenIDs, cat.ProductIDs)
 
 	if len(cat.Filter.Tags) > 0 {
 		var tagProductIDs []string
@@ -141,7 +141,11 @@ func (r *Repository) collectCategoryScopedProductIDs(ctx context.Context, cat *c
 			return fmt.Errorf("filter products by tags for category %s: %w", cat.ID, err)
 		}
 
-		priceQuery := r.db.WithContext(ctx).Table("products").Select("id").Where("deleted_at IS NULL AND id IN ?", tagProductIDs)
+		priceQuery := r.db.WithContext(ctx).
+			Table("products").
+			Select("id").
+			Where("deleted_at IS NULL AND id IN ?", tagProductIDs).
+			Order("created_at asc, id asc")
 		if cat.Filter.PriceRange != nil {
 			if cat.Filter.PriceRange.Min != nil {
 				priceQuery = priceQuery.Where("price >= ?", *cat.Filter.PriceRange.Min)
@@ -155,11 +159,13 @@ func (r *Repository) collectCategoryScopedProductIDs(ctx context.Context, cat *c
 		if err := priceQuery.Pluck("id", &filteredIDs).Error; err != nil {
 			return fmt.Errorf("apply price filter on tag results for category %s: %w", cat.ID, err)
 		}
-		for _, id := range filteredIDs {
-			idSet[id] = struct{}{}
-		}
+		appendUniqueProductIDs(orderedIDs, seenIDs, filteredIDs)
 	} else if cat.Filter.PriceRange != nil {
-		priceQuery := r.db.WithContext(ctx).Table("products").Select("id").Where("deleted_at IS NULL")
+		priceQuery := r.db.WithContext(ctx).
+			Table("products").
+			Select("id").
+			Where("deleted_at IS NULL").
+			Order("created_at asc, id asc")
 		if cat.Filter.PriceRange.Min != nil {
 			priceQuery = priceQuery.Where("price >= ?", *cat.Filter.PriceRange.Min)
 		}
@@ -171,19 +177,15 @@ func (r *Repository) collectCategoryScopedProductIDs(ctx context.Context, cat *c
 		if err := priceQuery.Pluck("id", &priceIDs).Error; err != nil {
 			return fmt.Errorf("filter products by price for category %s: %w", cat.ID, err)
 		}
-		for _, id := range priceIDs {
-			idSet[id] = struct{}{}
-		}
+		appendUniqueProductIDs(orderedIDs, seenIDs, priceIDs)
 	}
 
 	for _, refCatID := range cat.Filter.CategoryRefs {
 		var refRows []categoryProductRecord
-		if err := r.db.WithContext(ctx).Where("category_id = ?", refCatID).Find(&refRows).Error; err != nil {
+		if err := r.db.WithContext(ctx).Where("category_id = ?", refCatID).Order("position asc, id asc").Find(&refRows).Error; err != nil {
 			return fmt.Errorf("load ref category products for category %s: %w", cat.ID, err)
 		}
-		for _, row := range refRows {
-			idSet[row.ProductID] = struct{}{}
-		}
+		appendCategoryProductRows(orderedIDs, seenIDs, refRows)
 	}
 
 	return nil
@@ -199,7 +201,7 @@ func (r *Repository) collectDescendants(ctx context.Context, parentID string) ([
 		queue = queue[1:]
 
 		var childIDs []string
-		if err := r.db.WithContext(ctx).Model(&categoryRecord{}).Select("id").Where("parent_id = ? AND deleted_at IS NULL", current).Pluck("id", &childIDs).Error; err != nil {
+		if err := r.db.WithContext(ctx).Model(&categoryRecord{}).Select("id").Where("parent_id = ? AND deleted_at IS NULL", current).Order("created_at asc, id asc").Pluck("id", &childIDs).Error; err != nil {
 			return nil, fmt.Errorf("collect descendant categories: %w", err)
 		}
 		result = append(result, childIDs...)
@@ -219,4 +221,27 @@ func normalizePagination(page, pageSize int) (int, int) {
 	}
 
 	return page, pageSize
+}
+
+func appendUniqueProductIDs(orderedIDs *[]string, seenIDs map[string]struct{}, ids []string) {
+	for _, id := range ids {
+		trimmedID := strings.TrimSpace(id)
+		if trimmedID == "" {
+			continue
+		}
+		if _, exists := seenIDs[trimmedID]; exists {
+			continue
+		}
+		seenIDs[trimmedID] = struct{}{}
+		*orderedIDs = append(*orderedIDs, trimmedID)
+	}
+}
+
+func appendCategoryProductRows(orderedIDs *[]string, seenIDs map[string]struct{}, rows []categoryProductRecord) {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ProductID)
+	}
+
+	appendUniqueProductIDs(orderedIDs, seenIDs, ids)
 }
