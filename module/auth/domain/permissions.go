@@ -31,6 +31,9 @@ const (
 	PermShippingManage     = "shipping:manage"     // full shipping management including void
 	PermShippingGenerate   = "shipping:generate"   // create batches and close them for guides
 	PermShippingQuotations = "shipping:quotations" // generate quotations
+
+	// Storefront
+	PermStorefrontManage = "storefront:manage" // manage storefront-facing navigation and rewritten URL schemas
 )
 
 // PermissionCovers defines intermediate permission hierarchy.

@@ -54,6 +54,15 @@ func TestNewAndRegisterRoutes(t *testing.T) {
 	if variationResp.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("variations status = %d, want %d", variationResp.StatusCode, stdhttp.StatusOK)
 	}
+
+	storefrontReq, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/storefront/navigation", nil)
+	storefrontResp, storefrontErr := server.App().Test(storefrontReq)
+	if storefrontErr != nil {
+		t.Fatalf("App().Test(storefront navigation) error = %v", storefrontErr)
+	}
+	if storefrontResp.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("storefront navigation status = %d, want %d", storefrontResp.StatusCode, stdhttp.StatusOK)
+	}
 }
 
 // TestRegisterRoutesNilModule verifies nil module route registration behavior.

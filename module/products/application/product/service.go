@@ -111,6 +111,8 @@ type ProductService struct {
 	assetLookup AssetLookup
 	// tagRegistrar defines optional tag registry dependencies.
 	tagRegistrar TagRegistrar
+	// storefrontNavigationRefresher defines optional storefront navigation refresh dependencies.
+	storefrontNavigationRefresher StorefrontNavigationRefresher
 }
 
 var (
@@ -171,6 +173,7 @@ func (s *ProductService) Create(ctx context.Context, command CreateCommand) (*pr
 	if err := s.repository.Create(ctx, entity); err != nil {
 		return nil, fmt.Errorf("create product: %w", err)
 	}
+	s.triggerStorefrontNavigationRefresh(ctx)
 
 	return entity, nil
 }
@@ -225,7 +228,6 @@ func (s *ProductService) ListByTags(ctx context.Context, tags []string, page, pa
 	return entities, total, nil
 }
 
-
 // Update updates products by ID.
 func (s *ProductService) Update(ctx context.Context, id string, command UpdateCommand) (*productdomain.Product, error) {
 	trimmedID := strings.TrimSpace(id)
@@ -276,6 +278,7 @@ func (s *ProductService) Update(ctx context.Context, id string, command UpdateCo
 	if err := s.repository.Update(ctx, entity); err != nil {
 		return nil, fmt.Errorf("update product: %w", err)
 	}
+	s.triggerStorefrontNavigationRefresh(ctx)
 
 	return entity, nil
 }
@@ -290,6 +293,7 @@ func (s *ProductService) Delete(ctx context.Context, id string) error {
 	if err := s.repository.Delete(ctx, trimmedID); err != nil {
 		return fmt.Errorf("delete product: %w", err)
 	}
+	s.triggerStorefrontNavigationRefresh(ctx)
 
 	return nil
 }

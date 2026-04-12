@@ -118,6 +118,8 @@ type Service interface {
 type CategoryService struct {
 	// repository defines persistence dependencies.
 	repository categoryport.Repository
+	// storefrontNavigationRefresher defines optional storefront navigation refresh dependencies.
+	storefrontNavigationRefresher StorefrontNavigationRefresher
 }
 
 var (
@@ -166,6 +168,7 @@ func (s *CategoryService) Create(ctx context.Context, command CreateCommand) (*c
 	if err := s.repository.Create(ctx, entity); err != nil {
 		return nil, mapPortError(err)
 	}
+	s.triggerStorefrontNavigationRefresh(ctx)
 
 	return entity, nil
 }
@@ -281,6 +284,7 @@ func (s *CategoryService) Update(ctx context.Context, id string, command UpdateC
 	if err := s.repository.Update(ctx, entity); err != nil {
 		return nil, mapPortError(err)
 	}
+	s.triggerStorefrontNavigationRefresh(ctx)
 
 	return entity, nil
 }
@@ -295,6 +299,7 @@ func (s *CategoryService) Delete(ctx context.Context, id string) error {
 	if err := s.repository.Delete(ctx, trimmedID); err != nil {
 		return mapPortError(err)
 	}
+	s.triggerStorefrontNavigationRefresh(ctx)
 
 	return nil
 }

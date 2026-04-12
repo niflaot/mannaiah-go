@@ -8,6 +8,7 @@ Product catalog module with multi-realm datasheets, gallery composition, and CRU
 - `GET /products/:id`
 - `PATCH /products/:id`
 - `DELETE /products/:id`
+- `GET /storefront/navigation`
 - `POST /variations`
 - `GET /variations`
 - `GET /variations/:id`

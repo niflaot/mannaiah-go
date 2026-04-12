@@ -11,6 +11,9 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Paths.Value("/products/{id}") == nil {
 		t.Fatalf("expected /products/{id} path spec")
 	}
+	if spec.Paths.Value("/storefront/navigation") == nil {
+		t.Fatalf("expected /storefront/navigation path spec")
+	}
 	if spec.Paths.Value("/variations") == nil {
 		t.Fatalf("expected /variations path spec")
 	}

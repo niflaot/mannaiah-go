@@ -113,6 +113,7 @@ func run(ctx context.Context, envFile string) error {
 	var shippingCfg shipping.Config
 	var telemetryCfg coretelemetry.Config
 	var redisCfg coreredis.Config
+	var productsCfg products.Config
 
 	if err := coreconfig.Load(
 		envFile,
@@ -136,6 +137,7 @@ func run(ctx context.Context, envFile string) error {
 		&shippingCfg,
 		&telemetryCfg,
 		&redisCfg,
+		&productsCfg,
 	); err != nil {
 		return fmt.Errorf("load startup configuration: %w", err)
 	}
@@ -515,14 +517,27 @@ func run(ctx context.Context, envFile string) error {
 		_ = assetsModule.Stop(stopCtx)
 	}()
 
-	productsModule, err := products.New(db, assetsModule.Service())
+	productsModule, err := products.NewWithConfig(db, assetsModule.Service(), productsCfg, sharedRedisCacheStore, logger)
 	if err != nil {
 		return fmt.Errorf("initialize products module: %w", err)
 	}
+	productsScheduler, err := corecron.NewScheduler(cronCfg, logger)
+	if err != nil {
+		return fmt.Errorf("create products scheduler: %w", err)
+	}
+	productsModule.ConfigureScheduler(productsScheduler)
 	productsModule.SetAuthorizer(authModule)
 	if err := productsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load products module: %w", err)
 	}
+	if err := productsModule.Start(ctx); err != nil {
+		return fmt.Errorf("start products module: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = productsModule.Stop(stopCtx)
+	}()
 
 	falabellaCatalog, err := falabellaproducts.NewCatalog(
 		productsModule.Service(),
