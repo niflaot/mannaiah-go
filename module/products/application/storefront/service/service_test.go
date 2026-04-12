@@ -152,7 +152,7 @@ func TestRegenerateBuildsAndCachesNavigation(t *testing.T) {
 					Realm: "default",
 					Name:  "Dream Nubuk Negro",
 					Attributes: map[string]any{
-						"url": "dream-nubuk-negro",
+						"storefronturl": "dream-nubuk-negro",
 					},
 				}},
 			}}, nil

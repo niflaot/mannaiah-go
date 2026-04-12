@@ -40,7 +40,7 @@ type ProductNode struct {
 	SKU string `json:"sku"`
 	// Name defines the default-realm product display name.
 	Name string `json:"name"`
-	// Slug defines the mapped storefront slug or configured url value.
+	// Slug defines the mapped storefront slug or configured storefronturl value.
 	Slug string `json:"slug"`
 	// Path defines the mapped storefront product path.
 	Path string `json:"path"`

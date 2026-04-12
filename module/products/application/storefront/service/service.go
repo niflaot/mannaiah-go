@@ -385,7 +385,7 @@ func defaultRealmDatasheet(datasheets []productdomain.Datasheet, realm string) (
 
 // resolveProductPath resolves the mapped product slug and storefront path.
 func resolveProductPath(attributes map[string]any, fallbackName string, basePath string) (string, string) {
-	rawURL := strings.TrimSpace(stringAttribute(attributes, "url"))
+	rawURL := strings.TrimSpace(stringAttribute(attributes, "storefronturl"))
 	if rawURL == "" {
 		slugValue := slugify(fallbackName)
 		return slugValue, joinPath(basePath, slugValue)
