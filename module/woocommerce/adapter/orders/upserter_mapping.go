@@ -17,6 +17,7 @@ func toCreateCommand(
 	contactID string,
 	realm string,
 	status ordersdomain.Status,
+	references map[string]CouponReference,
 ) ordersapplication.CreateCommand {
 	return ordersapplication.CreateCommand{
 		Identifier:      strings.TrimSpace(command.Identifier),
@@ -29,7 +30,7 @@ func toCreateCommand(
 		ShippingAddress: toShippingAddress(command.ShippingAddress),
 		ShippingCharges: toShippingCharges(command.ShippingCharges),
 		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
-		AppliedCoupons:  toAppliedCoupons(command.AppliedCoupons, command.CreatedAt, nil),
+		AppliedCoupons:  toAppliedCoupons(command.AppliedCoupons, command.CreatedAt, nil, references),
 		Metadata:        normalizeMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
 		Source:          syncStatusAuthor,
@@ -37,10 +38,10 @@ func toCreateCommand(
 }
 
 // toUpdateCommand maps order sync command values to mutable order update payload values.
-func toUpdateCommand(command port.OrderSyncCommand, existing ordersdomain.Order) ordersapplication.UpdateCommand {
+func toUpdateCommand(command port.OrderSyncCommand, existing ordersdomain.Order, references map[string]CouponReference) ordersapplication.UpdateCommand {
 	items := toCreateItems(command.Items)
 	shippingCharges := toUpdateShippingCharges(command.ShippingCharges)
-	appliedCoupons := toUpdateAppliedCoupons(command.AppliedCoupons, command.CreatedAt, existing.AppliedCoupons)
+	appliedCoupons := toUpdateAppliedCoupons(command.AppliedCoupons, command.CreatedAt, existing.AppliedCoupons, references)
 
 	return ordersapplication.UpdateCommand{
 		Items:           optionalCreateItems(items),
@@ -142,7 +143,7 @@ func toUpdateShippingCharges(values []port.OrderSyncShippingCharge) *[]ordersapp
 }
 
 // toAppliedCoupons maps WooCommerce coupon-line values to applied-coupon command values.
-func toAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *time.Time, existing []ordersdomain.AppliedCoupon) []ordersapplication.AppliedCouponCommand {
+func toAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *time.Time, existing []ordersdomain.AppliedCoupon, references map[string]CouponReference) []ordersapplication.AppliedCouponCommand {
 	if len(values) == 0 {
 		return nil
 	}
@@ -162,8 +163,10 @@ func toAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *ti
 		if code == "" {
 			continue
 		}
+		normalizedCode := strings.ToUpper(code)
 		amount, _ := strconv.ParseFloat(strings.TrimSpace(value.Discount), 64)
-		existingCoupon, hasExisting := existingByCode[strings.ToUpper(code)]
+		existingCoupon, hasExisting := existingByCode[normalizedCode]
+		reference, hasReference := references[normalizedCode]
 		appliedAt := time.Now().UTC()
 		if hasExisting && !existingCoupon.AppliedAt.IsZero() {
 			appliedAt = existingCoupon.AppliedAt.UTC()
@@ -171,10 +174,18 @@ func toAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *ti
 		if defaultAppliedAt != nil && !defaultAppliedAt.IsZero() {
 			appliedAt = defaultAppliedAt.UTC()
 		}
+		couponID := strings.TrimSpace(existingCoupon.CouponID)
+		if hasReference && strings.TrimSpace(reference.ID) != "" {
+			couponID = strings.TrimSpace(reference.ID)
+		}
+		discountType := strings.TrimSpace(existingCoupon.DiscountType)
+		if discountType == "" && hasReference {
+			discountType = strings.TrimSpace(reference.DiscountType)
+		}
 		rows = append(rows, ordersapplication.AppliedCouponCommand{
-			CouponID:       strings.TrimSpace(existingCoupon.CouponID),
+			CouponID:       couponID,
 			Code:           code,
-			DiscountType:   strings.TrimSpace(existingCoupon.DiscountType),
+			DiscountType:   discountType,
 			DiscountAmount: amount,
 			AppliedAt:      &appliedAt,
 		})
@@ -187,8 +198,8 @@ func toAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *ti
 }
 
 // toUpdateAppliedCoupons maps sync applied coupon values to mutable update payloads.
-func toUpdateAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *time.Time, existing []ordersdomain.AppliedCoupon) *[]ordersapplication.AppliedCouponCommand {
-	rows := toAppliedCoupons(values, defaultAppliedAt, existing)
+func toUpdateAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *time.Time, existing []ordersdomain.AppliedCoupon, references map[string]CouponReference) *[]ordersapplication.AppliedCouponCommand {
+	rows := toAppliedCoupons(values, defaultAppliedAt, existing, references)
 	if rows == nil {
 		empty := []ordersapplication.AppliedCouponCommand{}
 		return &empty

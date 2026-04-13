@@ -40,6 +40,16 @@ var (
 type CouponUsageSyncService interface {
 	// SyncUsageByCode backfills coupon usage matched by coupon code.
 	SyncUsageByCode(ctx context.Context, cmd couponservice.SyncUsageByCodeCommand) error
+	// ResolveCouponByCode resolves optional local coupon references for applied-order coupons.
+	ResolveCouponByCode(ctx context.Context, code string) (*CouponReference, error)
+}
+
+// CouponReference defines stable coupon linkage values resolved by coupon code.
+type CouponReference struct {
+	// ID defines the local coupon identifier.
+	ID string
+	// DiscountType defines the linked coupon discount type.
+	DiscountType string
 }
 
 // Upserter defines order upsert behavior backed by orders and contacts application services.
@@ -122,7 +132,12 @@ func (u *Upserter) createOrder(
 	realm string,
 	status ordersdomain.Status,
 ) (port.UpsertOutcome, error) {
-	created, err := u.orderService.Create(ctx, toCreateCommand(command, contactID, realm, status))
+	references, err := u.resolveAppliedCouponReferences(ctx, command)
+	if err != nil {
+		return "", err
+	}
+
+	created, err := u.orderService.Create(ctx, toCreateCommand(command, contactID, realm, status, references))
 	if err != nil {
 		if !errors.Is(err, ordersport.ErrDuplicateIdentifier) {
 			return "", fmt.Errorf("create order for woocommerce sync: %w", err)
@@ -207,7 +222,12 @@ func (u *Upserter) updateExisting(
 
 // syncMutableState refreshes mutable order fields for synchronized WooCommerce orders.
 func (u *Upserter) syncMutableState(ctx context.Context, existing ordersdomain.Order, command port.OrderSyncCommand) (ordersdomain.Order, bool, error) {
-	updateCommand := toUpdateCommand(command, existing)
+	references, err := u.resolveAppliedCouponReferences(ctx, command)
+	if err != nil {
+		return ordersdomain.Order{}, false, err
+	}
+
+	updateCommand := toUpdateCommand(command, existing, references)
 	next, err := u.orderService.Update(ctx, existing.ID, updateCommand)
 	if err != nil {
 		return ordersdomain.Order{}, false, fmt.Errorf("update order for woocommerce sync: %w", err)
@@ -217,6 +237,43 @@ func (u *Upserter) syncMutableState(ctx context.Context, existing ordersdomain.O
 	}
 
 	return *next, hasMutableOrderStateChanges(existing, *next), nil
+}
+
+// resolveAppliedCouponReferences resolves local coupon identifiers for synced coupon codes when available.
+func (u *Upserter) resolveAppliedCouponReferences(ctx context.Context, command port.OrderSyncCommand) (map[string]CouponReference, error) {
+	if u == nil || u.couponUsageSyncService == nil || len(command.AppliedCoupons) == 0 {
+		return nil, nil
+	}
+
+	result := make(map[string]CouponReference, len(command.AppliedCoupons))
+	for _, appliedCoupon := range command.AppliedCoupons {
+		code := strings.ToUpper(strings.TrimSpace(appliedCoupon.Code))
+		if code == "" {
+			continue
+		}
+		if _, exists := result[code]; exists {
+			continue
+		}
+
+		reference, err := u.couponUsageSyncService.ResolveCouponByCode(ctx, code)
+		if err != nil {
+			return nil, fmt.Errorf("resolve coupon reference for order coupon %s: %w", code, err)
+		}
+		if reference == nil {
+			continue
+		}
+
+		result[code] = CouponReference{
+			ID:           strings.TrimSpace(reference.ID),
+			DiscountType: strings.TrimSpace(reference.DiscountType),
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result, nil
 }
 
 // syncCouponUsages records WooCommerce coupon redemptions against matching local coupons.

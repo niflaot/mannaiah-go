@@ -23,6 +23,7 @@ func TestToCreateCommandMapsPaymentMethod(t *testing.T) {
 		"contact-1",
 		"woocommerce",
 		ordersdomain.StatusCreated,
+		nil,
 	)
 
 	if command.PaymentMethod != "payonline" {

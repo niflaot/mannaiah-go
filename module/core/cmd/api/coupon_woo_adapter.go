@@ -8,6 +8,7 @@ import (
 
 	couponservice "mannaiah/module/coupons/application/coupon/service"
 	coupondomain "mannaiah/module/coupons/domain"
+	ordersadapter "mannaiah/module/woocommerce/adapter/orders"
 	woocommerceport "mannaiah/module/woocommerce/port"
 )
 
@@ -23,6 +24,26 @@ func (a couponWooSyncAdapter) SyncUsageByCode(ctx context.Context, cmd couponser
 	}
 
 	return a.service.SyncUsageByCode(ctx, cmd)
+}
+
+// ResolveCouponByCode resolves local coupon linkage by coupon code.
+func (a couponWooSyncAdapter) ResolveCouponByCode(ctx context.Context, code string) (*ordersadapter.CouponReference, error) {
+	if a.service == nil {
+		return nil, nil
+	}
+
+	coupon, err := a.service.GetByCode(ctx, code)
+	if err != nil {
+		return nil, fmt.Errorf("lookup coupon by code %s: %w", strings.TrimSpace(code), err)
+	}
+	if coupon == nil {
+		return nil, nil
+	}
+
+	return &ordersadapter.CouponReference{
+		ID:           strings.TrimSpace(coupon.ID),
+		DiscountType: string(coupon.DiscountType),
+	}, nil
 }
 
 // UpsertByWooID creates or updates a coupon keyed by its WooCommerce identifier.

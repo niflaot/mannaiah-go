@@ -283,6 +283,9 @@ func TestUpsertByIdentifierUpdateRefreshesAppliedCoupons(t *testing.T) {
 
 	createdAt := time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)
 	orderService := newOrdersServiceMock()
+	couponService := &couponUsageSyncServiceMock{references: map[string]CouponReference{
+		"WELCOME10": {ID: "coupon-1", DiscountType: "fixed"},
+	}}
 	orderService.orders["order-1"] = ordersdomain.Order{
 		ID:            "order-1",
 		Identifier:    "1001",
@@ -301,6 +304,7 @@ func TestUpsertByIdentifierUpdateRefreshesAppliedCoupons(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUpserter() error = %v", err)
 	}
+	upserter.SetCouponUsageSyncService(couponService)
 
 	outcome, err := upserter.UpsertByIdentifier(context.Background(), port.OrderSyncCommand{
 		Identifier: "1001",
@@ -333,6 +337,9 @@ func TestUpsertByIdentifierUpdateRefreshesAppliedCoupons(t *testing.T) {
 	if (*orderService.updateCommands[0].AppliedCoupons)[0].Code != "WELCOME10" {
 		t.Fatalf("applied coupon code = %q, want %q", (*orderService.updateCommands[0].AppliedCoupons)[0].Code, "WELCOME10")
 	}
+	if (*orderService.updateCommands[0].AppliedCoupons)[0].CouponID != "coupon-1" {
+		t.Fatalf("applied coupon id = %q, want %q", (*orderService.updateCommands[0].AppliedCoupons)[0].CouponID, "coupon-1")
+	}
 	stored := orderService.orders["order-1"]
 	if len(stored.AppliedCoupons) != 1 {
 		t.Fatalf("len(stored.AppliedCoupons) = %d, want 1", len(stored.AppliedCoupons))
@@ -340,11 +347,61 @@ func TestUpsertByIdentifierUpdateRefreshesAppliedCoupons(t *testing.T) {
 	if stored.AppliedCoupons[0].Code != "WELCOME10" {
 		t.Fatalf("stored applied coupon code = %q, want %q", stored.AppliedCoupons[0].Code, "WELCOME10")
 	}
+	if stored.AppliedCoupons[0].CouponID != "coupon-1" {
+		t.Fatalf("stored applied coupon id = %q, want %q", stored.AppliedCoupons[0].CouponID, "coupon-1")
+	}
 	if stored.AppliedCoupons[0].DiscountAmount != 1000 {
 		t.Fatalf("stored applied coupon amount = %v, want %v", stored.AppliedCoupons[0].DiscountAmount, 1000)
 	}
 	if !stored.AppliedCoupons[0].AppliedAt.UTC().Equal(createdAt) {
 		t.Fatalf("stored applied coupon appliedAt = %v, want %v", stored.AppliedCoupons[0].AppliedAt, createdAt)
+	}
+}
+
+// TestUpsertByIdentifierCreateResolvesAppliedCouponReferences verifies coupon linkage for newly created synced orders.
+func TestUpsertByIdentifierCreateResolvesAppliedCouponReferences(t *testing.T) {
+	contactService := newContactServiceMock()
+	orderService := newOrdersServiceMock()
+	couponService := &couponUsageSyncServiceMock{references: map[string]CouponReference{
+		"WELCOME10": {ID: "coupon-1", DiscountType: "fixed"},
+	}}
+	upserter, err := NewUpserter(orderService, contactService)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+	upserter.SetCouponUsageSyncService(couponService)
+
+	createdAt := time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)
+	_, err = upserter.UpsertByIdentifier(context.Background(), port.OrderSyncCommand{
+		Identifier: "1004",
+		Realm:      defaultRealm,
+		Status:     "processing",
+		CreatedAt:  &createdAt,
+		Contact: port.ContactSyncCommand{
+			Email:     "woo.four@example.com",
+			FirstName: "Woo",
+			LastName:  "Four",
+		},
+		Items: []port.OrderSyncItem{{SKU: "SKU-4", Quantity: 1, Value: 9000}},
+		AppliedCoupons: []port.OrderSyncAppliedCoupon{{
+			Code:     "WELCOME10",
+			Discount: "1000",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("UpsertByIdentifier() error = %v", err)
+	}
+	if len(orderService.createCommands) != 1 {
+		t.Fatalf("len(createCommands) = %d, want 1", len(orderService.createCommands))
+	}
+	if len(orderService.createCommands[0].AppliedCoupons) != 1 {
+		t.Fatalf("len(createCommand.AppliedCoupons) = %d, want 1", len(orderService.createCommands[0].AppliedCoupons))
+	}
+	if orderService.createCommands[0].AppliedCoupons[0].CouponID != "coupon-1" {
+		t.Fatalf("create applied coupon id = %q, want %q", orderService.createCommands[0].AppliedCoupons[0].CouponID, "coupon-1")
+	}
+	if orderService.createCommands[0].AppliedCoupons[0].DiscountType != "fixed" {
+		t.Fatalf("create applied coupon discount type = %q, want %q", orderService.createCommands[0].AppliedCoupons[0].DiscountType, "fixed")
 	}
 }
 

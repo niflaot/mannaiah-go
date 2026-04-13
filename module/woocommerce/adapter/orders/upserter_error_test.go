@@ -262,3 +262,34 @@ func TestUpsertByIdentifierCouponUsageFailure(t *testing.T) {
 		t.Fatalf("len(couponUsageCommands) = %d, want 1", len(couponService.commands))
 	}
 }
+
+// TestUpsertByIdentifierCouponReferenceFailure verifies coupon-reference lookup error propagation.
+func TestUpsertByIdentifierCouponReferenceFailure(t *testing.T) {
+	contactService := newContactServiceMock()
+	orderService := newOrdersServiceMock()
+	couponService := &couponUsageSyncServiceMock{resolveErr: errorspkg.New("coupon lookup failed")}
+	upserter, err := NewUpserter(orderService, contactService)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+	upserter.SetCouponUsageSyncService(couponService)
+
+	_, err = upserter.UpsertByIdentifier(context.Background(), port.OrderSyncCommand{
+		Identifier: "1005",
+		Realm:      defaultRealm,
+		Status:     "processing",
+		Contact: port.ContactSyncCommand{
+			Email:     "woo.five@example.com",
+			FirstName: "Woo",
+			LastName:  "Five",
+		},
+		Items: []port.OrderSyncItem{{SKU: "SKU-5", Quantity: 1}},
+		AppliedCoupons: []port.OrderSyncAppliedCoupon{{
+			Code:     "WELCOME10",
+			Discount: "10000",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected coupon reference resolution error")
+	}
+}
