@@ -130,16 +130,16 @@ func TestLatestEmbeddedMigrationVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestEmbeddedMigrationVersion(mysql) error = %v", err)
 	}
-	if version != 43 {
-		t.Fatalf("latestEmbeddedMigrationVersion(mysql) = %d, want 43", version)
+	if version != 45 {
+		t.Fatalf("latestEmbeddedMigrationVersion(mysql) = %d, want 45", version)
 	}
 
 	version, err = latestEmbeddedMigrationVersion("migrations/sqlite")
 	if err != nil {
 		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) error = %v", err)
 	}
-	if version != 42 {
-		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) = %d, want 42", version)
+	if version != 45 {
+		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) = %d, want 45", version)
 	}
 }
 
