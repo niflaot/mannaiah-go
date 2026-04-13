@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	couponservice "mannaiah/module/coupons/application/coupon/service"
 	"mannaiah/module/coupons/domain"
@@ -187,6 +188,93 @@ func TestRecordUsage_happyPath(t *testing.T) {
 	usedEvents := filterByTopic(events, port.TopicCouponUsed)
 	if len(usedEvents) != 1 {
 		t.Fatalf("expected 1 used event, got %d", len(usedEvents))
+	}
+}
+
+// TestSyncUsageByCode_historicalBackfillBypassesLiveRedemptionRules verifies historical sync behavior.
+func TestSyncUsageByCode_historicalBackfillBypassesLiveRedemptionRules(t *testing.T) {
+	repo := newMockRepository()
+	usageRepo := newMockUsageRepository()
+	pub := &mockPublisher{}
+	svc, _ := couponservice.NewService(repo, usageRepo, pub)
+
+	coupon, _ := svc.Create(context.Background(), couponservice.CreateCommand{
+		Code:            "woo-sync",
+		DiscountType:    domain.DiscountTypeFixed,
+		DiscountAmount:  15,
+		Active:          false,
+		ExpiresAt:       pastTime(),
+		MaxUsagesGlobal: ptr(1),
+	})
+
+	_ = usageRepo.RecordUsage(context.Background(), port.UsageRecord{
+		CouponID: coupon.ID,
+		OrderID:  "previous-order",
+		Email:    "existing@example.com",
+		UsedAt:   time.Now().UTC(),
+	})
+
+	usedAt := time.Date(2026, time.April, 13, 14, 30, 0, 0, time.UTC)
+	err := svc.SyncUsageByCode(context.Background(), couponservice.SyncUsageByCodeCommand{
+		Code:    "woo-sync",
+		OrderID: "order-42",
+		Email:   "SYNCED@EXAMPLE.COM",
+		UsedAt:  &usedAt,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(usageRepo.usages) != 2 {
+		t.Fatalf("len(usages) = %d, want 2", len(usageRepo.usages))
+	}
+	if usageRepo.usages[1].CouponID != coupon.ID {
+		t.Fatalf("usage coupon id = %q, want %q", usageRepo.usages[1].CouponID, coupon.ID)
+	}
+	if usageRepo.usages[1].OrderID != "order-42" {
+		t.Fatalf("usage order id = %q, want %q", usageRepo.usages[1].OrderID, "order-42")
+	}
+	if usageRepo.usages[1].Email != "synced@example.com" {
+		t.Fatalf("usage email = %q, want %q", usageRepo.usages[1].Email, "synced@example.com")
+	}
+	if !usageRepo.usages[1].UsedAt.Equal(usedAt) {
+		t.Fatalf("usage usedAt = %v, want %v", usageRepo.usages[1].UsedAt, usedAt)
+	}
+
+	usedEvents := filterByTopic(pub.published(), port.TopicCouponUsed)
+	if len(usedEvents) != 1 {
+		t.Fatalf("expected 1 used event, got %d", len(usedEvents))
+	}
+}
+
+// TestSyncUsageByCode_duplicateOrderIsNoOp verifies sync idempotency for repeated order imports.
+func TestSyncUsageByCode_duplicateOrderIsNoOp(t *testing.T) {
+	repo := newMockRepository()
+	usageRepo := newMockUsageRepository()
+	svc, _ := couponservice.NewService(repo, usageRepo, nil)
+	coupon, _ := svc.Create(context.Background(), couponservice.CreateCommand{
+		Code:           "DUPLICATE10",
+		DiscountType:   domain.DiscountTypeFixed,
+		DiscountAmount: 10,
+		Active:         true,
+	})
+
+	if err := svc.SyncUsageByCode(context.Background(), couponservice.SyncUsageByCodeCommand{
+		Code:    coupon.Code,
+		OrderID: "order-1",
+		Email:   "one@example.com",
+	}); err != nil {
+		t.Fatalf("first sync usage error = %v", err)
+	}
+	if err := svc.SyncUsageByCode(context.Background(), couponservice.SyncUsageByCodeCommand{
+		Code:    coupon.Code,
+		OrderID: "order-1",
+		Email:   "one@example.com",
+	}); err != nil {
+		t.Fatalf("second sync usage error = %v", err)
+	}
+
+	if len(usageRepo.usages) != 1 {
+		t.Fatalf("len(usages) = %d, want 1", len(usageRepo.usages))
 	}
 }
 

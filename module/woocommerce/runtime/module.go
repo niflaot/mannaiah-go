@@ -142,6 +142,9 @@ func NewWithCouponTarget(
 	if err != nil {
 		return nil, err
 	}
+	if couponUsageSyncService, ok := couponSyncTarget.(ordersadapter.CouponUsageSyncService); ok {
+		orderUpserter.SetCouponUsageSyncService(couponUsageSyncService)
+	}
 
 	orderSyncService, err := wooorderservice.NewService(
 		wooorderservice.SyncConfig{

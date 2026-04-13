@@ -228,3 +228,37 @@ func TestResolveContactIDByEmailNotFound(t *testing.T) {
 		t.Fatalf("resolveContactIDByEmail() error = %v, want ErrContactNotFound", err)
 	}
 }
+
+// TestUpsertByIdentifierCouponUsageFailure verifies coupon-usage sync error propagation.
+func TestUpsertByIdentifierCouponUsageFailure(t *testing.T) {
+	contactService := newContactServiceMock()
+	orderService := newOrdersServiceMock()
+	couponService := &couponUsageSyncServiceMock{syncErr: errorspkg.New("coupon usage write failed")}
+	upserter, err := NewUpserter(orderService, contactService)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+	upserter.SetCouponUsageSyncService(couponService)
+
+	_, err = upserter.UpsertByIdentifier(context.Background(), port.OrderSyncCommand{
+		Identifier: "1003",
+		Realm:      defaultRealm,
+		Status:     "processing",
+		Contact: port.ContactSyncCommand{
+			Email:     "woo.three@example.com",
+			FirstName: "Woo",
+			LastName:  "Three",
+		},
+		Items: []port.OrderSyncItem{{SKU: "SKU-3", Quantity: 1}},
+		AppliedCoupons: []port.OrderSyncAppliedCoupon{{
+			Code:     "WELCOME10",
+			Discount: "10000",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected coupon usage sync error")
+	}
+	if len(couponService.commands) != 1 {
+		t.Fatalf("len(couponUsageCommands) = %d, want 1", len(couponService.commands))
+	}
+}

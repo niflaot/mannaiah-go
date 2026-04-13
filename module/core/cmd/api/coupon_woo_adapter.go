@@ -6,14 +6,23 @@ import (
 	"strconv"
 	"strings"
 
-	coupondomain "mannaiah/module/coupons/domain"
 	couponservice "mannaiah/module/coupons/application/coupon/service"
+	coupondomain "mannaiah/module/coupons/domain"
 	woocommerceport "mannaiah/module/woocommerce/port"
 )
 
 // couponWooSyncAdapter adapts the coupons service to satisfy port.CouponSyncTarget.
 type couponWooSyncAdapter struct {
 	service *couponservice.Service
+}
+
+// SyncUsageByCode backfills coupon usage matched by coupon code for WooCommerce order syncs.
+func (a couponWooSyncAdapter) SyncUsageByCode(ctx context.Context, cmd couponservice.SyncUsageByCodeCommand) error {
+	if a.service == nil {
+		return nil
+	}
+
+	return a.service.SyncUsageByCode(ctx, cmd)
 }
 
 // UpsertByWooID creates or updates a coupon keyed by its WooCommerce identifier.
@@ -36,17 +45,17 @@ func (a couponWooSyncAdapter) createFromWoo(ctx context.Context, coupon woocomme
 	wooID := coupon.ID
 
 	_, err := a.service.Create(ctx, couponservice.CreateCommand{
-		Code:              strings.ToUpper(strings.TrimSpace(coupon.Code)),
-		Origin:            "woocommerce",
-		DiscountType:      mapWooDiscountType(coupon.DiscountType),
-		DiscountAmount:    discountAmount,
-		MaxUsagesGlobal:   resolveWooUsageLimit(coupon.UsageLimit),
-		MaxUsagesPerEmail: resolveWooUsageLimit(coupon.UsageLimitPerUser),
-		Active:            true,
-		AssignedEmails:    coupon.EmailRestrictions,
+		Code:                strings.ToUpper(strings.TrimSpace(coupon.Code)),
+		Origin:              "woocommerce",
+		DiscountType:        mapWooDiscountType(coupon.DiscountType),
+		DiscountAmount:      discountAmount,
+		MaxUsagesGlobal:     resolveWooUsageLimit(coupon.UsageLimit),
+		MaxUsagesPerEmail:   resolveWooUsageLimit(coupon.UsageLimitPerUser),
+		Active:              true,
+		AssignedEmails:      coupon.EmailRestrictions,
 		IncludedProductIDs:  intSliceToStringSlice(coupon.ProductIDs),
 		IncludedCategoryIDs: intSliceToStringSlice(coupon.ProductCategories),
-		WooCommerceID:     &wooID,
+		WooCommerceID:       &wooID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create coupon from woocommerce %d: %w", coupon.ID, err)
@@ -65,15 +74,15 @@ func (a couponWooSyncAdapter) updateFromWoo(ctx context.Context, existing coupon
 	}
 
 	_, err := a.service.Update(ctx, couponservice.UpdateCommand{
-		ID:                existing.ID,
-		Origin:            "woocommerce",
-		DiscountType:      discountType,
-		DiscountAmount:    discountAmount,
-		MaxUsagesGlobal:   resolveWooUsageLimit(coupon.UsageLimit),
-		MaxUsagesPerEmail: resolveWooUsageLimit(coupon.UsageLimitPerUser),
-		Active:            existing.Active,
-		ExpiresAt:         existing.ExpiresAt,
-		AssignedEmails:    coupon.EmailRestrictions,
+		ID:                  existing.ID,
+		Origin:              "woocommerce",
+		DiscountType:        discountType,
+		DiscountAmount:      discountAmount,
+		MaxUsagesGlobal:     resolveWooUsageLimit(coupon.UsageLimit),
+		MaxUsagesPerEmail:   resolveWooUsageLimit(coupon.UsageLimitPerUser),
+		Active:              existing.Active,
+		ExpiresAt:           existing.ExpiresAt,
+		AssignedEmails:      coupon.EmailRestrictions,
 		IncludedProductIDs:  intSliceToStringSlice(coupon.ProductIDs),
 		IncludedCategoryIDs: intSliceToStringSlice(coupon.ProductCategories),
 		IncludedTagIDs:      existing.IncludedTagIDs,

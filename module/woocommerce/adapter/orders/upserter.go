@@ -8,6 +8,7 @@ import (
 
 	contactsapplication "mannaiah/module/contacts/application"
 	contactsport "mannaiah/module/contacts/port"
+	couponservice "mannaiah/module/coupons/application/coupon/service"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
@@ -35,6 +36,12 @@ var (
 	ErrContactNotFound = errors.New("woocommerce sync contact not found by email")
 )
 
+// CouponUsageSyncService defines coupon-usage backfill behavior for synchronized orders.
+type CouponUsageSyncService interface {
+	// SyncUsageByCode backfills coupon usage matched by coupon code.
+	SyncUsageByCode(ctx context.Context, cmd couponservice.SyncUsageByCodeCommand) error
+}
+
 // Upserter defines order upsert behavior backed by orders and contacts application services.
 type Upserter struct {
 	// orderService defines order application service dependencies.
@@ -43,6 +50,8 @@ type Upserter struct {
 	contactService contactsapplication.Service
 	// contactUpserter defines contact upsert behavior for fallback contact synchronization.
 	contactUpserter port.ContactSyncTarget
+	// couponUsageSyncService defines optional coupon-usage backfill behavior.
+	couponUsageSyncService CouponUsageSyncService
 }
 
 var (
@@ -69,6 +78,15 @@ func NewUpserter(orderService ordersapplication.Service, contactService contacts
 		contactService:  contactService,
 		contactUpserter: contactUpserter,
 	}, nil
+}
+
+// SetCouponUsageSyncService configures optional coupon-usage synchronization behavior.
+func (u *Upserter) SetCouponUsageSyncService(service CouponUsageSyncService) {
+	if u == nil {
+		return
+	}
+
+	u.couponUsageSyncService = service
 }
 
 // UpsertByIdentifier creates or updates orders by realm and identifier.
@@ -125,6 +143,9 @@ func (u *Upserter) createOrder(
 	if appendErr != nil {
 		return "", appendErr
 	}
+	if err := u.syncCouponUsages(ctx, created.ID, command); err != nil {
+		return "", err
+	}
 
 	return port.UpsertOutcomeCreated, nil
 }
@@ -164,12 +185,40 @@ func (u *Upserter) updateExisting(
 		current = next
 		updated = true
 	}
+	if err := u.syncCouponUsages(ctx, current.ID, command); err != nil {
+		return "", err
+	}
 
 	if updated {
 		return port.UpsertOutcomeUpdated, nil
 	}
 
 	return port.UpsertOutcomeUnchanged, nil
+}
+
+// syncCouponUsages records WooCommerce coupon redemptions against matching local coupons.
+func (u *Upserter) syncCouponUsages(ctx context.Context, orderID string, command port.OrderSyncCommand) error {
+	if u == nil || u.couponUsageSyncService == nil || strings.TrimSpace(orderID) == "" || len(command.AppliedCoupons) == 0 {
+		return nil
+	}
+
+	for _, appliedCoupon := range command.AppliedCoupons {
+		code := strings.TrimSpace(appliedCoupon.Code)
+		if code == "" {
+			continue
+		}
+
+		if err := u.couponUsageSyncService.SyncUsageByCode(ctx, couponservice.SyncUsageByCodeCommand{
+			Code:    code,
+			OrderID: strings.TrimSpace(orderID),
+			Email:   strings.TrimSpace(command.Contact.Email),
+			UsedAt:  command.CreatedAt,
+		}); err != nil {
+			return fmt.Errorf("sync coupon usage for order %s coupon %s: %w", strings.TrimSpace(orderID), code, err)
+		}
+	}
+
+	return nil
 }
 
 // resolveContactIDByEmail resolves contact identifiers by normalized email values.

@@ -107,6 +107,18 @@ type RecordUsageCommand struct {
 	Email string
 }
 
+// SyncUsageByCodeCommand defines externally-sourced coupon usage input values matched by coupon code.
+type SyncUsageByCodeCommand struct {
+	// Code defines the externally-sourced coupon code.
+	Code string
+	// OrderID defines the order where the coupon was applied.
+	OrderID string
+	// Email defines the email of the redeemer when known.
+	Email string
+	// UsedAt defines the externally-sourced usage timestamp when known.
+	UsedAt *time.Time
+}
+
 // Service defines coupon management use-case behavior.
 type Service struct {
 	// repository defines coupon persistence dependencies.
@@ -285,6 +297,53 @@ func (s *Service) List(ctx context.Context, query port.ListQuery) ([]domain.Coup
 // Search retrieves paginated coupons matching the provided search query.
 func (s *Service) Search(ctx context.Context, query port.SearchQuery) ([]domain.Coupon, int64, error) {
 	return s.repository.Search(ctx, query)
+}
+
+// SyncUsageByCode records an externally-sourced coupon redemption matched by coupon code.
+//
+// This path is used for historical synchronization flows, so it intentionally skips
+// live redemption validation rules such as active state, expiry, and remaining limits.
+func (s *Service) SyncUsageByCode(ctx context.Context, cmd SyncUsageByCodeCommand) error {
+	code := strings.ToUpper(strings.TrimSpace(cmd.Code))
+	orderID := strings.TrimSpace(cmd.OrderID)
+	if code == "" || orderID == "" {
+		return nil
+	}
+
+	coupon, err := s.repository.GetByCode(ctx, code)
+	if err != nil {
+		return fmt.Errorf("get coupon by code for usage sync: %w", err)
+	}
+	if coupon == nil {
+		return nil
+	}
+
+	alreadyUsed, err := s.usageRepository.UsageExistsForOrder(ctx, coupon.ID, orderID)
+	if err != nil {
+		return fmt.Errorf("check coupon order usage for sync: %w", err)
+	}
+	if alreadyUsed {
+		return nil
+	}
+
+	usedAt := time.Now().UTC()
+	if cmd.UsedAt != nil && !cmd.UsedAt.IsZero() {
+		usedAt = cmd.UsedAt.UTC()
+	}
+	email := strings.ToLower(strings.TrimSpace(cmd.Email))
+
+	if err := s.usageRepository.RecordUsage(ctx, port.UsageRecord{
+		CouponID: coupon.ID,
+		OrderID:  orderID,
+		Email:    email,
+		UsedAt:   usedAt,
+	}); err != nil {
+		return fmt.Errorf("record synced coupon usage: %w", err)
+	}
+
+	_ = s.publisher.Publish(ctx, couponevent.NewCouponUsedEvent(coupon.ID, coupon.Code, orderID, email, usedAt))
+
+	return nil
 }
 
 // RecordUsage validates limits and records a coupon redemption event.

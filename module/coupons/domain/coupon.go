@@ -38,41 +38,41 @@ var (
 // Coupon defines a coupon aggregate with assignment, usage, and scope rules.
 type Coupon struct {
 	// ID defines unique coupon identifiers.
-	ID string
+	ID string `json:"id"`
 	// Code defines unique, uppercase coupon codes.
-	Code string
+	Code string `json:"code"`
 	// Origin defines the source that created this coupon (e.g., "manual", "campaign", "woocommerce").
-	Origin string
+	Origin string `json:"origin"`
 	// DiscountType defines the discount calculation method.
-	DiscountType DiscountType
+	DiscountType DiscountType `json:"discountType"`
 	// DiscountAmount defines the discount value (currency units for fixed, percent for percentage).
-	DiscountAmount float64
+	DiscountAmount float64 `json:"discountAmount"`
 	// MaxUsagesGlobal defines the global maximum redemption limit. Nil means unlimited.
-	MaxUsagesGlobal *int
+	MaxUsagesGlobal *int `json:"maxUsagesGlobal,omitempty"`
 	// MaxUsagesPerEmail defines the per-email maximum redemption limit. Nil means unlimited.
-	MaxUsagesPerEmail *int
+	MaxUsagesPerEmail *int `json:"maxUsagesPerEmail,omitempty"`
 	// Active reports whether this coupon is currently active.
-	Active bool
+	Active bool `json:"active"`
 	// ExpiresAt defines the optional coupon expiry timestamp.
-	ExpiresAt *time.Time
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 	// AssignedEmails defines the optional list of emails authorized to redeem this coupon.
 	// Empty means any email may redeem it (subject to other limits).
-	AssignedEmails []string
+	AssignedEmails []string `json:"assignedEmails,omitempty"`
 	// AssignedContactIDs defines the optional list of contact identifiers authorized to redeem this coupon.
-	AssignedContactIDs []string
+	AssignedContactIDs []string `json:"assignedContactIds,omitempty"`
 	// IncludedProductIDs defines products this coupon applies to. Empty means all products.
-	IncludedProductIDs []string
+	IncludedProductIDs []string `json:"includedProductIds,omitempty"`
 	// IncludedCategoryIDs defines product categories this coupon applies to. Empty means all categories.
-	IncludedCategoryIDs []string
+	IncludedCategoryIDs []string `json:"includedCategoryIds,omitempty"`
 	// IncludedTagIDs defines product tags this coupon applies to. Empty means all tags.
 	// Note: tag filtering is enforced by our system only; WooCommerce does not natively support coupon-tag restrictions.
-	IncludedTagIDs []string
+	IncludedTagIDs []string `json:"includedTagIds,omitempty"`
 	// WooCommerceID defines the optional WooCommerce coupon identifier for sync deduplication.
-	WooCommerceID *int
+	WooCommerceID *int `json:"wooCommerceId,omitempty"`
 	// CreatedAt defines creation timestamps.
-	CreatedAt time.Time
+	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines update timestamps.
-	UpdatedAt time.Time
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Normalize canonicalizes coupon values before validation and persistence.

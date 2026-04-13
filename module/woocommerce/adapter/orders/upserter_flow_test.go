@@ -262,3 +262,51 @@ func TestUpsertByIdentifierUpdateIgnoredByOrderService(t *testing.T) {
 		t.Fatalf("len(addCommentCommands) = %d, want 1", len(orderService.addCommentCommands))
 	}
 }
+
+// TestUpsertByIdentifierCreateSyncsCouponUsage verifies Woo order coupon usage backfill behavior.
+func TestUpsertByIdentifierCreateSyncsCouponUsage(t *testing.T) {
+	contactService := newContactServiceMock()
+	orderService := newOrdersServiceMock()
+	couponService := &couponUsageSyncServiceMock{}
+	upserter, err := NewUpserter(orderService, contactService)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+	upserter.SetCouponUsageSyncService(couponService)
+
+	createdAt := time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)
+	_, err = upserter.UpsertByIdentifier(context.Background(), port.OrderSyncCommand{
+		Identifier: "1002",
+		Realm:      defaultRealm,
+		Status:     "processing",
+		CreatedAt:  &createdAt,
+		Contact: port.ContactSyncCommand{
+			Email:     "woo.two@example.com",
+			FirstName: "Woo",
+			LastName:  "Two",
+		},
+		Items: []port.OrderSyncItem{{SKU: "SKU-2", Quantity: 1}},
+		AppliedCoupons: []port.OrderSyncAppliedCoupon{{
+			Code:     "WELCOME10",
+			Discount: "15000",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("UpsertByIdentifier() error = %v", err)
+	}
+	if len(couponService.commands) != 1 {
+		t.Fatalf("len(couponUsageCommands) = %d, want 1", len(couponService.commands))
+	}
+	if couponService.commands[0].Code != "WELCOME10" {
+		t.Fatalf("coupon usage code = %q, want %q", couponService.commands[0].Code, "WELCOME10")
+	}
+	if couponService.commands[0].OrderID != "order-1002" {
+		t.Fatalf("coupon usage order id = %q, want %q", couponService.commands[0].OrderID, "order-1002")
+	}
+	if couponService.commands[0].Email != "woo.two@example.com" {
+		t.Fatalf("coupon usage email = %q, want %q", couponService.commands[0].Email, "woo.two@example.com")
+	}
+	if couponService.commands[0].UsedAt == nil || !couponService.commands[0].UsedAt.UTC().Equal(createdAt) {
+		t.Fatalf("coupon usage usedAt = %v, want %v", couponService.commands[0].UsedAt, createdAt)
+	}
+}
