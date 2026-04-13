@@ -30,6 +30,7 @@ func (r *Repository) Update(ctx context.Context, order *ordersdomain.Order) erro
 
 	itemRows := toOrderItemRecords(entity.ID, entity.Items)
 	shippingChargeRows := toShippingChargeRecords(entity.ID, entity.ShippingCharges)
+	appliedCouponRows := toAppliedCouponRecords(entity.ID, entity.AppliedCoupons)
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&orderRecord{}, "id = ?", entity.ID).Error; err != nil {
@@ -71,6 +72,15 @@ func (r *Repository) Update(ctx context.Context, order *ordersdomain.Order) erro
 			}
 			if err := tx.Create(&shipping).Error; err != nil {
 				return fmt.Errorf("create order shipping record: %w", err)
+			}
+		}
+
+		if err := tx.Where("order_id = ?", entity.ID).Delete(&orderAppliedCouponRecord{}).Error; err != nil {
+			return fmt.Errorf("delete order applied coupon records: %w", err)
+		}
+		if len(appliedCouponRows) > 0 {
+			if err := tx.Create(&appliedCouponRows).Error; err != nil {
+				return fmt.Errorf("create order applied coupon records: %w", err)
 			}
 		}
 

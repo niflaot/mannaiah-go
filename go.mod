@@ -11,6 +11,7 @@ require (
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
 	mannaiah/module/core v0.0.0
+	mannaiah/module/coupons v0.0.0
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
@@ -136,6 +137,8 @@ replace mannaiah/module/orders => ./module/orders
 replace mannaiah/module/products => ./module/products
 
 replace mannaiah/module/woocommerce => ./module/woocommerce
+
+replace mannaiah/module/coupons => ./module/coupons
 
 replace mannaiah/module/falabella => ./module/falabella
 

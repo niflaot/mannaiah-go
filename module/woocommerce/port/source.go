@@ -39,6 +39,14 @@ type WooOrderComment struct {
 	OccurredAt time.Time
 }
 
+// WooOrderCouponLine defines a coupon applied to a WooCommerce order.
+type WooOrderCouponLine struct {
+	// Code defines the coupon code.
+	Code string
+	// Discount defines the discount amount applied (as a string from WooCommerce).
+	Discount string
+}
+
 // WooOrder defines order data retrieved from WooCommerce.
 type WooOrder struct {
 	// ID defines WooCommerce order identifiers.
@@ -93,6 +101,8 @@ type WooOrder struct {
 	ShippingCharges []WooOrderShippingCharge
 	// Comments defines order comment values.
 	Comments []WooOrderComment
+	// CouponLines defines coupon lines applied to the order.
+	CouponLines []WooOrderCouponLine
 	// Metadata defines order metadata values keyed by metadata key.
 	Metadata map[string]string
 }

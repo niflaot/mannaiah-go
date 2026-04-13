@@ -113,6 +113,16 @@ type rawOrderPayload struct {
 	FeeLines []rawFeeLine `json:"fee_lines"`
 	// MetaData defines metadata payload values.
 	MetaData []rawMeta `json:"meta_data"`
+	// CouponLines defines coupon-line payload values.
+	CouponLines []rawCouponLine `json:"coupon_lines"`
+}
+
+// rawCouponLine defines tolerant raw order coupon-line payload values.
+type rawCouponLine struct {
+	// Code defines coupon code values.
+	Code string `json:"code"`
+	// Discount defines discount amount values.
+	Discount string `json:"discount"`
 }
 
 // listOrdersRaw performs tolerant order decoding for metadata values unsupported by SDK structs.
@@ -215,6 +225,16 @@ func mapRawOrder(item rawOrderPayload) port.WooOrder {
 		metadata[key] = normalizeMetadataValue(meta.Value)
 	}
 
+	couponLines := make([]port.WooOrderCouponLine, 0, len(item.CouponLines))
+	for _, cl := range item.CouponLines {
+		if code := strings.TrimSpace(cl.Code); code != "" {
+			couponLines = append(couponLines, port.WooOrderCouponLine{
+				Code:     code,
+				Discount: strings.TrimSpace(cl.Discount),
+			})
+		}
+	}
+
 	return port.WooOrder{
 		ID:                     item.ID,
 		Status:                 strings.TrimSpace(item.Status),
@@ -242,6 +262,7 @@ func mapRawOrder(item rawOrderPayload) port.WooOrder {
 		ShippingCharges:        mapRawShippingCharges(item.ShippingLines),
 		Comments:               mapRawOrderComments(item.CustomerNote, item.DateModified, item.DateCreated),
 		CreatedAt:              parseWooOrderTime(item.DateCreated),
+		CouponLines:            couponLines,
 		Metadata:               metadata,
 	}
 }

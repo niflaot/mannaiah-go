@@ -15,6 +15,7 @@ import (
 	"mannaiah/module/woocommerce/adapter/http"
 	woomessaging "mannaiah/module/woocommerce/adapter/messaging"
 	ordersadapter "mannaiah/module/woocommerce/adapter/orders"
+	woocouponservice "mannaiah/module/woocommerce/application/coupon/service"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 	"mannaiah/module/woocommerce/port"
@@ -39,6 +40,8 @@ type Module struct {
 	contactsSyncService woocontactservice.Service
 	// ordersSyncService defines order sync use-case dependencies.
 	ordersSyncService wooorderservice.Service
+	// couponsSyncService defines optional coupon sync use-case dependencies.
+	couponsSyncService woocouponservice.Service
 	// handler defines HTTP route adapter dependencies.
 	handler *http.Handler
 	// scheduler defines optional cron scheduler dependencies.
@@ -47,6 +50,8 @@ type Module struct {
 	contactsSchedulerEntryID corecron.EntryID
 	// ordersSchedulerEntryID defines optional scheduled order-sync entry identifiers.
 	ordersSchedulerEntryID corecron.EntryID
+	// couponsSchedulerEntryID defines optional scheduled coupon-sync entry identifiers.
+	couponsSchedulerEntryID corecron.EntryID
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
 	// orderEventConsumer defines optional cross-module order event consumer dependencies.
@@ -75,13 +80,27 @@ func New(
 	registrar bus.Registrar,
 	publishers ...port.IntegrationEventPublisher,
 ) (*Module, error) {
+	return NewWithCouponTarget(cfg, contactService, orderService, nil, scheduler, providedLogger, registrar, publishers...)
+}
+
+// NewWithCouponTarget creates WooCommerce modules with optional coupon sync target wiring.
+func NewWithCouponTarget(
+	cfg Config,
+	contactService contactapplication.Service,
+	orderService ordersapplication.Service,
+	couponSyncTarget port.CouponSyncTarget,
+	scheduler corecron.Scheduler,
+	providedLogger *zap.Logger,
+	registrar bus.Registrar,
+	publishers ...port.IntegrationEventPublisher,
+) (*Module, error) {
 	if contactService == nil {
 		return nil, ErrNilContactService
 	}
 	if orderService == nil {
 		return nil, ErrNilOrderService
 	}
-	if (cfg.SyncContacts || cfg.SyncOrders) && scheduler == nil {
+	if (cfg.SyncContacts || cfg.SyncOrders || cfg.SyncCoupons) && scheduler == nil {
 		return nil, ErrNilSchedulerWhenEnabled
 	}
 
@@ -161,6 +180,26 @@ func New(
 		}
 	}
 
+	var couponsSyncService woocouponservice.Service
+	if cfg.SyncCoupons && couponSyncTarget != nil && sourceErr == nil {
+		couponsSyncService, err = woocouponservice.NewService(
+			woocouponservice.SyncConfig{
+				Enabled:  cfg.SyncCoupons,
+				PageSize: cfg.SyncPageSize,
+			},
+			source,
+			couponSyncTarget,
+			resolvePublisher(publishers),
+			logger,
+			woocouponservice.CircuitBreakers{
+				Source: newSourceCircuitBreaker(cfg, logger),
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	handler, err := http.NewHandler(contactSyncService, orderSyncService)
 	if err != nil {
 		return nil, err
@@ -170,6 +209,7 @@ func New(
 		cfg:                 cfg,
 		contactsSyncService: contactSyncService,
 		ordersSyncService:   orderSyncService,
+		couponsSyncService:  couponsSyncService,
 		handler:             handler,
 		scheduler:           scheduler,
 		logger:              logger,

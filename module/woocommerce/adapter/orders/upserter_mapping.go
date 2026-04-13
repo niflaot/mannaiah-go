@@ -1,7 +1,9 @@
 package orders
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
@@ -26,6 +28,7 @@ func toCreateCommand(
 		ShippingAddress: toShippingAddress(command.ShippingAddress),
 		ShippingCharges: toShippingCharges(command.ShippingCharges),
 		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
+		AppliedCoupons:  toAppliedCoupons(command.AppliedCoupons),
 		Metadata:        normalizeMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
 		Source:          syncStatusAuthor,
@@ -94,6 +97,33 @@ func toShippingCharges(values []port.OrderSyncShippingCharge) []ordersapplicatio
 			MethodID:    methodID,
 			MethodTitle: methodTitle,
 			Price:       value.Price,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
+}
+
+// toAppliedCoupons maps WooCommerce coupon-line values to applied-coupon command values.
+func toAppliedCoupons(values []port.OrderSyncAppliedCoupon) []ordersapplication.AppliedCouponCommand {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]ordersapplication.AppliedCouponCommand, 0, len(values))
+	for _, value := range values {
+		code := strings.TrimSpace(value.Code)
+		if code == "" {
+			continue
+		}
+		amount, _ := strconv.ParseFloat(strings.TrimSpace(value.Discount), 64)
+		appliedAt := time.Now().UTC()
+		rows = append(rows, ordersapplication.AppliedCouponCommand{
+			Code:           code,
+			DiscountAmount: amount,
+			AppliedAt:      &appliedAt,
 		})
 	}
 	if len(rows) == 0 {

@@ -19,34 +19,61 @@ func loadRelationsByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []string
 	map[string]orderShippingAddressRecord,
 	map[string][]orderShippingChargeRecord,
 	map[string]map[string]string,
+	map[string][]orderAppliedCouponRecord,
 	error,
 ) {
 	itemMap, err := loadOrderItemsByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	statusMap, err := loadOrderStatusesByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	commentMap, err := loadOrderCommentsByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	shippingMap, err := loadShippingByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	shippingChargeMap, err := loadShippingChargesByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	orderMetadataMap, err := loadOrderMetadataByOrderIDs(ctx, db, orderIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+	appliedCouponMap, err := loadAppliedCouponsByOrderIDs(ctx, db, orderIDs)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 
-	return itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, nil
+	return itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, appliedCouponMap, nil
+}
+
+// loadAppliedCouponsByOrderIDs loads applied coupon rows grouped by order identifiers.
+func loadAppliedCouponsByOrderIDs(ctx context.Context, db *gorm.DB, orderIDs []string) (map[string][]orderAppliedCouponRecord, error) {
+	result := make(map[string][]orderAppliedCouponRecord, len(orderIDs))
+	if len(orderIDs) == 0 {
+		return result, nil
+	}
+
+	rows := make([]orderAppliedCouponRecord, 0)
+	if err := db.WithContext(ctx).
+		Model(&orderAppliedCouponRecord{}).
+		Where("order_id IN ?", orderIDs).
+		Order("order_id ASC, applied_at ASC, id ASC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list order applied coupon records: %w", err)
+	}
+	for _, row := range rows {
+		result[row.OrderID] = append(result[row.OrderID], row)
+	}
+
+	return result, nil
 }
 
 // loadOrderItemsByOrderIDs loads order-item rows grouped by order identifiers.
@@ -242,6 +269,7 @@ func mapRowsToEntities(
 	shippingMap map[string]orderShippingAddressRecord,
 	shippingChargeMap map[string][]orderShippingChargeRecord,
 	orderMetadataMap map[string]map[string]string,
+	appliedCouponMap map[string][]orderAppliedCouponRecord,
 ) []ordersdomain.Order {
 	entities := make([]ordersdomain.Order, 0, len(rows))
 	for _, row := range rows {
@@ -250,7 +278,7 @@ func mapRowsToEntities(
 			copyValue := value
 			shipping = &copyValue
 		}
-		entities = append(entities, toOrderEntity(row, itemMap[row.ID], statusMap[row.ID], commentMap[row.ID], shipping, shippingChargeMap[row.ID], orderMetadataMap[row.ID]))
+		entities = append(entities, toOrderEntity(row, itemMap[row.ID], statusMap[row.ID], commentMap[row.ID], shipping, shippingChargeMap[row.ID], orderMetadataMap[row.ID], appliedCouponMap[row.ID]))
 	}
 
 	return entities

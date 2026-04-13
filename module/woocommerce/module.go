@@ -52,3 +52,17 @@ func NewWithMessaging(
 ) (*Module, error) {
 	return wooruntime.New(cfg, contactService, orderService, scheduler, providedLogger, registrar, publishers...)
 }
+
+// NewWithMessagingAndCouponTarget creates WooCommerce modules with messaging and coupon sync target wiring.
+func NewWithMessagingAndCouponTarget(
+	cfg Config,
+	contactService contactapplication.Service,
+	orderService ordersapplication.Service,
+	couponSyncTarget port.CouponSyncTarget,
+	scheduler corecron.Scheduler,
+	providedLogger *zap.Logger,
+	registrar bus.Registrar,
+	publishers ...port.IntegrationEventPublisher,
+) (*Module, error) {
+	return wooruntime.NewWithCouponTarget(cfg, contactService, orderService, couponSyncTarget, scheduler, providedLogger, registrar, publishers...)
+}

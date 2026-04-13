@@ -39,6 +39,14 @@ type OrderSyncShippingCharge struct {
 	Price float64
 }
 
+// OrderSyncAppliedCoupon defines a coupon applied to a synced order.
+type OrderSyncAppliedCoupon struct {
+	// Code defines the coupon code.
+	Code string
+	// Discount defines the discount amount string from WooCommerce.
+	Discount string
+}
+
 // OrderSyncComment defines order comment sync values.
 type OrderSyncComment struct {
 	// Author defines comment author values.
@@ -75,6 +83,8 @@ type OrderSyncCommand struct {
 	Metadata map[string]string
 	// Comments defines order comment values.
 	Comments []OrderSyncComment
+	// AppliedCoupons defines coupon lines applied to this order.
+	AppliedCoupons []OrderSyncAppliedCoupon
 }
 
 // OrderSyncTarget defines order upsert behavior required by WooCommerce sync services.

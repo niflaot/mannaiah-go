@@ -68,6 +68,7 @@ func (r *Repository) Create(ctx context.Context, order *ordersdomain.Order) erro
 	commentRows := toOrderCommentRecords(record.ID, entity.Comments)
 	shippingChargeRows := toShippingChargeRecords(record.ID, entity.ShippingCharges)
 	orderMetadataRows := toOrderMetadataRecords(record.ID, entity.Metadata)
+	appliedCouponRows := toAppliedCouponRecords(record.ID, entity.AppliedCoupons)
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&record).Error; err != nil {
@@ -104,6 +105,11 @@ func (r *Repository) Create(ctx context.Context, order *ordersdomain.Order) erro
 				return fmt.Errorf("create order shipping record: %w", err)
 			}
 		}
+		if len(appliedCouponRows) > 0 {
+			if err := tx.Create(&appliedCouponRows).Error; err != nil {
+				return fmt.Errorf("create order applied coupon records: %w", err)
+			}
+		}
 
 		return nil
 	})
@@ -132,7 +138,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*ordersdomain.Orde
 		return nil, fmt.Errorf("get order record: %w", err)
 	}
 
-	itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, []string{trimmedID})
+	itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, appliedCouponMap, err := loadRelationsByOrderIDs(ctx, r.db, []string{trimmedID})
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +148,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*ordersdomain.Orde
 		copyValue := value
 		shipping = &copyValue
 	}
-	entity := toOrderEntity(row, itemMap[trimmedID], statusMap[trimmedID], commentMap[trimmedID], shipping, shippingChargeMap[trimmedID], orderMetadataMap[trimmedID])
+	entity := toOrderEntity(row, itemMap[trimmedID], statusMap[trimmedID], commentMap[trimmedID], shipping, shippingChargeMap[trimmedID], orderMetadataMap[trimmedID], appliedCouponMap[trimmedID])
 
 	return &entity, nil
 }
@@ -165,12 +171,12 @@ func (r *Repository) List(ctx context.Context, query ordersport.ListQuery) ([]or
 	}
 
 	orderIDs := collectOrderIDs(rows)
-	itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, err := loadRelationsByOrderIDs(ctx, r.db, orderIDs)
+	itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, appliedCouponMap, err := loadRelationsByOrderIDs(ctx, r.db, orderIDs)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return mapRowsToEntities(rows, itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap), total, nil
+	return mapRowsToEntities(rows, itemMap, statusMap, commentMap, shippingMap, shippingChargeMap, orderMetadataMap, appliedCouponMap), total, nil
 }
 
 // AppendStatus appends status rows for order identifiers.

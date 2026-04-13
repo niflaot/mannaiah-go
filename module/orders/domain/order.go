@@ -117,6 +117,20 @@ type ShippingAddress struct {
 	CityCode string `json:"cityCode"`
 }
 
+// AppliedCoupon defines a coupon that was applied to an order.
+type AppliedCoupon struct {
+	// CouponID defines the coupon identifier (may be empty for externally-sourced coupons).
+	CouponID string `json:"couponId,omitempty"`
+	// Code defines the coupon code.
+	Code string `json:"code"`
+	// DiscountType defines the discount calculation method.
+	DiscountType string `json:"discountType"`
+	// DiscountAmount defines the discount value used at time of application.
+	DiscountAmount float64 `json:"discountAmount"`
+	// AppliedAt defines the coupon application timestamp.
+	AppliedAt time.Time `json:"appliedAt"`
+}
+
 // ShippingCharge defines order shipping-charge values.
 type ShippingCharge struct {
 	// MethodID defines shipping method identifier values.
@@ -153,6 +167,8 @@ type Order struct {
 	ShippingCharges []ShippingCharge `json:"shippingCharges,omitempty"`
 	// PaymentMethod defines order payment method values.
 	PaymentMethod string `json:"paymentMethod,omitempty"`
+	// AppliedCoupons defines coupons applied to this order.
+	AppliedCoupons []AppliedCoupon `json:"appliedCoupons,omitempty"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt defines creation timestamps.

@@ -130,6 +130,24 @@ type orderMetadataRecord struct {
 	Value string `gorm:"type:text;not null"`
 }
 
+// orderAppliedCouponRecord defines applied coupon persistence rows for orders.
+type orderAppliedCouponRecord struct {
+	// ID defines surrogate identifiers.
+	ID uint `gorm:"primaryKey"`
+	// OrderID defines owning order identifiers.
+	OrderID string `gorm:"size:64;not null;index;uniqueIndex:idx_order_applied_coupons_order_code,priority:1"`
+	// CouponID defines the linked coupon identifier (may be empty for externally-sourced coupons).
+	CouponID string `gorm:"size:64;not null;default:''"`
+	// Code defines the coupon code applied.
+	Code string `gorm:"size:128;not null;uniqueIndex:idx_order_applied_coupons_order_code,priority:2"`
+	// DiscountType defines the discount type at time of application.
+	DiscountType string `gorm:"size:32;not null"`
+	// DiscountAmount defines the discount amount at time of application.
+	DiscountAmount float64 `gorm:"type:decimal(18,4);not null;default:0"`
+	// AppliedAt defines the application timestamp.
+	AppliedAt time.Time `gorm:"not null"`
+}
+
 // orderItemMetadataRecord defines order-item metadata persistence rows.
 type orderItemMetadataRecord struct {
 	// ID defines surrogate identifiers.
@@ -165,3 +183,6 @@ func (orderMetadataRecord) TableName() string { return "order_metadata" }
 
 // TableName defines storage table names.
 func (orderItemMetadataRecord) TableName() string { return "order_item_metadata" }
+
+// TableName defines storage table names.
+func (orderAppliedCouponRecord) TableName() string { return "order_applied_coupons" }

@@ -16,6 +16,10 @@ type Config struct {
 	SyncOrders bool `mapstructure:"WOOCOMMERCE_SYNC_ORDERS" default:"false"`
 	// SyncOrdersCron defines cron specs for scheduled order sync behavior.
 	SyncOrdersCron string `mapstructure:"WOOCOMMERCE_SYNC_ORDERS_CRON" default:"0 0 * * *"`
+	// SyncCoupons enables coupon sync behavior.
+	SyncCoupons bool `mapstructure:"WOOCOMMERCE_SYNC_COUPONS" default:"false"`
+	// SyncCouponsCron defines cron specs for scheduled coupon sync behavior.
+	SyncCouponsCron string `mapstructure:"WOOCOMMERCE_SYNC_COUPONS_CRON" default:"0 1 * * *"`
 	// SyncPageSize defines order page sizes for sync behavior.
 	SyncPageSize int `mapstructure:"WOOCOMMERCE_SYNC_PAGE_SIZE" default:"100"`
 	// SyncWorkers defines concurrent upsert worker counts for sync behavior.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
@@ -165,6 +166,37 @@ func shippingEqual(left ordersdomain.ShippingAddress, right ordersdomain.Shippin
 		strings.TrimSpace(left.Address2) == strings.TrimSpace(right.Address2) &&
 		strings.TrimSpace(left.Phone) == strings.TrimSpace(right.Phone) &&
 		strings.TrimSpace(left.CityCode) == strings.TrimSpace(right.CityCode)
+}
+
+// normalizeAppliedCoupons maps applied-coupon command values to domain applied-coupon values.
+func normalizeAppliedCoupons(values []AppliedCouponCommand) []ordersdomain.AppliedCoupon {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]ordersdomain.AppliedCoupon, 0, len(values))
+	for _, value := range values {
+		code := strings.TrimSpace(value.Code)
+		if code == "" {
+			continue
+		}
+		appliedAt := time.Now().UTC()
+		if value.AppliedAt != nil && !value.AppliedAt.IsZero() {
+			appliedAt = value.AppliedAt.UTC()
+		}
+		rows = append(rows, ordersdomain.AppliedCoupon{
+			CouponID:       strings.TrimSpace(value.CouponID),
+			Code:           code,
+			DiscountType:   strings.TrimSpace(value.DiscountType),
+			DiscountAmount: value.DiscountAmount,
+			AppliedAt:      appliedAt,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
 }
 
 // normalizeShippingCharges normalizes shipping charge command values.

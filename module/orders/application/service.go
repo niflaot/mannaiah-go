@@ -64,6 +64,20 @@ type ShippingChargeCommand struct {
 	Price float64
 }
 
+// AppliedCouponCommand defines applied-coupon command values.
+type AppliedCouponCommand struct {
+	// CouponID defines optional coupon identifier values (empty for externally-sourced coupons).
+	CouponID string
+	// Code defines the coupon code.
+	Code string
+	// DiscountType defines the discount calculation method.
+	DiscountType string
+	// DiscountAmount defines the discount value applied.
+	DiscountAmount float64
+	// AppliedAt defines the coupon application timestamp.
+	AppliedAt *time.Time
+}
+
 // CreateCommand defines order creation payload values.
 type CreateCommand struct {
 	// Identifier defines external order identifiers.
@@ -86,6 +100,8 @@ type CreateCommand struct {
 	ShippingCharges []ShippingChargeCommand
 	// PaymentMethod defines order payment method values.
 	PaymentMethod string
+	// AppliedCoupons defines coupons applied to this order.
+	AppliedCoupons []AppliedCouponCommand
 	// Metadata defines order metadata values.
 	Metadata map[string]string
 	// CreatedAt defines optional source creation timestamps.
@@ -290,6 +306,7 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		StatusHistory:   []ordersdomain.StatusEntry{entry},
 		ShippingCharges: normalizeShippingCharges(command.ShippingCharges),
 		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
+		AppliedCoupons:  normalizeAppliedCoupons(command.AppliedCoupons),
 		Metadata:        command.Metadata,
 	}
 	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {

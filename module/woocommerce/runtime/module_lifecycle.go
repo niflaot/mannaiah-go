@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
+	woocouponservice "mannaiah/module/woocommerce/application/coupon/service"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 )
@@ -25,7 +26,7 @@ func (m *Module) Start(ctx context.Context) error {
 	}
 
 	m.validateAtStartup(resolveContext(ctx))
-	if !m.cfg.SyncContacts && !m.cfg.SyncOrders {
+	if !m.cfg.SyncContacts && !m.cfg.SyncOrders && !m.cfg.SyncCoupons {
 		m.started = true
 		return nil
 	}
@@ -62,6 +63,22 @@ func (m *Module) Start(ctx context.Context) error {
 		m.ordersSchedulerEntryID = entryID
 	}
 
+	if m.cfg.SyncCoupons && m.couponsSyncService != nil {
+		entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.SyncCouponsCron), func() {
+			syncCtx, cancel := context.WithTimeout(context.Background(), resolveSyncTimeout(m.cfg.SyncTimeoutMS))
+			defer cancel()
+
+			if _, syncErr := m.couponsSyncService.SyncCoupons(syncCtx, "cron"); syncErr != nil {
+				m.logger.Warn("woocommerce cron coupons sync failed", zap.Error(syncErr))
+			}
+		})
+		if err != nil {
+			return fmt.Errorf("register woocommerce coupons sync cron: %w", err)
+		}
+
+		m.couponsSchedulerEntryID = entryID
+	}
+
 	m.scheduler.Start()
 	m.started = true
 	return nil
@@ -84,6 +101,8 @@ func (m *Module) Stop(ctx context.Context) error {
 	m.contactsSchedulerEntryID = 0
 	ordersEntryID := m.ordersSchedulerEntryID
 	m.ordersSchedulerEntryID = 0
+	couponsEntryID := m.couponsSchedulerEntryID
+	m.couponsSchedulerEntryID = 0
 	scheduler := m.scheduler
 	m.mutex.Unlock()
 
@@ -95,6 +114,9 @@ func (m *Module) Stop(ctx context.Context) error {
 	}
 	if ordersEntryID != 0 {
 		scheduler.Remove(ordersEntryID)
+	}
+	if couponsEntryID != 0 {
+		scheduler.Remove(couponsEntryID)
 	}
 	if err := scheduler.Stop(ctx); err != nil {
 		return fmt.Errorf("stop woocommerce scheduler: %w", err)
@@ -122,4 +144,12 @@ func (m *Module) validateAtStartup(ctx context.Context) {
 
 	validate(m.contactsSyncService.ValidateIntegration, woocontactservice.ErrSyncDisabled)
 	validate(m.ordersSyncService.ValidateIntegration, wooorderservice.ErrSyncDisabled)
+	if m.couponsSyncService != nil {
+		validate(func(ctx context.Context) error {
+			if !m.cfg.SyncCoupons {
+				return woocouponservice.ErrSyncDisabled
+			}
+			return nil
+		}, woocouponservice.ErrSyncDisabled)
+	}
 }

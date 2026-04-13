@@ -70,6 +70,7 @@ import (
 	"mannaiah/module/shipping"
 	shippingevent "mannaiah/module/shipping/adapter/event"
 	shippingsearch "mannaiah/module/shipping/adapter/search"
+	"mannaiah/module/coupons"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -223,7 +224,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "1.2.0",
+		Version:     "1.3.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -599,18 +600,28 @@ func run(ctx context.Context, envFile string) error {
 	})
 	shippingModule.SetQuotationProductSource(shippingProductQuotationSourceAdapter{products: productsModule.Service()})
 
+	couponsModule, err := coupons.New(db, messaging.Publisher())
+	if err != nil {
+		return fmt.Errorf("initialize coupons module: %w", err)
+	}
+	couponsModule.SetAuthorizer(authModule)
+	if err := couponsModule.Load(runtime); err != nil {
+		return fmt.Errorf("load coupons module: %w", err)
+	}
+
 	var wooScheduler corecron.Scheduler
-	if wooCfg.SyncContacts || wooCfg.SyncOrders {
+	if wooCfg.SyncContacts || wooCfg.SyncOrders || wooCfg.SyncCoupons {
 		wooScheduler, err = corecron.NewScheduler(cronCfg, logger)
 		if err != nil {
 			return fmt.Errorf("create woocommerce scheduler: %w", err)
 		}
 	}
 
-	wooModule, err := woocommerce.NewWithMessaging(
+	wooModule, err := woocommerce.NewWithMessagingAndCouponTarget(
 		wooCfg,
 		contactsModule.Service(),
 		ordersModule.Service(),
+		couponWooSyncAdapter{service: couponsModule.Service()},
 		wooScheduler,
 		logger,
 		messaging.Registrar(),

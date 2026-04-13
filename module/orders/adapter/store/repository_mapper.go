@@ -114,6 +114,40 @@ func toShippingRecord(orderID string, shipping ordersdomain.ShippingAddress) ord
 	}
 }
 
+// toAppliedCouponRecords maps applied coupon domain values to storage rows.
+func toAppliedCouponRecords(orderID string, coupons []ordersdomain.AppliedCoupon) []orderAppliedCouponRecord {
+	rows := make([]orderAppliedCouponRecord, 0, len(coupons))
+	for _, c := range coupons {
+		rows = append(rows, orderAppliedCouponRecord{
+			OrderID:        strings.TrimSpace(orderID),
+			CouponID:       strings.TrimSpace(c.CouponID),
+			Code:           strings.TrimSpace(c.Code),
+			DiscountType:   strings.TrimSpace(c.DiscountType),
+			DiscountAmount: c.DiscountAmount,
+			AppliedAt:      c.AppliedAt.UTC(),
+		})
+	}
+	return rows
+}
+
+// toAppliedCoupons maps applied coupon storage rows to domain values.
+func toAppliedCoupons(rows []orderAppliedCouponRecord) []ordersdomain.AppliedCoupon {
+	if len(rows) == 0 {
+		return nil
+	}
+	coupons := make([]ordersdomain.AppliedCoupon, 0, len(rows))
+	for _, row := range rows {
+		coupons = append(coupons, ordersdomain.AppliedCoupon{
+			CouponID:       strings.TrimSpace(row.CouponID),
+			Code:           strings.TrimSpace(row.Code),
+			DiscountType:   strings.TrimSpace(row.DiscountType),
+			DiscountAmount: row.DiscountAmount,
+			AppliedAt:      row.AppliedAt,
+		})
+	}
+	return coupons
+}
+
 // toOrderEntity maps root and child storage rows to order aggregate values.
 func toOrderEntity(
 	record orderRecord,
@@ -123,6 +157,7 @@ func toOrderEntity(
 	shipping *orderShippingAddressRecord,
 	shippingCharges []orderShippingChargeRecord,
 	orderMetadata map[string]string,
+	appliedCoupons []orderAppliedCouponRecord,
 ) ordersdomain.Order {
 	resolvedStatus := resolveCurrentStatus(statuses)
 	entity := ordersdomain.Order{
@@ -136,9 +171,10 @@ func toOrderEntity(
 		UpdatedAt:       record.UpdatedAt,
 		StatusHistory:   toStatusEntries(statuses),
 		Comments:        toComments(comments),
-		Items:           toItemEntities(items),
+		Items:          toItemEntities(items),
 		ShippingAddress: ordersdomain.ShippingAddress{},
 		ShippingCharges: toShippingCharges(shippingCharges),
+		AppliedCoupons:  toAppliedCoupons(appliedCoupons),
 		Metadata:        orderMetadata,
 	}
 	if shipping != nil {

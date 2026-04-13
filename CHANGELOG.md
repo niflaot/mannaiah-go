@@ -52,6 +52,20 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.3.0] - 2026-04-12
+- Coupons module: full coupon management feature added (`module/coupons`).
+  - Domain: `Coupon` aggregate with fixed/percentage discount types, per-email and global usage limits, expiry, assigned emails/contacts, product/category/tag scope, and WooCommerce deduplication key.
+  - Application: `Service` with create, update, delete, get-by-id/code/woocommerce-id, list, and record-usage use-cases; integration events published on every mutation and redemption.
+  - HTTP adapter: REST endpoints under `/coupons` for CRUD and `/coupons/:id/usage` for redemption recording; migrated to `corehttp.Context` with structured `AppError` responses.
+  - Store adapter: GORM-backed repository with PostgreSQL JSONB columns for list fields, soft-delete, and coupon-usage table.
+  - Event adapter: Watermill bus publisher bridge.
+  - OpenAPI spec: coupon endpoints documented under the `Coupons` tag with full request/response schemas.
+  - WooCommerce coupon sync: `SyncCoupons` cron job pages WooCommerce coupons and upserts them via `CouponSyncTarget`; `client_coupons.go` implements `ListCoupons`, `GetCouponByID`, and `UpsertCoupon`; `couponWooSyncAdapter` bridges the woo sync target to the coupons service.
+  - Order sync: `coupon_lines` now extracted from raw WooCommerce order payloads and stored as `AppliedCoupon` records on orders via `order_applied_coupons` join table.
+  - DB migrations: `000044` (coupons + coupon_usages tables) and `000045` (order_applied_coupons table).
+  - New env vars: `WOOCOMMERCE_SYNC_COUPONS`, `WOOCOMMERCE_SYNC_COUPONS_CRON`.
+- Release metadata updated to `v1.3.0`.
+
 ### [v1.2.0] - 2026-04-08
 - Shipping manual flow: operator-entered tracking details can now be staged in manual batches without quotation-derived payloads.
   - `POST /shipping/batches/{id}/marks` already accepts `trackingNumber`, `customTrackingUrl`, and `observations`; manual batches now also tolerate sparse payloads by defaulting shipment mode and a placeholder package unit server-side.

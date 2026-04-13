@@ -16,6 +16,8 @@ import (
 type orderGateway interface {
 	port.OrderSource
 	port.OrderDestination
+	port.CouponSource
+	port.CouponDestination
 }
 
 // newSource creates WooCommerce order source adapters from module config values.
@@ -71,4 +73,19 @@ func (f failingSource) ListOrders(ctx context.Context, page int, pageSize int) (
 // UpdateOrderFromMainstream returns startup validation failures.
 func (f failingSource) UpdateOrderFromMainstream(ctx context.Context, command port.MainstreamOrderUpdateCommand) error {
 	return f.err
+}
+
+// ListCoupons returns startup validation failures.
+func (f failingSource) ListCoupons(ctx context.Context, page int, pageSize int) (coupons []port.WooCoupon, hasNext bool, err error) {
+	return nil, false, f.err
+}
+
+// GetCouponByID returns startup validation failures.
+func (f failingSource) GetCouponByID(ctx context.Context, id int) (port.WooCoupon, error) {
+	return port.WooCoupon{}, f.err
+}
+
+// UpsertCoupon returns startup validation failures.
+func (f failingSource) UpsertCoupon(ctx context.Context, command port.CouponSyncCommand) (port.CouponSyncResult, error) {
+	return port.CouponSyncResult{}, f.err
 }

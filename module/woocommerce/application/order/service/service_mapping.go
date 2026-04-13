@@ -73,6 +73,7 @@ func mapOrderToCommand(order port.WooOrder) (port.OrderSyncCommand, bool, mapOrd
 		Items:           items,
 		ShippingAddress: mapShippingAddress(order),
 		ShippingCharges: mapShippingCharges(order.ShippingCharges),
+		AppliedCoupons:  mapCouponLines(order.CouponLines),
 		Metadata:        nil,
 		Comments:        mapOrderComments(order),
 	}
@@ -212,6 +213,30 @@ func mapShippingCharges(values []port.WooOrderShippingCharge) []port.OrderSyncSh
 			MethodID:    methodID,
 			MethodTitle: methodTitle,
 			Price:       value.Price,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return rows
+}
+
+// mapCouponLines maps WooCommerce coupon-line values to order sync applied-coupon values.
+func mapCouponLines(values []port.WooOrderCouponLine) []port.OrderSyncAppliedCoupon {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]port.OrderSyncAppliedCoupon, 0, len(values))
+	for _, value := range values {
+		code := strings.TrimSpace(value.Code)
+		if code == "" {
+			continue
+		}
+		rows = append(rows, port.OrderSyncAppliedCoupon{
+			Code:     code,
+			Discount: strings.TrimSpace(value.Discount),
 		})
 	}
 	if len(rows) == 0 {
