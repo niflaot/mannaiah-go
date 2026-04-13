@@ -10,7 +10,7 @@ Provides coupon creation, management, and usage tracking with WooCommerce synchr
 |--------|------|-------------|
 | `POST` | `/coupons` | Create a coupon (auto-generates a code when none provided) |
 | `GET` | `/coupons` | List coupons with optional filters (`origin`, `active`, `code`, `limit`, `offset`) |
-| `GET` | `/search/coupons` | Search coupons with optional filters (`term`, `email`, `contact`, `code`, `origin`, `discountType`, `limit`, `offset`) |
+| `GET` | `/search/coupons` | Search coupons with unified search params (`term`, `filter[discountType]`, `page`, `pageSize`) |
 | `GET` | `/coupons/:id` | Get coupon by ID |
 | `GET` | `/coupons/code/:code` | Get coupon by code |
 | `PUT` | `/coupons/:id` | Update coupon (replaces assignment/scope lists wholesale) |
@@ -47,14 +47,10 @@ Supported query filters:
 
 | Query | Match type | Description |
 |-------|------------|-------------|
-| `term` | partial | Free-text match across coupon code, origin, assigned emails, and assigned contact identifiers |
-| `email` | partial | Match within assigned email values |
-| `contact` | partial | Match within assigned contact identifier values |
-| `code` | partial | Match within coupon code |
-| `origin` | exact | Match coupon origin |
-| `discountType` | exact | Match `fixed` or `percentage` |
-| `limit` | exact | Page size (default `50`) |
-| `offset` | exact | Zero-based pagination offset (default `0`) |
+| `term` | partial | Free-text match across coupon code, origin, assigned emails, assigned contact identifiers, and linked contact names/emails |
+| `filter[discountType]` | exact | Match `fixed` or `percentage` |
+| `page` | exact | 1-based page number (default `1`) |
+| `pageSize` | exact | Page size (default `20`, max `100`) |
 
 ### Response
 
@@ -62,7 +58,7 @@ Successful responses return HTTP `200` with the following JSON shape:
 
 ```json
 {
-  "items": [
+  "data": [
     {
       "id": "coupon_123",
       "code": "SAVE-2026",
@@ -83,7 +79,10 @@ Successful responses return HTTP `200` with the following JSON shape:
       "updatedAt": "2026-04-13T12:00:00Z"
     }
   ],
-  "total": 1
+  "total": 1,
+  "page": 1,
+  "pageSize": 20,
+  "totalPages": 1
 }
 ```
 

@@ -30,6 +30,7 @@ func TestOpenAPISpecContainsAllEndpoints(t *testing.T) {
 		"/search/tags",
 		"/search/shipping",
 		"/search/campaigns",
+		"/search/coupons",
 		"/search/segments",
 		"/search",
 	}
@@ -75,5 +76,26 @@ func TestOpenAPISpecSpotlightEndpoint(t *testing.T) {
 	}
 	if len(pathItem.Get.Parameters) != 3 {
 		t.Errorf("spotlight params = %d, want 3", len(pathItem.Get.Parameters))
+	}
+}
+
+// TestOpenAPISpecCouponEndpointIncludesDiscountTypeFilter verifies coupon-specific filter docs.
+func TestOpenAPISpecCouponEndpointIncludesDiscountTypeFilter(t *testing.T) {
+	spec := OpenAPISpec()
+	pathItem := spec.Paths.Find("/search/coupons")
+	if pathItem == nil || pathItem.Get == nil {
+		t.Fatal("missing /search/coupons GET operation")
+	}
+
+	found := false
+	for _, parameter := range pathItem.Get.Parameters {
+		if parameter != nil && parameter.Value != nil && parameter.Value.Name == "filter[discountType]" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Fatal("expected filter[discountType] parameter on /search/coupons")
 	}
 }

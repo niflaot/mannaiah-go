@@ -16,23 +16,25 @@ func OpenAPISpec() *openapi3.T {
 
 	paths := openapi3.NewPaths()
 	resources := []struct {
-		path string
-		tag  string
-		desc string
+		path            string
+		tag             string
+		desc            string
+		extraParameters openapi3.Parameters
 	}{
-		{"/search/contacts", "contacts", "Search contacts"},
-		{"/search/orders", "orders", "Search orders"},
-		{"/search/products", "products", "Search products"},
-		{"/search/categories", "categories", "Search categories"},
-		{"/search/variations", "variations", "Search product variations"},
-		{"/search/tags", "tags", "Search product tags"},
-		{"/search/shipping", "shipping", "Search shipping marks"},
-		{"/search/campaigns", "campaigns", "Search campaigns"},
-		{"/search/segments", "segments", "Search segments"},
+		{path: "/search/contacts", tag: "contacts", desc: "Search contacts"},
+		{path: "/search/orders", tag: "orders", desc: "Search orders"},
+		{path: "/search/products", tag: "products", desc: "Search products"},
+		{path: "/search/categories", tag: "categories", desc: "Search categories"},
+		{path: "/search/variations", tag: "variations", desc: "Search product variations"},
+		{path: "/search/tags", tag: "tags", desc: "Search product tags"},
+		{path: "/search/shipping", tag: "shipping", desc: "Search shipping marks"},
+		{path: "/search/campaigns", tag: "campaigns", desc: "Search campaigns"},
+		{path: "/search/coupons", tag: "coupons", desc: "Search coupons", extraParameters: couponSearchParameters()},
+		{path: "/search/segments", tag: "segments", desc: "Search segments"},
 	}
 
 	for _, r := range resources {
-		paths.Set(r.path, resourceSearchPathItem(r.tag, r.desc))
+		paths.Set(r.path, resourceSearchPathItem(r.tag, r.desc, r.extraParameters))
 	}
 	paths.Set("/search", spotlightPathItem())
 
@@ -50,13 +52,16 @@ func OpenAPISpec() *openapi3.T {
 	}
 }
 
-func resourceSearchPathItem(tag string, summary string) *openapi3.PathItem {
+func resourceSearchPathItem(tag string, summary string, extraParameters openapi3.Parameters) *openapi3.PathItem {
+	parameters := searchQueryParameters()
+	parameters = append(parameters, extraParameters...)
+
 	return &openapi3.PathItem{
 		Get: &openapi3.Operation{
 			OperationID: "Search_" + tag,
 			Summary:     summary,
 			Tags:        []string{tag, searchTag},
-			Parameters:  searchQueryParameters(),
+			Parameters:  parameters,
 			Responses: openapi3.NewResponses(
 				openapi3.WithStatus(200, &openapi3.ResponseRef{
 					Value: openapi3.NewResponse().WithDescription("Paginated search results").WithJSONSchemaRef(&openapi3.SchemaRef{Ref: "#/components/schemas/SearchResult"}),
@@ -64,6 +69,18 @@ func resourceSearchPathItem(tag string, summary string) *openapi3.PathItem {
 				openapi3.WithStatus(400, &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription("Invalid query parameters")}),
 			),
 		},
+	}
+}
+
+// couponSearchParameters returns coupon-specific unified-search parameters.
+func couponSearchParameters() openapi3.Parameters {
+	return openapi3.Parameters{
+		{Value: &openapi3.Parameter{
+			Name:        "filter[discountType]",
+			In:          "query",
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema().WithEnum("fixed", "percentage")},
+			Description: "Exact discount type filter. Example: filter[discountType]=fixed",
+		}},
 	}
 }
 
@@ -76,17 +93,17 @@ func spotlightPathItem() *openapi3.PathItem {
 			Parameters: openapi3.Parameters{
 				{Value: &openapi3.Parameter{
 					Name: "term", In: "query", Required: true,
-					Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
+					Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
 					Description: "Free-text search term",
 				}},
 				{Value: &openapi3.Parameter{
 					Name: "types", In: "query",
-					Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
+					Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
 					Description: "Comma-separated resource types to include (e.g. contact,order,product)",
 				}},
 				{Value: &openapi3.Parameter{
 					Name: "limit", In: "query",
-					Schema: &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()},
+					Schema:      &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()},
 					Description: "Maximum results per provider (default: 10, max: 50)",
 				}},
 			},
@@ -104,32 +121,32 @@ func searchQueryParameters() openapi3.Parameters {
 	return openapi3.Parameters{
 		{Value: &openapi3.Parameter{
 			Name: "term", In: "query",
-			Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
 			Description: "Free-text search term matched against configured text fields via LIKE",
 		}},
 		{Value: &openapi3.Parameter{
 			Name: "page", In: "query",
-			Schema: &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()},
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()},
 			Description: "1-based page number (default: 1)",
 		}},
 		{Value: &openapi3.Parameter{
 			Name: "pageSize", In: "query",
-			Schema: &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()},
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewInt64Schema()},
 			Description: "Items per page (default: 20, max: 100)",
 		}},
 		{Value: &openapi3.Parameter{
 			Name: "sort", In: "query",
-			Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
 			Description: "Sort fields as field:dir pairs. Example: created_at:desc,name:asc",
 		}},
 		{Value: &openapi3.Parameter{
 			Name: "filter[field]", In: "query",
-			Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
 			Description: "Exact match filter. Example: filter[status]=ACTIVE",
 		}},
 		{Value: &openapi3.Parameter{
 			Name: "filter[field.op]", In: "query",
-			Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
+			Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema()},
 			Description: "Operator filter (gte,lte,gt,lt,between,in,like). Example: filter[created_at.gte]=2024-01-01",
 		}},
 	}

@@ -36,6 +36,7 @@ The search infrastructure is built on these principles:
 | Tags        | `GET /search/tags`        | name                                                  |
 | Shipping    | `GET /search/shipping`    | tracking_number, order_id, observations               |
 | Campaigns   | `GET /search/campaigns`   | name, slug, subject                                   |
+| Coupons     | `GET /search/coupons`     | code, origin, assigned emails, assigned contact ids, linked contact names/emails |
 | Segments    | `GET /search/segments`    | name, slug                                            |
 | Spotlight   | `GET /search`             | All of the above (concurrent fan-out)                 |
 

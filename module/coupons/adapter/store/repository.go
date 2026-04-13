@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
+	coresearch "mannaiah/module/core/search"
 	"mannaiah/module/coupons/domain"
 	"mannaiah/module/coupons/port"
+
+	"gorm.io/gorm"
 )
 
 // Repository defines coupon and usage GORM persistence adapters.
@@ -149,30 +151,12 @@ func (r *Repository) Search(ctx context.Context, query port.SearchQuery) ([]doma
 	tx := r.db.WithContext(ctx).Model(&couponRecord{}).Where("deleted_at IS NULL")
 
 	if v := strings.TrimSpace(query.Term); v != "" {
-		upperValue := strings.ToUpper(v)
-		lowerValue := strings.ToLower(v)
-		tx = tx.Where(
-			"(code LIKE ? OR LOWER(origin) LIKE ? OR EXISTS (SELECT 1 FROM coupon_assigned_emails WHERE coupon_id = coupons.id AND email LIKE ?) OR EXISTS (SELECT 1 FROM coupon_assigned_contact_ids WHERE coupon_id = coupons.id AND contact_id LIKE ?))",
-			"%"+upperValue+"%",
-			"%"+lowerValue+"%",
-			"%"+lowerValue+"%",
-			"%"+v+"%",
-		)
-	}
-	if v := strings.TrimSpace(query.Code); v != "" {
-		tx = tx.Where("code LIKE ?", "%"+strings.ToUpper(v)+"%")
-	}
-	if v := strings.TrimSpace(query.Origin); v != "" {
-		tx = tx.Where("origin = ?", v)
+		upperValue := "%" + strings.ToUpper(v) + "%"
+		lowerValue := "%" + strings.ToLower(v) + "%"
+		tx = tx.Where(r.couponSearchTermClause(), upperValue, lowerValue, lowerValue, lowerValue, lowerValue, lowerValue, lowerValue, lowerValue, lowerValue)
 	}
 	if v := strings.TrimSpace(query.DiscountType); v != "" {
 		tx = tx.Where("discount_type = ?", v)
-	}
-	if v := strings.ToLower(strings.TrimSpace(query.Email)); v != "" {
-		tx = tx.Where("EXISTS (SELECT 1 FROM coupon_assigned_emails WHERE coupon_id = coupons.id AND email LIKE ?)", "%"+v+"%")
-	}
-	if v := strings.TrimSpace(query.ContactID); v != "" {
-		tx = tx.Where("EXISTS (SELECT 1 FROM coupon_assigned_contact_ids WHERE coupon_id = coupons.id AND contact_id LIKE ?)", "%"+v+"%")
 	}
 
 	var total int64
@@ -183,17 +167,11 @@ func (r *Repository) Search(ctx context.Context, query port.SearchQuery) ([]doma
 		return nil, 0, nil
 	}
 
-	limit := query.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	offset := query.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	page, pageSize := coresearch.NormalizePagination(query.Page, query.PageSize)
+	offset := (page - 1) * pageSize
 
 	var records []couponRecord
-	if err := tx.Limit(limit).Offset(offset).Order("created_at DESC, id DESC").Find(&records).Error; err != nil {
+	if err := tx.Limit(pageSize).Offset(offset).Order("created_at DESC, id DESC").Find(&records).Error; err != nil {
 		return nil, 0, fmt.Errorf("search coupons: %w", err)
 	}
 
@@ -213,6 +191,43 @@ func (r *Repository) Search(ctx context.Context, query port.SearchQuery) ([]doma
 	}
 
 	return result, total, nil
+}
+
+// couponSearchTermClause returns the SQL predicate used for unified coupon term search.
+func (r *Repository) couponSearchTermClause() string {
+	return fmt.Sprintf(`(
+		code LIKE ?
+		OR LOWER(origin) LIKE ?
+		OR EXISTS (
+			SELECT 1
+			FROM coupon_assigned_emails assigned_emails
+			WHERE assigned_emails.coupon_id = coupons.id
+				AND LOWER(assigned_emails.email) LIKE ?
+		)
+		OR EXISTS (
+			SELECT 1
+			FROM coupon_assigned_contact_ids assigned_contacts
+			LEFT JOIN contacts ON contacts.id = assigned_contacts.contact_id AND contacts.deleted_at IS NULL
+			WHERE assigned_contacts.coupon_id = coupons.id
+				AND (
+					LOWER(assigned_contacts.contact_id) LIKE ?
+					OR LOWER(contacts.email) LIKE ?
+					OR LOWER(contacts.legal_name) LIKE ?
+					OR LOWER(contacts.first_name) LIKE ?
+					OR LOWER(contacts.last_name) LIKE ?
+					OR LOWER(%s) LIKE ?
+				)
+		)
+	)`, r.contactFullNameExpression("contacts"))
+}
+
+// contactFullNameExpression returns a dialect-safe SQL expression for contact full names.
+func (r *Repository) contactFullNameExpression(tableAlias string) string {
+	if r.db.Dialector.Name() == "sqlite" {
+		return fmt.Sprintf("trim(coalesce(%s.first_name, '') || ' ' || coalesce(%s.last_name, ''))", tableAlias, tableAlias)
+	}
+
+	return fmt.Sprintf("trim(concat(coalesce(%s.first_name, ''), ' ', coalesce(%s.last_name, '')))", tableAlias, tableAlias)
 }
 
 // CodeExists reports whether a coupon code is already in use.

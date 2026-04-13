@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corehttp "mannaiah/module/core/http"
+	coresearch "mannaiah/module/core/search"
 	couponservice "mannaiah/module/coupons/application/coupon/service"
 	"mannaiah/module/coupons/domain"
 	"mannaiah/module/coupons/port"
@@ -283,16 +284,13 @@ func (h *Handler) search(ctx corehttp.Context) error {
 	if term == "" {
 		term = strings.TrimSpace(ctx.Query("search"))
 	}
+	page, pageSize := resolveSearchPagination(ctx)
 
 	query := port.SearchQuery{
 		Term:         term,
-		Email:        strings.ToLower(strings.TrimSpace(ctx.Query("email"))),
-		ContactID:    strings.TrimSpace(ctx.Query("contact")),
-		Code:         strings.TrimSpace(ctx.Query("code")),
-		Origin:       strings.TrimSpace(ctx.Query("origin")),
-		DiscountType: strings.TrimSpace(ctx.Query("discountType")),
-		Limit:        parseIntQuery(ctx, "limit", 50),
-		Offset:       parseIntQuery(ctx, "offset", 0),
+		DiscountType: resolveSearchFilterValue(ctx, "discountType"),
+		Page:         page,
+		PageSize:     pageSize,
 	}
 
 	coupons, total, err := h.service.Search(ctx.Context(), query)
@@ -300,7 +298,7 @@ func (h *Handler) search(ctx corehttp.Context) error {
 		return corehttp.NewAppError(500, "internal_server_error", err)
 	}
 
-	return ctx.Status(200).JSON(listResponse{Items: coupons, Total: total})
+	return ctx.Status(200).JSON(coresearch.NewResult(coupons, total, page, pageSize))
 }
 
 // protect wraps endpoint handlers with optional authentication and permission checks.
@@ -394,4 +392,41 @@ func parseIntQuery(ctx corehttp.Context, key string, defaultValue int) int {
 		return defaultValue
 	}
 	return v
+}
+
+// resolveSearchFilterValue resolves unified-search filter values with legacy fallback support.
+func resolveSearchFilterValue(ctx corehttp.Context, field string) string {
+	filterKey := "filter[" + field + "]"
+	if value := strings.TrimSpace(ctx.Query(filterKey)); value != "" {
+		return value
+	}
+
+	return strings.TrimSpace(ctx.Query(field))
+}
+
+// resolveSearchPagination resolves standard page/pageSize values with legacy limit/offset fallback.
+func resolveSearchPagination(ctx corehttp.Context) (int, int) {
+	pageRaw := strings.TrimSpace(ctx.Query("page"))
+	pageSizeRaw := strings.TrimSpace(ctx.Query("pageSize"))
+	if pageRaw != "" || pageSizeRaw != "" {
+		return coresearch.NormalizePagination(
+			parseIntQuery(ctx, "page", coresearch.DefaultPage),
+			parseIntQuery(ctx, "pageSize", coresearch.DefaultPageSize),
+		)
+	}
+
+	limitRaw := strings.TrimSpace(ctx.Query("limit"))
+	offsetRaw := strings.TrimSpace(ctx.Query("offset"))
+	if limitRaw == "" && offsetRaw == "" {
+		return coresearch.NormalizePagination(coresearch.DefaultPage, coresearch.DefaultPageSize)
+	}
+
+	pageSize := parseIntQuery(ctx, "limit", coresearch.DefaultPageSize)
+	offset := parseIntQuery(ctx, "offset", 0)
+	page := coresearch.DefaultPage
+	if pageSize > 0 {
+		page = (offset / pageSize) + 1
+	}
+
+	return coresearch.NormalizePagination(page, pageSize)
 }

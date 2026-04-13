@@ -5,8 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"go.uber.org/zap"
 	"mannaiah/module/woocommerce/port"
+
+	"go.uber.org/zap"
 )
 
 // startSyncRunRecord starts sync recorder runs and ignores recorder failures.

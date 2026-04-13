@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getkin/kin-openapi/openapi3"
-	"go.uber.org/zap"
 	contactapplication "mannaiah/module/contacts/application"
 	contactdomain "mannaiah/module/contacts/domain"
 	contactport "mannaiah/module/contacts/port"
@@ -17,6 +15,9 @@ import (
 	"mannaiah/module/core/messaging/bus"
 	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"go.uber.org/zap"
 )
 
 // contactServiceMock defines contacts service behavior for module tests.

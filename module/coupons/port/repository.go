@@ -24,22 +24,14 @@ type ListQuery struct {
 
 // SearchQuery defines coupon full-text search filter values.
 type SearchQuery struct {
-	// Term performs a partial free-text match across code, origin, assigned emails, and assigned contacts.
+	// Term performs a partial free-text match across code, origin, assigned emails, assigned contacts, and linked contact names.
 	Term string
-	// Email filters coupons that have the given email in their assigned-email list (partial match).
-	Email string
-	// ContactID filters coupons that have the given contact identifier in their assigned-contact list (partial match).
-	ContactID string
-	// Code filters coupons whose code contains the given value (partial match).
-	Code string
-	// Origin filters coupons by exact origin value.
-	Origin string
 	// DiscountType filters coupons by exact discount type value.
 	DiscountType string
-	// Offset defines pagination offset values.
-	Offset int
-	// Limit defines pagination page-size values.
-	Limit int
+	// Page defines 1-based pagination page values.
+	Page int
+	// PageSize defines pagination page-size values.
+	PageSize int
 }
 
 // CouponRepository defines coupon persistence behavior.
