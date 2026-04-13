@@ -65,6 +65,8 @@ type SyncSummary struct {
 
 // Service defines WooCommerce coupon sync use-case behavior.
 type Service interface {
+	// ValidateIntegration verifies sync preconditions and WooCommerce connectivity.
+	ValidateIntegration(ctx context.Context) error
 	// SyncCoupons performs coupon synchronization and emits integration events.
 	SyncCoupons(ctx context.Context, trigger string) (*SyncSummary, error)
 }
@@ -83,6 +85,8 @@ type CouponSyncService struct {
 	cfg SyncConfig
 	// sourceBreaker guards WooCommerce API calls.
 	sourceBreaker CircuitBreaker
+	// syncRecorder defines optional sync-run recording dependencies.
+	syncRecorder port.SyncRecorder
 }
 
 var (
@@ -108,25 +112,63 @@ func NewService(cfg SyncConfig, source port.CouponSource, target port.CouponSync
 		logger:        resolveLogger(providedLogger),
 		cfg:           normalizeSyncConfig(cfg),
 		sourceBreaker: resolvedBreakers.Source,
+		syncRecorder:  port.NoopSyncRecorder{},
 	}, nil
+}
+
+// SetSyncRecorder configures optional sync run recording dependencies.
+func (s *CouponSyncService) SetSyncRecorder(recorder port.SyncRecorder) {
+	if s == nil {
+		return
+	}
+	if recorder == nil {
+		s.syncRecorder = port.NoopSyncRecorder{}
+		return
+	}
+
+	s.syncRecorder = recorder
+}
+
+// ValidateIntegration verifies sync preconditions and WooCommerce connectivity.
+func (s *CouponSyncService) ValidateIntegration(ctx context.Context) error {
+	if !s.cfg.Enabled {
+		return ErrSyncDisabled
+	}
+
+	err := s.executeWithBreaker(s.sourceBreaker, ErrIntegrationUnavailable, func() error {
+		return s.source.Validate(ctx)
+	})
+	if err != nil {
+		if errors.Is(err, ErrIntegrationUnavailable) {
+			return err
+		}
+		return fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
+	}
+
+	return nil
 }
 
 // SyncCoupons performs coupon synchronization and emits integration events.
 func (s *CouponSyncService) SyncCoupons(ctx context.Context, trigger string) (*SyncSummary, error) {
-	if !s.cfg.Enabled {
-		return nil, ErrSyncDisabled
-	}
-
 	summary := &SyncSummary{Trigger: trigger}
+	runID := s.startSyncRunRecord(ctx, summary.Trigger)
 
 	_ = s.publisher.Publish(ctx, woocouponevent.NewSyncStartedEvent(trigger))
 
+	if err := s.ValidateIntegration(ctx); err != nil {
+		_ = s.publisher.Publish(ctx, woocouponevent.NewSyncFailedEvent(toEventSummary(summary), err))
+		s.finishSyncRunRecord(ctx, runID, summary, err)
+		return nil, err
+	}
+
 	if err := s.syncAllPages(ctx, summary); err != nil {
 		_ = s.publisher.Publish(ctx, woocouponevent.NewSyncFailedEvent(toEventSummary(summary), err))
+		s.finishSyncRunRecord(ctx, runID, summary, err)
 		return summary, fmt.Errorf("woocommerce coupon sync: %w", err)
 	}
 
 	_ = s.publisher.Publish(ctx, woocouponevent.NewSyncCompletedEvent(toEventSummary(summary)))
+	s.finishSyncRunRecord(ctx, runID, summary, nil)
 	return summary, nil
 }
 

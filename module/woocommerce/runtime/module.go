@@ -181,7 +181,7 @@ func NewWithCouponTarget(
 	}
 
 	var couponsSyncService woocouponservice.Service
-	if cfg.SyncCoupons && couponSyncTarget != nil && sourceErr == nil {
+	if couponSyncTarget != nil {
 		couponsSyncService, err = woocouponservice.NewService(
 			woocouponservice.SyncConfig{
 				Enabled:  cfg.SyncCoupons,
@@ -204,6 +204,7 @@ func NewWithCouponTarget(
 	if err != nil {
 		return nil, err
 	}
+	handler.SetCouponSyncService(couponsSyncService)
 
 	return &Module{
 		cfg:                 cfg,
@@ -246,6 +247,9 @@ func (m *Module) SetSyncRecorder(recorder port.SyncRecorder) {
 	}
 	if orderSyncService, ok := m.ordersSyncService.(*wooorderservice.OrderSyncService); ok {
 		orderSyncService.SetSyncRecorder(recorder)
+	}
+	if couponSyncService, ok := m.couponsSyncService.(*woocouponservice.CouponSyncService); ok {
+		couponSyncService.SetSyncRecorder(recorder)
 	}
 }
 

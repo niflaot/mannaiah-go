@@ -14,5 +14,6 @@
   - `(*http.Handler).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /woo/sync/contacts` (`?email=<contact@email>` optional targeted sync)
+  - `POST /woo/sync/coupons`
   - `POST /woo/sync/orders` (`?id=<woo_order_id>` optional targeted sync)
 - Events: none in this package.

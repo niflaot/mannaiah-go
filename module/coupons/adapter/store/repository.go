@@ -148,6 +148,17 @@ func (r *Repository) List(ctx context.Context, query port.ListQuery) ([]domain.C
 func (r *Repository) Search(ctx context.Context, query port.SearchQuery) ([]domain.Coupon, int64, error) {
 	tx := r.db.WithContext(ctx).Model(&couponRecord{}).Where("deleted_at IS NULL")
 
+	if v := strings.TrimSpace(query.Term); v != "" {
+		upperValue := strings.ToUpper(v)
+		lowerValue := strings.ToLower(v)
+		tx = tx.Where(
+			"(code LIKE ? OR LOWER(origin) LIKE ? OR EXISTS (SELECT 1 FROM coupon_assigned_emails WHERE coupon_id = coupons.id AND email LIKE ?) OR EXISTS (SELECT 1 FROM coupon_assigned_contact_ids WHERE coupon_id = coupons.id AND contact_id LIKE ?))",
+			"%"+upperValue+"%",
+			"%"+lowerValue+"%",
+			"%"+lowerValue+"%",
+			"%"+v+"%",
+		)
+	}
 	if v := strings.TrimSpace(query.Code); v != "" {
 		tx = tx.Where("code LIKE ?", "%"+strings.ToUpper(v)+"%")
 	}

@@ -24,6 +24,8 @@ type ListQuery struct {
 
 // SearchQuery defines coupon full-text search filter values.
 type SearchQuery struct {
+	// Term performs a partial free-text match across code, origin, assigned emails, and assigned contacts.
+	Term string
 	// Email filters coupons that have the given email in their assigned-email list (partial match).
 	Email string
 	// ContactID filters coupons that have the given contact identifier in their assigned-contact list (partial match).

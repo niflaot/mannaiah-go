@@ -8,6 +8,8 @@ type SyncKind string
 const (
 	// KindWooCommerceContacts defines WooCommerce contact sync runs.
 	KindWooCommerceContacts SyncKind = "woocommerce.contacts"
+	// KindWooCommerceCoupons defines WooCommerce coupon sync runs.
+	KindWooCommerceCoupons SyncKind = "woocommerce.coupons"
 	// KindWooCommerceOrders defines WooCommerce order sync runs.
 	KindWooCommerceOrders SyncKind = "woocommerce.orders"
 	// KindFalabellaProducts defines Falabella product sync runs.
@@ -30,6 +32,7 @@ const (
 func (k SyncKind) IsValid() bool {
 	switch SyncKind(strings.TrimSpace(string(k))) {
 	case KindWooCommerceContacts,
+		KindWooCommerceCoupons,
 		KindWooCommerceOrders,
 		KindFalabellaProducts,
 		KindFalabellaStatusResolution,

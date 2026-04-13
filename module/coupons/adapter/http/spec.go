@@ -50,6 +50,32 @@ func Paths() *openapi3.Paths {
 				),
 			},
 		}),
+		openapi3.WithPath("/search/coupons", &openapi3.PathItem{
+			Get: &openapi3.Operation{
+				Tags:        []string{"Coupons"},
+				Summary:     "Search coupons",
+				Description: "Returns a paginated coupon list filtered by free-text term, email, contact, code, origin, and discount type.",
+				OperationID: "searchCoupons",
+				Security:    openapi3.NewSecurityRequirements().With(openapi3.NewSecurityRequirement().Authenticate("coupons_bearer")),
+				Parameters: openapi3.Parameters{
+					{Value: openapi3.NewQueryParameter("term").WithDescription("Partial free-text term matched against code, origin, assigned emails, and assigned contact identifiers.").WithSchema(openapi3.NewStringSchema())},
+					{Value: openapi3.NewQueryParameter("email").WithDescription("Partial assigned-email match.").WithSchema(openapi3.NewStringSchema())},
+					{Value: openapi3.NewQueryParameter("contact").WithDescription("Partial assigned-contact identifier match.").WithSchema(openapi3.NewStringSchema())},
+					{Value: openapi3.NewQueryParameter("code").WithDescription("Partial coupon-code match.").WithSchema(openapi3.NewStringSchema())},
+					{Value: openapi3.NewQueryParameter("origin").WithDescription("Exact coupon origin match.").WithSchema(openapi3.NewStringSchema())},
+					{Value: openapi3.NewQueryParameter("discountType").WithDescription("Exact discount type match (`fixed` or `percentage`).").WithSchema(openapi3.NewStringSchema().WithEnum("fixed", "percentage"))},
+					{Value: openapi3.NewQueryParameter("limit").WithDescription("Page size.").WithSchema(openapi3.NewIntegerSchema())},
+					{Value: openapi3.NewQueryParameter("offset").WithDescription("Zero-based pagination offset.").WithSchema(openapi3.NewIntegerSchema())},
+				},
+				Responses: openapi3.NewResponses(
+					openapi3.WithStatus(200, &openapi3.ResponseRef{
+						Value: openapi3.NewResponse().WithDescription("Coupon search result.").
+							WithJSONSchemaRef(openapi3.NewSchemaRef("#/components/schemas/CouponSearchResponse", nil)),
+					}),
+					openapi3.WithStatus(401, errorResponse("Unauthorized")),
+				),
+			},
+		}),
 		openapi3.WithPath("/coupons/code/{code}", &openapi3.PathItem{
 			Get: &openapi3.Operation{
 				Tags:        []string{"Coupons"},
@@ -243,12 +269,18 @@ func Schemas() openapi3.Schemas {
 		"total": openapi3.NewInt64Schema(),
 	})
 
+	searchResp := openapi3.NewObjectSchema().WithProperties(map[string]*openapi3.Schema{
+		"items": openapi3.NewArraySchema().WithItems(coupon),
+		"total": openapi3.NewInt64Schema(),
+	})
+
 	return openapi3.Schemas{
 		"Coupon":                  openapi3.NewSchemaRef("", coupon),
 		"CreateCouponRequest":     openapi3.NewSchemaRef("", createReq),
 		"UpdateCouponRequest":     openapi3.NewSchemaRef("", updateReq),
 		"RecordCouponUsageRequest": openapi3.NewSchemaRef("", usageReq),
 		"CouponListResponse":      openapi3.NewSchemaRef("", listResp),
+		"CouponSearchResponse":    openapi3.NewSchemaRef("", searchResp),
 	}
 }
 

@@ -10,6 +10,7 @@ Provides coupon creation, management, and usage tracking with WooCommerce synchr
 |--------|------|-------------|
 | `POST` | `/coupons` | Create a coupon (auto-generates a code when none provided) |
 | `GET` | `/coupons` | List coupons with optional filters (`origin`, `active`, `code`, `limit`, `offset`) |
+| `GET` | `/search/coupons` | Search coupons with optional filters (`term`, `email`, `contact`, `code`, `origin`, `discountType`, `limit`, `offset`) |
 | `GET` | `/coupons/:id` | Get coupon by ID |
 | `GET` | `/coupons/code/:code` | Get coupon by code |
 | `PUT` | `/coupons/:id` | Update coupon (replaces assignment/scope lists wholesale) |
@@ -35,6 +36,56 @@ Provides coupon creation, management, and usage tracking with WooCommerce synchr
 - **Scope**: `includedProductIds`, `includedCategoryIds`, `includedTagIds`. Empty = applies to all.
   - **Note**: Tag filtering is enforced by this system only. WooCommerce does not natively restrict coupons by product tags.
 - **WooCommerce sync**: `woocommerceId` links the coupon to its WooCommerce counterpart for deduplication.
+
+## Search endpoint contract
+
+### Request
+
+`GET /search/coupons`
+
+Supported query filters:
+
+| Query | Match type | Description |
+|-------|------------|-------------|
+| `term` | partial | Free-text match across coupon code, origin, assigned emails, and assigned contact identifiers |
+| `email` | partial | Match within assigned email values |
+| `contact` | partial | Match within assigned contact identifier values |
+| `code` | partial | Match within coupon code |
+| `origin` | exact | Match coupon origin |
+| `discountType` | exact | Match `fixed` or `percentage` |
+| `limit` | exact | Page size (default `50`) |
+| `offset` | exact | Zero-based pagination offset (default `0`) |
+
+### Response
+
+Successful responses return HTTP `200` with the following JSON shape:
+
+```json
+{
+  "items": [
+    {
+      "id": "coupon_123",
+      "code": "SAVE-2026",
+      "origin": "woocommerce",
+      "discountType": "percentage",
+      "discountAmount": 10,
+      "maxUsagesGlobal": 100,
+      "maxUsagesPerEmail": 1,
+      "active": true,
+      "expiresAt": "2026-12-31T23:59:59Z",
+      "assignedEmails": ["user@example.com"],
+      "assignedContactIds": ["contact_123"],
+      "includedProductIds": ["product_1"],
+      "includedCategoryIds": ["category_1"],
+      "includedTagIds": ["tag_1"],
+      "wooCommerceId": 42,
+      "createdAt": "2026-04-13T12:00:00Z",
+      "updatedAt": "2026-04-13T12:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
 
 ## WooCommerce limitations
 

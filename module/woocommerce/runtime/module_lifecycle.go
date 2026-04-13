@@ -145,11 +145,6 @@ func (m *Module) validateAtStartup(ctx context.Context) {
 	validate(m.contactsSyncService.ValidateIntegration, woocontactservice.ErrSyncDisabled)
 	validate(m.ordersSyncService.ValidateIntegration, wooorderservice.ErrSyncDisabled)
 	if m.couponsSyncService != nil {
-		validate(func(ctx context.Context) error {
-			if !m.cfg.SyncCoupons {
-				return woocouponservice.ErrSyncDisabled
-			}
-			return nil
-		}, woocouponservice.ErrSyncDisabled)
+		validate(m.couponsSyncService.ValidateIntegration, woocouponservice.ErrSyncDisabled)
 	}
 }

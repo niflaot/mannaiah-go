@@ -28,6 +28,9 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/woo/sync/contacts", &openapi3.PathItem{
 				Post: syncContactsOperation(),
 			}),
+			openapi3.WithPath("/woo/sync/coupons", &openapi3.PathItem{
+				Post: syncCouponsOperation(),
+			}),
 			openapi3.WithPath("/woo/sync/orders", &openapi3.PathItem{
 				Post: syncOrdersOperation(),
 			}),
@@ -36,6 +39,22 @@ func OpenAPISpec() *openapi3.T {
 		Tags: openapi3.Tags{
 			&openapi3.Tag{Name: wooTag},
 		},
+	}
+}
+
+// syncCouponsOperation defines OpenAPI operations for manual coupon sync endpoints.
+func syncCouponsOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "WooCommerceSyncController_triggerCouponSync",
+		Summary:     "Trigger WooCommerce coupon sync",
+		Tags:        []string{wooTag},
+		Security:    bearerSecurityRequirements(),
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("Sync triggered successfully.")),
+			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
+			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
+			openapi3.WithStatus(503, responseWithDescription("WooCommerce integration unavailable or disabled.")),
+		),
 	}
 }
 

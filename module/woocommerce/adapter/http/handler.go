@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	corehttp "mannaiah/module/core/http"
+	woocouponservice "mannaiah/module/woocommerce/application/coupon/service"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 )
@@ -34,6 +35,8 @@ type Handler struct {
 	contactsService woocontactservice.Service
 	// ordersService defines WooCommerce order sync service dependencies.
 	ordersService wooorderservice.Service
+	// couponsService defines WooCommerce coupon sync service dependencies.
+	couponsService woocouponservice.Service
 	// authorizer defines optional auth dependency for protected endpoints.
 	authorizer Authorizer
 }
@@ -68,10 +71,20 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 	h.authorizer = authorizer
 }
 
+// SetCouponSyncService configures optional coupon sync dependencies.
+func (h *Handler) SetCouponSyncService(service woocouponservice.Service) {
+	if h == nil {
+		return
+	}
+
+	h.couponsService = service
+}
+
 // RegisterRoutes registers WooCommerce integration routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/woo/sync/contacts", h.protect("contact:sync", h.syncContacts))
 	router.Post("/woo/sync/orders", h.protect("order:sync", h.syncOrders))
+	router.Post("/woo/sync/coupons", h.protect("coupon:sync", h.syncCoupons))
 }
 
 // syncContacts triggers manual contact sync behavior.
@@ -112,6 +125,20 @@ func (h *Handler) syncOrders(ctx corehttp.Context) error {
 	} else {
 		summary, err = h.ordersService.SyncOrders(ctx.Context(), "manual")
 	}
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(summary)
+}
+
+// syncCoupons triggers manual coupon sync behavior.
+func (h *Handler) syncCoupons(ctx corehttp.Context) error {
+	if h.couponsService == nil {
+		return h.mapError(woocouponservice.ErrSyncDisabled)
+	}
+
+	summary, err := h.couponsService.SyncCoupons(ctx.Context(), "manual")
 	if err != nil {
 		return h.mapError(err)
 	}
@@ -167,6 +194,12 @@ func (h *Handler) mapError(err error) error {
 		return corehttp.NewAppError(503, "woocommerce_integration_unavailable", err)
 	}
 	if errors.Is(err, wooorderservice.ErrIntegrationUnavailable) {
+		return corehttp.NewAppError(503, "woocommerce_integration_unavailable", err)
+	}
+	if errors.Is(err, woocouponservice.ErrSyncDisabled) {
+		return corehttp.NewAppError(503, "woocommerce_coupons_sync_disabled", err)
+	}
+	if errors.Is(err, woocouponservice.ErrIntegrationUnavailable) || errors.Is(err, woocouponservice.ErrUpsertUnavailable) {
 		return corehttp.NewAppError(503, "woocommerce_integration_unavailable", err)
 	}
 

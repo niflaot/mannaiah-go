@@ -55,13 +55,13 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes mounts all coupon routes onto the provided router.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
-	router.Post("/coupons", h.protect(h.create, "coupons:write"))
-	router.Get("/coupons", h.protect(h.list, "coupons:read"))
-	router.Get("/coupons/:id", h.protect(h.getByID, "coupons:read"))
-	router.Put("/coupons/:id", h.protect(h.update, "coupons:write"))
-	router.Delete("/coupons/:id", h.protect(h.delete, "coupons:write"))
-	router.Get("/coupons/code/:code", h.protect(h.getByCode, "coupons:read"))
-	router.Post("/coupons/:id/usage", h.protect(h.recordUsage, "coupons:write"))
+	router.Post("/coupons", h.protect(h.create, "coupon:manage"))
+	router.Get("/coupons", h.protect(h.list, "coupon:view"))
+	router.Get("/coupons/:id", h.protect(h.getByID, "coupon:view"))
+	router.Put("/coupons/:id", h.protect(h.update, "coupon:manage"))
+	router.Delete("/coupons/:id", h.protect(h.delete, "coupon:manage"))
+	router.Get("/coupons/code/:code", h.protect(h.getByCode, "coupon:view"))
+	router.Post("/coupons/:id/usage", h.protect(h.recordUsage, "coupon:manage"))
 	router.Get("/search/coupons", h.protectAny(h.search, "coupon:view", "coupon:manage", "coupon:sync"))
 }
 
@@ -279,7 +279,13 @@ func (h *Handler) recordUsage(ctx corehttp.Context) error {
 
 // search handles GET /search/coupons.
 func (h *Handler) search(ctx corehttp.Context) error {
+	term := strings.TrimSpace(ctx.Query("term"))
+	if term == "" {
+		term = strings.TrimSpace(ctx.Query("search"))
+	}
+
 	query := port.SearchQuery{
+		Term:         term,
 		Email:        strings.ToLower(strings.TrimSpace(ctx.Query("email"))),
 		ContactID:    strings.TrimSpace(ctx.Query("contact")),
 		Code:         strings.TrimSpace(ctx.Query("code")),

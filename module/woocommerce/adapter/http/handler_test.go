@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	corehttp "mannaiah/module/core/http"
+	woocouponservice "mannaiah/module/woocommerce/application/coupon/service"
 	woocontactservice "mannaiah/module/woocommerce/application/contact/service"
 	wooorderservice "mannaiah/module/woocommerce/application/order/service"
 )
@@ -100,6 +101,31 @@ func (m *ordersServiceMock) SyncOrderByID(ctx context.Context, trigger string, o
 	return &wooorderservice.SyncSummary{Trigger: trigger, Processed: 1}, nil
 }
 
+// couponsServiceMock defines WooCommerce coupons service behavior for handler tests.
+type couponsServiceMock struct {
+	// summary defines sync summary responses.
+	summary *woocouponservice.SyncSummary
+	// syncErr defines sync execution errors.
+	syncErr error
+}
+
+// ValidateIntegration validates integration state.
+func (m *couponsServiceMock) ValidateIntegration(ctx context.Context) error {
+	return nil
+}
+
+// SyncCoupons performs sync behavior.
+func (m *couponsServiceMock) SyncCoupons(ctx context.Context, trigger string) (*woocouponservice.SyncSummary, error) {
+	if m.syncErr != nil {
+		return nil, m.syncErr
+	}
+	if m.summary != nil {
+		return m.summary, nil
+	}
+
+	return &woocouponservice.SyncSummary{Trigger: trigger}, nil
+}
+
 // authorizerMock defines authorization behavior for handler tests.
 type authorizerMock struct {
 	// requireErr defines auth errors.
@@ -146,10 +172,14 @@ func TestRegisterRoutesAndSync(t *testing.T) {
 	ordersMock := &ordersServiceMock{
 		summary: &wooorderservice.SyncSummary{Trigger: "manual", Processed: 3},
 	}
+	couponsMock := &couponsServiceMock{
+		summary: &woocouponservice.SyncSummary{Trigger: "manual", Processed: 4},
+	}
 	handler, err := NewHandler(contactsMock, ordersMock)
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
+	handler.SetCouponSyncService(couponsMock)
 
 	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8121}, nil)
 	if err != nil {
@@ -191,6 +221,15 @@ func TestRegisterRoutesAndSync(t *testing.T) {
 	}
 	if targetOrderResponse.StatusCode != stdhttp.StatusOK {
 		t.Fatalf("status = %d, want %d", targetOrderResponse.StatusCode, stdhttp.StatusOK)
+	}
+
+	couponRequest, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/coupons", nil)
+	couponResponse, couponErr := server.App().Test(couponRequest)
+	if couponErr != nil {
+		t.Fatalf("App().Test() error = %v", couponErr)
+	}
+	if couponResponse.StatusCode != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want %d", couponResponse.StatusCode, stdhttp.StatusOK)
 	}
 	if contactsMock.lastEmail != "target@example.com" {
 		t.Fatalf("contacts lastEmail = %q, want %q", contactsMock.lastEmail, "target@example.com")
@@ -254,6 +293,12 @@ func TestMapError(t *testing.T) {
 	if appErr := handler.mapError(wooorderservice.ErrIntegrationUnavailable); appErr == nil {
 		t.Fatalf("expected mapError(order integration unavailable)")
 	}
+	if appErr := handler.mapError(woocouponservice.ErrSyncDisabled); appErr == nil {
+		t.Fatalf("expected mapError(coupon sync disabled)")
+	}
+	if appErr := handler.mapError(woocouponservice.ErrIntegrationUnavailable); appErr == nil {
+		t.Fatalf("expected mapError(coupon integration unavailable)")
+	}
 	if appErr := handler.mapError(errorspkg.New("unknown")); appErr == nil {
 		t.Fatalf("expected mapError(unknown)")
 	}
@@ -289,5 +334,28 @@ func TestSyncRoutesInvalidOrderIDQuery(t *testing.T) {
 	}
 	if response.StatusCode != stdhttp.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", response.StatusCode, stdhttp.StatusBadRequest)
+	}
+}
+
+// TestSyncCouponsWithoutServiceReturnsServiceUnavailable verifies coupon sync behavior without optional service wiring.
+func TestSyncCouponsWithoutServiceReturnsServiceUnavailable(t *testing.T) {
+	handler, err := NewHandler(&contactsServiceMock{}, &ordersServiceMock{})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8124}, nil)
+	if err != nil {
+		t.Fatalf("corehttp.New() error = %v", err)
+	}
+	server.RegisterRoutes(handler.RegisterRoutes)
+
+	request, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/coupons", nil)
+	response, testErr := server.App().Test(request)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+	if response.StatusCode != stdhttp.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.StatusCode, stdhttp.StatusServiceUnavailable)
 	}
 }

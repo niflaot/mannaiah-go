@@ -277,6 +277,15 @@ func TestRegisterRoutesServer(t *testing.T) {
 	if orderResp.StatusCode != stdhttp.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", orderResp.StatusCode, stdhttp.StatusServiceUnavailable)
 	}
+
+	couponReq, _ := stdhttp.NewRequest(stdhttp.MethodPost, "/woo/sync/coupons", nil)
+	couponResp, couponTestErr := server.App().Test(couponReq)
+	if couponTestErr != nil {
+		t.Fatalf("App().Test() error = %v", couponTestErr)
+	}
+	if couponResp.StatusCode != stdhttp.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", couponResp.StatusCode, stdhttp.StatusServiceUnavailable)
+	}
 }
 
 // TestSetAuthorizer verifies optional authorizer wiring behavior.

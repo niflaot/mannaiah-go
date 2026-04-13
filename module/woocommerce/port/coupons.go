@@ -69,6 +69,8 @@ type CouponSyncResult struct {
 
 // CouponSource defines WooCommerce coupon retrieval behavior.
 type CouponSource interface {
+	// Validate verifies source connectivity and credentials.
+	Validate(ctx context.Context) error
 	// ListCoupons retrieves paginated coupon values and reports whether additional pages exist.
 	ListCoupons(ctx context.Context, page int, pageSize int) (coupons []WooCoupon, hasNext bool, err error)
 	// GetCouponByID retrieves one WooCommerce coupon by identifier.

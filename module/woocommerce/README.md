@@ -8,6 +8,7 @@
 - WooCommerce adapter and sync orchestration.
 - Contact synchronization from WooCommerce orders into the contacts module.
 - Order synchronization from WooCommerce orders into the orders module.
+- Coupon synchronization from WooCommerce coupons into the coupons module.
 - Contact `createdAt` alignment with oldest WooCommerce order dates per email.
 - Manual and scheduled sync triggers.
 - Integration events for sync lifecycle visibility.
@@ -37,11 +38,15 @@
   - `(*woocommerce.Module).SetAuthorizer(authorizer)`
 - Endpoints:
   - `POST /woo/sync/contacts` (`?email=<contact@email>` optional targeted sync).
+  - `POST /woo/sync/coupons`
   - `POST /woo/sync/orders` (`?id=<woo_order_id>` optional targeted sync).
 - Events:
   - `woocommerce.v1.contacts.sync.started`
   - `woocommerce.v1.contacts.sync.completed`
   - `woocommerce.v1.contacts.sync.failed`
+  - `woocommerce.v1.coupons.sync.started`
+  - `woocommerce.v1.coupons.sync.completed`
+  - `woocommerce.v1.coupons.sync.failed`
   - `woocommerce.v1.orders.sync.started`
   - `woocommerce.v1.orders.sync.completed`
   - `woocommerce.v1.orders.sync.failed`
