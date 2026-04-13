@@ -22,6 +22,24 @@ type ListQuery struct {
 	Limit int
 }
 
+// SearchQuery defines coupon full-text search filter values.
+type SearchQuery struct {
+	// Email filters coupons that have the given email in their assigned-email list (partial match).
+	Email string
+	// ContactID filters coupons that have the given contact identifier in their assigned-contact list (partial match).
+	ContactID string
+	// Code filters coupons whose code contains the given value (partial match).
+	Code string
+	// Origin filters coupons by exact origin value.
+	Origin string
+	// DiscountType filters coupons by exact discount type value.
+	DiscountType string
+	// Offset defines pagination offset values.
+	Offset int
+	// Limit defines pagination page-size values.
+	Limit int
+}
+
 // CouponRepository defines coupon persistence behavior.
 type CouponRepository interface {
 	// Create persists a new coupon aggregate.
@@ -38,6 +56,8 @@ type CouponRepository interface {
 	Delete(ctx context.Context, id string) error
 	// List retrieves paginated coupons matching the provided query.
 	List(ctx context.Context, query ListQuery) ([]domain.Coupon, int64, error)
+	// Search retrieves paginated coupons matching the provided full-text search query.
+	Search(ctx context.Context, query SearchQuery) ([]domain.Coupon, int64, error)
 	// CodeExists reports whether a coupon code is already in use.
 	CodeExists(ctx context.Context, code string) (bool, error)
 }

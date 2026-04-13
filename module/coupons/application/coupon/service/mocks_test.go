@@ -114,6 +114,16 @@ func (m *mockRepository) List(_ context.Context, _ port.ListQuery) ([]domain.Cou
 	return result, int64(len(result)), nil
 }
 
+func (m *mockRepository) Search(_ context.Context, _ port.SearchQuery) ([]domain.Coupon, int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]domain.Coupon, 0, len(m.coupons))
+	for _, c := range m.coupons {
+		result = append(result, *c)
+	}
+	return result, int64(len(result)), nil
+}
+
 func (m *mockRepository) CodeExists(_ context.Context, code string) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

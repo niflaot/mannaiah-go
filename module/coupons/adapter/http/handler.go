@@ -62,6 +62,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Delete("/coupons/:id", h.protect(h.delete, "coupons:write"))
 	router.Get("/coupons/code/:code", h.protect(h.getByCode, "coupons:read"))
 	router.Post("/coupons/:id/usage", h.protect(h.recordUsage, "coupons:write"))
+	router.Get("/search/coupons", h.protectAny(h.search, "coupon:view", "coupon:manage", "coupon:sync"))
 }
 
 // createRequest defines coupon creation request payload values.
@@ -276,6 +277,26 @@ func (h *Handler) recordUsage(ctx corehttp.Context) error {
 	return ctx.SendStatus(204)
 }
 
+// search handles GET /search/coupons.
+func (h *Handler) search(ctx corehttp.Context) error {
+	query := port.SearchQuery{
+		Email:        strings.ToLower(strings.TrimSpace(ctx.Query("email"))),
+		ContactID:    strings.TrimSpace(ctx.Query("contact")),
+		Code:         strings.TrimSpace(ctx.Query("code")),
+		Origin:       strings.TrimSpace(ctx.Query("origin")),
+		DiscountType: strings.TrimSpace(ctx.Query("discountType")),
+		Limit:        parseIntQuery(ctx, "limit", 50),
+		Offset:       parseIntQuery(ctx, "offset", 0),
+	}
+
+	coupons, total, err := h.service.Search(ctx.Context(), query)
+	if err != nil {
+		return corehttp.NewAppError(500, "internal_server_error", err)
+	}
+
+	return ctx.Status(200).JSON(listResponse{Items: coupons, Total: total})
+}
+
 // protect wraps endpoint handlers with optional authentication and permission checks.
 func (h *Handler) protect(next corehttp.Handler, permissions ...string) corehttp.Handler {
 	if h == nil || h.authorizer == nil {
@@ -289,6 +310,23 @@ func (h *Handler) protect(next corehttp.Handler, permissions ...string) corehttp
 		}
 
 		return next(ctx)
+	}
+}
+
+// protectAny wraps an endpoint handler requiring the token to hold at least one of the given permissions.
+func (h *Handler) protectAny(next corehttp.Handler, permissions ...string) corehttp.Handler {
+	if h == nil || h.authorizer == nil {
+		return next
+	}
+
+	return func(ctx corehttp.Context) error {
+		header := ctx.GetHeader("Authorization")
+		for _, perm := range permissions {
+			if err := h.authorizer.Require(ctx.Context(), header, perm); err == nil {
+				return next(ctx)
+			}
+		}
+		return corehttp.NewAppError(403, "forbidden", nil)
 	}
 }
 

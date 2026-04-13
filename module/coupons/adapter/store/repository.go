@@ -144,6 +144,66 @@ func (r *Repository) List(ctx context.Context, query port.ListQuery) ([]domain.C
 	return result, total, nil
 }
 
+// Search retrieves paginated coupons matching the provided full-text search query.
+func (r *Repository) Search(ctx context.Context, query port.SearchQuery) ([]domain.Coupon, int64, error) {
+	tx := r.db.WithContext(ctx).Model(&couponRecord{}).Where("deleted_at IS NULL")
+
+	if v := strings.TrimSpace(query.Code); v != "" {
+		tx = tx.Where("code LIKE ?", "%"+strings.ToUpper(v)+"%")
+	}
+	if v := strings.TrimSpace(query.Origin); v != "" {
+		tx = tx.Where("origin = ?", v)
+	}
+	if v := strings.TrimSpace(query.DiscountType); v != "" {
+		tx = tx.Where("discount_type = ?", v)
+	}
+	if v := strings.ToLower(strings.TrimSpace(query.Email)); v != "" {
+		tx = tx.Where("EXISTS (SELECT 1 FROM coupon_assigned_emails WHERE coupon_id = coupons.id AND email LIKE ?)", "%"+v+"%")
+	}
+	if v := strings.TrimSpace(query.ContactID); v != "" {
+		tx = tx.Where("EXISTS (SELECT 1 FROM coupon_assigned_contact_ids WHERE coupon_id = coupons.id AND contact_id LIKE ?)", "%"+v+"%")
+	}
+
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count search coupons: %w", err)
+	}
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := query.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var records []couponRecord
+	if err := tx.Limit(limit).Offset(offset).Order("created_at DESC, id DESC").Find(&records).Error; err != nil {
+		return nil, 0, fmt.Errorf("search coupons: %w", err)
+	}
+
+	ids := make([]string, 0, len(records))
+	for _, rec := range records {
+		ids = append(ids, rec.ID)
+	}
+
+	emails, contacts, products, categories, tags, err := r.loadChildrenByIDs(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]domain.Coupon, 0, len(records))
+	for _, rec := range records {
+		result = append(result, toCouponEntity(rec, emails[rec.ID], contacts[rec.ID], products[rec.ID], categories[rec.ID], tags[rec.ID]))
+	}
+
+	return result, total, nil
+}
+
 // CodeExists reports whether a coupon code is already in use.
 func (r *Repository) CodeExists(ctx context.Context, code string) (bool, error) {
 	var count int64

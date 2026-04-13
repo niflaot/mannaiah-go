@@ -282,6 +282,11 @@ func (s *Service) List(ctx context.Context, query port.ListQuery) ([]domain.Coup
 	return s.repository.List(ctx, query)
 }
 
+// Search retrieves paginated coupons matching the provided search query.
+func (s *Service) Search(ctx context.Context, query port.SearchQuery) ([]domain.Coupon, int64, error) {
+	return s.repository.Search(ctx, query)
+}
+
 // RecordUsage validates limits and records a coupon redemption event.
 func (s *Service) RecordUsage(ctx context.Context, cmd RecordUsageCommand) error {
 	coupon, err := s.repository.GetByID(ctx, strings.TrimSpace(cmd.CouponID))
