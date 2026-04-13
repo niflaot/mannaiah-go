@@ -34,6 +34,7 @@ require (
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/campaign v0.0.0
 	mannaiah/module/contacts v0.0.0
+	mannaiah/module/coupons v0.0.0
 	mannaiah/module/email v0.0.0
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/membership v0.0.0
@@ -97,8 +98,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hhrutter/lzw v1.0.0 // indirect
-	github.com/hhrutter/tiff v1.0.1 // indirect
 	github.com/hiscaler/gox v0.0.0-20220607093548-75ae453f938c // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -125,7 +124,6 @@ require (
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/paulmach/orb v0.11.1 // indirect
-	github.com/pdfcpu/pdfcpu v0.8.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
@@ -170,7 +168,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240822170219-fc7c04adadcd // indirect
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
@@ -201,3 +198,5 @@ replace mannaiah/module/email => ../email
 replace mannaiah/module/campaign => ../campaign
 
 replace mannaiah/module/shipping => ../shipping
+
+replace mannaiah/module/coupons => ../coupons
