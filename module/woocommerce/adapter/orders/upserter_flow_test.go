@@ -85,6 +85,9 @@ func TestUpsertByIdentifierCreate(t *testing.T) {
 	if command.ShippingAddress == nil || command.ShippingAddress.Address != "Ship Street" {
 		t.Fatalf("createCommand.ShippingAddress = %+v, want mapped shipping address", command.ShippingAddress)
 	}
+	if len(command.AppliedCoupons) != 0 {
+		t.Fatalf("expected no applied coupons in create command, got %+v", command.AppliedCoupons)
+	}
 }
 
 // TestUpsertByIdentifierUpdate verifies update-path status and comment behavior.
@@ -150,6 +153,9 @@ func TestUpsertByIdentifierUpdate(t *testing.T) {
 	if orderService.addCommentCommands[0].Comment != "Order delivered" {
 		t.Fatalf("comment text = %q, want %q", orderService.addCommentCommands[0].Comment, "Order delivered")
 	}
+	if len(orderService.updateCommands) != 1 {
+		t.Fatalf("len(updateCommands) = %d, want 1", len(orderService.updateCommands))
+	}
 }
 
 // TestUpsertByIdentifierUnchanged verifies unchanged-path behavior.
@@ -165,6 +171,7 @@ func TestUpsertByIdentifierUnchanged(t *testing.T) {
 		Realm:         defaultRealm,
 		ContactID:     "contact-1",
 		CurrentStatus: ordersdomain.StatusCompleted,
+		Items:         []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1}},
 		StatusHistory: []ordersdomain.StatusEntry{
 			{Status: ordersdomain.StatusCompleted, Author: syncStatusAuthor, Description: syncStatusDescription, OccurredAt: time.Date(2026, time.February, 10, 12, 0, 0, 0, time.UTC)},
 		},
@@ -208,6 +215,9 @@ func TestUpsertByIdentifierUnchanged(t *testing.T) {
 	}
 	if len(orderService.addCommentCommands) != 0 {
 		t.Fatalf("expected no comment updates on unchanged sync")
+	}
+	if len(orderService.updateCommands) != 1 {
+		t.Fatalf("expected one mutable update evaluation on unchanged sync, got %d", len(orderService.updateCommands))
 	}
 }
 
@@ -260,6 +270,81 @@ func TestUpsertByIdentifierUpdateIgnoredByOrderService(t *testing.T) {
 	}
 	if len(orderService.addCommentCommands) != 1 {
 		t.Fatalf("len(addCommentCommands) = %d, want 1", len(orderService.addCommentCommands))
+	}
+	if len(orderService.updateCommands) != 1 {
+		t.Fatalf("len(updateCommands) = %d, want 1", len(orderService.updateCommands))
+	}
+}
+
+// TestUpsertByIdentifierUpdateRefreshesAppliedCoupons verifies mutable order refresh behavior for existing synced orders.
+func TestUpsertByIdentifierUpdateRefreshesAppliedCoupons(t *testing.T) {
+	contactService := newContactServiceMock()
+	seedContact(contactService, "contact-1", "woo.one@example.com")
+
+	createdAt := time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)
+	orderService := newOrdersServiceMock()
+	orderService.orders["order-1"] = ordersdomain.Order{
+		ID:            "order-1",
+		Identifier:    "1001",
+		Realm:         defaultRealm,
+		ContactID:     "contact-1",
+		CurrentStatus: ordersdomain.StatusCreated,
+		StatusHistory: []ordersdomain.StatusEntry{{
+			Status:     ordersdomain.StatusCreated,
+			Author:     syncStatusAuthor,
+			OccurredAt: createdAt,
+		}},
+		Items: []ordersdomain.Item{{SKU: "SKU-1", Quantity: 1, Value: 10000}},
+	}
+
+	upserter, err := NewUpserter(orderService, contactService)
+	if err != nil {
+		t.Fatalf("NewUpserter() error = %v", err)
+	}
+
+	outcome, err := upserter.UpsertByIdentifier(context.Background(), port.OrderSyncCommand{
+		Identifier: "1001",
+		Realm:      defaultRealm,
+		Status:     "processing",
+		CreatedAt:  &createdAt,
+		Contact: port.ContactSyncCommand{
+			Email:     "woo.one@example.com",
+			FirstName: "Woo",
+			LastName:  "One",
+		},
+		Items: []port.OrderSyncItem{{SKU: "SKU-1", Quantity: 1, Value: 9000}},
+		AppliedCoupons: []port.OrderSyncAppliedCoupon{{
+			Code:     "WELCOME10",
+			Discount: "1000",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("UpsertByIdentifier() error = %v", err)
+	}
+	if outcome != port.UpsertOutcomeUpdated {
+		t.Fatalf("outcome = %q, want %q", outcome, port.UpsertOutcomeUpdated)
+	}
+	if len(orderService.updateCommands) != 1 {
+		t.Fatalf("len(updateCommands) = %d, want 1", len(orderService.updateCommands))
+	}
+	if orderService.updateCommands[0].AppliedCoupons == nil || len(*orderService.updateCommands[0].AppliedCoupons) != 1 {
+		t.Fatalf("expected one applied coupon update command, got %+v", orderService.updateCommands[0].AppliedCoupons)
+	}
+	if (*orderService.updateCommands[0].AppliedCoupons)[0].Code != "WELCOME10" {
+		t.Fatalf("applied coupon code = %q, want %q", (*orderService.updateCommands[0].AppliedCoupons)[0].Code, "WELCOME10")
+	}
+	stored := orderService.orders["order-1"]
+	if len(stored.AppliedCoupons) != 1 {
+		t.Fatalf("len(stored.AppliedCoupons) = %d, want 1", len(stored.AppliedCoupons))
+	}
+	if stored.AppliedCoupons[0].Code != "WELCOME10" {
+		t.Fatalf("stored applied coupon code = %q, want %q", stored.AppliedCoupons[0].Code, "WELCOME10")
+	}
+	if stored.AppliedCoupons[0].DiscountAmount != 1000 {
+		t.Fatalf("stored applied coupon amount = %v, want %v", stored.AppliedCoupons[0].DiscountAmount, 1000)
+	}
+	if !stored.AppliedCoupons[0].AppliedAt.UTC().Equal(createdAt) {
+		t.Fatalf("stored applied coupon appliedAt = %v, want %v", stored.AppliedCoupons[0].AppliedAt, createdAt)
 	}
 }
 

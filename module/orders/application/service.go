@@ -118,6 +118,8 @@ type UpdateCommand struct {
 	ShippingAddress *ShippingAddressCommand
 	// ShippingCharges defines optional shipping charge values.
 	ShippingCharges *[]ShippingChargeCommand
+	// AppliedCoupons defines optional applied coupon values.
+	AppliedCoupons *[]AppliedCouponCommand
 	// Source defines mutation source values.
 	Source string
 }

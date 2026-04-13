@@ -160,6 +160,15 @@ func (u *Upserter) updateExisting(
 	current := existing
 	updated := false
 
+	mutatedOrder, mutableUpdated, err := u.syncMutableState(ctx, current, command)
+	if err != nil {
+		return "", err
+	}
+	if mutableUpdated {
+		current = mutatedOrder
+		updated = true
+	}
+
 	if current.CurrentStatus != status {
 		next, err := u.orderService.UpdateStatus(ctx, current.ID, ordersapplication.UpdateStatusCommand{
 			Status:      status,
@@ -194,6 +203,20 @@ func (u *Upserter) updateExisting(
 	}
 
 	return port.UpsertOutcomeUnchanged, nil
+}
+
+// syncMutableState refreshes mutable order fields for synchronized WooCommerce orders.
+func (u *Upserter) syncMutableState(ctx context.Context, existing ordersdomain.Order, command port.OrderSyncCommand) (ordersdomain.Order, bool, error) {
+	updateCommand := toUpdateCommand(command, existing)
+	next, err := u.orderService.Update(ctx, existing.ID, updateCommand)
+	if err != nil {
+		return ordersdomain.Order{}, false, fmt.Errorf("update order for woocommerce sync: %w", err)
+	}
+	if next == nil {
+		return existing, false, nil
+	}
+
+	return *next, hasMutableOrderStateChanges(existing, *next), nil
 }
 
 // syncCouponUsages records WooCommerce coupon redemptions against matching local coupons.

@@ -1,6 +1,7 @@
 package orders
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -28,9 +29,24 @@ func toCreateCommand(
 		ShippingAddress: toShippingAddress(command.ShippingAddress),
 		ShippingCharges: toShippingCharges(command.ShippingCharges),
 		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
-		AppliedCoupons:  toAppliedCoupons(command.AppliedCoupons),
+		AppliedCoupons:  toAppliedCoupons(command.AppliedCoupons, command.CreatedAt, nil),
 		Metadata:        normalizeMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
+		Source:          syncStatusAuthor,
+	}
+}
+
+// toUpdateCommand maps order sync command values to mutable order update payload values.
+func toUpdateCommand(command port.OrderSyncCommand, existing ordersdomain.Order) ordersapplication.UpdateCommand {
+	items := toCreateItems(command.Items)
+	shippingCharges := toUpdateShippingCharges(command.ShippingCharges)
+	appliedCoupons := toUpdateAppliedCoupons(command.AppliedCoupons, command.CreatedAt, existing.AppliedCoupons)
+
+	return ordersapplication.UpdateCommand{
+		Items:           optionalCreateItems(items),
+		ShippingAddress: toShippingAddress(command.ShippingAddress),
+		ShippingCharges: shippingCharges,
+		AppliedCoupons:  appliedCoupons,
 		Source:          syncStatusAuthor,
 	}
 }
@@ -106,10 +122,38 @@ func toShippingCharges(values []port.OrderSyncShippingCharge) []ordersapplicatio
 	return rows
 }
 
+// toUpdateShippingCharges maps sync shipping charge values to mutable update payloads.
+func toUpdateShippingCharges(values []port.OrderSyncShippingCharge) *[]ordersapplication.ShippingChargeCommand {
+	rows := make([]ordersapplication.ShippingChargeCommand, 0, len(values))
+	for _, value := range values {
+		methodID := strings.TrimSpace(value.MethodID)
+		methodTitle := strings.TrimSpace(value.MethodTitle)
+		if methodID == "" && methodTitle == "" && value.Price == 0 {
+			continue
+		}
+		rows = append(rows, ordersapplication.ShippingChargeCommand{
+			MethodID:    methodID,
+			MethodTitle: methodTitle,
+			Price:       value.Price,
+		})
+	}
+
+	return &rows
+}
+
 // toAppliedCoupons maps WooCommerce coupon-line values to applied-coupon command values.
-func toAppliedCoupons(values []port.OrderSyncAppliedCoupon) []ordersapplication.AppliedCouponCommand {
+func toAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *time.Time, existing []ordersdomain.AppliedCoupon) []ordersapplication.AppliedCouponCommand {
 	if len(values) == 0 {
 		return nil
+	}
+
+	existingByCode := make(map[string]ordersdomain.AppliedCoupon, len(existing))
+	for _, coupon := range existing {
+		code := strings.ToUpper(strings.TrimSpace(coupon.Code))
+		if code == "" {
+			continue
+		}
+		existingByCode[code] = coupon
 	}
 
 	rows := make([]ordersapplication.AppliedCouponCommand, 0, len(values))
@@ -119,9 +163,18 @@ func toAppliedCoupons(values []port.OrderSyncAppliedCoupon) []ordersapplication.
 			continue
 		}
 		amount, _ := strconv.ParseFloat(strings.TrimSpace(value.Discount), 64)
+		existingCoupon, hasExisting := existingByCode[strings.ToUpper(code)]
 		appliedAt := time.Now().UTC()
+		if hasExisting && !existingCoupon.AppliedAt.IsZero() {
+			appliedAt = existingCoupon.AppliedAt.UTC()
+		}
+		if defaultAppliedAt != nil && !defaultAppliedAt.IsZero() {
+			appliedAt = defaultAppliedAt.UTC()
+		}
 		rows = append(rows, ordersapplication.AppliedCouponCommand{
+			CouponID:       strings.TrimSpace(existingCoupon.CouponID),
 			Code:           code,
+			DiscountType:   strings.TrimSpace(existingCoupon.DiscountType),
 			DiscountAmount: amount,
 			AppliedAt:      &appliedAt,
 		})
@@ -131,6 +184,96 @@ func toAppliedCoupons(values []port.OrderSyncAppliedCoupon) []ordersapplication.
 	}
 
 	return rows
+}
+
+// toUpdateAppliedCoupons maps sync applied coupon values to mutable update payloads.
+func toUpdateAppliedCoupons(values []port.OrderSyncAppliedCoupon, defaultAppliedAt *time.Time, existing []ordersdomain.AppliedCoupon) *[]ordersapplication.AppliedCouponCommand {
+	rows := toAppliedCoupons(values, defaultAppliedAt, existing)
+	if rows == nil {
+		empty := []ordersapplication.AppliedCouponCommand{}
+		return &empty
+	}
+
+	return &rows
+}
+
+// optionalCreateItems maps populated item rows to optional update payload pointers.
+func optionalCreateItems(items []ordersapplication.CreateItemCommand) *[]ordersapplication.CreateItemCommand {
+	if len(items) == 0 {
+		return nil
+	}
+
+	return &items
+}
+
+// hasMutableOrderStateChanges reports whether mutable order state differs between two orders.
+func hasMutableOrderStateChanges(left ordersdomain.Order, right ordersdomain.Order) bool {
+	if len(left.Items) != len(right.Items) {
+		return true
+	}
+	for index := range left.Items {
+		if !itemsEqual(left.Items[index], right.Items[index]) {
+			return true
+		}
+	}
+	if left.HasCustomShippingAddress != right.HasCustomShippingAddress {
+		return true
+	}
+	if !shippingAddressEqual(left.ShippingAddress, right.ShippingAddress) {
+		return true
+	}
+	if len(left.ShippingCharges) != len(right.ShippingCharges) {
+		return true
+	}
+	for index := range left.ShippingCharges {
+		if !shippingChargeEqual(left.ShippingCharges[index], right.ShippingCharges[index]) {
+			return true
+		}
+	}
+	if len(left.AppliedCoupons) != len(right.AppliedCoupons) {
+		return true
+	}
+	for index := range left.AppliedCoupons {
+		if !appliedCouponEqual(left.AppliedCoupons[index], right.AppliedCoupons[index]) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// itemsEqual reports whether mutable order item state is equivalent.
+func itemsEqual(left ordersdomain.Item, right ordersdomain.Item) bool {
+	return strings.EqualFold(strings.TrimSpace(left.SKU), strings.TrimSpace(right.SKU)) &&
+		strings.EqualFold(strings.TrimSpace(left.AlternateName), strings.TrimSpace(right.AlternateName)) &&
+		left.Quantity == right.Quantity &&
+		math.Abs(left.Value-right.Value) <= 0.000001 &&
+		strings.EqualFold(strings.TrimSpace(left.ProductID), strings.TrimSpace(right.ProductID)) &&
+		strings.EqualFold(strings.TrimSpace(string(left.ResolutionSource)), strings.TrimSpace(string(right.ResolutionSource)))
+}
+
+// shippingAddressEqual reports whether mutable shipping-address state is equivalent.
+func shippingAddressEqual(left ordersdomain.ShippingAddress, right ordersdomain.ShippingAddress) bool {
+	return strings.TrimSpace(left.Address) == strings.TrimSpace(right.Address) &&
+		strings.TrimSpace(left.Address2) == strings.TrimSpace(right.Address2) &&
+		strings.TrimSpace(left.Phone) == strings.TrimSpace(right.Phone) &&
+		strings.TrimSpace(left.CityCode) == strings.TrimSpace(right.CityCode)
+}
+
+// shippingChargeEqual reports whether mutable shipping-charge state is equivalent.
+func shippingChargeEqual(left ordersdomain.ShippingCharge, right ordersdomain.ShippingCharge) bool {
+	return strings.EqualFold(strings.TrimSpace(left.MethodID), strings.TrimSpace(right.MethodID)) &&
+		strings.EqualFold(strings.TrimSpace(left.MethodTitle), strings.TrimSpace(right.MethodTitle)) &&
+		math.Abs(left.Price-right.Price) <= 0.000001
+}
+
+// appliedCouponEqual reports whether mutable applied-coupon state is equivalent.
+func appliedCouponEqual(left ordersdomain.AppliedCoupon, right ordersdomain.AppliedCoupon) bool {
+	return strings.EqualFold(strings.TrimSpace(left.CouponID), strings.TrimSpace(right.CouponID)) &&
+		strings.EqualFold(strings.TrimSpace(left.Code), strings.TrimSpace(right.Code)) &&
+		strings.EqualFold(strings.TrimSpace(left.DiscountType), strings.TrimSpace(right.DiscountType)) &&
+		math.Abs(left.DiscountAmount-right.DiscountAmount) <= 0.000001 &&
+		left.AppliedAt.UTC().Equal(right.AppliedAt.UTC())
 }
 
 // mapOrderStatus maps WooCommerce source status values to order-domain status values.

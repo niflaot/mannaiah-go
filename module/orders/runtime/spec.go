@@ -19,6 +19,7 @@ func OpenAPISpec() *openapi3.T {
 		"OrderUpdate":         &openapi3.SchemaRef{Value: orderUpdateSchema()},
 		"OrderStatusUpdate":   &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
 		"OrderItem":           &openapi3.SchemaRef{Value: orderItemSchema()},
+		"OrderAppliedCoupon":  &openapi3.SchemaRef{Value: orderAppliedCouponSchema()},
 		"OrderComment":        &openapi3.SchemaRef{Value: orderCommentSchema()},
 		"OrderCommentCreate":  &openapi3.SchemaRef{Value: orderCommentCreateSchema()},
 		"OrderCommentUpdate":  &openapi3.SchemaRef{Value: orderCommentUpdateSchema()},
@@ -104,7 +105,7 @@ func createOrderOperation() *openapi3.Operation {
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCreate"),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(201, responseWithDescription("The order has been successfully created.")),
+			openapi3.WithStatus(201, jsonResponse("The order has been successfully created.", "#/components/schemas/Order")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
@@ -130,7 +131,7 @@ func listOrdersOperation() *openapi3.Operation {
 			queryParameter("status", "Filter by current order status", orderStatusSchema()),
 		},
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("Return paginated orders.")),
+			openapi3.WithStatus(200, jsonResponse("Return paginated orders.", "#/components/schemas/OrderListResponse")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
@@ -149,7 +150,7 @@ func getOrderOperation() *openapi3.Operation {
 			pathParameter("id", "Order ID", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("Return the order.")),
+			openapi3.WithStatus(200, jsonResponse("Return the order.", "#/components/schemas/Order")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Order not found.")),
@@ -170,7 +171,7 @@ func updateOrderOperation() *openapi3.Operation {
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderUpdate"),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The order has been successfully updated.")),
+			openapi3.WithStatus(200, jsonResponse("The order has been successfully updated.", "#/components/schemas/Order")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
@@ -192,7 +193,7 @@ func updateOrderStatusOperation() *openapi3.Operation {
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderStatusUpdate"),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The order status has been successfully updated.")),
+			openapi3.WithStatus(200, jsonResponse("The order status has been successfully updated.", "#/components/schemas/Order")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
@@ -214,7 +215,7 @@ func addOrderCommentOperation() *openapi3.Operation {
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCommentCreate"),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The order comment has been successfully appended.")),
+			openapi3.WithStatus(200, jsonResponse("The order comment has been successfully appended.", "#/components/schemas/Order")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
@@ -237,7 +238,7 @@ func updateOrderCommentOperation() *openapi3.Operation {
 		},
 		RequestBody: jsonRequestBodyRef("#/components/schemas/OrderCommentUpdate"),
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The order comment has been successfully updated.")),
+			openapi3.WithStatus(200, jsonResponse("The order comment has been successfully updated.", "#/components/schemas/Order")),
 			openapi3.WithStatus(400, responseWithDescription("Bad Request.")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
@@ -259,7 +260,7 @@ func deleteOrderCommentOperation() *openapi3.Operation {
 			headerParameter(syncSourceHeader, "Optional mutation source for loop-safe integrations (e.g. woocommerce_plugin)", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, responseWithDescription("The order comment has been successfully deleted.")),
+			openapi3.WithStatus(200, jsonResponse("The order comment has been successfully deleted.", "#/components/schemas/Order")),
 			openapi3.WithStatus(401, responseWithDescription("Unauthorized.")),
 			openapi3.WithStatus(403, responseWithDescription("Forbidden - Insufficient permissions.")),
 			openapi3.WithStatus(404, responseWithDescription("Order or order comment not found.")),
@@ -275,6 +276,19 @@ func bearerSecurityRequirements() *openapi3.SecurityRequirements {
 // responseWithDescription builds an OpenAPI response from a plain description.
 func responseWithDescription(description string) *openapi3.ResponseRef {
 	return &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription(description)}
+}
+
+// jsonResponse builds a JSON response with a schema reference.
+func jsonResponse(description string, schemaRef string) *openapi3.ResponseRef {
+	return &openapi3.ResponseRef{
+		Value: openapi3.NewResponse().
+			WithDescription(description).
+			WithContent(openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{Ref: schemaRef},
+				},
+			}),
+	}
 }
 
 // jsonRequestBodyRef builds a required JSON request body referencing a component schema.
@@ -331,6 +345,7 @@ func orderCreateSchema() *openapi3.Schema {
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
 		WithProperty("paymentMethod", openapi3.NewStringSchema()).
+		WithProperty("appliedCoupons", openapi3.NewArraySchema().WithItems(orderAppliedCouponSchema())).
 		WithProperty("source", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"identifier", "realm", "contactId", "items"})
@@ -342,6 +357,7 @@ func orderUpdateSchema() *openapi3.Schema {
 		WithProperty("items", openapi3.NewArraySchema().WithItems(orderItemSchema())).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
+		WithProperty("appliedCoupons", openapi3.NewArraySchema().WithItems(orderAppliedCouponSchema())).
 		WithProperty("source", openapi3.NewStringSchema())
 }
 
@@ -372,9 +388,21 @@ func orderSchema() *openapi3.Schema {
 		WithProperty("hasCustomShippingAddress", openapi3.NewBoolSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
 		WithProperty("paymentMethod", openapi3.NewStringSchema()).
+		WithProperty("appliedCoupons", openapi3.NewArraySchema().WithItems(orderAppliedCouponSchema())).
 		WithProperty("metadata", metadataSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
+}
+
+// orderAppliedCouponSchema returns schema for applied coupon payloads.
+func orderAppliedCouponSchema() *openapi3.Schema {
+	return openapi3.NewObjectSchema().
+		WithProperty("couponId", openapi3.NewStringSchema()).
+		WithProperty("code", openapi3.NewStringSchema()).
+		WithProperty("discountType", openapi3.NewStringSchema()).
+		WithProperty("discountAmount", openapi3.NewFloat64Schema()).
+		WithProperty("appliedAt", openapi3.NewDateTimeSchema()).
+		WithRequired([]string{"code", "discountAmount", "appliedAt"})
 }
 
 // orderItemSchema returns schema for order item payloads.

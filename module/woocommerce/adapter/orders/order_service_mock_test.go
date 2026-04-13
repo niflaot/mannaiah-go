@@ -24,6 +24,8 @@ type ordersServiceMock struct {
 	orders map[string]ordersdomain.Order
 	// createCommands stores create command values.
 	createCommands []ordersapplication.CreateCommand
+	// updateCommands stores mutable update command values.
+	updateCommands []ordersapplication.UpdateCommand
 	// updateStatusCommands stores update-status command values.
 	updateStatusCommands []ordersapplication.UpdateStatusCommand
 	// addCommentCommands stores add-comment command values.
@@ -89,6 +91,7 @@ func (m *ordersServiceMock) Create(ctx context.Context, command ordersapplicatio
 			Price:       charge.Price,
 		})
 	}
+	entity.AppliedCoupons = toDomainAppliedCoupons(command.AppliedCoupons)
 
 	m.createCommands = append(m.createCommands, command)
 	m.orders[identifier] = entity
@@ -140,6 +143,11 @@ func (m *ordersServiceMock) Update(ctx context.Context, id string, command order
 	if !ok {
 		return nil, ordersport.ErrNotFound
 	}
+	m.updateCommands = append(m.updateCommands, command)
+	if m.ignoreWooSourceMutations && strings.HasPrefix(strings.ToLower(strings.TrimSpace(command.Source)), "woocommerce") && strings.EqualFold(strings.TrimSpace(entity.Realm), "woocommerce") {
+		copied := entity
+		return &copied, nil
+	}
 
 	if command.Items != nil {
 		entity.Items = make([]ordersdomain.Item, 0, len(*command.Items))
@@ -171,10 +179,37 @@ func (m *ordersServiceMock) Update(ctx context.Context, id string, command order
 			})
 		}
 	}
+	if command.AppliedCoupons != nil {
+		entity.AppliedCoupons = toDomainAppliedCoupons(*command.AppliedCoupons)
+	}
 
 	m.orders[entity.ID] = entity
 	copied := entity
 	return &copied, nil
+}
+
+// toDomainAppliedCoupons maps application coupon commands to domain coupon values.
+func toDomainAppliedCoupons(values []ordersapplication.AppliedCouponCommand) []ordersdomain.AppliedCoupon {
+	if len(values) == 0 {
+		return nil
+	}
+
+	rows := make([]ordersdomain.AppliedCoupon, 0, len(values))
+	for _, value := range values {
+		appliedAt := time.Now().UTC()
+		if value.AppliedAt != nil && !value.AppliedAt.IsZero() {
+			appliedAt = value.AppliedAt.UTC()
+		}
+		rows = append(rows, ordersdomain.AppliedCoupon{
+			CouponID:       strings.TrimSpace(value.CouponID),
+			Code:           strings.TrimSpace(value.Code),
+			DiscountType:   strings.TrimSpace(value.DiscountType),
+			DiscountAmount: value.DiscountAmount,
+			AppliedAt:      appliedAt,
+		})
+	}
+
+	return rows
 }
 
 // UpdateStatus appends status history rows.

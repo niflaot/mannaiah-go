@@ -16,7 +16,7 @@ func (s *OrderService) Update(ctx context.Context, id string, command UpdateComm
 	if trimmedID == "" {
 		return nil, ErrInvalidID
 	}
-	if command.Items == nil && command.ShippingAddress == nil && command.ShippingCharges == nil {
+	if command.Items == nil && command.ShippingAddress == nil && command.ShippingCharges == nil && command.AppliedCoupons == nil {
 		return nil, ErrEmptyOrderUpdate
 	}
 
@@ -43,6 +43,9 @@ func (s *OrderService) Update(ctx context.Context, id string, command UpdateComm
 	}
 	if command.ShippingCharges != nil {
 		entity.ShippingCharges = normalizeShippingCharges(*command.ShippingCharges)
+	}
+	if command.AppliedCoupons != nil {
+		entity.AppliedCoupons = normalizeAppliedCoupons(*command.AppliedCoupons)
 	}
 
 	entity.Normalize()
@@ -77,6 +80,8 @@ type mutableStateSnapshot struct {
 	HasCustomShippingAddress bool
 	// ShippingCharges defines shipping-charge state values.
 	ShippingCharges []ordersdomain.ShippingCharge
+	// AppliedCoupons defines applied coupon state values.
+	AppliedCoupons []ordersdomain.AppliedCoupon
 }
 
 // snapshotMutableState snapshots mutable order state values.
@@ -86,6 +91,7 @@ func snapshotMutableState(value ordersdomain.Order) mutableStateSnapshot {
 		ShippingAddress:          value.ShippingAddress,
 		HasCustomShippingAddress: value.HasCustomShippingAddress,
 		ShippingCharges:          append([]ordersdomain.ShippingCharge{}, value.ShippingCharges...),
+		AppliedCoupons:           append([]ordersdomain.AppliedCoupon{}, value.AppliedCoupons...),
 	}
 }
 
@@ -113,6 +119,14 @@ func hasMutableStateChanges(left mutableStateSnapshot, right mutableStateSnapsho
 			return true
 		}
 	}
+	if len(left.AppliedCoupons) != len(right.AppliedCoupons) {
+		return true
+	}
+	for index := range left.AppliedCoupons {
+		if !appliedCouponsEqual(left.AppliedCoupons[index], right.AppliedCoupons[index]) {
+			return true
+		}
+	}
 
 	return false
 }
@@ -132,4 +146,13 @@ func shippingChargesEqual(left ordersdomain.ShippingCharge, right ordersdomain.S
 	return strings.EqualFold(strings.TrimSpace(left.MethodID), strings.TrimSpace(right.MethodID)) &&
 		strings.EqualFold(strings.TrimSpace(left.MethodTitle), strings.TrimSpace(right.MethodTitle)) &&
 		math.Abs(left.Price-right.Price) <= 0.000001
+}
+
+// appliedCouponsEqual reports whether applied coupon values are equivalent.
+func appliedCouponsEqual(left ordersdomain.AppliedCoupon, right ordersdomain.AppliedCoupon) bool {
+	return strings.EqualFold(strings.TrimSpace(left.CouponID), strings.TrimSpace(right.CouponID)) &&
+		strings.EqualFold(strings.TrimSpace(left.Code), strings.TrimSpace(right.Code)) &&
+		strings.EqualFold(strings.TrimSpace(left.DiscountType), strings.TrimSpace(right.DiscountType)) &&
+		math.Abs(left.DiscountAmount-right.DiscountAmount) <= 0.000001 &&
+		left.AppliedAt.UTC().Equal(right.AppliedAt.UTC())
 }
