@@ -98,6 +98,30 @@ func TestRepositorySearchFiltersByDiscountType(t *testing.T) {
 	}
 }
 
+// TestRepositoryCreatePersistsWooCommerceID verifies WooCommerce identifier persistence and lookup behavior.
+func TestRepositoryCreatePersistsWooCommerceID(t *testing.T) {
+	repository := newRepositoryForTest(t)
+	wooCommerceID := 1024365
+
+	coupon := newCouponForTest("coupon-woo", "WOO10", domain.DiscountTypePercentage, nil)
+	coupon.WooCommerceID = &wooCommerceID
+
+	if err := repository.Create(context.Background(), coupon); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	stored, err := repository.GetByWooCommerceID(context.Background(), wooCommerceID)
+	if err != nil {
+		t.Fatalf("GetByWooCommerceID() error = %v", err)
+	}
+	if stored == nil {
+		t.Fatalf("GetByWooCommerceID() = nil, want coupon")
+	}
+	if stored.WooCommerceID == nil || *stored.WooCommerceID != wooCommerceID {
+		t.Fatalf("stored.WooCommerceID = %v, want %d", stored.WooCommerceID, wooCommerceID)
+	}
+}
+
 // newCouponForTest builds a minimal coupon aggregate for repository tests.
 func newCouponForTest(id string, code string, discountType domain.DiscountType, assignedContactIDs []string) *domain.Coupon {
 	now := time.Now().UTC()
@@ -162,7 +186,7 @@ func ensureSchemaForTest(db *gorm.DB) error {
 			max_usages_per_email INTEGER,
 			active BOOLEAN NOT NULL DEFAULT 1,
 			expires_at DATETIME,
-			woo_commerce_id INTEGER,
+			woocommerce_id INTEGER,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
 			deleted_at DATETIME

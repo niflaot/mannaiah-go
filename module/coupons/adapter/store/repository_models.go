@@ -23,7 +23,7 @@ type couponRecord struct {
 	// ExpiresAt defines optional expiry timestamp values.
 	ExpiresAt *time.Time `gorm:"default:null"`
 	// WooCommerceID defines optional WooCommerce coupon identifier values.
-	WooCommerceID *int `gorm:"default:null;index"`
+	WooCommerceID *int `gorm:"column:woocommerce_id;default:null;index"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.

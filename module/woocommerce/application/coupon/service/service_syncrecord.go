@@ -26,7 +26,7 @@ func (s *CouponSyncService) startSyncRunRecord(ctx context.Context, trigger stri
 }
 
 // finishSyncRunRecord completes or fails sync recorder runs and ignores recorder failures.
-func (s *CouponSyncService) finishSyncRunRecord(ctx context.Context, runID string, summary *SyncSummary, syncErr error) {
+func (s *CouponSyncService) finishSyncRunRecord(ctx context.Context, runID string, summary *SyncSummary, syncErr error, syncErrors []port.SyncError) {
 	if s == nil || s.syncRecorder == nil || strings.TrimSpace(runID) == "" || summary == nil {
 		return
 	}
@@ -39,16 +39,19 @@ func (s *CouponSyncService) finishSyncRunRecord(ctx context.Context, runID strin
 		return
 	}
 
-	syncErrors := []port.SyncError{{
-		Type:    classifyCouponSyncError(syncErr),
-		Code:    "coupons_sync_failed",
-		Message: syncErr.Error(),
-	}}
-	if errors.Is(syncErr, context.Canceled) || errors.Is(syncErr, context.DeadlineExceeded) {
-		syncErrors[0].Type = "timeout"
-		syncErrors[0].Code = "coupons_sync_timeout"
+	resolvedSyncErrors := syncErrors
+	if len(resolvedSyncErrors) == 0 {
+		resolvedSyncErrors = []port.SyncError{{
+			Type:    classifyCouponSyncError(syncErr),
+			Code:    "coupons_sync_failed",
+			Message: syncErr.Error(),
+		}}
+		if errors.Is(syncErr, context.Canceled) || errors.Is(syncErr, context.DeadlineExceeded) {
+			resolvedSyncErrors[0].Type = "timeout"
+			resolvedSyncErrors[0].Code = "coupons_sync_timeout"
+		}
 	}
-	if err := s.syncRecorder.FailRun(ctx, runID, summary.Processed, succeeded, summary.Failed, summary.Skipped, syncErrors); err != nil {
+	if err := s.syncRecorder.FailRun(ctx, runID, summary.Processed, succeeded, summary.Failed, summary.Skipped, resolvedSyncErrors); err != nil {
 		s.logger.Warn("woocommerce coupons sync recorder fail failed", zap.Error(err))
 	}
 }

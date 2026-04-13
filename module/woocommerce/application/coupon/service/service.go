@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	woocouponevent "mannaiah/module/woocommerce/application/coupon/event"
 	"mannaiah/module/woocommerce/port"
@@ -22,7 +23,11 @@ var (
 	ErrIntegrationUnavailable = errors.New("woocommerce integration is unavailable")
 	// ErrUpsertUnavailable is returned when coupon-upsert dependencies are unavailable.
 	ErrUpsertUnavailable = errors.New("woocommerce coupon upsert dependency is unavailable")
+	// ErrPartialSyncFailure is returned when coupon sync finishes with one or more failed upserts.
+	ErrPartialSyncFailure = errors.New("woocommerce coupon sync completed with failed items")
 )
+
+const maxRecordedCouponSyncErrors = 25
 
 // SyncConfig defines coupon sync behavior configuration values.
 type SyncConfig struct {
@@ -153,28 +158,35 @@ func (s *CouponSyncService) ValidateIntegration(ctx context.Context) error {
 func (s *CouponSyncService) SyncCoupons(ctx context.Context, trigger string) (*SyncSummary, error) {
 	summary := &SyncSummary{Trigger: trigger}
 	runID := s.startSyncRunRecord(ctx, summary.Trigger)
+	syncErrors := make([]port.SyncError, 0, maxRecordedCouponSyncErrors)
 
 	_ = s.publisher.Publish(ctx, woocouponevent.NewSyncStartedEvent(trigger))
 
 	if err := s.ValidateIntegration(ctx); err != nil {
 		_ = s.publisher.Publish(ctx, woocouponevent.NewSyncFailedEvent(toEventSummary(summary), err))
-		s.finishSyncRunRecord(ctx, runID, summary, err)
+		s.finishSyncRunRecord(ctx, runID, summary, err, nil)
 		return nil, err
 	}
 
-	if err := s.syncAllPages(ctx, summary); err != nil {
+	if err := s.syncAllPages(ctx, summary, &syncErrors); err != nil {
 		_ = s.publisher.Publish(ctx, woocouponevent.NewSyncFailedEvent(toEventSummary(summary), err))
-		s.finishSyncRunRecord(ctx, runID, summary, err)
+		s.finishSyncRunRecord(ctx, runID, summary, err, syncErrors)
+		return summary, fmt.Errorf("woocommerce coupon sync: %w", err)
+	}
+
+	if err := buildPartialSyncFailure(summary); err != nil {
+		_ = s.publisher.Publish(ctx, woocouponevent.NewSyncFailedEvent(toEventSummary(summary), err))
+		s.finishSyncRunRecord(ctx, runID, summary, err, syncErrors)
 		return summary, fmt.Errorf("woocommerce coupon sync: %w", err)
 	}
 
 	_ = s.publisher.Publish(ctx, woocouponevent.NewSyncCompletedEvent(toEventSummary(summary)))
-	s.finishSyncRunRecord(ctx, runID, summary, nil)
+	s.finishSyncRunRecord(ctx, runID, summary, nil, nil)
 	return summary, nil
 }
 
 // syncAllPages pages through WooCommerce coupons and upserts each one.
-func (s *CouponSyncService) syncAllPages(ctx context.Context, summary *SyncSummary) error {
+func (s *CouponSyncService) syncAllPages(ctx context.Context, summary *SyncSummary, syncErrors *[]port.SyncError) error {
 	page := 1
 	for {
 		if err := ctx.Err(); err != nil {
@@ -202,6 +214,7 @@ func (s *CouponSyncService) syncAllPages(ctx context.Context, summary *SyncSumma
 			summary.Processed++
 			if upsertErr != nil {
 				summary.Failed++
+				appendCouponSyncError(syncErrors, coupon, upsertErr)
 				s.logger.Warn("woocommerce coupon sync upsert failed",
 					zap.Int("woo_coupon_id", coupon.ID),
 					zap.String("code", coupon.Code),
@@ -227,6 +240,42 @@ func (s *CouponSyncService) syncAllPages(ctx context.Context, summary *SyncSumma
 	}
 
 	return nil
+}
+
+// buildPartialSyncFailure returns a stable sync error when row failures occurred.
+func buildPartialSyncFailure(summary *SyncSummary) error {
+	if summary == nil || summary.Failed == 0 {
+		return nil
+	}
+
+	succeeded := summary.Created + summary.Updated + summary.Unchanged
+
+	return fmt.Errorf(
+		"%w: processed=%d failed=%d succeeded=%d skipped=%d",
+		ErrPartialSyncFailure,
+		summary.Processed,
+		summary.Failed,
+		succeeded,
+		summary.Skipped,
+	)
+}
+
+// appendCouponSyncError stores a bounded sync error entry for failed coupon upserts.
+func appendCouponSyncError(syncErrors *[]port.SyncError, coupon port.WooCoupon, err error) {
+	if syncErrors == nil || err == nil || len(*syncErrors) >= maxRecordedCouponSyncErrors {
+		return
+	}
+
+	message := fmt.Sprintf("coupon %d: %v", coupon.ID, err)
+	if code := strings.TrimSpace(coupon.Code); code != "" {
+		message = fmt.Sprintf("coupon %d (%s): %v", coupon.ID, code, err)
+	}
+
+	*syncErrors = append(*syncErrors, port.SyncError{
+		Type:    "upsert",
+		Code:    "coupon_upsert_failed",
+		Message: message,
+	})
 }
 
 // executeWithBreaker runs an operation with optional circuit-breaker protection.
