@@ -148,6 +148,12 @@ func (s *staticPageRepositoryStub) Update(_ context.Context, page *domain.Static
 	return nil
 }
 
+// Archive persists archived state for one static page.
+func (s *staticPageRepositoryStub) Archive(_ context.Context, page *domain.StaticPage) error {
+	s.pages[page.ID] = *page
+	return nil
+}
+
 // Delete removes one static page.
 func (s *staticPageRepositoryStub) Delete(_ context.Context, id string) error {
 	delete(s.pages, id)
@@ -155,9 +161,15 @@ func (s *staticPageRepositoryStub) Delete(_ context.Context, id string) error {
 }
 
 // List returns paginated static-page rows.
-func (s *staticPageRepositoryStub) List(_ context.Context, _ port.StaticPageListQuery) ([]domain.StaticPage, int64, error) {
+func (s *staticPageRepositoryStub) List(_ context.Context, query port.StaticPageListQuery) ([]domain.StaticPage, int64, error) {
 	rows := make([]domain.StaticPage, 0, len(s.pages))
 	for _, page := range s.pages {
+		if query.Archived != nil {
+			isArchived := page.ArchivedAt != nil
+			if *query.Archived != isArchived {
+				continue
+			}
+		}
 		rows = append(rows, page)
 	}
 	return rows, int64(len(rows)), nil
@@ -217,5 +229,53 @@ func TestServiceRejectsURLConflict(t *testing.T) {
 	})
 	if err != ErrStaticPageURLConflict {
 		t.Fatalf("Create() conflict error = %v, want %v", err, ErrStaticPageURLConflict)
+	}
+}
+
+// TestServiceArchivesStaticPage verifies archive state is preserved without deletion.
+func TestServiceArchivesStaticPage(t *testing.T) {
+	renderables := newRenderableRepositoryStub()
+	renderables.renderables["renderable-1"] = domain.Renderable{ID: "renderable-1", Kind: domain.StaticPageRenderableKind, Metadata: json.RawMessage(`{}`), Content: json.RawMessage(`{}`)}
+	pages := &staticPageRepositoryStub{pages: map[string]domain.StaticPage{}}
+
+	service, err := NewService(pages, renderables)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	created, err := service.Create(context.Background(), CreateCommand{
+		RenderableID: "renderable-1",
+		Title:        "About",
+		URL:          "/about",
+		SEOTags:      json.RawMessage(`{"robots":"index,follow"}`),
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	archived, err := service.Archive(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("Archive() error = %v", err)
+	}
+	if archived.ArchivedAt == nil {
+		t.Fatalf("Archive() archivedAt = nil, want value")
+	}
+
+	active := false
+	activeRows, total, err := service.List(context.Background(), port.StaticPageListQuery{Archived: &active})
+	if err != nil {
+		t.Fatalf("List(active) error = %v", err)
+	}
+	if total != 0 || len(activeRows) != 0 {
+		t.Fatalf("List(active) total = %d len = %d, want 0/0", total, len(activeRows))
+	}
+
+	archivedOnly := true
+	archivedRows, total, err := service.List(context.Background(), port.StaticPageListQuery{Archived: &archivedOnly})
+	if err != nil {
+		t.Fatalf("List(archived) error = %v", err)
+	}
+	if total != 1 || len(archivedRows) != 1 {
+		t.Fatalf("List(archived) total = %d len = %d, want 1/1", total, len(archivedRows))
 	}
 }

@@ -24,6 +24,8 @@ type StaticPageListQuery struct {
 	Term string
 	// RenderableID filters by bound renderable when provided.
 	RenderableID string
+	// Archived filters by archived state when provided.
+	Archived *bool
 	// Page defines the 1-based page number.
 	Page int
 	// PageSize defines the page size.
@@ -64,6 +66,8 @@ type StaticPageRepository interface {
 	GetByRenderableID(ctx context.Context, renderableID string) (*domain.StaticPage, error)
 	// Update persists mutable page values.
 	Update(ctx context.Context, page *domain.StaticPage) error
+	// Archive persists archived state for one static page.
+	Archive(ctx context.Context, page *domain.StaticPage) error
 	// Delete removes one static page.
 	Delete(ctx context.Context, id string) error
 	// List returns paginated static-page rows.

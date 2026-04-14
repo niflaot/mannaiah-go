@@ -62,6 +62,8 @@ type PageService interface {
 	GetByID(ctx context.Context, id string) (*domain.StaticPage, error)
 	// Update applies page mutations.
 	Update(ctx context.Context, cmd pageservice.UpdateCommand) (*domain.StaticPage, error)
+	// Archive marks one static page as archived.
+	Archive(ctx context.Context, id string) (*domain.StaticPage, error)
 	// Delete removes one static page.
 	Delete(ctx context.Context, id string) error
 	// List returns paginated static pages.
@@ -120,6 +122,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Get("/storefront/page", h.protect(h.listPages))
 	router.Get("/storefront/page/:id", h.protect(h.getPage))
 	router.Patch("/storefront/page/:id", h.protect(h.updatePage))
+	router.Post("/storefront/page/:id/archive", h.protect(h.archivePage))
 	router.Delete("/storefront/page/:id", h.protect(h.deletePage))
 }
 
@@ -287,11 +290,18 @@ func (h *Handler) createPage(ctx corehttp.Context) error {
 
 // listPages handles GET /storefront/page.
 func (h *Handler) listPages(ctx corehttp.Context) error {
+	archived := false
 	query := port.StaticPageListQuery{
 		Term:         strings.TrimSpace(ctx.Query("term")),
 		RenderableID: strings.TrimSpace(ctx.Query("renderableId")),
+		Archived:     &archived,
 		Page:         parsePositiveInt(ctx, "page", 1),
 		PageSize:     parsePositiveInt(ctx, "pageSize", coresearch.DefaultPageSize),
+	}
+	if archivedRaw := strings.TrimSpace(ctx.Query("archived")); archivedRaw != "" {
+		if parsed, err := strconv.ParseBool(archivedRaw); err == nil {
+			query.Archived = &parsed
+		}
 	}
 
 	rows, total, err := h.pages.List(ctx.Context(), query)
@@ -326,6 +336,16 @@ func (h *Handler) updatePage(ctx corehttp.Context) error {
 		URL:          strings.TrimSpace(request.URL),
 		SEOTags:      request.SEOTags,
 	})
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	return ctx.Status(200).JSON(page)
+}
+
+// archivePage handles POST /storefront/page/:id/archive.
+func (h *Handler) archivePage(ctx corehttp.Context) error {
+	page, err := h.pages.Archive(ctx.Context(), ctx.Params("id"))
 	if err != nil {
 		return h.mapError(err)
 	}

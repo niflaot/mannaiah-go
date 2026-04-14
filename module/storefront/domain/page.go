@@ -30,6 +30,8 @@ type StaticPage struct {
 	URL string `json:"url"`
 	// SEOTags defines frontend-provided SEO JSON.
 	SEOTags json.RawMessage `json:"seoTags"`
+	// ArchivedAt defines when the page was archived.
+	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines last mutation timestamps.

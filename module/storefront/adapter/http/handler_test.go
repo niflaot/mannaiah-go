@@ -72,7 +72,12 @@ func (m renderableServiceMock) Rollback(_ context.Context, _ string, _ string) (
 }
 
 // pageServiceMock defines static-page handler dependencies for tests.
-type pageServiceMock struct{}
+type pageServiceMock struct {
+	// archiveFn defines archive behavior.
+	archiveFn func(ctx context.Context, id string) (*domain.StaticPage, error)
+	// listFn defines list behavior.
+	listFn func(ctx context.Context, query port.StaticPageListQuery) ([]domain.StaticPage, int64, error)
+}
 
 // Create persists a new static page.
 func (pageServiceMock) Create(_ context.Context, _ pageservice.CreateCommand) (*domain.StaticPage, error) {
@@ -89,13 +94,26 @@ func (pageServiceMock) Update(_ context.Context, _ pageservice.UpdateCommand) (*
 	return nil, errors.New("not implemented")
 }
 
+// Archive marks one static page as archived.
+func (m pageServiceMock) Archive(ctx context.Context, id string) (*domain.StaticPage, error) {
+	if m.archiveFn != nil {
+		return m.archiveFn(ctx, id)
+	}
+
+	return &domain.StaticPage{ID: id}, nil
+}
+
 // Delete removes one static page.
 func (pageServiceMock) Delete(_ context.Context, _ string) error {
 	return errors.New("not implemented")
 }
 
 // List returns paginated static pages.
-func (pageServiceMock) List(_ context.Context, _ port.StaticPageListQuery) ([]domain.StaticPage, int64, error) {
+func (m pageServiceMock) List(ctx context.Context, query port.StaticPageListQuery) ([]domain.StaticPage, int64, error) {
+	if m.listFn != nil {
+		return m.listFn(ctx, query)
+	}
+
 	return []domain.StaticPage{}, 0, nil
 }
 
@@ -195,6 +213,52 @@ func TestCreateRenderableSuccess(t *testing.T) {
 	}
 	if payload["kind"] != "static_page" {
 		t.Fatalf("payload.kind = %v, want %q", payload["kind"], "static_page")
+	}
+}
+
+// TestArchivePageSuccess verifies archive route wiring for static pages.
+func TestArchivePageSuccess(t *testing.T) {
+	handler, err := NewHandler(renderableServiceMock{}, pageServiceMock{}, authorizerMock{})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	server := newHTTPServerForHandler(t, handler)
+	request, _ := http.NewRequest(http.MethodPost, "/storefront/page/page-1/archive", nil)
+	response := runRequest(t, server, request)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+}
+
+// TestListPagesDefaultsToActive verifies page listings exclude archived rows unless requested.
+func TestListPagesDefaultsToActive(t *testing.T) {
+	called := false
+	handler, err := NewHandler(renderableServiceMock{}, pageServiceMock{
+		listFn: func(_ context.Context, query port.StaticPageListQuery) ([]domain.StaticPage, int64, error) {
+			called = true
+			if query.Archived == nil {
+				t.Fatalf("query.Archived = nil, want non-nil false")
+			}
+			if *query.Archived {
+				t.Fatalf("*query.Archived = true, want false")
+			}
+
+			return []domain.StaticPage{}, 0, nil
+		},
+	}, authorizerMock{})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	server := newHTTPServerForHandler(t, handler)
+	request, _ := http.NewRequest(http.MethodGet, "/storefront/page", nil)
+	response := runRequest(t, server, request)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if !called {
+		t.Fatal("List() was not called")
 	}
 }
 

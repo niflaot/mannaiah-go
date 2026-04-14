@@ -81,6 +81,7 @@ func toStaticPageRecord(page domain.StaticPage) staticPageRecord {
 		Title:        page.Title,
 		URL:          page.URL,
 		SEOTagsJSON:  string(page.SEOTags),
+		ArchivedAt:   page.ArchivedAt,
 		CreatedAt:    page.CreatedAt,
 		UpdatedAt:    page.UpdatedAt,
 	}
@@ -94,6 +95,7 @@ func toStaticPageEntity(record staticPageRecord) domain.StaticPage {
 		Title:        record.Title,
 		URL:          record.URL,
 		SEOTags:      json.RawMessage(record.SEOTagsJSON),
+		ArchivedAt:   record.ArchivedAt,
 		CreatedAt:    record.CreatedAt,
 		UpdatedAt:    record.UpdatedAt,
 	}

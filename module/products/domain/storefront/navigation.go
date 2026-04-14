@@ -10,6 +10,8 @@ type Navigation struct {
 	GeneratedAt time.Time `json:"generatedAt"`
 	// Categories defines the ordered storefront category tree.
 	Categories []CategoryNode `json:"categories"`
+	// StaticPages defines the ordered static pages available in storefront navigation.
+	StaticPages []StaticPageNode `json:"staticPages"`
 }
 
 // CategoryNode defines one category node in the storefront navigation tree.
@@ -47,5 +49,21 @@ type ProductNode struct {
 	// CreatedAt defines the source product creation timestamp.
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt defines the source product update timestamp.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// StaticPageNode defines one static storefront page available in navigation.
+type StaticPageNode struct {
+	// ID defines the source static-page identifier.
+	ID string `json:"id"`
+	// RenderableID defines the bound renderable identifier.
+	RenderableID string `json:"renderableId"`
+	// Title defines the source static-page title.
+	Title string `json:"title"`
+	// URL defines the assigned storefront URL path.
+	URL string `json:"url"`
+	// CreatedAt defines the source static-page creation timestamp.
+	CreatedAt time.Time `json:"createdAt"`
+	// UpdatedAt defines the source static-page update timestamp.
 	UpdatedAt time.Time `json:"updatedAt"`
 }

@@ -26,6 +26,9 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Components == nil || spec.Components.Schemas["CreateVariationDto"] == nil {
 		t.Fatalf("expected CreateVariationDto schema")
 	}
+	if spec.Components == nil || spec.Components.Schemas["StorefrontNavigation"] == nil {
+		t.Fatalf("expected StorefrontNavigation schema")
+	}
 	if spec.Components == nil || spec.Components.SecuritySchemes[bearerSecurityScheme] == nil {
 		t.Fatalf("expected bearer security scheme")
 	}
@@ -41,5 +44,10 @@ func TestOpenAPISpec(t *testing.T) {
 	variationsPath := spec.Paths.Value("/variations")
 	if variationsPath == nil || variationsPath.Get == nil || variationsPath.Get.Security == nil || len(*variationsPath.Get.Security) == 0 {
 		t.Fatalf("expected bearer security requirements on variations list operation")
+	}
+
+	storefrontPath := spec.Paths.Value("/storefront/navigation")
+	if storefrontPath == nil || storefrontPath.Get == nil || storefrontPath.Get.Responses == nil || storefrontPath.Get.Responses.Status(200) == nil {
+		t.Fatalf("expected storefront navigation response schema")
 	}
 }

@@ -207,6 +207,28 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.pages.Delete(ctx, page.ID)
 }
 
+// Archive marks one static page as archived without deleting bound renderable history.
+func (s *Service) Archive(ctx context.Context, id string) (*domain.StaticPage, error) {
+	page, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if page.ArchivedAt != nil {
+		return page, nil
+	}
+
+	now := time.Now().UTC()
+	page.ArchivedAt = &now
+	page.UpdatedAt = now
+
+	if err := s.pages.Archive(ctx, page); err != nil {
+		return nil, err
+	}
+
+	return page, nil
+}
+
 // List returns paginated static pages matching the provided query.
 func (s *Service) List(ctx context.Context, query port.StaticPageListQuery) ([]domain.StaticPage, int64, error) {
 	return s.pages.List(ctx, query)

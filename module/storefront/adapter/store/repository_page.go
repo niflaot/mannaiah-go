@@ -51,11 +51,26 @@ func (r *StaticPageRepository) Update(ctx context.Context, page *domain.StaticPa
 		"title":         page.Title,
 		"url":           page.URL,
 		"seo_tags_json": string(page.SEOTags),
+		"archived_at":   page.ArchivedAt,
 		"updated_at":    page.UpdatedAt,
 	}
 
 	if err := r.db.WithContext(ctx).Model(&staticPageRecord{}).Where("id = ?", page.ID).Updates(updates).Error; err != nil {
 		return fmt.Errorf("update static page: %w", err)
+	}
+
+	return nil
+}
+
+// Archive persists archived state for one static page.
+func (r *StaticPageRepository) Archive(ctx context.Context, page *domain.StaticPage) error {
+	updates := map[string]any{
+		"archived_at": page.ArchivedAt,
+		"updated_at":  page.UpdatedAt,
+	}
+
+	if err := r.db.WithContext(ctx).Model(&staticPageRecord{}).Where("id = ?", page.ID).Updates(updates).Error; err != nil {
+		return fmt.Errorf("archive static page: %w", err)
 	}
 
 	return nil
@@ -75,6 +90,13 @@ func (r *StaticPageRepository) List(ctx context.Context, query port.StaticPageLi
 	tx := r.db.WithContext(ctx).Model(&staticPageRecord{})
 	if renderableID := strings.TrimSpace(query.RenderableID); renderableID != "" {
 		tx = tx.Where("renderable_id = ?", renderableID)
+	}
+	if query.Archived != nil {
+		if *query.Archived {
+			tx = tx.Where("archived_at IS NOT NULL")
+		} else {
+			tx = tx.Where("archived_at IS NULL")
+		}
 	}
 	if term := strings.TrimSpace(query.Term); term != "" {
 		like := "%" + strings.ToLower(term) + "%"

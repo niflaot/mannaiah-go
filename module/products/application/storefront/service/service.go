@@ -34,6 +34,8 @@ type Source interface {
 	Children(ctx context.Context, parentID string) ([]*categorydomain.Category, error)
 	// ListProducts returns all products visible under the provided category ordered from oldest to newest.
 	ListProducts(ctx context.Context, categoryID string) ([]*productdomain.Product, error)
+	// ListStaticPages returns all active static pages available in storefront navigation.
+	ListStaticPages(ctx context.Context) ([]storefrontdomain.StaticPageNode, error)
 }
 
 // Config defines storefront navigation caching and mapping behavior.
@@ -193,6 +195,19 @@ func (s *NavigationService) build(ctx context.Context) (*storefrontdomain.Naviga
 		return nil, fmt.Errorf("load storefront root categories: %w", err)
 	}
 
+	staticPages, err := s.source.ListStaticPages(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load storefront static pages: %w", err)
+	}
+
+	sort.SliceStable(staticPages, func(left, right int) bool {
+		if staticPages[left].CreatedAt.Equal(staticPages[right].CreatedAt) {
+			return staticPages[left].ID < staticPages[right].ID
+		}
+
+		return staticPages[left].CreatedAt.Before(staticPages[right].CreatedAt)
+	})
+
 	categories := make([]storefrontdomain.CategoryNode, 0, len(roots))
 	for _, root := range roots {
 		node, mapErr := s.mapCategory(ctx, root, nil)
@@ -206,6 +221,7 @@ func (s *NavigationService) build(ctx context.Context) (*storefrontdomain.Naviga
 		Realm:       s.config.Realm,
 		GeneratedAt: time.Now().UTC(),
 		Categories:  categories,
+		StaticPages: staticPages,
 	}, nil
 }
 

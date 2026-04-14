@@ -17,4 +17,10 @@ HTTP adapter for storefront renderable and static-page management endpoints.
 - `POST /storefront/page`
 - `GET /storefront/page/:id`
 - `PATCH /storefront/page/:id`
+- `POST /storefront/page/:id/archive`
 - `DELETE /storefront/page/:id`
+
+## Notes
+
+- `GET /storefront/page` defaults to active pages and accepts `archived=true|false` for explicit filtering.
+- `POST /storefront/page/:id/archive` preserves renderable/version history while removing the page from active storefront listings.

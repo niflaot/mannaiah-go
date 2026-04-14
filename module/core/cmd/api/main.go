@@ -61,6 +61,7 @@ import (
 	orderproducts "mannaiah/module/orders/adapter/products"
 	ordersearch "mannaiah/module/orders/adapter/search"
 	"mannaiah/module/products"
+	productsstorefrontdomain "mannaiah/module/products/domain/storefront"
 	categorysearch "mannaiah/module/products/adapter/search/category"
 	productsearch "mannaiah/module/products/adapter/search/product"
 	tagsearch "mannaiah/module/products/adapter/search/tag"
@@ -72,6 +73,8 @@ import (
 	shippingevent "mannaiah/module/shipping/adapter/event"
 	shippingsearch "mannaiah/module/shipping/adapter/search"
 	"mannaiah/module/storefront"
+	storefrontdomain "mannaiah/module/storefront/domain"
+	storefrontport "mannaiah/module/storefront/port"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -532,6 +535,12 @@ func run(ctx context.Context, envFile string) error {
 	if err := productsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load products module: %w", err)
 	}
+
+	storefrontModule, err := storefront.New(db)
+	if err != nil {
+		return fmt.Errorf("initialize storefront module: %w", err)
+	}
+	productsModule.SetStorefrontStaticPageSource(storefrontNavigationStaticPageSourceAdapter{pages: storefrontModule.PageService()})
 	if err := productsModule.Start(ctx); err != nil {
 		return fmt.Errorf("start products module: %w", err)
 	}
@@ -540,11 +549,6 @@ func run(ctx context.Context, envFile string) error {
 		defer cancel()
 		_ = productsModule.Stop(stopCtx)
 	}()
-
-	storefrontModule, err := storefront.New(db)
-	if err != nil {
-		return fmt.Errorf("initialize storefront module: %w", err)
-	}
 	storefrontModule.SetAuthorizer(authModule)
 	if err := storefrontModule.Load(runtime); err != nil {
 		return fmt.Errorf("load storefront module: %w", err)
@@ -701,6 +705,49 @@ func run(ctx context.Context, envFile string) error {
 	}()
 
 	return waitForShutdown(ctx, db, httpServer, messaging, serverErrors, messagingErrors)
+}
+
+// storefrontNavigationStaticPageLister defines static-page listing behavior required by products navigation wiring.
+type storefrontNavigationStaticPageLister interface {
+	// List returns paginated static pages.
+	List(ctx context.Context, query storefrontport.StaticPageListQuery) ([]storefrontdomain.StaticPage, int64, error)
+}
+
+// storefrontNavigationStaticPageSourceAdapter adapts storefront pages into products navigation nodes.
+type storefrontNavigationStaticPageSourceAdapter struct {
+	// pages defines static-page listing dependencies.
+	pages storefrontNavigationStaticPageLister
+}
+
+// ListStaticPages returns active static pages mapped into products navigation nodes.
+func (a storefrontNavigationStaticPageSourceAdapter) ListStaticPages(ctx context.Context) ([]productsstorefrontdomain.StaticPageNode, error) {
+	if a.pages == nil {
+		return []productsstorefrontdomain.StaticPageNode{}, nil
+	}
+
+	archived := false
+	rows, _, err := a.pages.List(ctx, storefrontport.StaticPageListQuery{
+		Archived: &archived,
+		Page:     1,
+		PageSize: 100000,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]productsstorefrontdomain.StaticPageNode, 0, len(rows))
+	for _, row := range rows {
+		nodes = append(nodes, productsstorefrontdomain.StaticPageNode{
+			ID:           row.ID,
+			RenderableID: row.RenderableID,
+			Title:        row.Title,
+			URL:          row.URL,
+			CreatedAt:    row.CreatedAt,
+			UpdatedAt:    row.UpdatedAt,
+		})
+	}
+
+	return nodes, nil
 }
 
 // registerCoreStatusRoute registers core status endpoints.

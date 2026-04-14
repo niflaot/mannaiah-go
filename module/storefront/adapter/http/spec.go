@@ -178,12 +178,13 @@ func Paths() *openapi3.Paths {
 			Get: &openapi3.Operation{
 				Tags:        []string{"storefront"},
 				Summary:     "List static pages",
-				Description: "Returns paginated static pages filtered by term or bound renderable.",
+				Description: "Returns paginated active static pages by default, optionally filtered by term, bound renderable, or archived state.",
 				OperationID: "listStorefrontPages",
 				Security:    storefrontSecurityRequirements(),
 				Parameters: openapi3.Parameters{
 					{Value: openapi3.NewQueryParameter("term").WithSchema(openapi3.NewStringSchema())},
 					{Value: openapi3.NewQueryParameter("renderableId").WithSchema(openapi3.NewStringSchema())},
+					{Value: openapi3.NewQueryParameter("archived").WithSchema(openapi3.NewBoolSchema())},
 					{Value: openapi3.NewQueryParameter("page").WithSchema(openapi3.NewIntegerSchema())},
 					{Value: openapi3.NewQueryParameter("pageSize").WithSchema(openapi3.NewIntegerSchema())},
 				},
@@ -235,6 +236,22 @@ func Paths() *openapi3.Paths {
 				Parameters:  openapi3.Parameters{{Value: openapi3.NewPathParameter("id").WithSchema(openapi3.NewStringSchema())}},
 				Responses: openapi3.NewResponses(
 					openapi3.WithStatus(204, &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription("Deleted")}),
+					openapi3.WithStatus(404, errorResponse("Not found")),
+					openapi3.WithStatus(401, errorResponse("Unauthorized")),
+					openapi3.WithStatus(403, errorResponse("Forbidden")),
+				),
+			},
+		}),
+		openapi3.WithPath("/storefront/page/{id}/archive", &openapi3.PathItem{
+			Post: &openapi3.Operation{
+				Tags:        []string{"storefront"},
+				Summary:     "Archive static page",
+				Description: "Archives one storefront static page without deleting bound renderable history.",
+				OperationID: "archiveStorefrontPage",
+				Security:    storefrontSecurityRequirements(),
+				Parameters:  openapi3.Parameters{{Value: openapi3.NewPathParameter("id").WithSchema(openapi3.NewStringSchema())}},
+				Responses: openapi3.NewResponses(
+					openapi3.WithStatus(200, schemaResponse("Static page archived", "#/components/schemas/StaticPage")),
 					openapi3.WithStatus(404, errorResponse("Not found")),
 					openapi3.WithStatus(401, errorResponse("Unauthorized")),
 					openapi3.WithStatus(403, errorResponse("Forbidden")),
@@ -293,6 +310,7 @@ func Schemas() openapi3.Schemas {
 		"title":        openapi3.NewStringSchema(),
 		"url":          openapi3.NewStringSchema(),
 		"seoTags":      jsonObject,
+		"archivedAt":   openapi3.NewStringSchema().WithFormat("date-time"),
 		"createdAt":    openapi3.NewStringSchema().WithFormat("date-time"),
 		"updatedAt":    openapi3.NewStringSchema().WithFormat("date-time"),
 	})

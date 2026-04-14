@@ -6,6 +6,7 @@ import (
 	categoryapplication "mannaiah/module/products/application/category"
 	categorydomain "mannaiah/module/products/domain/category"
 	productdomain "mannaiah/module/products/domain/product"
+	storefrontdomain "mannaiah/module/products/domain/storefront"
 )
 
 const (
@@ -13,10 +14,18 @@ const (
 	storefrontNavigationPageSize = 100000
 )
 
+// StorefrontStaticPageSource defines active static-page lookup behavior for navigation snapshots.
+type StorefrontStaticPageSource interface {
+	// ListStaticPages returns all active static pages that should be exposed in navigation.
+	ListStaticPages(ctx context.Context) ([]storefrontdomain.StaticPageNode, error)
+}
+
 // storefrontNavigationSource adapts category application services into storefront navigation data sources.
 type storefrontNavigationSource struct {
 	// categoryService defines category query dependencies.
 	categoryService categoryapplication.Service
+	// pageSource defines optional static-page query dependencies.
+	pageSource StorefrontStaticPageSource
 }
 
 // Tree returns all root categories ordered from oldest to newest.
@@ -41,4 +50,13 @@ func (s storefrontNavigationSource) ListProducts(ctx context.Context, categoryID
 	}
 
 	return result.Items, nil
+}
+
+// ListStaticPages returns all active static pages available in storefront navigation.
+func (s storefrontNavigationSource) ListStaticPages(ctx context.Context) ([]storefrontdomain.StaticPageNode, error) {
+	if s.pageSource == nil {
+		return []storefrontdomain.StaticPageNode{}, nil
+	}
+
+	return s.pageSource.ListStaticPages(ctx)
 }

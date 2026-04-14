@@ -31,6 +31,8 @@ import (
 type Module struct {
 	// cfg defines runtime configuration values.
 	cfg Config
+	// storefrontSource defines navigation source dependencies that can be enriched post-construction.
+	storefrontSource *storefrontNavigationSource
 	// productHandler defines HTTP adapter used for product route registration.
 	productHandler *producthttp.Handler
 	// productService defines product application service dependencies.
@@ -146,8 +148,9 @@ func NewWithConfig(
 		return nil, err
 	}
 
+	navigationSource := &storefrontNavigationSource{categoryService: categoryService}
 	storefrontNavigationService, err := storefrontservice.NewService(
-		storefrontNavigationSource{categoryService: categoryService},
+		navigationSource,
 		cacheStore,
 		storefrontServiceConfig(resolvedConfig),
 		providedLogger,
@@ -165,6 +168,7 @@ func NewWithConfig(
 
 	return &Module{
 		cfg:               resolvedConfig,
+		storefrontSource:  navigationSource,
 		productHandler:    productHandler,
 		productService:    productService,
 		variationHandler:  variationHandler,
@@ -241,6 +245,15 @@ func (m *Module) SetAuthorizer(authorizer producthttp.Authorizer) {
 	if m.tagHandler != nil {
 		m.tagHandler.SetAuthorizer(authorizer)
 	}
+}
+
+// SetStorefrontStaticPageSource configures optional static-page lookups for navigation snapshots.
+func (m *Module) SetStorefrontStaticPageSource(source StorefrontStaticPageSource) {
+	if m == nil || m.storefrontSource == nil {
+		return
+	}
+
+	m.storefrontSource.pageSource = source
 }
 
 // CategoryService returns category application service dependencies for module integrations.

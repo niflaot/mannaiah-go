@@ -9,6 +9,7 @@ import (
 	corecache "mannaiah/module/core/cache"
 	categorydomain "mannaiah/module/products/domain/category"
 	productdomain "mannaiah/module/products/domain/product"
+	storefrontdomain "mannaiah/module/products/domain/storefront"
 )
 
 // sourceMock defines storefront navigation source behavior for tests.
@@ -19,6 +20,8 @@ type sourceMock struct {
 	childrenFn func(ctx context.Context, parentID string) ([]*categorydomain.Category, error)
 	// productsFn defines category product lookup behavior.
 	productsFn func(ctx context.Context, categoryID string) ([]*productdomain.Product, error)
+	// pagesFn defines static-page lookup behavior.
+	pagesFn func(ctx context.Context) ([]storefrontdomain.StaticPageNode, error)
 }
 
 // Tree executes configured root-category lookup behavior.
@@ -34,6 +37,15 @@ func (m sourceMock) Children(ctx context.Context, parentID string) ([]*categoryd
 // ListProducts executes configured category-product lookup behavior.
 func (m sourceMock) ListProducts(ctx context.Context, categoryID string) ([]*productdomain.Product, error) {
 	return m.productsFn(ctx, categoryID)
+}
+
+// ListStaticPages executes configured static-page lookup behavior.
+func (m sourceMock) ListStaticPages(ctx context.Context) ([]storefrontdomain.StaticPageNode, error) {
+	if m.pagesFn != nil {
+		return m.pagesFn(ctx)
+	}
+
+	return []storefrontdomain.StaticPageNode{}, nil
 }
 
 // cacheStoreMock defines in-memory cache behavior for tests.
@@ -111,6 +123,9 @@ func TestGetUsesCache(t *testing.T) {
 		productsFn: func(ctx context.Context, categoryID string) ([]*productdomain.Product, error) {
 			return nil, nil
 		},
+		pagesFn: func(ctx context.Context) ([]storefrontdomain.StaticPageNode, error) {
+			return nil, nil
+		},
 	}, store, Config{}, nil)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
@@ -157,6 +172,16 @@ func TestRegenerateBuildsAndCachesNavigation(t *testing.T) {
 				}},
 			}}, nil
 		},
+		pagesFn: func(ctx context.Context) ([]storefrontdomain.StaticPageNode, error) {
+			return []storefrontdomain.StaticPageNode{{
+				ID:           "page-1",
+				RenderableID: "renderable-1",
+				Title:        "About",
+				URL:          "/about",
+				CreatedAt:    rootCreatedAt.Add(2 * time.Hour),
+				UpdatedAt:    rootCreatedAt.Add(2 * time.Hour),
+			}}, nil
+		},
 	}, store, Config{}, nil)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
@@ -178,6 +203,12 @@ func TestRegenerateBuildsAndCachesNavigation(t *testing.T) {
 	if got := snapshot.Categories[0].Products[0].Path; got != "/product/dream-nubuk-negro" {
 		t.Fatalf("product path = %q, want /product/dream-nubuk-negro", got)
 	}
+	if len(snapshot.StaticPages) != 1 {
+		t.Fatalf("len(snapshot.StaticPages) = %d, want 1", len(snapshot.StaticPages))
+	}
+	if got := snapshot.StaticPages[0].URL; got != "/about" {
+		t.Fatalf("static page url = %q, want /about", got)
+	}
 	if ttl := store.lastTTL["products:storefront:navigation:default"]; ttl != 24*time.Hour {
 		t.Fatalf("cache ttl = %s, want 24h", ttl)
 	}
@@ -198,6 +229,9 @@ func TestRegenerateExtendsStaleSnapshotOnFailure(t *testing.T) {
 			return nil, nil
 		},
 		productsFn: func(ctx context.Context, categoryID string) ([]*productdomain.Product, error) {
+			return nil, nil
+		},
+		pagesFn: func(ctx context.Context) ([]storefrontdomain.StaticPageNode, error) {
 			return nil, nil
 		},
 	}, store, Config{}, nil)

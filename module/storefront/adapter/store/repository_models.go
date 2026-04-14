@@ -58,6 +58,8 @@ type staticPageRecord struct {
 	URL string `gorm:"column:url;size:512;not null;uniqueIndex"`
 	// SEOTagsJSON defines compact SEO JSON values.
 	SEOTagsJSON string `gorm:"column:seo_tags_json;type:longtext;not null"`
+	// ArchivedAt defines archive timestamps when present.
+	ArchivedAt *time.Time `gorm:"column:archived_at;default:null;index"`
 	// CreatedAt defines creation timestamps.
 	CreatedAt time.Time
 	// UpdatedAt defines update timestamps.
