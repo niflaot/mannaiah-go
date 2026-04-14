@@ -18,6 +18,7 @@
 - All production code must be unit tested to the maximum practical level.
 - Follow TDD by writing or updating tests before implementation changes whenever possible.
 - Every new function must be covered by end-to-end test flows whenever it participates in runtime module behavior.
+- When e2e or migration-oriented tests assert the latest migration version, do not leave hardcoded version numbers behind; update them to resolve the latest embedded migration version dynamically when newer migrations are present.
 - Add resilience tests for critical flows, including authentication-provider outages, dependency connection failures (database/cache/messaging), and expected error-mapping behavior.
 - Add concurrency/race-condition tests on uniqueness/idempotency critical paths whenever applicable.
 - Add performance tests (benchmarks/load-oriented tests) for hot paths whenever practical, and keep them modular and reproducible.
