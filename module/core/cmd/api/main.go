@@ -44,6 +44,7 @@ import (
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
 	coretelemetry "mannaiah/module/core/telemetry"
+	"mannaiah/module/coupons"
 	"mannaiah/module/email"
 	emailapplication "mannaiah/module/email/application"
 	emailport "mannaiah/module/email/port"
@@ -70,7 +71,7 @@ import (
 	"mannaiah/module/shipping"
 	shippingevent "mannaiah/module/shipping/adapter/event"
 	shippingsearch "mannaiah/module/shipping/adapter/search"
-	"mannaiah/module/coupons"
+	"mannaiah/module/storefront"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -224,7 +225,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "1.3.0",
+		Version:     "1.4.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -539,6 +540,15 @@ func run(ctx context.Context, envFile string) error {
 		defer cancel()
 		_ = productsModule.Stop(stopCtx)
 	}()
+
+	storefrontModule, err := storefront.New(db)
+	if err != nil {
+		return fmt.Errorf("initialize storefront module: %w", err)
+	}
+	storefrontModule.SetAuthorizer(authModule)
+	if err := storefrontModule.Load(runtime); err != nil {
+		return fmt.Errorf("load storefront module: %w", err)
+	}
 
 	falabellaCatalog, err := falabellaproducts.NewCatalog(
 		productsModule.Service(),

@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v1.3.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v1.4.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -15,6 +15,7 @@ Campaign-template parsing and runtime DSL behavior are documented in `FINAL-DSL-
 - `module/contacts`: contact domain.
 - `module/orders`: order domain.
 - `module/products`: product domain.
+- `module/storefront`: renderable and static-page storefront content domain.
 - `module/assets`: asset/storage domain.
 - `module/falabella`: Falabella integration module.
 - `module/woocommerce`: WooCommerce integration module.

@@ -52,6 +52,18 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v1.4.0] - 2026-04-14
+- Storefront module: renderable and static-page management feature added (`module/storefront`).
+  - Domain: `Renderable` root rows hold the current draft snapshot (`kind`, metadata JSON, content JSON, `draft` state), while immutable `RenderableVersion` rows are created only on publish and rollback.
+  - Versioning: publish creates timestamped immutable snapshots; rollback clones a historical version into a fresh published version with a new timestamp and source-version linkage.
+  - Static pages: one-to-one bindings from pages to renderables with title, unique URL, and SEO-tags JSON managed separately from renderable version history.
+  - HTTP adapter: CRUD and listing endpoints added under `/storefront/renderable*` and `/storefront/page*`, all protected by `storefront:manage`.
+  - OpenAPI: request/response schemas and path documentation added for renderables, published versions, rollbacks, and static pages.
+  - Persistence: migration `000046_storefront_renderables` added for MySQL and SQLite with indexed renderable roots, published snapshots, and static-page bindings.
+  - Performance/storage: draft edits remain on the root renderable row; only published or rollback snapshots create version rows, with compacted JSON payload persistence and indexed version retrieval.
+  - Validation: added unit coverage for renderable publish/rollback and static-page conflicts, handler coverage for permission enforcement and payload decoding, plus end-to-end lifecycle coverage for renderables and static pages.
+- Release metadata updated to `v1.4.0`.
+
 ### [v1.3.0] - 2026-04-12
 - Coupons module: full coupon management feature added (`module/coupons`).
   - Domain: `Coupon` aggregate with fixed/percentage discount types, per-email and global usage limits, expiry, assigned emails/contacts, product/category/tag scope, and WooCommerce deduplication key.

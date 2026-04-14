@@ -26,6 +26,7 @@ import (
 	orderevent "mannaiah/module/orders/adapter/event"
 	orderproducts "mannaiah/module/orders/adapter/products"
 	"mannaiah/module/products"
+	"mannaiah/module/storefront"
 )
 
 // newContactsE2EHarness creates a fully wired contacts/auth/event E2E runtime harness.
@@ -151,6 +152,13 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	}
 	ordersModule.SetAuthorizer(authModule)
 
+	tracer.Step("initialize storefront module")
+	storefrontModule, err := storefront.New(db)
+	if err != nil {
+		t.Fatalf("storefront.New() error = %v", err)
+	}
+	storefrontModule.SetAuthorizer(authModule)
+
 	tracer.Step("initialize http server")
 	server, err := corehttp.New(corehttp.Config{Host: "127.0.0.1", Port: 8011}, tracer.logger)
 	if err != nil {
@@ -161,6 +169,7 @@ func newContactsE2EHarness(t *testing.T) *contactsE2EHarness {
 	server.RegisterRoutes(assetsModule.RegisterRoutes)
 	server.RegisterRoutes(productsModule.RegisterRoutes)
 	server.RegisterRoutes(ordersModule.RegisterRoutes)
+	server.RegisterRoutes(storefrontModule.RegisterRoutes)
 
 	return &contactsE2EHarness{
 		tracer:             tracer,
