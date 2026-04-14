@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -126,21 +127,69 @@ func TestRunForceRequiresVersion(t *testing.T) {
 
 // TestLatestEmbeddedMigrationVersion verifies embedded latest-version discovery per driver directory.
 func TestLatestEmbeddedMigrationVersion(t *testing.T) {
+	expectedMySQLVersion, err := expectedLatestMigrationVersion("migrations/mysql")
+	if err != nil {
+		t.Fatalf("expectedLatestMigrationVersion(mysql) error = %v", err)
+	}
+	expectedSQLiteVersion, err := expectedLatestMigrationVersion("migrations/sqlite")
+	if err != nil {
+		t.Fatalf("expectedLatestMigrationVersion(sqlite) error = %v", err)
+	}
+	if expectedMySQLVersion != expectedSQLiteVersion {
+		t.Fatalf("latest migration mismatch mysql=%d sqlite=%d", expectedMySQLVersion, expectedSQLiteVersion)
+	}
+
 	version, err := latestEmbeddedMigrationVersion("migrations/mysql")
 	if err != nil {
 		t.Fatalf("latestEmbeddedMigrationVersion(mysql) error = %v", err)
 	}
-	if version != 45 {
-		t.Fatalf("latestEmbeddedMigrationVersion(mysql) = %d, want 45", version)
+	if version != expectedMySQLVersion {
+		t.Fatalf("latestEmbeddedMigrationVersion(mysql) = %d, want %d", version, expectedMySQLVersion)
 	}
 
 	version, err = latestEmbeddedMigrationVersion("migrations/sqlite")
 	if err != nil {
 		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) error = %v", err)
 	}
-	if version != 45 {
-		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) = %d, want 45", version)
+	if version != expectedSQLiteVersion {
+		t.Fatalf("latestEmbeddedMigrationVersion(sqlite) = %d, want %d", version, expectedSQLiteVersion)
 	}
+}
+
+// expectedLatestMigrationVersion derives the highest embedded migration version for one driver directory.
+func expectedLatestMigrationVersion(driverDirectory string) (uint, error) {
+	entries, err := fs.ReadDir(migrationFiles, driverDirectory)
+	if err != nil {
+		return 0, err
+	}
+
+	latestVersion := uint(0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".up.sql") && !strings.HasSuffix(name, ".down.sql") {
+			continue
+		}
+
+		prefix := strings.SplitN(name, "_", 2)[0]
+		version, parseErr := strconv.Atoi(prefix)
+		if parseErr != nil {
+			return 0, fmt.Errorf("parse migration version %q: %w", name, parseErr)
+		}
+		parsedVersion := uint(version)
+		if parsedVersion > latestVersion {
+			latestVersion = parsedVersion
+		}
+	}
+
+	if latestVersion == 0 {
+		return 0, fmt.Errorf("no migration versions found in %q", driverDirectory)
+	}
+
+	return latestVersion, nil
 }
 
 // TestIsMissingCurrentDownMigrationError verifies matching of the tolerated startup migration error.

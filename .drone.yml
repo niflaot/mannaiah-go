@@ -27,8 +27,10 @@ steps:
           module/auth \
           module/contacts \
           module/orders \
+          module/coupons \
           module/assets \
           module/products \
+          module/storefront \
           module/falabella \
           module/woocommerce \
           module/syncrecord \
