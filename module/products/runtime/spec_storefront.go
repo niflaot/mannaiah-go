@@ -19,7 +19,7 @@ func getStorefrontNavigationOperation() *openapi3.Operation {
 	return &openapi3.Operation{
 		OperationID: "StorefrontController_navigation",
 		Summary:     "Get storefront navigation rewrite tree",
-		Description: "Returns the cached storefront navigation snapshot for categories, products, and static pages.",
+		Description: "Returns the cached storefront navigation snapshot for categories, products, and static pages. Static pages expose the bound renderable identifier only through renderableId; renderable payloads are not embedded in this response.",
 		Tags:        []string{storefrontTag},
 		Security:    bearerSecurityRequirements(),
 		Responses: openapi3.NewResponses(
@@ -70,7 +70,7 @@ func storefrontProductNodeSchema() *openapi3.Schema {
 
 // storefrontStaticPageNodeSchema returns the response schema for one navigation static-page node.
 func storefrontStaticPageNodeSchema() *openapi3.Schema {
-	return openapi3.NewObjectSchema().
+	schema := openapi3.NewObjectSchema().
 		WithProperty("id", openapi3.NewStringSchema()).
 		WithProperty("renderableId", openapi3.NewStringSchema()).
 		WithProperty("title", openapi3.NewStringSchema()).
@@ -78,6 +78,9 @@ func storefrontStaticPageNodeSchema() *openapi3.Schema {
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema()).
 		WithRequired([]string{"id", "renderableId", "title", "url", "createdAt", "updatedAt"})
+	schema.Description = "Static-page navigation entry including the bound renderable identifier only; use renderableId to load the page body separately."
+
+	return schema
 }
 
 // storefrontArrayRefSchema returns an array schema using a component reference for its item type.

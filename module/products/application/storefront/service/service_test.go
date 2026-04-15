@@ -206,6 +206,9 @@ func TestRegenerateBuildsAndCachesNavigation(t *testing.T) {
 	if len(snapshot.StaticPages) != 1 {
 		t.Fatalf("len(snapshot.StaticPages) = %d, want 1", len(snapshot.StaticPages))
 	}
+	if got := snapshot.StaticPages[0].RenderableID; got != "renderable-1" {
+		t.Fatalf("static page renderable id = %q, want renderable-1", got)
+	}
 	if got := snapshot.StaticPages[0].URL; got != "/about" {
 		t.Fatalf("static page url = %q, want /about", got)
 	}
