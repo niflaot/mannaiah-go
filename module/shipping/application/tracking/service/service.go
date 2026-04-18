@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,10 @@ type Service struct {
 	registry port.ProviderRegistry
 	// publisher defines integration event publisher dependencies.
 	publisher port.IntegrationEventPublisher
+	// trackingHistoryCache guards short-lived tracking lookups reused across list filter changes.
+	trackingHistoryCache map[string]trackingHistoryCacheEntry
+	// trackingHistoryCacheMu guards trackingHistoryCache access.
+	trackingHistoryCacheMu sync.RWMutex
 }
 
 // TrackingUpdatedPayload defines tracking-updated event payload values.
@@ -35,7 +40,12 @@ type TrackingUpdatedPayload struct {
 
 // NewService creates tracking services.
 func NewService(repository port.ShippingMarkRepository, registry port.ProviderRegistry, publisher port.IntegrationEventPublisher) *Service {
-	return &Service{repository: repository, registry: registry, publisher: publisher}
+	return &Service{
+		repository:           repository,
+		registry:             registry,
+		publisher:            publisher,
+		trackingHistoryCache: map[string]trackingHistoryCacheEntry{},
+	}
 }
 
 // Get resolves normalized tracking history for one tracking number and carrier identifier.

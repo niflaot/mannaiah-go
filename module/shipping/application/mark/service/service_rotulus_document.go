@@ -82,6 +82,8 @@ type markRotulusMeta struct {
 	RecipientPhone string
 	// RecipientCity defines recipient city label values.
 	RecipientCity string
+	// CollectOnDeliveryAmount defines cash-on-delivery amount shown as recaudo when present.
+	CollectOnDeliveryAmount float64
 	// GeneratedAt defines generation timestamp values.
 	GeneratedAt time.Time
 }
@@ -154,17 +156,18 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 	}
 
 	payload, err := s.buildRotulusPDF(ctx, markRotulusMeta{
-		MarkID:                mark.ID,
-		OrderID:               mark.OrderID,
-		OrderNumber:           firstNonEmptyString(orderNumber, mark.OrderID),
-		TrackingNumber:        firstNonEmptyString(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(mark.DocumentRef), mark.ID),
-		CarrierLabel:          resolveRotulusCarrierLabel(*mark),
-		RecipientName:         firstNonEmptyString(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName)),
-		RecipientAddressLine:  recipientAddressLine,
-		RecipientAddressLine2: recipientAddressLine2,
-		RecipientPhone:        recipientPhone,
-		RecipientCity:         recipientCity,
-		GeneratedAt:           now,
+		MarkID:                  mark.ID,
+		OrderID:                 mark.OrderID,
+		OrderNumber:             firstNonEmptyString(orderNumber, mark.OrderID),
+		TrackingNumber:          firstNonEmptyString(strings.TrimSpace(mark.TrackingNumber), strings.TrimSpace(mark.DocumentRef), mark.ID),
+		CarrierLabel:            resolveRotulusCarrierLabel(*mark),
+		RecipientName:           firstNonEmptyString(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName)),
+		RecipientAddressLine:    recipientAddressLine,
+		RecipientAddressLine2:   recipientAddressLine2,
+		RecipientPhone:          recipientPhone,
+		RecipientCity:           recipientCity,
+		CollectOnDeliveryAmount: resolveRotulusCollectOnDeliveryAmount(*mark),
+		GeneratedAt:             now,
 	})
 	if err != nil {
 		return nil, err
@@ -240,6 +243,15 @@ func resolveRotulusCarrierLabel(mark domain.ShippingMark) string {
 	}
 
 	return strings.TrimSpace(mark.CarrierID)
+}
+
+// resolveRotulusCollectOnDeliveryAmount resolves the shown recaudo amount for one rotulus.
+func resolveRotulusCollectOnDeliveryAmount(mark domain.ShippingMark) float64 {
+	if mark.CollectOnDeliveryChargedAmount > 0 {
+		return mark.CollectOnDeliveryChargedAmount
+	}
+
+	return mark.CollectOnDeliveryAmount
 }
 
 // rotulusDocumentCacheKey resolves one versioned cache key for the provided mark state.

@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/jung-kurt/gofpdf"
@@ -103,6 +105,7 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 	for _, row := range rows {
 		drawRotulusLabelValueRow(pdf, textX, leftWidth, formatRotulusLabel(row.label), row.value)
 	}
+	drawRotulusCollectOnDelivery(pdf, textX, leftWidth, meta.CollectOnDeliveryAmount)
 }
 
 // drawRotulusRightColumn renders the centered signed QR code payload.
@@ -192,6 +195,17 @@ func drawRotulusInlineLabelValue(pdf *gofpdf.Fpdf, x float64, y float64, width f
 	pdf.MultiCell(width-labelWidth, lineHeight, valueText, "", "L", false)
 }
 
+// drawRotulusCollectOnDelivery renders highlighted COD collection amount when present.
+func drawRotulusCollectOnDelivery(pdf *gofpdf.Fpdf, x float64, width float64, value float64) {
+	if pdf == nil || value <= 0 {
+		return
+	}
+	pdf.Ln(1.5)
+	pdf.SetX(x)
+	pdf.SetFont("Arial", "B", 16)
+	pdf.CellFormat(width, 9, encodeRotulusText("RECAUDO: "+formatRotulusCOP(value)), "", 1, "L", false, 0, "")
+}
+
 // downloadRotulusLogo downloads one logo image and resolves image type values for gofpdf.
 func (s *Service) downloadRotulusLogo(ctx context.Context) ([]byte, string, error) {
 	if s == nil || s.rotulusDocuments == nil {
@@ -249,6 +263,36 @@ func sanitizeRotulusValue(value string, fallback string) string {
 	}
 
 	return trimmed
+}
+
+// formatRotulusCOP formats whole monetary values using Colombian thousands separators.
+func formatRotulusCOP(value float64) string {
+	if value <= 0 {
+		return "$0"
+	}
+	rounded := int64(math.Round(value))
+	raw := strconv.FormatInt(rounded, 10)
+	if len(raw) <= 3 {
+		return "$" + raw
+	}
+
+	var builder strings.Builder
+	remainder := len(raw) % 3
+	if remainder > 0 {
+		builder.WriteString(raw[:remainder])
+		if len(raw) > remainder {
+			builder.WriteByte('.')
+		}
+	}
+
+	for index := remainder; index < len(raw); index += 3 {
+		builder.WriteString(raw[index : index+3])
+		if index+3 < len(raw) {
+			builder.WriteByte('.')
+		}
+	}
+
+	return "$" + builder.String()
 }
 
 // encodeRotulusText encodes UTF-8 strings into ISO-8859-1 compatible PDF text.

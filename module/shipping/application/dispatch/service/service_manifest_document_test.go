@@ -264,6 +264,49 @@ func TestManifestDocumentRejectsOpenBatch(t *testing.T) {
 	}
 }
 
+// TestManifestDocumentAllowsOpenManualBatch verifies manifest-document generation accepts open manual batches.
+func TestManifestDocumentAllowsOpenManualBatch(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	service := NewService(batchRepository, markRepository, nil)
+
+	batchRepository.batches["batch-open-manual"] = domain.DispatchBatch{
+		ID:        "batch-open-manual",
+		CarrierID: "manual",
+		Status:    domain.BatchStatusOpen,
+		CreatedBy: "user-1",
+		CreatedAt: time.Now().UTC(),
+	}
+	batchID := "batch-open-manual"
+	markRepository.marks["mark-manual-1"] = domain.ShippingMark{
+		ID:                "mark-manual-1",
+		OrderID:           "order-1",
+		CarrierID:         "manual",
+		Status:            domain.MarkStatusQuoted,
+		TrackingNumber:    "MANUAL-001",
+		QuotedFreightCost: 12000,
+		Recipient:         domain.Address{Name: "Recipient Manual", CityCode: "11001"},
+		Units:             []domain.PackageUnit{{Description: "MORRAL"}},
+		DispatchBatchID:   &batchID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	}
+
+	payload, err := service.ManifestDocument(context.Background(), "batch-open-manual")
+	if err != nil {
+		t.Fatalf("ManifestDocument() error = %v, want nil", err)
+	}
+	if len(payload) == 0 || !strings.HasPrefix(string(payload), "%PDF") {
+		t.Fatalf("ManifestDocument() returned non-pdf payload")
+	}
+	if strings.Contains(string(payload), "NÚMERO DE GUÍA") {
+		t.Fatalf("ManifestDocument() manual cover should not include tracking-number column header")
+	}
+	if strings.Contains(string(payload), "FLETE") {
+		t.Fatalf("ManifestDocument() manual cover should not include freight column header")
+	}
+}
+
 // TestResolveBatchManifestCoverRowsSkipsFailedMarks verifies failed marks are excluded from manifest cover rows and merged URLs.
 func TestResolveBatchManifestCoverRowsSkipsFailedMarks(t *testing.T) {
 	service := NewService(newDispatchBatchRepositoryStub(), newDispatchMarkRepositoryStub(), nil)

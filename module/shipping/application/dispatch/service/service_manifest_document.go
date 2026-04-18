@@ -85,6 +85,8 @@ type batchManifestCoverMeta struct {
 	GeneratedAt time.Time
 	// Quantity defines mark-count values included in this document.
 	Quantity int
+	// IsManualBatch defines whether the source batch belongs to the manual carrier flow.
+	IsManualBatch bool
 }
 
 // batchManifestCoverRow defines one row rendered in cover-page summary tables.
@@ -132,7 +134,8 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	if batch.Status != domain.BatchStatusClosed {
+	isOpenManualBatch := batch.Status == domain.BatchStatusOpen && domain.IsManualCarrierID(batch.CarrierID)
+	if batch.Status != domain.BatchStatusClosed && !isOpenManualBatch {
 		return nil, domain.ErrInvalidBatchStatus
 	}
 
@@ -142,10 +145,11 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 	}
 	rows, _ := s.resolveBatchManifestCoverRows(ctx, marks)
 	cover, err := s.buildBatchManifestCoverPDF(ctx, batchManifestCoverMeta{
-		BatchID:     batch.ID,
-		CarrierID:   batch.CarrierID,
-		GeneratedAt: time.Now().UTC(),
-		Quantity:    len(rows),
+		BatchID:       batch.ID,
+		CarrierID:     batch.CarrierID,
+		GeneratedAt:   time.Now().UTC(),
+		Quantity:      len(rows),
+		IsManualBatch: domain.IsManualCarrierID(batch.CarrierID),
 	}, rows)
 	if err != nil {
 		return nil, err

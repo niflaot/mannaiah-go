@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"mannaiah/module/shipping/domain"
 	"mannaiah/module/shipping/port"
 )
 
 const trackingStatusManual = "MANUAL"
 const trackingListFetchChunkSize = 100
+const trackingListBuildConcurrency = 8
 
 // ListQuery defines tracking listing query values.
 type ListQuery struct {
@@ -48,6 +51,26 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]ListItem, int64,
 	page, limit := normalizeListPagination(query.Page, query.Limit)
 	normalizedStatus := strings.ToUpper(strings.TrimSpace(query.Status))
 	trimmedTerm := strings.TrimSpace(query.Term)
+	if normalizedStatus == trackingStatusManual {
+		rows, total, err := s.listCandidateMarks(ctx, port.MarkListQuery{
+			CarrierID:        "manual",
+			SearchTerm:       trimmedTerm,
+			ExcludedStatuses: []domain.MarkStatus{domain.MarkStatusQuoted, domain.MarkStatusRemoved},
+			RequireTracking:  true,
+			Page:             page,
+			Limit:            limit,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+
+		items, err := s.buildListItems(ctx, rows)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return items, total, nil
+	}
 	if normalizedStatus == "" {
 		rows, total, err := s.listCandidateMarks(ctx, port.MarkListQuery{
 			SearchTerm:       trimmedTerm,
@@ -128,13 +151,27 @@ func (s *Service) collectAllCandidateMarks(ctx context.Context, term string) ([]
 
 // buildListItems builds tracking list rows for marks.
 func (s *Service) buildListItems(ctx context.Context, marks []domain.ShippingMark) ([]ListItem, error) {
-	items := make([]ListItem, 0, len(marks))
-	for _, mark := range marks {
-		item, err := s.buildListItem(ctx, mark)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, item)
+	if len(marks) == 0 {
+		return []ListItem{}, nil
+	}
+	items := make([]ListItem, len(marks))
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(trackingListBuildConcurrency)
+	for index, mark := range marks {
+		index := index
+		mark := mark
+		group.Go(func() error {
+			item, err := s.buildListItem(groupCtx, mark)
+			if err != nil {
+				return err
+			}
+			items[index] = item
+
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 
 	return items, nil
@@ -177,6 +214,9 @@ func (s *Service) resolveListStatus(ctx context.Context, mark domain.ShippingMar
 
 // lookupTrackingHistory resolves tracking history without publishing tracking-updated events.
 func (s *Service) lookupTrackingHistory(ctx context.Context, carrierID string, trackingNumber string) (*domain.TrackingHistory, error) {
+	if cached, ok := s.getCachedTrackingHistory(carrierID, trackingNumber); ok {
+		return cached, nil
+	}
 	if s == nil || s.registry == nil {
 		return nil, domain.ErrTrackingNotSupported
 	}
@@ -188,6 +228,7 @@ func (s *Service) lookupTrackingHistory(ctx context.Context, carrierID string, t
 	if err != nil {
 		return nil, fmt.Errorf("get tracking history: %w", err)
 	}
+	s.putCachedTrackingHistory(carrierID, trackingNumber, history)
 
 	return history, nil
 }

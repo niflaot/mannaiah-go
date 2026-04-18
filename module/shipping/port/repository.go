@@ -13,6 +13,8 @@ type MarkListQuery struct {
 	OrderID string
 	// BatchID filters rows by batch identifier.
 	BatchID string
+	// CarrierID filters rows by carrier identifier.
+	CarrierID string
 	// SearchTerm filters rows by tracking number, order id, and recipient labels.
 	SearchTerm string
 	// ExcludedStatuses removes rows whose mark status belongs to the provided set.

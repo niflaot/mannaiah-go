@@ -273,6 +273,9 @@ func (r *MarkRepository) List(ctx context.Context, query port.MarkListQuery) ([]
 	if strings.TrimSpace(query.BatchID) != "" {
 		builder = builder.Where("dispatch_batch_id = ?", strings.TrimSpace(query.BatchID))
 	}
+	if strings.TrimSpace(query.CarrierID) != "" {
+		builder = builder.Where("carrier_id = ?", strings.TrimSpace(query.CarrierID))
+	}
 	if query.RequireTracking {
 		builder = builder.Where("tracking_number IS NOT NULL AND TRIM(tracking_number) <> ''")
 	}

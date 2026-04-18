@@ -24,14 +24,15 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	repository := newMarkRepositoryStub()
 	now := time.Now().UTC()
 	repository.rows["mark-1"] = domain.ShippingMark{
-		ID:             "mark-1",
-		OrderID:        "order-1",
-		CarrierID:      "manual",
-		Observations:   "interrapidisimo",
-		TrackingNumber: "11515151",
-		Recipient:      domain.Address{Name: "Ian Castano"},
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:                      "mark-1",
+		OrderID:                 "order-1",
+		CarrierID:               "manual",
+		Observations:            "interrapidisimo",
+		TrackingNumber:          "11515151",
+		CollectOnDeliveryAmount: 150000,
+		Recipient:               domain.Address{Name: "Ian Castano"},
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 
 	service := NewService(repository, markRegistryStub{}, &publisherStub{})
@@ -78,6 +79,9 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	}
 	if !strings.Contains(string(firstPayload), "DESTINATARIO:") {
 		t.Fatalf("RotulusDocument(first) missing uppercase recipient label")
+	}
+	if !strings.Contains(string(firstPayload), "RECAUDO: $150.000") {
+		t.Fatalf("RotulusDocument(first) missing highlighted recaudo amount")
 	}
 	if strings.Contains(string(firstPayload), "despacho") {
 		t.Fatalf("RotulusDocument(first) includes deprecated title")
