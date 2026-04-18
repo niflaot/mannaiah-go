@@ -30,6 +30,7 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 		Observations:            "interrapidisimo",
 		TrackingNumber:          "11515151",
 		CollectOnDeliveryAmount: 150000,
+		Units:                   []domain.PackageUnit{{Description: "MORRAL AXEL"}},
 		Recipient:               domain.Address{Name: "Ian Castano"},
 		CreatedAt:               now,
 		UpdatedAt:               now,
@@ -82,6 +83,12 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	}
 	if !strings.Contains(string(firstPayload), "RECAUDO: $150.000") {
 		t.Fatalf("RotulusDocument(first) missing highlighted recaudo amount")
+	}
+	if !strings.Contains(string(firstPayload), "CONTENIDO:") {
+		t.Fatalf("RotulusDocument(first) missing content label")
+	}
+	if !strings.Contains(string(firstPayload), "- MORRAL AXEL") {
+		t.Fatalf("RotulusDocument(first) missing manifest-style content value")
 	}
 	if strings.Contains(string(firstPayload), "despacho") {
 		t.Fatalf("RotulusDocument(first) includes deprecated title")

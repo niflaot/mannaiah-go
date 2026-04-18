@@ -106,6 +106,7 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 		drawRotulusLabelValueRow(pdf, textX, leftWidth, formatRotulusLabel(row.label), row.value)
 	}
 	drawRotulusCollectOnDelivery(pdf, textX, leftWidth, meta.CollectOnDeliveryAmount)
+	drawRotulusContent(pdf, textX, leftWidth, meta.Content, template.EmptyValueFallback)
 }
 
 // drawRotulusRightColumn renders the centered signed QR code payload.
@@ -140,11 +141,12 @@ func (s *Service) drawRotulusFooter(pdf *gofpdf.Fpdf, meta markRotulusMeta) {
 		return
 	}
 	template := s.rotulusDocuments.template
-	pdf.SetXY(rotulusMarginMM, rotulusContentHeightMM-rotulusMarginMM-4)
+	footerY := rotulusContentHeightMM - rotulusMarginMM - 4
+	pdf.SetXY(rotulusMarginMM, footerY)
 	drawRotulusInlineLabelValue(
 		pdf,
 		rotulusMarginMM,
-		rotulusContentHeightMM-rotulusMarginMM-4,
+		footerY,
 		rotulusPageWidthMM-(2*rotulusMarginMM),
 		4,
 		8,
@@ -204,6 +206,20 @@ func drawRotulusCollectOnDelivery(pdf *gofpdf.Fpdf, x float64, width float64, va
 	pdf.SetX(x)
 	pdf.SetFont("Arial", "B", 16)
 	pdf.CellFormat(width, 9, encodeRotulusText("RECAUDO: "+formatRotulusCOP(value)), "", 1, "L", false, 0, "")
+}
+
+// drawRotulusContent renders the content line directly in the detail stack (after city and optional COD).
+func drawRotulusContent(pdf *gofpdf.Fpdf, x float64, width float64, content string, fallback string) {
+	if pdf == nil {
+		return
+	}
+	drawRotulusLabelValueRow(
+		pdf,
+		x,
+		width,
+		formatRotulusLabel("Contenido"),
+		sanitizeRotulusValue(content, fallback),
+	)
 }
 
 // downloadRotulusLogo downloads one logo image and resolves image type values for gofpdf.

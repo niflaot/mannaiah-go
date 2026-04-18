@@ -82,6 +82,8 @@ type markRotulusMeta struct {
 	RecipientPhone string
 	// RecipientCity defines recipient city label values.
 	RecipientCity string
+	// Content defines rendered shipment content lines shown in the footer.
+	Content string
 	// CollectOnDeliveryAmount defines cash-on-delivery amount shown as recaudo when present.
 	CollectOnDeliveryAmount float64
 	// GeneratedAt defines generation timestamp values.
@@ -166,6 +168,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 		RecipientAddressLine2:   recipientAddressLine2,
 		RecipientPhone:          recipientPhone,
 		RecipientCity:           recipientCity,
+		Content:                 resolveRotulusContent(*mark),
 		CollectOnDeliveryAmount: resolveRotulusCollectOnDeliveryAmount(*mark),
 		GeneratedAt:             now,
 	})
@@ -252,6 +255,28 @@ func resolveRotulusCollectOnDeliveryAmount(mark domain.ShippingMark) float64 {
 	}
 
 	return mark.CollectOnDeliveryAmount
+}
+
+// resolveRotulusContent resolves footer content lines using the same item-description source as manifest fallback rows.
+func resolveRotulusContent(mark domain.ShippingMark) string {
+	items := make([]string, 0, len(mark.Units))
+	for _, unit := range mark.Units {
+		description := strings.TrimSpace(unit.Description)
+		if description == "" {
+			continue
+		}
+		items = append(items, description)
+	}
+	if len(items) == 0 {
+		return "-"
+	}
+
+	rows := make([]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, "- "+item)
+	}
+
+	return strings.Join(rows, "\n")
 }
 
 // rotulusDocumentCacheKey resolves one versioned cache key for the provided mark state.
