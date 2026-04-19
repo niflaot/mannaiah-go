@@ -264,8 +264,8 @@ func TestManifestDocumentRejectsOpenBatch(t *testing.T) {
 	}
 }
 
-// TestManifestDocumentAllowsOpenManualBatch verifies manifest-document generation accepts open manual batches.
-func TestManifestDocumentAllowsOpenManualBatch(t *testing.T) {
+// TestManifestDocumentRejectsOpenManualBatch verifies manifest-document generation rejects open manual batches.
+func TestManifestDocumentRejectsOpenManualBatch(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()
 	markRepository := newDispatchMarkRepositoryStub()
 	service := NewService(batchRepository, markRepository, nil)
@@ -292,18 +292,9 @@ func TestManifestDocumentAllowsOpenManualBatch(t *testing.T) {
 		UpdatedAt:         time.Now().UTC(),
 	}
 
-	payload, err := service.ManifestDocument(context.Background(), "batch-open-manual")
-	if err != nil {
-		t.Fatalf("ManifestDocument() error = %v, want nil", err)
-	}
-	if len(payload) == 0 || !strings.HasPrefix(string(payload), "%PDF") {
-		t.Fatalf("ManifestDocument() returned non-pdf payload")
-	}
-	if strings.Contains(string(payload), "NÚMERO DE GUÍA") {
-		t.Fatalf("ManifestDocument() manual cover should not include tracking-number column header")
-	}
-	if strings.Contains(string(payload), "FLETE") {
-		t.Fatalf("ManifestDocument() manual cover should not include freight column header")
+	_, err := service.ManifestDocument(context.Background(), "batch-open-manual")
+	if !errors.Is(err, domain.ErrInvalidBatchStatus) {
+		t.Fatalf("ManifestDocument() error = %v, want ErrInvalidBatchStatus", err)
 	}
 }
 

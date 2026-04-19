@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	corecache "mannaiah/module/core/cache"
+	markservice "mannaiah/module/shipping/application/mark/service"
 	"mannaiah/module/shipping/domain"
 )
 
@@ -134,8 +135,7 @@ func (s *Service) ManifestDocument(ctx context.Context, batchID string) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	isOpenManualBatch := batch.Status == domain.BatchStatusOpen && domain.IsManualCarrierID(batch.CarrierID)
-	if batch.Status != domain.BatchStatusClosed && !isOpenManualBatch {
+	if batch.Status != domain.BatchStatusClosed {
 		return nil, domain.ErrInvalidBatchStatus
 	}
 
@@ -296,7 +296,7 @@ func (s *Service) resolveBatchManifestCoverRows(ctx context.Context, marks []dom
 			FreightCost:    mark.QuotedFreightCost,
 			RecipientName:  firstNonEmpty(strings.TrimSpace(mark.Recipient.Name), strings.TrimSpace(mark.Recipient.LegalName), "-"),
 			OrderNumber:    orderNumber,
-			City:           firstNonEmpty(strings.TrimSpace(mark.Recipient.CityCode), "-"),
+			City:           firstNonEmpty(markservice.ResolveShippingCityDisplayName(mark.Recipient.CityCode), "-"),
 			Items:          items,
 		})
 		manifestURL := strings.TrimSpace(mark.ManifestRef)

@@ -252,6 +252,21 @@ func (h *Handler) batchManifestDocument(ctx corehttp.Context) error {
 	return ctx.Status(200).SendBytes(payload)
 }
 
+// batchChecklistDocument handles open-batch checklist document downloads.
+func (h *Handler) batchChecklistDocument(ctx corehttp.Context) error {
+	batchID := strings.TrimSpace(ctx.Params("id"))
+	payload, err := h.batches.ChecklistDocument(ctx.Context(), batchID)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	ctx.SetHeader("Content-Type", "application/pdf")
+	ctx.SetHeader("Content-Disposition", fmt.Sprintf("inline; filename=\"batch-%s-checklist.pdf\"", batchID))
+	ctx.SetHeader("Cache-Control", "no-store")
+
+	return ctx.Status(200).SendBytes(payload)
+}
+
 func mapDraftMarkUnits(unitsRequest []draftMarkUnitRequest) []domain.PackageUnit {
 	units := make([]domain.PackageUnit, 0, len(unitsRequest))
 	for _, unit := range unitsRequest {

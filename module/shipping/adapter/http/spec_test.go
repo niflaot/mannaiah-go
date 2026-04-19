@@ -17,6 +17,9 @@ func TestPaths(t *testing.T) {
 	if paths.Find("/shipping/batches/{id}/manifest-document") == nil {
 		t.Fatalf("missing /shipping/batches/{id}/manifest-document path")
 	}
+	if paths.Find("/shipping/batches/{id}/checklist-document") == nil {
+		t.Fatalf("missing /shipping/batches/{id}/checklist-document path")
+	}
 	if paths.Find("/shipping/orders/{orderID}/dispatch") == nil {
 		t.Fatalf("missing /shipping/orders/{orderID}/dispatch path")
 	}
@@ -337,5 +340,14 @@ func TestShippingOperationsExposeSchemas(t *testing.T) {
 	getBatchManifestDocumentResponse := getBatchManifestDocument.Responses.Value("200")
 	if getBatchManifestDocumentResponse.Value == nil || getBatchManifestDocumentResponse.Value.Content.Get("application/pdf") == nil {
 		t.Fatalf("expected /shipping/batches/{id}/manifest-document GET 200 application/pdf response")
+	}
+
+	getBatchChecklistDocument := paths.Find("/shipping/batches/{id}/checklist-document").Get
+	if getBatchChecklistDocument == nil || getBatchChecklistDocument.Responses == nil || getBatchChecklistDocument.Responses.Value("200") == nil {
+		t.Fatalf("expected /shipping/batches/{id}/checklist-document GET 200 response")
+	}
+	getBatchChecklistDocumentResponse := getBatchChecklistDocument.Responses.Value("200")
+	if getBatchChecklistDocumentResponse.Value == nil || getBatchChecklistDocumentResponse.Value.Content.Get("application/pdf") == nil {
+		t.Fatalf("expected /shipping/batches/{id}/checklist-document GET 200 application/pdf response")
 	}
 }

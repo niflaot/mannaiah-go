@@ -62,6 +62,11 @@ func resolveRotulusCityDisplayName(value string) string {
 	return trimmed
 }
 
+// ResolveShippingCityDisplayName resolves municipality codes into city labels for shipping documents.
+func ResolveShippingCityDisplayName(value string) string {
+	return resolveRotulusCityDisplayName(value)
+}
+
 // resolveRotulusCityLookupCandidates resolves lookup variants for 5-digit and TCC-style 8-digit codes.
 func resolveRotulusCityLookupCandidates(value string) []string {
 	trimmed := strings.TrimSpace(value)

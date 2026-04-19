@@ -28,6 +28,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/batches/{id}/marks/{markID}", &openapi3.PathItem{Patch: batchUpdateMarkOperation(), Delete: batchRemoveMarkOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/manifest-document", &openapi3.PathItem{Get: batchManifestDocumentOperation()}),
+		openapi3.WithPath("/shipping/batches/{id}/checklist-document", &openapi3.PathItem{Get: batchChecklistDocumentOperation()}),
 		openapi3.WithPath("/shipping/tracking", &openapi3.PathItem{Get: trackingListOperation()}),
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
 		openapi3.WithPath("/shipping/carriers", &openapi3.PathItem{Get: carrierListOperation()}),
@@ -474,6 +475,22 @@ func batchManifestDocumentOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, binaryPDFResponse("Merged batch manifest PDF document.")),
+		),
+	}
+}
+
+// batchChecklistDocumentOperation defines the OpenAPI operation for open-batch checklist documents.
+func batchChecklistDocumentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getBatchChecklistDocument",
+		Summary:     "Get open-batch checklist PDF document",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Dispatch batch identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, binaryPDFResponse("Open-batch checklist PDF document.")),
 		),
 	}
 }

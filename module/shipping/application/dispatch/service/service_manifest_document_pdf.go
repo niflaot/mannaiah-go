@@ -11,6 +11,8 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 	"golang.org/x/text/encoding/charmap"
+
+	"mannaiah/module/shipping/domain"
 )
 
 const (
@@ -95,7 +97,7 @@ func (s *Service) drawBatchManifestCoverHeader(ctx context.Context, pdf *gofpdf.
 	pdf.SetFont("Arial", "", 9)
 	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.BatchIDLabel, sanitizeBatchManifestValue(meta.BatchID, template.EmptyValueFallback))), "", 1, "L", false, 0, "")
 	pdf.SetX(headerX)
-	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.GeneratedLabel, meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC"))), "", 1, "L", false, 0, "")
+	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.GeneratedLabel, domain.FormatUTCMinusFiveTimestamp(meta.GeneratedAt))), "", 1, "L", false, 0, "")
 	pdf.SetX(headerX)
 	pdf.CellFormat(headerWidth, 5, encodeBatchManifestText(fmt.Sprintf("%s: %s", template.CarrierLabel, sanitizeBatchManifestValue(meta.CarrierID, template.EmptyValueFallback))), "", 1, "L", false, 0, "")
 	pdf.SetX(headerX)

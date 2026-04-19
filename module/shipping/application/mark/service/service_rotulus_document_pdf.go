@@ -151,7 +151,7 @@ func (s *Service) drawRotulusFooter(pdf *gofpdf.Fpdf, meta markRotulusMeta) {
 		4,
 		8,
 		formatRotulusLabel(template.FooterLabel),
-		meta.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC"),
+		domain.FormatUTCMinusFiveTimestamp(meta.GeneratedAt),
 	)
 }
 

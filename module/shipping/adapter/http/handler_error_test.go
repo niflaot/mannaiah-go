@@ -88,6 +88,9 @@ func (dispatchServiceStub) Close(ctx context.Context, batchID string) (*domain.D
 func (dispatchServiceStub) ManifestDocument(ctx context.Context, batchID string) ([]byte, error) {
 	return []byte("%PDF"), nil
 }
+func (dispatchServiceStub) ChecklistDocument(ctx context.Context, batchID string) ([]byte, error) {
+	return []byte("%PDF"), nil
+}
 
 type trackingServiceStub struct{}
 

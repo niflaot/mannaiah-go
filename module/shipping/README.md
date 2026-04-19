@@ -11,6 +11,7 @@
 - Carrier artifact persistence for both shipping mark documents and shipping manifests.
 - Dispatch batch grouping (create/add/remove/close).
 - On-demand merged batch manifest PDF generation (cover summary page + carrier manifest pages) with 5-minute cache (Redis when configured + in-memory fallback).
+- On-demand open-batch checklist PDF generation (`LISTA DE CHEQUEO DE LOTE`) without cache for operator hand-check workflows.
 - On-demand per-mark rotulus PDF generation with signed QR payloads and cacheable rendering.
 - JSON-based batch-manifest cover template for editable labels/headers without code changes.
 - Homogenized tracking API.
@@ -37,7 +38,7 @@
   - `POST /shipping/quotations/order-packaging` — preview package allocation, COD value, destination city, and resolved shipment mode without carrier calls or persistence
   - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
   - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks/:id/rotulus-document`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
-  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `PATCH /shipping/batches/:id/marks/:markID`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`
+  - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `PATCH /shipping/batches/:id/marks/:markID`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`, `GET /shipping/batches/:id/checklist-document`
   - `GET /shipping/tracking`, `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
 - Events:
@@ -60,6 +61,12 @@
 - `SHIPPING_BATCH_MANIFEST_CACHE_TTL_SECONDS` controls merged manifest cache TTL (default `300`).
 - `SHIPPING_BATCH_MANIFEST_TEMPLATE_PATH` optionally points to a JSON template file for cover-page labels/headers.
 - Default template source: `application/dispatch/service/templates/batch_manifest_cover.es.json`.
+- `GET /shipping/batches/:id/manifest-document` is available only for `CLOSED` batches.
+
+## Batch Checklist Document
+- `GET /shipping/batches/:id/checklist-document` generates `LISTA DE CHEQUEO DE LOTE` for `OPEN` batches (`manual` and `tcc`).
+- Checklist generation is always on-demand and intentionally bypasses Redis/in-memory document cache.
+- Checklist rows render: `PEDIDO`, `DESTINATARIO`, `CIUDAD`, `ARTÍCULOS`, plus right-side manual check columns `1`, `2`, `3`.
 
 ## Rotulus Document
 - `SHIPPING_ROTULUS_CACHE_TTL_SECONDS` controls per-mark rotulus cache TTL (default `300`).
