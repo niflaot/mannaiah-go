@@ -6,6 +6,7 @@ import (
 
 	ordersdomain "mannaiah/module/orders/domain"
 	dispatchservice "mannaiah/module/shipping/application/dispatch/service"
+	markservice "mannaiah/module/shipping/application/mark/service"
 )
 
 // shippingBatchManifestOrderLookupService defines order lookup behavior required by batch manifest summary adapters.
@@ -32,6 +33,21 @@ func (a shippingBatchManifestOrderSummaryAdapter) ResolveBatchManifestOrderSumma
 	return &dispatchservice.BatchManifestOrderSummary{
 		OrderNumber: firstNonEmpty(strings.TrimSpace(order.Identifier), strings.TrimSpace(order.ID)),
 		Items:       shippingBatchManifestItemLabels(order.Items),
+	}, nil
+}
+
+// ResolveRotulusOrderSummary resolves one rotulus order summary by order id.
+func (a shippingBatchManifestOrderSummaryAdapter) ResolveRotulusOrderSummary(ctx context.Context, orderID string) (*markservice.RotulusOrderSummary, error) {
+	if a.orders == nil {
+		return nil, nil
+	}
+	order, err := a.orders.Get(ctx, strings.TrimSpace(orderID))
+	if err != nil || order == nil {
+		return nil, err
+	}
+
+	return &markservice.RotulusOrderSummary{
+		Items: shippingBatchManifestItemLabels(order.Items),
 	}, nil
 }
 

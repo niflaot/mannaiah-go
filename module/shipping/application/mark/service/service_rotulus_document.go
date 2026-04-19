@@ -15,6 +15,7 @@ import (
 
 	corecache "mannaiah/module/core/cache"
 	"mannaiah/module/shipping/domain"
+	"mannaiah/module/shipping/port"
 )
 
 const (
@@ -28,6 +29,8 @@ const (
 	defaultRotulusCacheKeyPrefix = "shipping:mark_rotulus_document:"
 	// defaultRotulusSigningSecret defines fallback signing-secret values for QR payloads.
 	defaultRotulusSigningSecret = "shipping-rotulus-default-secret-change-me"
+	// rotulusDocumentCacheVersion defines cache version values used to invalidate stale document payloads.
+	rotulusDocumentCacheVersion = "v2"
 )
 
 // markRotulusDocumentCacheEntry defines one cached rotulus document value.
@@ -58,6 +61,8 @@ type markRotulusDocumentBuilder struct {
 	template markRotulusTemplate
 	// signingSecret defines HMAC secret values for QR payload signing.
 	signingSecret string
+	// orderSummaryResolver defines optional order-summary dependencies used to render content labels.
+	orderSummaryResolver RotulusOrderSummaryResolver
 }
 
 // markRotulusMeta defines mark metadata rendered in one rotulus PDF.
@@ -102,6 +107,18 @@ type rotulusQRPayload struct {
 	GeneratedAtUnix int64 `json:"generatedAt"`
 }
 
+// RotulusOrderSummary defines order metadata rendered in rotulus content rows.
+type RotulusOrderSummary struct {
+	// Items defines display item labels rendered in the content row.
+	Items []string
+}
+
+// RotulusOrderSummaryResolver defines order metadata lookup behavior for rotulus content rows.
+type RotulusOrderSummaryResolver interface {
+	// ResolveRotulusOrderSummary resolves one rotulus order summary by order identifier.
+	ResolveRotulusOrderSummary(ctx context.Context, orderID string) (*RotulusOrderSummary, error)
+}
+
 // newMarkRotulusDocumentBuilder creates default rotulus document builder dependencies.
 func newMarkRotulusDocumentBuilder() *markRotulusDocumentBuilder {
 	return &markRotulusDocumentBuilder{
@@ -140,6 +157,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 	recipientAddressLine2 := ""
 	recipientPhone := strings.TrimSpace(mark.Recipient.Phone)
 	recipientCity := resolveRotulusCityDisplayName(strings.TrimSpace(mark.Recipient.CityCode))
+	orderItemLabels := []string{}
 	if s.orderSource != nil {
 		orderData, orderErr := s.orderSource.GetByIDOrIdentifier(ctx, strings.TrimSpace(mark.OrderID))
 		if orderErr == nil && orderData != nil && strings.TrimSpace(orderData.OrderIdentifier) != "" {
@@ -154,8 +172,10 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 				resolveRotulusCityDisplayName(strings.TrimSpace(orderData.DestCityCode)),
 				recipientCity,
 			)
+			orderItemLabels = resolveRotulusOrderDataItemLabels(orderData)
 		}
 	}
+	summaryItems := s.resolveRotulusOrderSummaryItems(ctx, mark.OrderID)
 
 	payload, err := s.buildRotulusPDF(ctx, markRotulusMeta{
 		MarkID:                  mark.ID,
@@ -168,7 +188,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 		RecipientAddressLine2:   recipientAddressLine2,
 		RecipientPhone:          recipientPhone,
 		RecipientCity:           recipientCity,
-		Content:                 resolveRotulusContent(*mark),
+		Content:                 resolveRotulusContent(*mark, summaryItems, orderItemLabels),
 		CollectOnDeliveryAmount: resolveRotulusCollectOnDeliveryAmount(*mark),
 		GeneratedAt:             now,
 	})
@@ -179,6 +199,14 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 	s.cacheRotulusDocument(ctx, cacheKey, payload)
 
 	return append([]byte(nil), payload...), nil
+}
+
+// SetRotulusOrderSummaryResolver configures optional order summary lookup dependencies for rotulus content rows.
+func (s *Service) SetRotulusOrderSummaryResolver(resolver RotulusOrderSummaryResolver) {
+	if s == nil || s.rotulusDocuments == nil {
+		return
+	}
+	s.rotulusDocuments.orderSummaryResolver = resolver
 }
 
 // SetRotulusDocumentCacheTTL configures rotulus cache TTL values.
@@ -257,15 +285,14 @@ func resolveRotulusCollectOnDeliveryAmount(mark domain.ShippingMark) float64 {
 	return mark.CollectOnDeliveryAmount
 }
 
-// resolveRotulusContent resolves footer content lines using the same item-description source as manifest fallback rows.
-func resolveRotulusContent(mark domain.ShippingMark) string {
-	items := make([]string, 0, len(mark.Units))
-	for _, unit := range mark.Units {
-		description := strings.TrimSpace(unit.Description)
-		if description == "" {
-			continue
-		}
-		items = append(items, description)
+// resolveRotulusContent resolves content lines prioritizing order summary items and ignoring manual placeholders.
+func resolveRotulusContent(mark domain.ShippingMark, summaryItems []string, orderItemLabels []string) string {
+	items := normalizeRotulusItemLabels(summaryItems)
+	if len(items) == 0 {
+		items = resolveRotulusUnitLabels(mark)
+	}
+	if len(items) == 0 {
+		items = normalizeRotulusItemLabels(orderItemLabels)
 	}
 	if len(items) == 0 {
 		return "-"
@@ -279,6 +306,79 @@ func resolveRotulusContent(mark domain.ShippingMark) string {
 	return strings.Join(rows, "\n")
 }
 
+// resolveRotulusUnitLabels resolves display item labels from mark units while excluding known manual placeholders.
+func resolveRotulusUnitLabels(mark domain.ShippingMark) []string {
+	items := make([]string, 0, len(mark.Units))
+	for _, unit := range mark.Units {
+		description := strings.TrimSpace(unit.Description)
+		if description == "" || isRotulusManualPlaceholderDescription(description) {
+			continue
+		}
+		items = append(items, description)
+	}
+
+	return normalizeRotulusItemLabels(items)
+}
+
+// resolveRotulusOrderSummaryItems resolves item labels from optional order-summary dependencies.
+func (s *Service) resolveRotulusOrderSummaryItems(ctx context.Context, orderID string) []string {
+	if s == nil || s.rotulusDocuments == nil || s.rotulusDocuments.orderSummaryResolver == nil {
+		return nil
+	}
+	summary, err := s.rotulusDocuments.orderSummaryResolver.ResolveRotulusOrderSummary(ctx, strings.TrimSpace(orderID))
+	if err != nil || summary == nil {
+		return nil
+	}
+
+	return normalizeRotulusItemLabels(summary.Items)
+}
+
+// resolveRotulusOrderDataItemLabels resolves fallback item labels from order-source line-item identifiers.
+func resolveRotulusOrderDataItemLabels(orderData *port.OrderQuotationData) []string {
+	if orderData == nil {
+		return nil
+	}
+	labels := make([]string, 0, len(orderData.Items))
+	for _, item := range orderData.Items {
+		label := firstNonEmptyString(strings.TrimSpace(item.SKU), strings.TrimSpace(item.ProductID))
+		if label == "" {
+			continue
+		}
+		if item.Quantity > 1 {
+			label = label + " x" + strconv.Itoa(item.Quantity)
+		}
+		labels = append(labels, label)
+	}
+
+	return normalizeRotulusItemLabels(labels)
+}
+
+// normalizeRotulusItemLabels normalizes item labels and removes empty/duplicate values.
+func normalizeRotulusItemLabels(items []string) []string {
+	normalized := make([]string, 0, len(items))
+	seen := map[string]struct{}{}
+	for _, item := range items {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+
+	return normalized
+}
+
+// isRotulusManualPlaceholderDescription reports whether one unit description is a synthetic manual placeholder.
+func isRotulusManualPlaceholderDescription(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	return normalized == "manual tracking entry" || normalized == "manual entry"
+}
+
 // rotulusDocumentCacheKey resolves one versioned cache key for the provided mark state.
 func (s *Service) rotulusDocumentCacheKey(mark domain.ShippingMark) string {
 	version := mark.UpdatedAt.UTC().Unix()
@@ -289,7 +389,7 @@ func (s *Service) rotulusDocumentCacheKey(mark domain.ShippingMark) string {
 		version = 1
 	}
 
-	return strings.TrimSpace(mark.ID) + ":" + strconv.FormatInt(version, 10)
+	return rotulusDocumentCacheVersion + ":" + strings.TrimSpace(mark.ID) + ":" + strconv.FormatInt(version, 10)
 }
 
 // buildSignedRotulusQRToken builds a signed QR payload token for the provided mark meta.

@@ -19,6 +19,19 @@ func (s rotulusOrderSourceStub) GetByIDOrIdentifier(ctx context.Context, identif
 	return s.row, nil
 }
 
+type rotulusOrderSummaryResolverStub struct {
+	rows map[string]RotulusOrderSummary
+}
+
+func (s rotulusOrderSummaryResolverStub) ResolveRotulusOrderSummary(ctx context.Context, orderID string) (*RotulusOrderSummary, error) {
+	row, exists := s.rows[orderID]
+	if !exists {
+		return nil, nil
+	}
+	copy := row
+	return &copy, nil
+}
+
 // TestRotulusDocumentBuildsPDFAndCaches verifies rotulus PDFs render and reuse cache for unchanged marks.
 func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	repository := newMarkRepositoryStub()
@@ -37,6 +50,11 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	}
 
 	service := NewService(repository, markRegistryStub{}, &publisherStub{})
+	service.SetRotulusOrderSummaryResolver(rotulusOrderSummaryResolverStub{
+		rows: map[string]RotulusOrderSummary{
+			"order-1": {Items: []string{"MORRAL AXEL"}},
+		},
+	})
 	service.SetOrderSource(rotulusOrderSourceStub{row: &port.OrderQuotationData{
 		OrderID:               "order-1",
 		OrderIdentifier:       "1024751",
@@ -103,6 +121,42 @@ func TestRotulusDocumentBuildsPDFAndCaches(t *testing.T) {
 	}
 	if !bytes.Equal(firstPayload, secondPayload) {
 		t.Fatalf("RotulusDocument(second) payload differs from cached payload")
+	}
+}
+
+// TestRotulusDocumentContentSkipsManualPlaceholder verifies rotulus content skips synthetic manual unit placeholders.
+func TestRotulusDocumentContentSkipsManualPlaceholder(t *testing.T) {
+	repository := newMarkRepositoryStub()
+	now := time.Now().UTC()
+	repository.rows["mark-manual"] = domain.ShippingMark{
+		ID:             "mark-manual",
+		OrderID:        "order-manual",
+		CarrierID:      "manual",
+		Observations:   "interrapidisimo",
+		TrackingNumber: "11515152",
+		Units:          []domain.PackageUnit{{Description: "Manual tracking entry"}},
+		Recipient:      domain.Address{Name: "Ian Castano"},
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	service := NewService(repository, markRegistryStub{}, &publisherStub{})
+	service.SetRotulusOrderSummaryResolver(rotulusOrderSummaryResolverStub{
+		rows: map[string]RotulusOrderSummary{
+			"order-manual": {Items: []string{"Morral Journey Croma Negro", "Neceser Carry Sports Negro"}},
+		},
+	})
+	service.SetRotulusDocumentSigningSecret("secret-123")
+
+	payload, err := service.RotulusDocument(context.Background(), "mark-manual")
+	if err != nil {
+		t.Fatalf("RotulusDocument() error = %v", err)
+	}
+	if !strings.Contains(string(payload), "- Morral Journey Croma Negro") {
+		t.Fatalf("RotulusDocument() missing order-summary content item")
+	}
+	if strings.Contains(strings.ToLower(string(payload)), "manual tracking entry") {
+		t.Fatalf("RotulusDocument() includes synthetic manual placeholder content")
 	}
 }
 

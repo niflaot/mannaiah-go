@@ -61,11 +61,11 @@ import (
 	orderproducts "mannaiah/module/orders/adapter/products"
 	ordersearch "mannaiah/module/orders/adapter/search"
 	"mannaiah/module/products"
-	productsstorefrontdomain "mannaiah/module/products/domain/storefront"
 	categorysearch "mannaiah/module/products/adapter/search/category"
 	productsearch "mannaiah/module/products/adapter/search/product"
 	tagsearch "mannaiah/module/products/adapter/search/tag"
 	variationsearch "mannaiah/module/products/adapter/search/variation"
+	productsstorefrontdomain "mannaiah/module/products/domain/storefront"
 	"mannaiah/module/segment"
 	segmentsearch "mannaiah/module/segment/adapter/search"
 	segmentapplication "mannaiah/module/segment/application"
@@ -605,9 +605,11 @@ func run(ctx context.Context, envFile string) error {
 	if err := ordersModule.Load(runtime); err != nil {
 		return fmt.Errorf("load orders module: %w", err)
 	}
-	shippingModule.DispatchService().SetBatchManifestOrderSummaryResolver(shippingBatchManifestOrderSummaryAdapter{
+	shippingOrderSummaryAdapter := shippingBatchManifestOrderSummaryAdapter{
 		orders: ordersModule.Service(),
-	})
+	}
+	shippingModule.DispatchService().SetBatchManifestOrderSummaryResolver(shippingOrderSummaryAdapter)
+	shippingModule.MarkService().SetRotulusOrderSummaryResolver(shippingOrderSummaryAdapter)
 	shippingModule.SetQuotationOrderSource(shippingOrderQuotationSourceAdapter{
 		orders:   ordersModule.Service(),
 		contacts: contactsModule.Service(),
