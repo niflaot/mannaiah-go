@@ -292,18 +292,6 @@ func run(ctx context.Context, envFile string) error {
 		segmentSearchRepo,
 	)
 
-	runtime.RegisterRoutes(func(router corehttp.Router) {
-		router.Get("/search/contacts", coresearch.SearchHandlerFunc(contactSearchRepo))
-		router.Get("/search/orders", coresearch.SearchHandlerFunc(orderSearchRepo))
-		router.Get("/search/products", coresearch.SearchHandlerFunc(productSearchRepo))
-		router.Get("/search/categories", coresearch.SearchHandlerFunc(categorySearchRepo))
-		router.Get("/search/variations", coresearch.SearchHandlerFunc(variationSearchRepo))
-		router.Get("/search/tags", coresearch.SearchHandlerFunc(tagSearchRepo))
-		router.Get("/search/shipping", coresearch.SearchHandlerFunc(shippingSearchRepo))
-		router.Get("/search/campaigns", coresearch.SearchHandlerFunc(campaignSearchRepo))
-		router.Get("/search/segments", coresearch.SearchHandlerFunc(segmentSearchRepo))
-		router.Get("/search", coresearch.SpotlightHandlerFunc(spotlightService))
-	})
 
 	if err := runtime.AddOpenAPISpec(coresearch.OpenAPISpec()); err != nil {
 		return fmt.Errorf("add search openapi spec: %w", err)
@@ -345,6 +333,34 @@ func run(ctx context.Context, envFile string) error {
 	if err := authModule.Load(runtime); err != nil {
 		return fmt.Errorf("load auth module: %w", err)
 	}
+
+	searchProtect := func(permission string, next corehttp.Handler) corehttp.Handler {
+		return func(ctx corehttp.Context) error {
+			if err := authModule.Require(ctx.Context(), ctx.GetHeader("Authorization"), permission); err != nil {
+				if authModule.IsUnauthorized(err) {
+					return corehttp.NewAppError(401, "unauthorized", err)
+				}
+				if authModule.IsForbidden(err) {
+					return corehttp.NewAppError(403, "forbidden", err)
+				}
+				return corehttp.NewAppError(500, "auth_failed", err)
+			}
+			return next(ctx)
+		}
+	}
+
+	runtime.RegisterRoutes(func(router corehttp.Router) {
+		router.Get("/search/contacts", searchProtect("contact:view", coresearch.SearchHandlerFunc(contactSearchRepo)))
+		router.Get("/search/orders", searchProtect("order:view", coresearch.SearchHandlerFunc(orderSearchRepo)))
+		router.Get("/search/products", searchProtect("product:view", coresearch.SearchHandlerFunc(productSearchRepo)))
+		router.Get("/search/categories", searchProtect("product:view", coresearch.SearchHandlerFunc(categorySearchRepo)))
+		router.Get("/search/variations", searchProtect("product:view", coresearch.SearchHandlerFunc(variationSearchRepo)))
+		router.Get("/search/tags", searchProtect("product:view", coresearch.SearchHandlerFunc(tagSearchRepo)))
+		router.Get("/search/shipping", searchProtect("shipping:quotations", coresearch.SearchHandlerFunc(shippingSearchRepo)))
+		router.Get("/search/campaigns", searchProtect("marketing:manage", coresearch.SearchHandlerFunc(campaignSearchRepo)))
+		router.Get("/search/segments", searchProtect("marketing:manage", coresearch.SearchHandlerFunc(segmentSearchRepo)))
+		router.Get("/search", searchProtect("contact:view", coresearch.SpotlightHandlerFunc(spotlightService)))
+	})
 
 	var syncRecordScheduler corecron.Scheduler
 	if syncRecordCfg.Enabled && syncRecordCfg.CleanupEnabled {

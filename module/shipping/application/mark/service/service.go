@@ -75,15 +75,18 @@ type Service struct {
 	orderSource port.OrderQuotationSource
 	// rotulusDocuments defines on-demand rotulus document generation dependencies.
 	rotulusDocuments *markRotulusDocumentBuilder
+	// batchMarksDocuments defines batch all-marks merged PDF document generation dependencies.
+	batchMarksDocuments *batchAllMarksDocumentBuilder
 }
 
 // NewService creates shipping-mark services.
 func NewService(repository port.ShippingMarkRepository, registry port.ProviderRegistry, publisher port.IntegrationEventPublisher) *Service {
 	return &Service{
-		repository:       repository,
-		registry:         registry,
-		publisher:        publisher,
-		rotulusDocuments: newMarkRotulusDocumentBuilder(),
+		repository:          repository,
+		registry:            registry,
+		publisher:           publisher,
+		rotulusDocuments:    newMarkRotulusDocumentBuilder(),
+		batchMarksDocuments: newBatchAllMarksDocumentBuilder(),
 	}
 }
 

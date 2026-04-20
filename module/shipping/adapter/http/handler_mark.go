@@ -173,6 +173,36 @@ func (h *Handler) rotulusDocument(ctx corehttp.Context) error {
 	return ctx.Status(200).SendBytes(payload)
 }
 
+// batchAllMarksDocument handles merged shipping label PDF downloads for all marks in a batch.
+func (h *Handler) batchAllMarksDocument(ctx corehttp.Context) error {
+	batchID := strings.TrimSpace(ctx.Params("id"))
+	payload, err := h.marks.BatchAllMarksDocument(ctx.Context(), batchID)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	ctx.SetHeader("Content-Type", "application/pdf")
+	ctx.SetHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"batch-%s-marks.pdf\"", batchID))
+	ctx.SetHeader("Cache-Control", "private, max-age=300")
+
+	return ctx.Status(200).SendBytes(payload)
+}
+
+// batchAllRotulusDocument handles all-rotulus PDF downloads for all marks in a batch.
+func (h *Handler) batchAllRotulusDocument(ctx corehttp.Context) error {
+	batchID := strings.TrimSpace(ctx.Params("id"))
+	payload, err := h.marks.BatchAllRotulusDocument(ctx.Context(), batchID)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	ctx.SetHeader("Content-Type", "application/pdf")
+	ctx.SetHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"batch-%s-rotulus.pdf\"", batchID))
+	ctx.SetHeader("Cache-Control", "no-store")
+
+	return ctx.Status(200).SendBytes(payload)
+}
+
 // listMarks handles shipping mark listing requests.
 func (h *Handler) listMarks(ctx corehttp.Context) error {
 	page, limit := parsePageLimit(ctx, 20)

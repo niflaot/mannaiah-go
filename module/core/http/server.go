@@ -3,10 +3,13 @@ package http
 import (
 	"context"
 	"net"
+	"strings"
 	"time"
 
 	fiberzap "github.com/gofiber/contrib/fiberzap/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"go.uber.org/zap"
 	coreconfig "mannaiah/module/core/config"
 )
@@ -50,6 +53,27 @@ func NewWithCore(cfg Config, coreCfg *coreconfig.Core, providedLogger *zap.Logge
 		DisableStartupMessage: true,
 		ErrorHandler:          errorHandlerWithLogger(logger),
 	})
+
+	if origins := strings.TrimSpace(resolvedCfg.CORSAllowedOrigins); origins != "" {
+		app.Use(cors.New(cors.Config{
+			AllowOrigins:     origins,
+			AllowMethods:     "GET,POST,PATCH,DELETE,OPTIONS",
+			AllowHeaders:     "Authorization,Content-Type,Accept",
+			AllowCredentials: false,
+			MaxAge:           600,
+		}))
+	}
+
+	if resolvedCfg.RateLimitMax > 0 {
+		window := time.Duration(resolvedCfg.RateLimitWindowMS) * time.Millisecond
+		if window <= 0 {
+			window = time.Minute
+		}
+		app.Use(limiter.New(limiter.Config{
+			Max:        resolvedCfg.RateLimitMax,
+			Expiration: window,
+		}))
+	}
 
 	app.Use(rayIDMiddleware)
 	app.Use(fiberzap.New(fiberzap.Config{

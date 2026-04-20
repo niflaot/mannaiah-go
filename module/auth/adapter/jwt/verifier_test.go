@@ -95,6 +95,7 @@ func TestVerifyES384(t *testing.T) {
 		RateLimitPerMinute: 5,
 		CacheTTL:           time.Hour,
 		HTTPTimeout:        2 * time.Second,
+		Algorithm:          "ES384",
 	})
 
 	token := signES384Token(t, privateKey, "ec-1", server.URL, "https://api.mannaiah.test", "contacts:update")
@@ -177,6 +178,67 @@ func TestVerifyRateLimitUnknownKID(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(verifyErr.Error()), "rate") {
 		t.Fatalf("Verify() error = %v, want rate-limit context", verifyErr)
+	}
+}
+
+// TestVerifyRejectsWrongAlgorithm verifies that a token signed with a different algorithm is rejected
+// when the verifier is locked to a specific algorithm.
+func TestVerifyRejectsWrongAlgorithm(t *testing.T) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatalf("ecdsa.GenerateKey() error = %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{ecJWK("ec-1", privateKey.PublicKey)}})
+	}))
+	defer server.Close()
+
+	verifier := newVerifierForTest(t, Config{
+		Issuer:             server.URL,
+		Audience:           "https://api.mannaiah.test",
+		JWKSURL:            server.URL,
+		RateLimitPerMinute: 5,
+		CacheTTL:           time.Hour,
+		HTTPTimeout:        2 * time.Second,
+		Algorithm:          "RS256",
+	})
+
+	token := signES384Token(t, privateKey, "ec-1", server.URL, "https://api.mannaiah.test", "contacts:read")
+
+	_, verifyErr := verifier.Verify(context.Background(), token)
+	if !errors.Is(verifyErr, ErrInvalidToken) {
+		t.Fatalf("Verify() error = %v, want ErrInvalidToken for mismatched algorithm", verifyErr)
+	}
+}
+
+// TestVerifyDefaultsToRS256WhenAlgorithmEmpty verifies RS256 is enforced when Algorithm is not configured.
+func TestVerifyDefaultsToRS256WhenAlgorithmEmpty(t *testing.T) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatalf("ecdsa.GenerateKey() error = %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{ecJWK("ec-1", privateKey.PublicKey)}})
+	}))
+	defer server.Close()
+
+	verifier := newVerifierForTest(t, Config{
+		Issuer:             server.URL,
+		Audience:           "https://api.mannaiah.test",
+		JWKSURL:            server.URL,
+		RateLimitPerMinute: 5,
+		CacheTTL:           time.Hour,
+		HTTPTimeout:        2 * time.Second,
+		Algorithm:          "",
+	})
+
+	token := signES384Token(t, privateKey, "ec-1", server.URL, "https://api.mannaiah.test", "contacts:read")
+
+	_, verifyErr := verifier.Verify(context.Background(), token)
+	if !errors.Is(verifyErr, ErrInvalidToken) {
+		t.Fatalf("Verify() error = %v, want ErrInvalidToken when default RS256 rejects ES384 token", verifyErr)
 	}
 }
 

@@ -1,9 +1,11 @@
 package http
 
 import (
+	stdhttp "net/http"
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 	coreconfig "mannaiah/module/core/config"
 )
@@ -171,5 +173,113 @@ func TestNewWithCoreNilLoggerFallback(t *testing.T) {
 	}
 	if server.Logger() == nil {
 		t.Fatalf("expected resolved fallback logger instance")
+	}
+}
+
+// TestCORSHeadersInjectedWhenOriginsConfigured verifies that CORS response headers are added when allowed origins are set.
+func TestCORSHeadersInjectedWhenOriginsConfigured(t *testing.T) {
+	server, err := New(Config{
+		Host:               "127.0.0.1",
+		Port:               8092,
+		CORSAllowedOrigins: "https://app.example.com",
+	}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.Register(func(app *fiber.App) {
+		app.Get("/ping", func(ctx *fiber.Ctx) error { return ctx.SendStatus(200) })
+	})
+
+	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/ping", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	resp, testErr := server.App().Test(req)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, "https://app.example.com")
+	}
+}
+
+// TestCORSHeadersAbsentWhenOriginsNotConfigured verifies no CORS headers are emitted when origins are empty.
+func TestCORSHeadersAbsentWhenOriginsNotConfigured(t *testing.T) {
+	server, err := New(Config{Host: "127.0.0.1", Port: 8093}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.Register(func(app *fiber.App) {
+		app.Get("/ping", func(ctx *fiber.Ctx) error { return ctx.SendStatus(200) })
+	})
+
+	req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/ping", nil)
+	req.Header.Set("Origin", "https://attacker.example.com")
+	resp, testErr := server.App().Test(req)
+	if testErr != nil {
+		t.Fatalf("App().Test() error = %v", testErr)
+	}
+
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want empty when CORS is disabled", got)
+	}
+}
+
+// TestRateLimiterRejects429WhenMaxExceeded verifies the rate limiter returns 429 after the request limit is reached.
+func TestRateLimiterRejects429WhenMaxExceeded(t *testing.T) {
+	server, err := New(Config{
+		Host:              "127.0.0.1",
+		Port:              8094,
+		RateLimitMax:      1,
+		RateLimitWindowMS: 60000,
+	}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.Register(func(app *fiber.App) {
+		app.Get("/ping", func(ctx *fiber.Ctx) error { return ctx.SendStatus(200) })
+	})
+
+	first, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/ping", nil)
+	resp1, err1 := server.App().Test(first)
+	if err1 != nil {
+		t.Fatalf("first request error = %v", err1)
+	}
+	if resp1.StatusCode != 200 {
+		t.Fatalf("first request status = %d, want 200", resp1.StatusCode)
+	}
+
+	second, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/ping", nil)
+	resp2, err2 := server.App().Test(second)
+	if err2 != nil {
+		t.Fatalf("second request error = %v", err2)
+	}
+	if resp2.StatusCode != stdhttp.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want 429", resp2.StatusCode)
+	}
+}
+
+// TestRateLimiterDisabledWhenMaxIsZero verifies that rate limiting is not applied when RateLimitMax is zero.
+func TestRateLimiterDisabledWhenMaxIsZero(t *testing.T) {
+	server, err := New(Config{Host: "127.0.0.1", Port: 8095, RateLimitMax: 0}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	server.Register(func(app *fiber.App) {
+		app.Get("/ping", func(ctx *fiber.Ctx) error { return ctx.SendStatus(200) })
+	})
+
+	for i := range 5 {
+		req, _ := stdhttp.NewRequest(stdhttp.MethodGet, "/ping", nil)
+		resp, testErr := server.App().Test(req)
+		if testErr != nil {
+			t.Fatalf("request %d error = %v", i+1, testErr)
+		}
+		if resp.StatusCode != 200 {
+			t.Fatalf("request %d status = %d, want 200 (rate limiting should be disabled)", i+1, resp.StatusCode)
+		}
 	}
 }

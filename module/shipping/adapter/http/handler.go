@@ -61,6 +61,10 @@ type MarkService interface {
 	Related(ctx context.Context, id string) ([]domain.ShippingMark, error)
 	// RotulusDocument builds one rotulus PDF document for one mark.
 	RotulusDocument(ctx context.Context, id string) ([]byte, error)
+	// BatchAllMarksDocument downloads and merges all shipping label PDFs for marks in a batch.
+	BatchAllMarksDocument(ctx context.Context, batchID string) ([]byte, error)
+	// BatchAllRotulusDocument builds one PDF with all rotulus for marks in a batch, two per page.
+	BatchAllRotulusDocument(ctx context.Context, batchID string) ([]byte, error)
 }
 
 // DispatchService defines dispatch batch behavior required by HTTP handlers.
@@ -168,6 +172,8 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Patch("/shipping/batches/:id/close", h.protect("shipping:generate", h.closeBatch))
 	router.Get("/shipping/batches/:id/manifest-document", h.protect("shipping:generate", h.batchManifestDocument))
 	router.Get("/shipping/batches/:id/checklist-document", h.protect("shipping:generate", h.batchChecklistDocument))
+	router.Get("/shipping/batches/:id/marks-all-document", h.protect("shipping:generate", h.batchAllMarksDocument))
+	router.Get("/shipping/batches/:id/rotulus-all-document", h.protectAny([]string{"shipping:generate", "shipping:quotations", "order:view"}, h.batchAllRotulusDocument))
 	router.Get("/shipping/tracking", h.protectAny([]string{"shipping:quotations", "shipping:generate", "shipping:manage"}, h.listTracking))
 	router.Get("/shipping/tracking/:trackingNumber", h.protectAny([]string{"shipping:quotations", "shipping:generate", "shipping:manage"}, h.getTracking))
 	router.Get("/shipping/carriers", h.protect("shipping:quotations", h.listCarriers))

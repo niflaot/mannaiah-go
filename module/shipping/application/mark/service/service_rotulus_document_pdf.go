@@ -54,11 +54,9 @@ func (s *Service) buildRotulusPDF(ctx context.Context, meta markRotulusMeta) ([]
 	pdf.SetCompression(false)
 	pdf.AddPage()
 
-	s.drawRotulusLeftColumn(ctx, pdf, meta)
-	if err := s.drawRotulusRightColumn(pdf, meta); err != nil {
+	if err := s.drawRotulusOnPage(ctx, pdf, meta, 0, "rotulus-qr"); err != nil {
 		return nil, err
 	}
-	s.drawRotulusFooter(pdf, meta)
 
 	var output bytes.Buffer
 	if err := pdf.Output(&output); err != nil {
@@ -68,14 +66,41 @@ func (s *Service) buildRotulusPDF(ctx context.Context, meta markRotulusMeta) ([]
 	return output.Bytes(), nil
 }
 
-// drawRotulusLeftColumn renders logo + mark information.
-func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, meta markRotulusMeta) {
+// drawRotulusOnPage renders one rotulus at the given vertical offset within an existing PDF page.
+func (s *Service) drawRotulusOnPage(ctx context.Context, pdf *gofpdf.Fpdf, meta markRotulusMeta, yOffset float64, qrImageName string) error {
+	if s == nil || s.rotulusDocuments == nil || pdf == nil {
+		return domain.ErrInvalidID
+	}
+	s.drawRotulusLeftColumn(ctx, pdf, meta, yOffset)
+	if err := s.drawRotulusRightColumn(pdf, meta, yOffset, qrImageName); err != nil {
+		return err
+	}
+	s.drawRotulusFooter(pdf, meta, yOffset)
+	return nil
+}
+
+// drawRotulusDivider renders a dashed separator line at the given vertical position.
+func drawRotulusDivider(pdf *gofpdf.Fpdf, y float64) {
+	if pdf == nil {
+		return
+	}
+	pdf.SetDrawColor(180, 180, 180)
+	pdf.SetLineWidth(0.3)
+	pdf.SetDashPattern([]float64{3, 2}, 0)
+	pdf.Line(rotulusMarginMM, y, rotulusPageWidthMM-rotulusMarginMM, y)
+	pdf.SetDashPattern([]float64{}, 0)
+	pdf.SetLineWidth(0.2)
+	pdf.SetDrawColor(0, 0, 0)
+}
+
+// drawRotulusLeftColumn renders logo + mark information at the given vertical offset.
+func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, meta markRotulusMeta, yOffset float64) {
 	if pdf == nil || s == nil || s.rotulusDocuments == nil {
 		return
 	}
 	template := s.rotulusDocuments.template
 	leftWidth := (rotulusPageWidthMM - (2 * rotulusMarginMM) - rotulusColumnGapMM) / 2
-	logoY := rotulusMarginMM
+	logoY := rotulusMarginMM + yOffset
 	if logoBytes, imageType, err := s.downloadRotulusLogo(ctx); err == nil && len(logoBytes) > 0 {
 		imageName := "rotulus-logo"
 		opts := gofpdf.ImageOptions{ImageType: imageType, ReadDpi: true}
@@ -84,7 +109,7 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 	}
 
 	textX := rotulusMarginMM
-	textY := rotulusMarginMM + 32
+	textY := rotulusMarginMM + 32 + yOffset
 	pdf.SetXY(textX, textY)
 	pdf.SetFont("Arial", "B", 18)
 	pdf.CellFormat(leftWidth, 8, encodeRotulusText(strings.ToUpper(resolveRotulusTitle(template, meta))), "", 1, "L", false, 0, "")
@@ -109,8 +134,8 @@ func (s *Service) drawRotulusLeftColumn(ctx context.Context, pdf *gofpdf.Fpdf, m
 	drawRotulusContent(pdf, textX, leftWidth, meta.Content, template.EmptyValueFallback)
 }
 
-// drawRotulusRightColumn renders the centered signed QR code payload.
-func (s *Service) drawRotulusRightColumn(pdf *gofpdf.Fpdf, meta markRotulusMeta) error {
+// drawRotulusRightColumn renders the centered signed QR code payload at the given vertical offset.
+func (s *Service) drawRotulusRightColumn(pdf *gofpdf.Fpdf, meta markRotulusMeta, yOffset float64, qrImageName string) error {
 	if pdf == nil || s == nil || s.rotulusDocuments == nil {
 		return nil
 	}
@@ -127,21 +152,21 @@ func (s *Service) drawRotulusRightColumn(pdf *gofpdf.Fpdf, meta markRotulusMeta)
 	rightWidth := (rotulusPageWidthMM - (2 * rotulusMarginMM) - rotulusColumnGapMM) / 2
 	qrSize := rotulusQRSizeMM
 	qrX := rightX + (rightWidth-qrSize)/2
-	qrY := rotulusMarginMM + ((rotulusContentHeightMM - (2 * rotulusMarginMM) - qrSize) / 2)
+	qrY := rotulusMarginMM + ((rotulusContentHeightMM-(2*rotulusMarginMM)-qrSize)/2) + yOffset
 	opts := gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}
-	pdf.RegisterImageOptionsReader("rotulus-qr", opts, bytes.NewReader(qrBytes))
-	pdf.ImageOptions("rotulus-qr", qrX, qrY, qrSize, qrSize, false, opts, 0, "")
+	pdf.RegisterImageOptionsReader(qrImageName, opts, bytes.NewReader(qrBytes))
+	pdf.ImageOptions(qrImageName, qrX, qrY, qrSize, qrSize, false, opts, 0, "")
 
 	return nil
 }
 
-// drawRotulusFooter renders the generation timestamp footer.
-func (s *Service) drawRotulusFooter(pdf *gofpdf.Fpdf, meta markRotulusMeta) {
+// drawRotulusFooter renders the generation timestamp footer at the given vertical offset.
+func (s *Service) drawRotulusFooter(pdf *gofpdf.Fpdf, meta markRotulusMeta, yOffset float64) {
 	if pdf == nil || s == nil || s.rotulusDocuments == nil {
 		return
 	}
 	template := s.rotulusDocuments.template
-	footerY := rotulusContentHeightMM - rotulusMarginMM - 4
+	footerY := rotulusContentHeightMM - rotulusMarginMM - 4 + yOffset
 	pdf.SetXY(rotulusMarginMM, footerY)
 	drawRotulusInlineLabelValue(
 		pdf,

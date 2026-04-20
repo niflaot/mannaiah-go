@@ -151,6 +151,18 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 		return payload, nil
 	}
 
+	payload, err := s.buildRotulusPDF(ctx, s.buildRotulusMetaForMark(ctx, mark))
+	if err != nil {
+		return nil, err
+	}
+
+	s.cacheRotulusDocument(ctx, cacheKey, payload)
+
+	return append([]byte(nil), payload...), nil
+}
+
+// buildRotulusMetaForMark resolves all display metadata required to render one rotulus for the provided mark.
+func (s *Service) buildRotulusMetaForMark(ctx context.Context, mark *domain.ShippingMark) markRotulusMeta {
 	now := time.Now().UTC()
 	orderNumber := strings.TrimSpace(mark.OrderID)
 	recipientAddressLine := strings.TrimSpace(mark.Recipient.AddressLine)
@@ -158,7 +170,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 	recipientPhone := strings.TrimSpace(mark.Recipient.Phone)
 	recipientCity := resolveRotulusCityDisplayName(strings.TrimSpace(mark.Recipient.CityCode))
 	orderItemLabels := []string{}
-	if s.orderSource != nil {
+	if s != nil && s.orderSource != nil {
 		orderData, orderErr := s.orderSource.GetByIDOrIdentifier(ctx, strings.TrimSpace(mark.OrderID))
 		if orderErr == nil && orderData != nil && strings.TrimSpace(orderData.OrderIdentifier) != "" {
 			orderNumber = strings.TrimSpace(orderData.OrderIdentifier)
@@ -177,7 +189,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 	}
 	summaryItems := s.resolveRotulusOrderSummaryItems(ctx, mark.OrderID)
 
-	payload, err := s.buildRotulusPDF(ctx, markRotulusMeta{
+	return markRotulusMeta{
 		MarkID:                  mark.ID,
 		OrderID:                 mark.OrderID,
 		OrderNumber:             firstNonEmptyString(orderNumber, mark.OrderID),
@@ -191,14 +203,7 @@ func (s *Service) RotulusDocument(ctx context.Context, markID string) ([]byte, e
 		Content:                 resolveRotulusContent(*mark, summaryItems, orderItemLabels),
 		CollectOnDeliveryAmount: resolveRotulusCollectOnDeliveryAmount(*mark),
 		GeneratedAt:             now,
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	s.cacheRotulusDocument(ctx, cacheKey, payload)
-
-	return append([]byte(nil), payload...), nil
 }
 
 // SetRotulusOrderSummaryResolver configures optional order summary lookup dependencies for rotulus content rows.

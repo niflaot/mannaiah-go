@@ -18,4 +18,10 @@ type Config struct {
 	WriteTimeoutMS int `mapstructure:"HTTP_WRITE_TIMEOUT_MS" default:"30000"`
 	// IdleTimeoutMS defines idle connection timeout in milliseconds.
 	IdleTimeoutMS int `mapstructure:"HTTP_IDLE_TIMEOUT_MS" default:"120000"`
+	// CORSAllowedOrigins defines a comma-separated list of allowed CORS origins. Empty disables CORS middleware.
+	CORSAllowedOrigins string `mapstructure:"HTTP_CORS_ALLOWED_ORIGINS" default:""`
+	// RateLimitMax defines the maximum number of requests allowed per RateLimitWindowMS. Zero disables rate limiting.
+	RateLimitMax int `mapstructure:"HTTP_RATE_LIMIT_MAX" default:"0"`
+	// RateLimitWindowMS defines the rate limit sliding window duration in milliseconds.
+	RateLimitWindowMS int `mapstructure:"HTTP_RATE_LIMIT_WINDOW_MS" default:"60000"`
 }

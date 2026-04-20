@@ -29,6 +29,8 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/batches/{id}/close", &openapi3.PathItem{Patch: batchCloseOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/manifest-document", &openapi3.PathItem{Get: batchManifestDocumentOperation()}),
 		openapi3.WithPath("/shipping/batches/{id}/checklist-document", &openapi3.PathItem{Get: batchChecklistDocumentOperation()}),
+		openapi3.WithPath("/shipping/batches/{id}/marks-all-document", &openapi3.PathItem{Get: batchAllMarksDocumentOperation()}),
+		openapi3.WithPath("/shipping/batches/{id}/rotulus-all-document", &openapi3.PathItem{Get: batchAllRotulusDocumentOperation()}),
 		openapi3.WithPath("/shipping/tracking", &openapi3.PathItem{Get: trackingListOperation()}),
 		openapi3.WithPath("/shipping/tracking/{trackingNumber}", &openapi3.PathItem{Get: trackingGetOperation()}),
 		openapi3.WithPath("/shipping/carriers", &openapi3.PathItem{Get: carrierListOperation()}),
@@ -491,6 +493,46 @@ func batchChecklistDocumentOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, binaryPDFResponse("Open-batch checklist PDF document.")),
+		),
+	}
+}
+
+// batchAllMarksDocumentOperation defines the OpenAPI operation for merged batch shipping-label documents.
+func batchAllMarksDocumentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getBatchAllMarksDocument",
+		Summary:     "Get merged PDF of all shipping labels for a closed batch",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Dispatch batch identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, binaryPDFResponse("Merged shipping labels PDF document.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
+		),
+	}
+}
+
+// batchAllRotulusDocumentOperation defines the OpenAPI operation for all-rotulus batch documents.
+func batchAllRotulusDocumentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getBatchAllRotulusDocument",
+		Summary:     "Get PDF with all rotulus for a batch, two per page",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Dispatch batch identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, binaryPDFResponse("All-rotulus PDF document.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
 		),
 	}
 }

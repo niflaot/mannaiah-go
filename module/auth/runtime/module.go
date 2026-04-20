@@ -59,6 +59,7 @@ func New(cfg Config, coreEnvironment string, logger *zap.Logger) (*Module, error
 		RateLimitPerMinute: cfg.JWKSRateLimitPerMinute,
 		CacheTTL:           time.Duration(resolvePositiveInt(cfg.JWKSCacheTTLMS, 300000)) * time.Millisecond,
 		HTTPTimeout:        time.Duration(resolvePositiveInt(cfg.JWKSHTTPTimeoutMS, 5000)) * time.Millisecond,
+		Algorithm:          strings.TrimSpace(cfg.JWTAlgorithm),
 	})
 	if err != nil {
 		return nil, err

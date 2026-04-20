@@ -155,6 +155,58 @@ func TestAuthenticateUsesOptionalDevScope(t *testing.T) {
 	}
 }
 
+// TestRequireBlocksCrossResourceManage verifies that resource:manage does not satisfy a different resource's actions.
+func TestRequireBlocksCrossResourceManage(t *testing.T) {
+	service := newServiceForTest(t, "development", "", "", verifierMock{
+		verifyFn: func(ctx context.Context, token string) (*domain.Claims, error) {
+			return &domain.Claims{Subject: "user-1", Scope: "contact:manage"}, nil
+		},
+	})
+
+	if err := service.Require(context.Background(), "Bearer jwt-token", "order:view"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("Require() error = %v, want ErrForbidden for cross-resource manage", err)
+	}
+}
+
+// TestRequireAllowsPermissionCoversHierarchy verifies product:edit covers product:view.
+func TestRequireAllowsPermissionCoversHierarchy(t *testing.T) {
+	service := newServiceForTest(t, "development", "", "", verifierMock{
+		verifyFn: func(ctx context.Context, token string) (*domain.Claims, error) {
+			return &domain.Claims{Subject: "user-1", Scope: domain.PermProductEdit}, nil
+		},
+	})
+
+	if err := service.Require(context.Background(), "Bearer jwt-token", domain.PermProductView); err != nil {
+		t.Fatalf("Require() error = %v, want nil: product:edit should cover product:view", err)
+	}
+}
+
+// TestRequireAllowsShippingCoverageHierarchy verifies shipping:generate covers shipping:quotations.
+func TestRequireAllowsShippingCoverageHierarchy(t *testing.T) {
+	service := newServiceForTest(t, "development", "", "", verifierMock{
+		verifyFn: func(ctx context.Context, token string) (*domain.Claims, error) {
+			return &domain.Claims{Subject: "user-1", Scope: domain.PermShippingGenerate}, nil
+		},
+	})
+
+	if err := service.Require(context.Background(), "Bearer jwt-token", domain.PermShippingQuotations); err != nil {
+		t.Fatalf("Require() error = %v, want nil: shipping:generate should cover shipping:quotations", err)
+	}
+}
+
+// TestRequireBlocksReverseHierarchy verifies product:view does not cover product:edit.
+func TestRequireBlocksReverseHierarchy(t *testing.T) {
+	service := newServiceForTest(t, "development", "", "", verifierMock{
+		verifyFn: func(ctx context.Context, token string) (*domain.Claims, error) {
+			return &domain.Claims{Subject: "user-1", Scope: domain.PermProductView}, nil
+		},
+	})
+
+	if err := service.Require(context.Background(), "Bearer jwt-token", domain.PermProductEdit); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("Require() error = %v, want ErrForbidden: product:view must not cover product:edit", err)
+	}
+}
+
 // TestAuthorizeWithoutRequiredPermissions verifies pass-through behavior when no permissions are required.
 func TestAuthorizeWithoutRequiredPermissions(t *testing.T) {
 	service := newServiceForTest(t, "development", "", "", verifierMock{
