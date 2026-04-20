@@ -55,6 +55,12 @@ func (markServiceStub) Related(ctx context.Context, id string) ([]domain.Shippin
 func (markServiceStub) RotulusDocument(ctx context.Context, id string) ([]byte, error) {
 	return []byte("%PDF"), nil
 }
+func (markServiceStub) BatchAllMarksDocument(ctx context.Context, batchID string) ([]byte, error) {
+	return []byte("%PDF"), nil
+}
+func (markServiceStub) BatchAllRotulusDocument(ctx context.Context, batchID string) ([]byte, error) {
+	return []byte("%PDF"), nil
+}
 
 type dispatchServiceStub struct{}
 
