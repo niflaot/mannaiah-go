@@ -36,8 +36,6 @@ type Config struct {
 	CacheTTL time.Duration
 	// HTTPTimeout defines JWKS HTTP request timeout.
 	HTTPTimeout time.Duration
-	// Algorithm defines the single allowed JWT signing algorithm. Defaults to RS256 when empty.
-	Algorithm string
 }
 
 // Verifier defines a JWKS-backed token verifier implementation.
@@ -46,8 +44,6 @@ type Verifier struct {
 	issuer string
 	// audience defines expected JWT audience.
 	audience string
-	// algorithm defines the single allowed JWT signing algorithm.
-	algorithm string
 	// keyfunc defines JWKS-backed signing-key resolution.
 	keyfunc keyfunc.Keyfunc
 }
@@ -109,16 +105,10 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 		return nil, fmt.Errorf("create keyfunc resolver: %w", err)
 	}
 
-	algorithm := strings.TrimSpace(cfg.Algorithm)
-	if algorithm == "" {
-		algorithm = "RS256"
-	}
-
 	return &Verifier{
-		issuer:    issuer,
-		audience:  audience,
-		algorithm: algorithm,
-		keyfunc:   resolvedKeyfunc,
+		issuer:   issuer,
+		audience: audience,
+		keyfunc:  resolvedKeyfunc,
 	}, nil
 }
 
@@ -127,7 +117,7 @@ func (v *Verifier) Verify(ctx context.Context, token string) (*domain.Claims, er
 	parsed, err := jwtlib.Parse(token, v.keyfunc.KeyfuncCtx(ctx),
 		jwtlib.WithIssuer(v.issuer),
 		jwtlib.WithAudience(v.audience),
-		jwtlib.WithValidMethods([]string{v.algorithm}),
+		jwtlib.WithValidMethods([]string{"RS256", "ES384"}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)

@@ -16,7 +16,4 @@ type Config struct {
 	JWKSCacheTTLMS int `mapstructure:"AUTH_JWKS_CACHE_TTL_MS" default:"300000"`
 	// JWKSHTTPTimeoutMS defines JWKS HTTP client timeout in milliseconds.
 	JWKSHTTPTimeoutMS int `mapstructure:"AUTH_JWKS_HTTP_TIMEOUT_MS" default:"5000"`
-	// JWTAlgorithm defines the expected JWT signing algorithm. Defaults to RS256.
-	// Accepted values: RS256, ES384.
-	JWTAlgorithm string `mapstructure:"AUTH_JWT_ALGORITHM" default:"RS256"`
 }
