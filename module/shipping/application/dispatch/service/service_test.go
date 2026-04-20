@@ -516,6 +516,55 @@ func TestDraftMarkManualDefaultsAllowSparsePayload(t *testing.T) {
 	}
 }
 
+// TestDraftMarkAllowsAdditionalActiveMarkAcrossDifferentBatch verifies one order can receive a new active mark in another batch.
+func TestDraftMarkAllowsAdditionalActiveMarkAcrossDifferentBatch(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	service := NewService(batchRepository, markRepository, nil, &materializerStub{repository: markRepository})
+
+	firstBatch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create(first batch) error = %v", err)
+	}
+	firstMark, err := service.CreateBatchMark(context.Background(), CreateBatchMarkCommand{
+		BatchID:        firstBatch.ID,
+		Direct:         true,
+		OrderID:        "order-manual-duplicate",
+		TrackingNumber: "MANUAL-TRACK-100",
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMark(first) error = %v", err)
+	}
+	if firstMark.Status != domain.MarkStatusCreated {
+		t.Fatalf("first mark status = %q, want %q", firstMark.Status, domain.MarkStatusCreated)
+	}
+	if _, err := service.Close(context.Background(), firstBatch.ID); err != nil {
+		t.Fatalf("Close(first batch) error = %v", err)
+	}
+	secondBatch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "manual", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create(second batch) error = %v", err)
+	}
+	secondMark, err := service.DraftMark(context.Background(), DraftMarkCommand{
+		BatchID:        secondBatch.ID,
+		OrderID:        "order-manual-duplicate",
+		TrackingNumber: "MANUAL-TRACK-101",
+	})
+	if err != nil {
+		t.Fatalf("DraftMark(second) error = %v", err)
+	}
+	if firstMark.ID == secondMark.ID {
+		t.Fatalf("mark id reused across batches = %q", firstMark.ID)
+	}
+	if secondMark.DispatchBatchID == nil || *secondMark.DispatchBatchID != secondBatch.ID {
+		t.Fatalf("second mark dispatch batch id = %v, want %q", secondMark.DispatchBatchID, secondBatch.ID)
+	}
+	if len(markRepository.marks) != 2 {
+		t.Fatalf("mark repository size = %d, want 2", len(markRepository.marks))
+	}
+}
+
 // TestUpdateDraftMarkManualCompletesSparseDraft verifies manual drafts can be completed after they were added to the batch.
 func TestUpdateDraftMarkManualCompletesSparseDraft(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()

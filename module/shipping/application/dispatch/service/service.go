@@ -275,7 +275,7 @@ func (s *Service) DraftMark(ctx context.Context, command DraftMarkCommand) (*dom
 	if err != nil {
 		return nil, err
 	}
-	if existingMark != nil {
+	if existingMark != nil && isMarkInBatch(*existingMark, batch.ID) {
 		return existingMark, nil
 	}
 	var quotationID *string
@@ -336,8 +336,8 @@ func (s *Service) CreateBatchMark(ctx context.Context, command CreateBatchMarkCo
 	if err != nil {
 		return nil, err
 	}
-	if existingMark != nil {
-		if command.Direct && existingMark.Status == domain.MarkStatusQuoted && isMarkInBatch(*existingMark, trimmedBatchID) {
+	if existingMark != nil && isMarkInBatch(*existingMark, trimmedBatchID) {
+		if command.Direct && existingMark.Status == domain.MarkStatusQuoted {
 			if s.materializer == nil {
 				return existingMark, nil
 			}
