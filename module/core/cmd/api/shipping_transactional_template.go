@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"strings"
-
-	campaigntemplate "mannaiah/module/campaign/application/template"
+	"text/template"
+	"time"
 )
 
 const (
@@ -25,8 +26,10 @@ type shippingTemplateRenderer struct {
 	// voidedSource defines raw voided template source values.
 	voidedSource string
 	// renderer defines go-template renderer dependencies.
-	renderer *campaigntemplate.Renderer
+	renderer *shippingTemplateEngine
 }
+
+type shippingTemplateEngine struct{}
 
 // newShippingTemplateRenderer creates transactional template renderers.
 func newShippingTemplateRenderer() (*shippingTemplateRenderer, error) {
@@ -42,7 +45,7 @@ func newShippingTemplateRenderer() (*shippingTemplateRenderer, error) {
 	return &shippingTemplateRenderer{
 		dispatchedSource: string(dispatchedRawTemplate),
 		voidedSource:     string(voidedRawTemplate),
-		renderer:         campaigntemplate.NewRenderer(),
+		renderer:         &shippingTemplateEngine{},
 	}, nil
 }
 
@@ -99,4 +102,36 @@ func (r *shippingTemplateRenderer) RenderVoidedText(data shippingDispatchedTempl
 	builder.WriteString("Lamentamos cualquier inconveniente que esto pueda ocasionar y agradecemos tu comprension.")
 
 	return builder.String()
+}
+
+func (r *shippingTemplateEngine) Render(name string, src string, data any) (string, error) {
+	tmpl, err := template.New(name).Funcs(template.FuncMap{
+		"formatDate": func(value *time.Time) string {
+			if value == nil {
+				return ""
+			}
+			return value.Format("2006-01-02")
+		},
+		"formatPrice": func(price float64) string {
+			return fmt.Sprintf("%.2f", price)
+		},
+		"default": func(fallback string, value string) string {
+			if value == "" {
+				return fallback
+			}
+			return value
+		},
+		"upper": strings.ToUpper,
+		"lower": strings.ToLower,
+	}).Parse(src)
+	if err != nil {
+		return "", fmt.Errorf("parse template %q: %w", name, err)
+	}
+
+	var buffer bytes.Buffer
+	if err := tmpl.Execute(&buffer, data); err != nil {
+		return "", fmt.Errorf("execute template %q: %w", name, err)
+	}
+
+	return buffer.String(), nil
 }

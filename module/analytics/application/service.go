@@ -43,8 +43,6 @@ type SeedSummary struct {
 	OrderItems int64 `json:"orderItems"`
 	// MembershipEvents defines seeded membership-event row counts.
 	MembershipEvents int64 `json:"membershipEvents"`
-	// CampaignEvents defines seeded campaign-event row counts.
-	CampaignEvents int64 `json:"campaignEvents"`
 }
 
 // Service defines analytics use-case behavior.
@@ -63,8 +61,6 @@ type Service interface {
 	IngestOrders(ctx context.Context, orders []port.OrderFact, items []port.OrderItemFact) error
 	// IngestMembershipEvents ingests membership events from integration events.
 	IngestMembershipEvents(ctx context.Context, rows []port.MembershipEvent) error
-	// IngestCampaignEvents ingests campaign delivery events from integration events.
-	IngestCampaignEvents(ctx context.Context, rows []port.CampaignEvent) error
 }
 
 // AnalyticsService implements analytics use-cases.
@@ -212,21 +208,6 @@ func (s *AnalyticsService) IngestMembershipEvents(ctx context.Context, rows []po
 	}
 	if err := s.store.InsertMembershipEvents(ctx, rows); err != nil {
 		return fmt.Errorf("ingest membership events: %w", err)
-	}
-
-	return nil
-}
-
-// IngestCampaignEvents ingests campaign delivery events from integration events.
-func (s *AnalyticsService) IngestCampaignEvents(ctx context.Context, rows []port.CampaignEvent) error {
-	if !s.enabled {
-		return ErrDisabled
-	}
-	if s.store == nil {
-		return ErrBackendUnavailable
-	}
-	if err := s.store.InsertCampaignEvents(ctx, rows); err != nil {
-		return fmt.Errorf("ingest campaign events: %w", err)
 	}
 
 	return nil

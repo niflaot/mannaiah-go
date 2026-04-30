@@ -47,7 +47,7 @@ func (s *AnalyticsService) Seed(ctx context.Context) (*SeedSummary, error) {
 		if strings.TrimSpace(runID) == "" || s.syncRecorder == nil {
 			return
 		}
-		processed := int(summary.Contacts + summary.Orders + summary.OrderItems + summary.MembershipEvents + summary.CampaignEvents)
+		processed := int(summary.Contacts + summary.Orders + summary.OrderItems + summary.MembershipEvents)
 		if failed {
 			_ = s.syncRecorder.FailRun(ctx, runID, processed, processed, len(syncErrors), 0, syncErrors)
 			return
@@ -70,12 +70,6 @@ func (s *AnalyticsService) Seed(ctx context.Context) (*SeedSummary, error) {
 		finalizeSyncRecord(true)
 		return nil, err
 	}
-	if err := s.seedCampaignEvents(ctx, summary); err != nil {
-		appendSyncError("seed", "campaign_failed", err.Error())
-		finalizeSyncRecord(true)
-		return nil, err
-	}
-
 	if s.taxonomyStore != nil {
 		if err := s.seedProductTaxonomy(ctx, s.taxonomyStore); err != nil {
 			appendSyncError("seed", "product_taxonomy_failed", err.Error())

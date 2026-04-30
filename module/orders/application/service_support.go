@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
@@ -168,37 +167,6 @@ func shippingEqual(left ordersdomain.ShippingAddress, right ordersdomain.Shippin
 		strings.TrimSpace(left.CityCode) == strings.TrimSpace(right.CityCode)
 }
 
-// normalizeAppliedCoupons maps applied-coupon command values to domain applied-coupon values.
-func normalizeAppliedCoupons(values []AppliedCouponCommand) []ordersdomain.AppliedCoupon {
-	if len(values) == 0 {
-		return nil
-	}
-
-	rows := make([]ordersdomain.AppliedCoupon, 0, len(values))
-	for _, value := range values {
-		code := strings.TrimSpace(value.Code)
-		if code == "" {
-			continue
-		}
-		appliedAt := time.Now().UTC()
-		if value.AppliedAt != nil && !value.AppliedAt.IsZero() {
-			appliedAt = value.AppliedAt.UTC()
-		}
-		rows = append(rows, ordersdomain.AppliedCoupon{
-			CouponID:       strings.TrimSpace(value.CouponID),
-			Code:           code,
-			DiscountType:   strings.TrimSpace(value.DiscountType),
-			DiscountAmount: value.DiscountAmount,
-			AppliedAt:      appliedAt,
-		})
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-
-	return rows
-}
-
 // normalizeShippingCharges normalizes shipping charge command values.
 func normalizeShippingCharges(values []ShippingChargeCommand) []ordersdomain.ShippingCharge {
 	if len(values) == 0 {
@@ -227,6 +195,20 @@ func normalizeShippingCharges(values []ShippingChargeCommand) []ordersdomain.Shi
 	}
 
 	return rows
+}
+
+// cloneOptionalFloat64 returns a copy of one optional float64 pointer.
+func cloneOptionalFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+
+	resolved := *value
+	if resolved < 0 {
+		resolved = 0
+	}
+
+	return &resolved
 }
 
 // validateStatusEntry validates status-entry values.

@@ -32,19 +32,14 @@ require (
 	mannaiah/module/analytics v0.0.0
 	mannaiah/module/assets v0.0.0
 	mannaiah/module/auth v0.0.0
-	mannaiah/module/campaign v0.0.0
 	mannaiah/module/contacts v0.0.0
-	mannaiah/module/coupons v0.0.0
 	mannaiah/module/email v0.0.0
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/membership v0.0.0
 	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
-	mannaiah/module/segment v0.0.0
 	mannaiah/module/shipping v0.0.0
-	mannaiah/module/storefront v0.0.0
 	mannaiah/module/syncrecord v0.0.0
-	mannaiah/module/woocommerce v0.0.0
 )
 
 require (
@@ -57,8 +52,6 @@ require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
-	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
@@ -90,27 +83,21 @@ require (
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
 	github.com/go-openapi/spec v0.20.4 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
-	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
-	github.com/go-resty/resty/v2 v2.7.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/tiff v1.0.1 // indirect
-	github.com/hiscaler/gox v0.0.0-20220607093548-75ae453f938c // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.6.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/jmolboy/woocommerce-go v0.0.0-20250423081406-2ee148f0a048 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jung-kurt/gofpdf v1.16.2 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/lithammer/shortuuid/v3 v3.0.7 // indirect
@@ -119,8 +106,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
@@ -190,22 +175,12 @@ replace mannaiah/module/products => ../products
 
 replace mannaiah/module/orders => ../orders
 
-replace mannaiah/module/woocommerce => ../woocommerce
-
 replace mannaiah/module/membership => ../membership
 
 replace mannaiah/module/syncrecord => ../syncrecord
 
 replace mannaiah/module/analytics => ../analytics
 
-replace mannaiah/module/segment => ../segment
-
 replace mannaiah/module/email => ../email
 
-replace mannaiah/module/campaign => ../campaign
-
 replace mannaiah/module/shipping => ../shipping
-
-replace mannaiah/module/coupons => ../coupons
-
-replace mannaiah/module/storefront => ../storefront

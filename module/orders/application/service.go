@@ -64,20 +64,6 @@ type ShippingChargeCommand struct {
 	Price float64
 }
 
-// AppliedCouponCommand defines applied-coupon command values.
-type AppliedCouponCommand struct {
-	// CouponID defines optional coupon identifier values (empty for externally-sourced coupons).
-	CouponID string
-	// Code defines the coupon code.
-	Code string
-	// DiscountType defines the discount calculation method.
-	DiscountType string
-	// DiscountAmount defines the discount value applied.
-	DiscountAmount float64
-	// AppliedAt defines the coupon application timestamp.
-	AppliedAt *time.Time
-}
-
 // CreateCommand defines order creation payload values.
 type CreateCommand struct {
 	// Identifier defines external order identifiers.
@@ -100,8 +86,12 @@ type CreateCommand struct {
 	ShippingCharges []ShippingChargeCommand
 	// PaymentMethod defines order payment method values.
 	PaymentMethod string
-	// AppliedCoupons defines coupons applied to this order.
-	AppliedCoupons []AppliedCouponCommand
+	// CouponCode defines optional order-level coupon attribution code values.
+	CouponCode string
+	// CouponDiscountAmount defines optional order-level coupon attribution amount values.
+	CouponDiscountAmount *float64
+	// CouponDiscountType defines optional order-level coupon attribution type values.
+	CouponDiscountType string
 	// Metadata defines order metadata values.
 	Metadata map[string]string
 	// CreatedAt defines optional source creation timestamps.
@@ -118,8 +108,12 @@ type UpdateCommand struct {
 	ShippingAddress *ShippingAddressCommand
 	// ShippingCharges defines optional shipping charge values.
 	ShippingCharges *[]ShippingChargeCommand
-	// AppliedCoupons defines optional applied coupon values.
-	AppliedCoupons *[]AppliedCouponCommand
+	// CouponCode defines optional order-level coupon attribution code values.
+	CouponCode *string
+	// CouponDiscountAmount defines optional order-level coupon attribution amount values.
+	CouponDiscountAmount *float64
+	// CouponDiscountType defines optional order-level coupon attribution type values.
+	CouponDiscountType *string
 	// Source defines mutation source values.
 	Source string
 }
@@ -300,16 +294,18 @@ func (s *OrderService) Create(ctx context.Context, command CreateCommand) (*orde
 		OccurredAt:  time.Now().UTC(),
 	}
 	order := &ordersdomain.Order{
-		Identifier:      strings.TrimSpace(command.Identifier),
-		Realm:           strings.TrimSpace(command.Realm),
-		ContactID:       strings.TrimSpace(command.ContactID),
-		Items:           items,
-		CurrentStatus:   initialStatus,
-		StatusHistory:   []ordersdomain.StatusEntry{entry},
-		ShippingCharges: normalizeShippingCharges(command.ShippingCharges),
-		PaymentMethod:   strings.TrimSpace(command.PaymentMethod),
-		AppliedCoupons:  normalizeAppliedCoupons(command.AppliedCoupons),
-		Metadata:        command.Metadata,
+		Identifier:           strings.TrimSpace(command.Identifier),
+		Realm:                strings.TrimSpace(command.Realm),
+		ContactID:            strings.TrimSpace(command.ContactID),
+		Items:                items,
+		CurrentStatus:        initialStatus,
+		StatusHistory:        []ordersdomain.StatusEntry{entry},
+		ShippingCharges:      normalizeShippingCharges(command.ShippingCharges),
+		PaymentMethod:        strings.TrimSpace(command.PaymentMethod),
+		CouponCode:           strings.TrimSpace(command.CouponCode),
+		CouponDiscountAmount: cloneOptionalFloat64(command.CouponDiscountAmount),
+		CouponDiscountType:   strings.TrimSpace(command.CouponDiscountType),
+		Metadata:             command.Metadata,
 	}
 	if command.CreatedAt != nil && !command.CreatedAt.IsZero() {
 		order.CreatedAt = command.CreatedAt.UTC()

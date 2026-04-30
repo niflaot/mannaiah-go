@@ -26,9 +26,6 @@ func TestOpenAPISpec(t *testing.T) {
 	if spec.Components == nil || spec.Components.Schemas["OrderUpdate"] == nil {
 		t.Fatalf("expected OrderUpdate schema")
 	}
-	if spec.Components == nil || spec.Components.Schemas["OrderAppliedCoupon"] == nil {
-		t.Fatalf("expected OrderAppliedCoupon schema")
-	}
 	if spec.Components == nil || spec.Components.SecuritySchemes[bearerSecurityScheme] == nil {
 		t.Fatalf("expected bearer security scheme")
 	}
@@ -49,11 +46,11 @@ func TestOpenAPISpec(t *testing.T) {
 	if ordersPath.Get == nil || len(ordersPath.Get.Parameters) < 1 {
 		t.Fatalf("expected list order query parameters")
 	}
-	if spec.Components.Schemas["Order"].Value.Properties["appliedCoupons"] == nil {
-		t.Fatalf("expected appliedCoupons property on Order schema")
+	if spec.Components.Schemas["Order"].Value.Properties["couponCode"] == nil {
+		t.Fatalf("expected couponCode property on Order schema")
 	}
-	if spec.Components.Schemas["OrderCreate"].Value.Properties["appliedCoupons"] == nil {
-		t.Fatalf("expected appliedCoupons property on OrderCreate schema")
+	if spec.Components.Schemas["OrderCreate"].Value.Properties["couponCode"] == nil {
+		t.Fatalf("expected couponCode property on OrderCreate schema")
 	}
 
 	orderByIDPath := spec.Paths.Value("/orders/{id}")

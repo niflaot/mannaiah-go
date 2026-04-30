@@ -93,22 +93,6 @@ type MembershipEvent struct {
 	OccurredAt time.Time
 }
 
-// CampaignEvent defines analytical campaign-event row values.
-type CampaignEvent struct {
-	// CampaignID defines campaign identifier values.
-	CampaignID string
-	// ContactID defines contact identifier values.
-	ContactID string
-	// Channel defines channel values.
-	Channel string
-	// Status defines campaign delivery status values.
-	Status string
-	// TemplateVersion defines optional template version values.
-	TemplateVersion int
-	// OccurredAt defines event timestamp values.
-	OccurredAt time.Time
-}
-
 // Store defines analytics storage behavior.
 type Store interface {
 	// Ping verifies analytics backend connectivity.
@@ -123,8 +107,6 @@ type Store interface {
 	UpsertOrderItems(ctx context.Context, rows []OrderItemFact) error
 	// InsertMembershipEvents inserts membership event rows.
 	InsertMembershipEvents(ctx context.Context, rows []MembershipEvent) error
-	// InsertCampaignEvents inserts campaign event rows.
-	InsertCampaignEvents(ctx context.Context, rows []CampaignEvent) error
 	// ResolveContacts resolves analytical contact IDs by filter.
 	ResolveContacts(ctx context.Context, filter domain.SegmentFilter, page int, limit int) ([]string, error)
 	// CountContacts counts analytical contacts by filter.

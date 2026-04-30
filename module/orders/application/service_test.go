@@ -629,14 +629,17 @@ func TestUpdateAndEventPublishing(t *testing.T) {
 
 	items := []CreateItemCommand{{SKU: "SKU-2", Quantity: 2, Value: 22}}
 	charges := []ShippingChargeCommand{{MethodID: "flat_rate", MethodTitle: "Flat", Price: 9}}
-	appliedAt := time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)
-	appliedCoupons := []AppliedCouponCommand{{Code: "WELCOME10", DiscountType: "fixed", DiscountAmount: 5, AppliedAt: &appliedAt}}
+	couponCode := "WELCOME10"
+	couponDiscountAmount := 5.0
+	couponDiscountType := "fixed"
 	updated, err := service.Update(context.Background(), "o-1", UpdateCommand{
-		Items:           &items,
-		ShippingCharges: &charges,
-		ShippingAddress: &ShippingAddressCommand{Address: "Street 1", CityCode: "11001"},
-		AppliedCoupons:  &appliedCoupons,
-		Source:          "mainstream",
+		Items:                &items,
+		ShippingCharges:      &charges,
+		ShippingAddress:      &ShippingAddressCommand{Address: "Street 1", CityCode: "11001"},
+		CouponCode:           &couponCode,
+		CouponDiscountAmount: &couponDiscountAmount,
+		CouponDiscountType:   &couponDiscountType,
+		Source:               "mainstream",
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -644,8 +647,8 @@ func TestUpdateAndEventPublishing(t *testing.T) {
 	if len(updated.Items) != 1 || updated.Items[0].SKU != "SKU-2" {
 		t.Fatalf("updated.Items = %+v, want SKU-2 row", updated.Items)
 	}
-	if len(updated.AppliedCoupons) != 1 || updated.AppliedCoupons[0].Code != "WELCOME10" {
-		t.Fatalf("updated.AppliedCoupons = %+v, want WELCOME10 row", updated.AppliedCoupons)
+	if updated.CouponCode != "WELCOME10" || updated.CouponDiscountType != "fixed" || updated.CouponDiscountAmount == nil || *updated.CouponDiscountAmount != 5 {
+		t.Fatalf("updated coupon metadata = code:%q type:%q amount:%v", updated.CouponCode, updated.CouponDiscountType, updated.CouponDiscountAmount)
 	}
 
 	_, err = service.UpdateStatus(context.Background(), "o-1", UpdateStatusCommand{
@@ -748,7 +751,9 @@ func TestUpdateNoopSkipsPersistenceAndPublish(t *testing.T) {
 				HasCustomShippingAddress: true,
 				ShippingAddress:          ordersdomain.ShippingAddress{Address: "Street 1", CityCode: "11001"},
 				ShippingCharges:          []ordersdomain.ShippingCharge{{MethodID: "flat_rate", MethodTitle: "Flat", Price: 9}},
-				AppliedCoupons:           []ordersdomain.AppliedCoupon{{Code: "WELCOME10", DiscountType: "fixed", DiscountAmount: 5, AppliedAt: time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)}},
+				CouponCode:               "WELCOME10",
+				CouponDiscountAmount:     cloneFloat64(5),
+				CouponDiscountType:       "fixed",
 				StatusHistory:            []ordersdomain.StatusEntry{{Status: ordersdomain.StatusCreated, Author: "system", OccurredAt: time.Now().UTC()}},
 				Items: []ordersdomain.Item{
 					{SKU: "SKU-2", Quantity: 2, Value: 22, ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved},
@@ -778,14 +783,17 @@ func TestUpdateNoopSkipsPersistenceAndPublish(t *testing.T) {
 
 	items := []CreateItemCommand{{SKU: "SKU-2", Quantity: 2, Value: 22}}
 	charges := []ShippingChargeCommand{{MethodID: "flat_rate", MethodTitle: "Flat", Price: 9}}
-	appliedAt := time.Date(2026, time.April, 13, 15, 0, 0, 0, time.UTC)
-	appliedCoupons := []AppliedCouponCommand{{Code: "WELCOME10", DiscountType: "fixed", DiscountAmount: 5, AppliedAt: &appliedAt}}
+	couponCode := "WELCOME10"
+	couponDiscountAmount := 5.0
+	couponDiscountType := "fixed"
 	updated, err := service.Update(context.Background(), "o-1", UpdateCommand{
-		Items:           &items,
-		ShippingCharges: &charges,
-		ShippingAddress: &ShippingAddressCommand{Address: "Street 1", CityCode: "11001"},
-		AppliedCoupons:  &appliedCoupons,
-		Source:          "mainstream",
+		Items:                &items,
+		ShippingCharges:      &charges,
+		ShippingAddress:      &ShippingAddressCommand{Address: "Street 1", CityCode: "11001"},
+		CouponCode:           &couponCode,
+		CouponDiscountAmount: &couponDiscountAmount,
+		CouponDiscountType:   &couponDiscountType,
+		Source:               "mainstream",
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -799,6 +807,10 @@ func TestUpdateNoopSkipsPersistenceAndPublish(t *testing.T) {
 	if len(updated.Items) != 1 || updated.Items[0].SKU != "SKU-2" {
 		t.Fatalf("updated.Items = %+v, want unchanged SKU-2 row", updated.Items)
 	}
+}
+
+func cloneFloat64(value float64) *float64 {
+	return &value
 }
 
 // TestUpdateStatusSkipsWooInboundMutation verifies Woo-origin status-update suppression behavior.

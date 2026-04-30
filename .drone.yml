@@ -27,18 +27,13 @@ steps:
           module/auth \
           module/contacts \
           module/orders \
-          module/coupons \
           module/assets \
           module/products \
-          module/storefront \
           module/falabella \
-          module/woocommerce \
           module/syncrecord \
           module/membership \
           module/analytics \
-          module/segment \
           module/email \
-          module/campaign \
           module/shipping
         do
           echo "Running tests for $module"
@@ -91,8 +86,8 @@ steps:
     environment:
       CGO_ENABLED: "1"
     commands:
-      - cd module/woocommerce
-      - go test ./application/contact/service -run '^$' -bench BenchmarkProcessCommands -benchmem -benchtime=100x -count=1
+      - cd module/core
+      - go test ./search -run '^$' -bench BenchmarkSpotlightFanout -benchmem -benchtime=100x -count=1
     volumes:
       - name: go-mod-cache
         path: /go/pkg/mod

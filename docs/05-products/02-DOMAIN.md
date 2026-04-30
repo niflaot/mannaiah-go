@@ -77,16 +77,15 @@ This means a single `PATCH` can update only the `"falabella"` datasheet without 
 The `"default"` realm is the canonical fallback used by any system that does not have a
 channel-specific datasheet. It **must** be populated when a product is created.
 
-**Consumers:** `module/campaign` forces `Realm = "default"` when building recommendation queries;
-`module/analytics` loads it alongside all other realms for recommendation rendering.
+**Consumers:** `module/analytics` may load it alongside other realms when building BI-oriented recommendation inputs.
 
 **Attributes read by consumers:**
 
 | Attribute Key | Type | Used By | Description |
 |--------------|------|---------|-------------|
-| `price` | `float64` | `module/campaign`, `module/analytics` | Displayed/filtered price in recommendation blocks |
-| `url` | `string` | `module/campaign`, `module/analytics` | Product page URL for recommendation links |
-| `<variationID>.url` | `string` | `module/campaign`, `module/analytics` | Variation-scoped product URL (key pattern: `"var-uuid.url"`) |
+| `price` | `float64` | `module/analytics` | Displayed/filtered price in recommendation-oriented BI inputs |
+| `url` | `string` | `module/analytics` | Product page URL metadata |
+| `<variationID>.url` | `string` | `module/analytics` | Variation-scoped product URL (key pattern: `"var-uuid.url"`) |
 
 Additional common `"default"` attributes (not machine-read, but documented by convention):
 
@@ -126,12 +125,11 @@ submitting the image feed.
 
 | Realm | Writer | Reader | What is read |
 |-------|--------|--------|--------------|
-| `"default"` | Product API (manual) | `module/campaign`, `module/analytics` | `price`, `url`, `<variationID>.url`, gallery `IncludedRealms` |
+| `"default"` | Product API (manual) | `module/analytics` | `price`, `url`, `<variationID>.url`, gallery `IncludedRealms` |
 | `"falabella"` | Product API (manual) | `module/falabella` | `Name`, `Description`, all `Attributes` (for Seller Center listing) |
 | *(custom)* | Product API | External consumers | Free-form via `Datasheet.Attributes` |
 
-> **Note on WooCommerce:** WooCommerce does **not** use product datasheets. The string `"woocommerce"`
-> appears as the `Order.Realm` field (identifying order origin) but is not a product datasheet realm.
+> **Note:** order realms do not imply product datasheet realms. Datasheet realms remain an independent product concern.
 
 ---
 

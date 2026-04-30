@@ -35,9 +35,6 @@ for all Mannaiah resources with cross-resource spotlight capability.
 | GET | `/search/variations` | `SearchHandlerFunc` |
 | GET | `/search/tags` | `SearchHandlerFunc` |
 | GET | `/search/shipping` | `SearchHandlerFunc` |
-| GET | `/search/campaigns` | `SearchHandlerFunc` |
-| GET | `/search/coupons` | `SearchHandlerFunc` |
-| GET | `/search/segments` | `SearchHandlerFunc` |
 | GET | `/search` | `SpotlightHandlerFunc` |
 
 ## Usage

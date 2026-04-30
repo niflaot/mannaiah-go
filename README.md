@@ -1,12 +1,11 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v1.4.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v2.0.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
-Frontend integration for the 2.0+ marketing/BI stack is documented through the aggregated API docs at `/docs` and `/openapi.json`.
-Campaign-template parsing and runtime DSL behavior are documented in `FINAL-DSL-EMAILS.md`.
+Frontend integration is documented through the aggregated API docs at `/docs` and `/openapi.json`.
 
 ## Architecture
 
@@ -15,16 +14,12 @@ Campaign-template parsing and runtime DSL behavior are documented in `FINAL-DSL-
 - `module/contacts`: contact domain.
 - `module/orders`: order domain.
 - `module/products`: product domain.
-- `module/storefront`: renderable and static-page storefront content domain.
 - `module/assets`: asset/storage domain.
 - `module/falabella`: Falabella integration module.
-- `module/woocommerce`: WooCommerce integration module.
 - `module/syncrecord`: centralized sync execution registry and query API.
 - `module/membership`: auditable consent/membership stamping module.
-- `module/analytics`: ClickHouse analytics module with schema bootstrap, event ingestion, and seed endpoint.
-- `module/segment`: audience segment definitions and resolution via analytics resolver.
+- `module/analytics`: ClickHouse analytics ingestion/bootstrap module for BI fact data.
 - `module/email`: optional email delivery tracking and webhook module.
-- `module/campaign`: campaign lifecycle and fan-out orchestration module.
 - `module/shipping`: carrier-agnostic shipping module (quotation, mark generation, dispatch batches, tracking).
 - `e2e/`: root end-to-end validation flows.
 
@@ -54,18 +49,8 @@ The API listens on `CORE_HOST:CORE_PORT` (`0.0.0.0:8080` by default).
 ### Analytics Bootstrap
 
 - `ANALYTICS_ENABLED=true` enables ClickHouse analytics and integration consumers.
-- `SEGMENT_ENABLED=true` requires analytics to be enabled.
-- Run `POST /analytics/seed` once (admin scope `marketing:manage`) to backfill ClickHouse from transactional data.
-- Optional affinity-map auto-refresh cron:
-  - `ANALYTICS_AFFINITY_REFRESH_ENABLED=true`
-  - `ANALYTICS_AFFINITY_REFRESH_CRON=*/30 * * * *` (every 30 minutes)
-  - `ANALYTICS_AFFINITY_REFRESH_TIMEOUT_MS=600000`
-
-### WooCommerce Order Sync Cron
-
-- `WOOCOMMERCE_SYNC_ORDERS=true`
-- `WOOCOMMERCE_SYNC_ORDERS_CRON=*/30 * * * *` (every 30 minutes)
-- `CRON_LOCATION=America/Bogota` to run cron expressions in Colombia timezone.
+- Run `POST /analytics/seed` once to backfill ClickHouse fact tables from transactional data.
+- Analytics no longer exposes CRM-facing routes in `v2.0.0`; the retained module is write-focused infrastructure for BI.
 
 ### Email Tracking Pixel
 
@@ -98,15 +83,7 @@ Use these env vars to convert tagged assets to `.jpg` through scheduled jobs:
 ### Module Unit Tests
 
 ```bash
-for module in module/core module/auth module/contacts module/orders module/assets module/products module/falabella module/woocommerce; do
-  (cd "$module" && go test ./...)
-done
-```
-
-Extended module sweep including marketing modules:
-
-```bash
-for module in module/syncrecord module/membership module/analytics module/segment module/email module/campaign module/shipping; do
+for module in module/core module/auth module/contacts module/orders module/assets module/products module/falabella module/syncrecord module/membership module/analytics module/email module/shipping; do
   (cd "$module" && go test ./...)
 done
 ```
@@ -117,11 +94,11 @@ done
 go test ./e2e -v -count=1
 ```
 
-### WooCommerce Benchmark
+### Performance Benchmark
 
 ```bash
-cd module/woocommerce
-go test ./application/contact/service -run '^$' -bench BenchmarkProcessCommands -benchmem -benchtime=100x -count=1
+cd module/core
+go test ./search -run '^$' -bench BenchmarkSpotlightFanout -benchmem -benchtime=100x -count=1
 ```
 
 ## Docker
@@ -185,7 +162,7 @@ npm run build
 ## CI/CD
 
 - CI/CD is managed by Drone via `.drone.yml`.
-- Validation pipeline runs module tests, e2e tests, and WooCommerce benchmark checks.
+- Validation pipeline runs module tests, e2e tests, and performance benchmark checks.
 - Docker images are published to Nexus registry:
   - Registry: `docker.momlesstomato.dev`
   - API repository: `fl-docker/mannaiah-go`

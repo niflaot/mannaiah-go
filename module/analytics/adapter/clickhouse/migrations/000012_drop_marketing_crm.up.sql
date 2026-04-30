@@ -1,0 +1,9 @@
+DROP VIEW IF EXISTS variation_affinity_mv;
+DROP TABLE IF EXISTS variation_affinity_mv;
+DROP VIEW IF EXISTS category_affinity_mv;
+DROP TABLE IF EXISTS category_affinity_mv;
+DROP VIEW IF EXISTS tag_affinity_mv;
+DROP TABLE IF EXISTS tag_affinity_mv;
+DROP VIEW IF EXISTS rfm_scores_mv;
+DROP TABLE IF EXISTS rfm_scores_mv;
+DROP TABLE IF EXISTS campaign_events;

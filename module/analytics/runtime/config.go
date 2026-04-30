@@ -18,10 +18,4 @@ type Config struct {
 	FlushIntervalMS int64 `mapstructure:"ANALYTICS_CLICKHOUSE_FLUSH_INTERVAL_MS" default:"5000"`
 	// MigrationEnabled defines whether analytics backend migrations should run on startup.
 	MigrationEnabled bool `mapstructure:"ANALYTICS_CLICKHOUSE_MIGRATION_ENABLED" default:"true"`
-	// AffinityRefreshEnabled defines whether periodic affinity materialized-view refresh is enabled.
-	AffinityRefreshEnabled bool `mapstructure:"ANALYTICS_AFFINITY_REFRESH_ENABLED" default:"false"`
-	// AffinityRefreshCron defines cron specs for scheduled affinity refresh behavior.
-	AffinityRefreshCron string `mapstructure:"ANALYTICS_AFFINITY_REFRESH_CRON" default:"0 * * * *"`
-	// AffinityRefreshTimeoutMS defines affinity refresh execution timeout values in milliseconds.
-	AffinityRefreshTimeoutMS int `mapstructure:"ANALYTICS_AFFINITY_REFRESH_TIMEOUT_MS" default:"600000"`
 }

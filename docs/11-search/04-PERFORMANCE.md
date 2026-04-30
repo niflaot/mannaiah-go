@@ -78,8 +78,6 @@ Migration `000041` (MySQL) / `000040` (SQLite) adds B-tree indexes on all text-s
 | products | sku |
 | categories | name, slug |
 | shipping_marks | tracking_number, order_id, carrier_id, status, dispatch_batch_id |
-| campaigns | name, slug, status, channel, segment_id |
-| segments | name, slug, channel, parent_segment_id |
 | tags | name |
 | variations | name, value, definition |
 

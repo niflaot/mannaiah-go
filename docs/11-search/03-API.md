@@ -33,17 +33,6 @@ All resource search endpoints follow identical request/response conventions.
 | `GET` | `/search/variations` | Search product variations by name, value |
 | `GET` | `/search/tags` | Search product tags by name |
 | `GET` | `/search/shipping` | Search shipping marks by tracking, order |
-| `GET` | `/search/campaigns` | Search campaigns by name, slug, subject |
-| `GET` | `/search/coupons` | Search coupons by code, origin, assignment, or linked contact name |
-| `GET` | `/search/segments` | Search segments by name, slug |
-
-### Coupon-Specific Filter
-
-Coupons support the standard `term`, `page`, `pageSize`, and `sort` parameters plus one exact-match filter:
-
-| Query | Description |
-|-------|-------------|
-| `filter[discountType]` | Match `fixed` or `percentage` coupons |
 
 ---
 
@@ -97,8 +86,6 @@ Cross-resource concurrent search with relevance scoring.
 | `variation` | Variations |
 | `tag` | Tags |
 | `shipping_mark` | Shipping marks |
-| `campaign` | Campaigns |
-| `segment` | Segments |
 
 **Behavior:**
 - Each provider runs concurrently with a 2-second timeout

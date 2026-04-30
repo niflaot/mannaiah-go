@@ -14,7 +14,6 @@ Update all of these when releasing `vX.Y.Z`:
 - `module/core/cmd/api/main.go`: Swagger document version (`"X.Y.Z"`)
 - `module/core/startup/runtime.go`: `CoreSpec()` OpenAPI version (`"X.Y.Z"`)
 - `README.md`: latest badge (`latest-vX.Y.Z`)
-- `module/woocommerce/README.md`: latest badge (`latest-vX.Y.Z`)
 
 ### 2) Commit and merge
 - Commit version changes on your release branch.
@@ -51,6 +50,20 @@ A new release image is accepted only if all are true:
 ## Version Registry
 
 Keep newest entries on top. Add one section per version.
+
+### [v2.0.0] - 2026-04-30
+- Removed the legacy marketing and commerce surface:
+  - deleted `module/campaign`, `module/coupons`, `module/segment`, `module/storefront`, and `module/woocommerce`
+  - removed their API routes, bootstrap wiring, workspace entries, and CI coverage
+  - removed WooCommerce/storefront/CRM-focused root E2E coverage that no longer applies
+- Orders now retain coupon usage as direct order metadata:
+  - added `couponCode`, `couponDiscountAmount`, and `couponDiscountType` to the order model and HTTP/OpenAPI surface
+  - removed the `order_applied_coupons` runtime dependency
+- Analytics was reduced to BI infrastructure only:
+  - removed campaign-event ingestion
+  - removed CRM-facing OpenAPI routes from the module surface
+  - retained ClickHouse schema bootstrap plus fact-table ingestion for contacts, orders, order items, membership events, and taxonomy data
+- Release metadata updated to `v2.0.0`.
 
 ### [v1.4.0] - 2026-04-14
 - Storefront module: renderable and static-page management feature added (`module/storefront`).

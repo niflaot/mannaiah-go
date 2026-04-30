@@ -33,6 +33,9 @@ func TestOrderNormalize(t *testing.T) {
 		ShippingCharges: []ShippingCharge{
 			{MethodID: " flat_rate ", MethodTitle: " Flat Rate ", Price: 10000},
 		},
+		CouponCode:           " welcome10 ",
+		CouponDiscountAmount: cloneFloat64(5000),
+		CouponDiscountType:   " fixed ",
 	}
 
 	entity.Normalize()
@@ -55,9 +58,16 @@ func TestOrderNormalize(t *testing.T) {
 	if entity.ShippingCharges[0].MethodID != "flat_rate" {
 		t.Fatalf("ShippingCharges[0].MethodID = %q, want %q", entity.ShippingCharges[0].MethodID, "flat_rate")
 	}
+	if entity.CouponCode != "welcome10" || entity.CouponDiscountType != "fixed" || entity.CouponDiscountAmount == nil || *entity.CouponDiscountAmount != 5000 {
+		t.Fatalf("coupon metadata = code:%q type:%q amount:%v", entity.CouponCode, entity.CouponDiscountType, entity.CouponDiscountAmount)
+	}
 	if entity.Comments[0].Author != "system" || entity.Comments[0].Comment != "packed" {
 		t.Fatalf("Comments[0] = %+v, want trimmed values", entity.Comments[0])
 	}
+}
+
+func cloneFloat64(value float64) *float64 {
+	return &value
 }
 
 // TestOrderValidate validates domain invariant behavior.

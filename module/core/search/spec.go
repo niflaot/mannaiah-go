@@ -28,9 +28,6 @@ func OpenAPISpec() *openapi3.T {
 		{path: "/search/variations", tag: "variations", desc: "Search product variations"},
 		{path: "/search/tags", tag: "tags", desc: "Search product tags"},
 		{path: "/search/shipping", tag: "shipping", desc: "Search shipping marks"},
-		{path: "/search/campaigns", tag: "campaigns", desc: "Search campaigns"},
-		{path: "/search/coupons", tag: "coupons", desc: "Search coupons", extraParameters: couponSearchParameters()},
-		{path: "/search/segments", tag: "segments", desc: "Search segments"},
 	}
 
 	for _, r := range resources {
@@ -69,18 +66,6 @@ func resourceSearchPathItem(tag string, summary string, extraParameters openapi3
 				openapi3.WithStatus(400, &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription("Invalid query parameters")}),
 			),
 		},
-	}
-}
-
-// couponSearchParameters returns coupon-specific unified-search parameters.
-func couponSearchParameters() openapi3.Parameters {
-	return openapi3.Parameters{
-		{Value: &openapi3.Parameter{
-			Name:        "filter[discountType]",
-			In:          "query",
-			Schema:      &openapi3.SchemaRef{Value: openapi3.NewStringSchema().WithEnum("fixed", "percentage")},
-			Description: "Exact discount type filter. Example: filter[discountType]=fixed",
-		}},
 	}
 }
 

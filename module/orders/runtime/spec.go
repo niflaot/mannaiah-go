@@ -19,7 +19,6 @@ func OpenAPISpec() *openapi3.T {
 		"OrderUpdate":         &openapi3.SchemaRef{Value: orderUpdateSchema()},
 		"OrderStatusUpdate":   &openapi3.SchemaRef{Value: orderStatusUpdateSchema()},
 		"OrderItem":           &openapi3.SchemaRef{Value: orderItemSchema()},
-		"OrderAppliedCoupon":  &openapi3.SchemaRef{Value: orderAppliedCouponSchema()},
 		"OrderComment":        &openapi3.SchemaRef{Value: orderCommentSchema()},
 		"OrderCommentCreate":  &openapi3.SchemaRef{Value: orderCommentCreateSchema()},
 		"OrderCommentUpdate":  &openapi3.SchemaRef{Value: orderCommentUpdateSchema()},
@@ -345,7 +344,9 @@ func orderCreateSchema() *openapi3.Schema {
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
 		WithProperty("paymentMethod", openapi3.NewStringSchema()).
-		WithProperty("appliedCoupons", openapi3.NewArraySchema().WithItems(orderAppliedCouponSchema())).
+		WithProperty("couponCode", openapi3.NewStringSchema()).
+		WithProperty("couponDiscountAmount", openapi3.NewFloat64Schema()).
+		WithProperty("couponDiscountType", openapi3.NewStringSchema()).
 		WithProperty("source", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema()).
 		WithRequired([]string{"identifier", "realm", "contactId", "items"})
@@ -357,7 +358,9 @@ func orderUpdateSchema() *openapi3.Schema {
 		WithProperty("items", openapi3.NewArraySchema().WithItems(orderItemSchema())).
 		WithProperty("shippingAddress", orderShippingSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
-		WithProperty("appliedCoupons", openapi3.NewArraySchema().WithItems(orderAppliedCouponSchema())).
+		WithProperty("couponCode", openapi3.NewStringSchema()).
+		WithProperty("couponDiscountAmount", openapi3.NewFloat64Schema()).
+		WithProperty("couponDiscountType", openapi3.NewStringSchema()).
 		WithProperty("source", openapi3.NewStringSchema())
 }
 
@@ -388,21 +391,12 @@ func orderSchema() *openapi3.Schema {
 		WithProperty("hasCustomShippingAddress", openapi3.NewBoolSchema()).
 		WithProperty("shippingCharges", openapi3.NewArraySchema().WithItems(orderShippingChargeSchema())).
 		WithProperty("paymentMethod", openapi3.NewStringSchema()).
-		WithProperty("appliedCoupons", openapi3.NewArraySchema().WithItems(orderAppliedCouponSchema())).
+		WithProperty("couponCode", openapi3.NewStringSchema()).
+		WithProperty("couponDiscountAmount", openapi3.NewFloat64Schema()).
+		WithProperty("couponDiscountType", openapi3.NewStringSchema()).
 		WithProperty("metadata", metadataSchema()).
 		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("updatedAt", openapi3.NewDateTimeSchema())
-}
-
-// orderAppliedCouponSchema returns schema for applied coupon payloads.
-func orderAppliedCouponSchema() *openapi3.Schema {
-	return openapi3.NewObjectSchema().
-		WithProperty("couponId", openapi3.NewStringSchema()).
-		WithProperty("code", openapi3.NewStringSchema()).
-		WithProperty("discountType", openapi3.NewStringSchema()).
-		WithProperty("discountAmount", openapi3.NewFloat64Schema()).
-		WithProperty("appliedAt", openapi3.NewDateTimeSchema()).
-		WithRequired([]string{"code", "discountAmount", "appliedAt"})
 }
 
 // orderItemSchema returns schema for order item payloads.

@@ -21,6 +21,4 @@ type Repository interface {
 	GetByProviderMessageID(ctx context.Context, providerMessageID string) (*domain.Delivery, error)
 	// ListByEmail retrieves all deliveries sent to one recipient email.
 	ListByEmail(ctx context.Context, email string) ([]*domain.Delivery, error)
-	// ListByCampaignID retrieves paginated delivery rows for a campaign by idempotency key prefix.
-	ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]*domain.Delivery, int64, error)
 }

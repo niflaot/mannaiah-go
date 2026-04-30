@@ -19,11 +19,6 @@ import (
 	assetstorage "mannaiah/module/assets/adapter/storage"
 	assetsport "mannaiah/module/assets/port"
 	"mannaiah/module/auth"
-	"mannaiah/module/campaign"
-	campaignaffinity "mannaiah/module/campaign/adapter/affinity"
-	campaignevent "mannaiah/module/campaign/adapter/event"
-	campaignsearch "mannaiah/module/campaign/adapter/search"
-	campaignport "mannaiah/module/campaign/port"
 	"mannaiah/module/contacts"
 	contactevent "mannaiah/module/contacts/adapter/event"
 	contactsearch "mannaiah/module/contacts/adapter/search"
@@ -44,10 +39,7 @@ import (
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
 	coretelemetry "mannaiah/module/core/telemetry"
-	"mannaiah/module/coupons"
 	"mannaiah/module/email"
-	emailapplication "mannaiah/module/email/application"
-	emailport "mannaiah/module/email/port"
 	"mannaiah/module/falabella"
 	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	falabellaport "mannaiah/module/falabella/port"
@@ -65,22 +57,12 @@ import (
 	productsearch "mannaiah/module/products/adapter/search/product"
 	tagsearch "mannaiah/module/products/adapter/search/tag"
 	variationsearch "mannaiah/module/products/adapter/search/variation"
-	productsstorefrontdomain "mannaiah/module/products/domain/storefront"
-	"mannaiah/module/segment"
-	segmentsearch "mannaiah/module/segment/adapter/search"
-	segmentapplication "mannaiah/module/segment/application"
 	"mannaiah/module/shipping"
 	shippingevent "mannaiah/module/shipping/adapter/event"
 	shippingsearch "mannaiah/module/shipping/adapter/search"
-	"mannaiah/module/storefront"
-	storefrontdomain "mannaiah/module/storefront/domain"
-	storefrontport "mannaiah/module/storefront/port"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
-	"mannaiah/module/woocommerce"
-	wooevent "mannaiah/module/woocommerce/adapter/event"
-	woocommerceport "mannaiah/module/woocommerce/port"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -108,11 +90,8 @@ func run(ctx context.Context, envFile string) error {
 	var cronCfg corecron.Config
 	var assetsCfg assets.Config
 	var falabellaCfg falabella.Config
-	var wooCfg woocommerce.Config
 	var analyticsCfg analytics.Config
-	var segmentCfg segment.Config
 	var emailCfg email.Config
-	var campaignCfg campaign.Config
 	var membershipCfg membership.Config
 	var syncRecordCfg syncrecord.Config
 	var shippingCfg shipping.Config
@@ -132,11 +111,8 @@ func run(ctx context.Context, envFile string) error {
 		&cronCfg,
 		&assetsCfg,
 		&falabellaCfg,
-		&wooCfg,
 		&analyticsCfg,
-		&segmentCfg,
 		&emailCfg,
-		&campaignCfg,
 		&membershipCfg,
 		&syncRecordCfg,
 		&shippingCfg,
@@ -228,7 +204,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "1.4.0",
+		Version:     "2.0.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -270,15 +246,6 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create shipping search repo: %w", err)
 	}
-	campaignSearchRepo, err := campaignsearch.NewRepository(db)
-	if err != nil {
-		return fmt.Errorf("create campaigns search repo: %w", err)
-	}
-	segmentSearchRepo, err := segmentsearch.NewRepository(db)
-	if err != nil {
-		return fmt.Errorf("create segments search repo: %w", err)
-	}
-
 	spotlightService := coresearch.NewSpotlightService(
 		2*time.Second,
 		contactSearchRepo,
@@ -288,10 +255,7 @@ func run(ctx context.Context, envFile string) error {
 		variationSearchRepo,
 		tagSearchRepo,
 		shippingSearchRepo,
-		campaignSearchRepo,
-		segmentSearchRepo,
 	)
-
 
 	if err := runtime.AddOpenAPISpec(coresearch.OpenAPISpec()); err != nil {
 		return fmt.Errorf("add search openapi spec: %w", err)
@@ -309,17 +273,9 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("create orders integration publisher: %w", err)
 	}
-	wooPublisher, err := wooevent.NewPublisher(messaging.Publisher())
-	if err != nil {
-		return fmt.Errorf("create woocommerce integration publisher: %w", err)
-	}
 	membershipPublisher, err := membershipevent.NewPublisher(messaging.Publisher())
 	if err != nil {
 		return fmt.Errorf("create membership integration publisher: %w", err)
-	}
-	campaignPublisher, err := campaignevent.NewPublisher(messaging.Publisher())
-	if err != nil {
-		return fmt.Errorf("create campaign integration publisher: %w", err)
 	}
 	shippingPublisher, err := shippingevent.NewPublisher(messaging.Publisher())
 	if err != nil {
@@ -357,8 +313,6 @@ func run(ctx context.Context, envFile string) error {
 		router.Get("/search/variations", searchProtect("product:view", coresearch.SearchHandlerFunc(variationSearchRepo)))
 		router.Get("/search/tags", searchProtect("product:view", coresearch.SearchHandlerFunc(tagSearchRepo)))
 		router.Get("/search/shipping", searchProtect("shipping:quotations", coresearch.SearchHandlerFunc(shippingSearchRepo)))
-		router.Get("/search/campaigns", searchProtect("marketing:manage", coresearch.SearchHandlerFunc(campaignSearchRepo)))
-		router.Get("/search/segments", searchProtect("marketing:manage", coresearch.SearchHandlerFunc(segmentSearchRepo)))
 		router.Get("/search", searchProtect("contact:view", coresearch.SpotlightHandlerFunc(spotlightService)))
 	})
 
@@ -413,23 +367,10 @@ func run(ctx context.Context, envFile string) error {
 	if err := membershipModule.Load(runtime); err != nil {
 		return fmt.Errorf("load membership module: %w", err)
 	}
-	if segmentCfg.Enabled && !analyticsCfg.Enabled {
-		return errors.New("segment module requires analytics to be enabled")
-	}
-
-	var analyticsScheduler corecron.Scheduler
-	if analyticsCfg.Enabled && analyticsCfg.AffinityRefreshEnabled {
-		analyticsScheduler, err = corecron.NewScheduler(cronCfg, logger)
-		if err != nil {
-			return fmt.Errorf("create analytics scheduler: %w", err)
-		}
-	}
-
 	analyticsModule, err := analytics.New(analyticsCfg, db, messaging.Registrar())
 	if err != nil {
 		return fmt.Errorf("initialize analytics module: %w", err)
 	}
-	analyticsModule.ConfigureScheduler(analyticsScheduler)
 	analyticsModule.SetSyncRecorder(analyticsSyncRecorderAdapter{recorder: recorderAdapter})
 	analyticsModule.SetAuthorizer(authModule)
 	if err := analyticsModule.Load(runtime); err != nil {
@@ -441,15 +382,6 @@ func run(ctx context.Context, envFile string) error {
 	defer func() {
 		_ = analyticsModule.Stop()
 	}()
-
-	segmentModule, err := segment.New(segmentCfg, db, analyticsModule.QueryService())
-	if err != nil {
-		return fmt.Errorf("initialize segment module: %w", err)
-	}
-	segmentModule.SetAuthorizer(authModule)
-	if err := segmentModule.Load(runtime); err != nil {
-		return fmt.Errorf("load segment module: %w", err)
-	}
 
 	emailModule, err := email.New(emailCfg, db)
 	if err != nil {
@@ -463,29 +395,6 @@ func run(ctx context.Context, envFile string) error {
 	shippingEmailTemplateRenderer, err := newShippingTemplateRenderer()
 	if err != nil {
 		return fmt.Errorf("initialize shipping transactional template renderer: %w", err)
-	}
-
-	campaignModule, err := campaign.New(
-		campaignCfg,
-		db,
-		campaignSegmentResolverAdapter{segments: segmentModule.Service(), contacts: contactsModule.Service()},
-		campaignEmailSenderAdapter{service: emailModule.Service()},
-		campaignDeliveryReaderAdapter{repository: emailModule.Repository()},
-		campaignPublisher,
-	)
-	if err != nil {
-		return fmt.Errorf("initialize campaign module: %w", err)
-	}
-	affinityProductProvider, affinityProviderErr := campaignaffinity.NewProductProvider(analyticsModule.RecommendationService())
-	if affinityProviderErr != nil {
-		return fmt.Errorf("initialize campaign affinity provider: %w", affinityProviderErr)
-	}
-	campaignModule.Service().SetContactDataProvider(campaignContactDataProviderAdapter{contacts: contactsModule.Service()})
-	campaignModule.Service().SetAffinityProductProvider(affinityProductProvider)
-	campaignModule.SetSyncRecorder(campaignSyncRecorderAdapter{recorder: recorderAdapter})
-	campaignModule.SetAuthorizer(authModule)
-	if err := campaignModule.Load(runtime); err != nil {
-		return fmt.Errorf("load campaign module: %w", err)
 	}
 
 	shippingModule, err := shipping.New(shippingCfg, db, shippingPublisher)
@@ -523,15 +432,6 @@ func run(ctx context.Context, envFile string) error {
 	if err := assetsModule.Start(ctx); err != nil {
 		return fmt.Errorf("start assets module: %w", err)
 	}
-	if recommendationService := analyticsModule.RecommendationService(); recommendationService != nil {
-		recommendationService.SetAssetResolver(analyticsAssetURLResolver{
-			assetService: assetsModule.Service(),
-			assetBaseURL: resolveMarketingAssetBaseURL(
-				falabellaCfg.ProductImageBaseURL,
-				buildStorageBucketBaseURL(storageCfg.Endpoint, storageCfg.BucketName),
-			),
-		})
-	}
 	defer func() {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -551,12 +451,6 @@ func run(ctx context.Context, envFile string) error {
 	if err := productsModule.Load(runtime); err != nil {
 		return fmt.Errorf("load products module: %w", err)
 	}
-
-	storefrontModule, err := storefront.New(db)
-	if err != nil {
-		return fmt.Errorf("initialize storefront module: %w", err)
-	}
-	productsModule.SetStorefrontStaticPageSource(storefrontNavigationStaticPageSourceAdapter{pages: storefrontModule.PageService()})
 	if err := productsModule.Start(ctx); err != nil {
 		return fmt.Errorf("start products module: %w", err)
 	}
@@ -565,10 +459,6 @@ func run(ctx context.Context, envFile string) error {
 		defer cancel()
 		_ = productsModule.Stop(stopCtx)
 	}()
-	storefrontModule.SetAuthorizer(authModule)
-	if err := storefrontModule.Load(runtime); err != nil {
-		return fmt.Errorf("load storefront module: %w", err)
-	}
 
 	falabellaCatalog, err := falabellaproducts.NewCatalog(
 		productsModule.Service(),
@@ -631,51 +521,6 @@ func run(ctx context.Context, envFile string) error {
 		contacts: contactsModule.Service(),
 	})
 	shippingModule.SetQuotationProductSource(shippingProductQuotationSourceAdapter{products: productsModule.Service()})
-
-	couponsModule, err := coupons.New(db, messaging.Publisher())
-	if err != nil {
-		return fmt.Errorf("initialize coupons module: %w", err)
-	}
-	couponsModule.SetAuthorizer(authModule)
-	if err := couponsModule.Load(runtime); err != nil {
-		return fmt.Errorf("load coupons module: %w", err)
-	}
-
-	var wooScheduler corecron.Scheduler
-	if wooCfg.SyncContacts || wooCfg.SyncOrders || wooCfg.SyncCoupons {
-		wooScheduler, err = corecron.NewScheduler(cronCfg, logger)
-		if err != nil {
-			return fmt.Errorf("create woocommerce scheduler: %w", err)
-		}
-	}
-
-	wooModule, err := woocommerce.NewWithMessagingAndCouponTarget(
-		wooCfg,
-		contactsModule.Service(),
-		ordersModule.Service(),
-		couponWooSyncAdapter{service: couponsModule.Service()},
-		wooScheduler,
-		logger,
-		messaging.Registrar(),
-		wooPublisher,
-	)
-	if err != nil {
-		return fmt.Errorf("initialize woocommerce module: %w", err)
-	}
-	wooModule.SetSyncRecorder(wooSyncRecorderAdapter{recorder: recorderAdapter})
-	wooModule.SetMembershipStamper(membershipWooStamperAdapter{service: membershipModule.Service()})
-	wooModule.SetAuthorizer(authModule)
-	if err := wooModule.Load(runtime); err != nil {
-		return fmt.Errorf("load woocommerce module: %w", err)
-	}
-	if err := wooModule.Start(ctx); err != nil {
-		return fmt.Errorf("start woocommerce module: %w", err)
-	}
-	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = wooModule.Stop(stopCtx)
-	}()
 	if err := registerShippingMarkOrderCompletionConsumer(
 		messaging.Registrar(),
 		ordersModule.Service(),
@@ -723,49 +568,6 @@ func run(ctx context.Context, envFile string) error {
 	}()
 
 	return waitForShutdown(ctx, db, httpServer, messaging, serverErrors, messagingErrors)
-}
-
-// storefrontNavigationStaticPageLister defines static-page listing behavior required by products navigation wiring.
-type storefrontNavigationStaticPageLister interface {
-	// List returns paginated static pages.
-	List(ctx context.Context, query storefrontport.StaticPageListQuery) ([]storefrontdomain.StaticPage, int64, error)
-}
-
-// storefrontNavigationStaticPageSourceAdapter adapts storefront pages into products navigation nodes.
-type storefrontNavigationStaticPageSourceAdapter struct {
-	// pages defines static-page listing dependencies.
-	pages storefrontNavigationStaticPageLister
-}
-
-// ListStaticPages returns active static pages mapped into products navigation nodes.
-func (a storefrontNavigationStaticPageSourceAdapter) ListStaticPages(ctx context.Context) ([]productsstorefrontdomain.StaticPageNode, error) {
-	if a.pages == nil {
-		return []productsstorefrontdomain.StaticPageNode{}, nil
-	}
-
-	archived := false
-	rows, _, err := a.pages.List(ctx, storefrontport.StaticPageListQuery{
-		Archived: &archived,
-		Page:     1,
-		PageSize: 100000,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	nodes := make([]productsstorefrontdomain.StaticPageNode, 0, len(rows))
-	for _, row := range rows {
-		nodes = append(nodes, productsstorefrontdomain.StaticPageNode{
-			ID:           row.ID,
-			RenderableID: row.RenderableID,
-			Title:        row.Title,
-			URL:          row.URL,
-			CreatedAt:    row.CreatedAt,
-			UpdatedAt:    row.UpdatedAt,
-		})
-	}
-
-	return nodes, nil
 }
 
 // registerCoreStatusRoute registers core status endpoints.
@@ -894,32 +696,6 @@ type errorPayload struct {
 	Message string
 }
 
-// wooSyncRecorderAdapter adapts sync recorders for WooCommerce sync recorder ports.
-type wooSyncRecorderAdapter struct {
-	// recorder defines base sync recorder dependencies.
-	recorder syncRecordRecorderAdapter
-}
-
-// StartRun starts one synchronization run and returns a run identifier.
-func (a wooSyncRecorderAdapter) StartRun(ctx context.Context, kind string, trigger string) (string, error) {
-	return a.recorder.StartRun(ctx, kind, trigger)
-}
-
-// CompleteRun marks one synchronization run as completed.
-func (a wooSyncRecorderAdapter) CompleteRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int) error {
-	return a.recorder.CompleteRun(ctx, runID, processed, succeeded, failed, skipped)
-}
-
-// FailRun marks one synchronization run as failed.
-func (a wooSyncRecorderAdapter) FailRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []woocommerceport.SyncError) error {
-	adapted := make([]errorPayload, 0, len(syncErrors))
-	for _, syncErr := range syncErrors {
-		adapted = append(adapted, errorPayload{Type: syncErr.Type, Code: syncErr.Code, Message: syncErr.Message})
-	}
-
-	return a.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, adapted)
-}
-
 // assetSyncRecorderAdapter adapts sync recorders for assets sync recorder ports.
 type assetSyncRecorderAdapter struct {
 	// recorder defines base sync recorder dependencies.
@@ -1024,28 +800,6 @@ func (a membershipContactLookupAdapter) ListByMetadata(ctx context.Context, meta
 	return result, rows.Total, nil
 }
 
-// membershipWooStamperAdapter adapts membership stamping behavior for WooCommerce sync flows.
-type membershipWooStamperAdapter struct {
-	// service defines membership stamper dependencies.
-	service membershipport.Stamper
-}
-
-// StampByEmail stamps membership state by contact email.
-func (a membershipWooStamperAdapter) StampByEmail(ctx context.Context, email string, channel string, action woocommerceport.MembershipAction, source string, occurredAt *time.Time) error {
-	if a.service == nil {
-		return nil
-	}
-
-	_, err := a.service.Stamp(ctx, membershipport.StampCommand{
-		Email:      email,
-		Channel:    membershipdomain.Channel(channel),
-		Action:     membershipdomain.Action(action),
-		Source:     source,
-		OccurredAt: occurredAt,
-	})
-	return err
-}
-
 // analyticsSyncRecorderAdapter adapts sync recorders for analytics sync recorder ports.
 type analyticsSyncRecorderAdapter struct {
 	// recorder defines base sync recorder dependencies.
@@ -1098,32 +852,6 @@ func (a membershipSyncRecorderAdapter) FailRun(ctx context.Context, runID string
 	return a.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, adapted)
 }
 
-// campaignSyncRecorderAdapter adapts sync recorders for campaign sync recorder ports.
-type campaignSyncRecorderAdapter struct {
-	// recorder defines base sync recorder dependencies.
-	recorder syncRecordRecorderAdapter
-}
-
-// StartRun starts one synchronization run and returns a run identifier.
-func (a campaignSyncRecorderAdapter) StartRun(ctx context.Context, kind string, trigger string) (string, error) {
-	return a.recorder.StartRun(ctx, kind, trigger)
-}
-
-// CompleteRun marks one synchronization run as completed.
-func (a campaignSyncRecorderAdapter) CompleteRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int) error {
-	return a.recorder.CompleteRun(ctx, runID, processed, succeeded, failed, skipped)
-}
-
-// FailRun marks one synchronization run as failed.
-func (a campaignSyncRecorderAdapter) FailRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []campaignport.SyncError) error {
-	adapted := make([]errorPayload, 0, len(syncErrors))
-	for _, syncErr := range syncErrors {
-		adapted = append(adapted, errorPayload{Type: syncErr.Type, Code: syncErr.Code, Message: syncErr.Message})
-	}
-
-	return a.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, adapted)
-}
-
 // emailMembershipStamperAdapter adapts membership stamping behavior for email complaint handling.
 type emailMembershipStamperAdapter struct {
 	// service defines membership stamper dependencies.
@@ -1145,78 +873,6 @@ func (a emailMembershipStamperAdapter) OptOutByEmail(ctx context.Context, email 
 	return err
 }
 
-// campaignSegmentResolverAdapter adapts segment and contacts services for campaign resolution.
-type campaignSegmentResolverAdapter struct {
-	// segments defines segment resolution dependencies.
-	segments segmentapplication.Service
-	// contacts defines contact lookup dependencies.
-	contacts contactapplication.Service
-}
-
-// campaignContactDataProviderAdapter adapts contacts service behavior for campaign template personalization.
-type campaignContactDataProviderAdapter struct {
-	// contacts defines contact lookup dependencies.
-	contacts contactapplication.Service
-}
-
-// GetContactData resolves one contact snapshot used for campaign template rendering.
-func (a campaignContactDataProviderAdapter) GetContactData(ctx context.Context, contactID string) (campaignport.ContactData, error) {
-	if a.contacts == nil {
-		return campaignport.ContactData{}, errors.New("contacts service is not configured")
-	}
-
-	trimmedID := strings.TrimSpace(contactID)
-	if trimmedID == "" {
-		return campaignport.ContactData{}, nil
-	}
-
-	contact, err := a.contacts.Get(ctx, trimmedID)
-	if err != nil || contact == nil {
-		return campaignport.ContactData{}, err
-	}
-
-	return campaignport.ContactData{
-		Name:  resolveContactDisplayName(contact),
-		Email: strings.TrimSpace(contact.Email),
-	}, nil
-}
-
-// ResolveSegment resolves contact ids for a segment.
-func (a campaignSegmentResolverAdapter) ResolveSegment(ctx context.Context, segmentID string, page int, limit int) ([]string, error) {
-	if a.segments == nil {
-		return nil, errors.New("segment service is not configured")
-	}
-
-	resolved, err := a.segments.Resolve(ctx, strings.TrimSpace(segmentID), page, limit)
-	if err != nil {
-		return nil, err
-	}
-	if resolved == nil {
-		return nil, nil
-	}
-
-	return resolved.ContactIDs, nil
-}
-
-// ResolveEmails resolves recipient emails by contact ids.
-func (a campaignSegmentResolverAdapter) ResolveEmails(ctx context.Context, contactIDs []string) (map[string]string, error) {
-	if a.contacts == nil {
-		return nil, errors.New("contacts service is not configured")
-	}
-
-	result := make(map[string]string, len(contactIDs))
-	for _, contactID := range contactIDs {
-		contact, err := a.contacts.Get(ctx, strings.TrimSpace(contactID))
-		if err != nil || contact == nil {
-			continue
-		}
-
-		result[strings.TrimSpace(contactID)] = strings.TrimSpace(contact.Email)
-	}
-
-	return result, nil
-}
-
 // resolveContactDisplayName resolves one contact display name from legal/personal name fields.
 func resolveContactDisplayName(contact *contactdomain.Contact) string {
 	if contact == nil {
@@ -1231,61 +887,4 @@ func resolveContactDisplayName(contact *contactdomain.Contact) string {
 	firstName := strings.TrimSpace(contact.FirstName)
 	lastName := strings.TrimSpace(contact.LastName)
 	return strings.TrimSpace(firstName + " " + lastName)
-}
-
-// campaignDeliveryReaderAdapter adapts email repository behavior for campaign delivery reads.
-type campaignDeliveryReaderAdapter struct {
-	// repository defines email delivery read dependencies.
-	repository emailport.Repository
-}
-
-// ListByCampaignID returns paginated delivery rows for one campaign.
-func (a campaignDeliveryReaderAdapter) ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]campaignport.DeliveryRow, int64, error) {
-	if a.repository == nil {
-		return nil, 0, nil
-	}
-
-	rows, total, err := a.repository.ListByCampaignID(ctx, campaignID, page, limit)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	result := make([]campaignport.DeliveryRow, 0, len(rows))
-	for _, d := range rows {
-		if d == nil {
-			continue
-		}
-		result = append(result, campaignport.DeliveryRow{
-			ContactID: d.ContactID,
-			Email:     d.Email,
-			Status:    string(d.Status),
-			CreatedAt: d.CreatedAt,
-			UpdatedAt: d.UpdatedAt,
-		})
-	}
-
-	return result, total, nil
-}
-
-// campaignEmailSenderAdapter adapts email service behavior for campaign send flows.
-type campaignEmailSenderAdapter struct {
-	// service defines email send dependencies.
-	service emailapplication.Service
-}
-
-// SendCampaignEmail sends one campaign email.
-func (a campaignEmailSenderAdapter) SendCampaignEmail(ctx context.Context, contactID string, email string, subject string, htmlBody string, textBody string, idempotencyKey string) error {
-	if a.service == nil {
-		return errors.New("email service is not configured")
-	}
-
-	_, err := a.service.Send(ctx, emailapplication.SendCommand{
-		ContactID:      strings.TrimSpace(contactID),
-		Email:          strings.TrimSpace(email),
-		Subject:        strings.TrimSpace(subject),
-		HTMLBody:       htmlBody,
-		TextBody:       textBody,
-		IdempotencyKey: strings.TrimSpace(idempotencyKey),
-	})
-	return err
 }

@@ -152,11 +152,6 @@ func (s *snsWebhookRepositoryStub) ListByEmail(ctx context.Context, email string
 	return rows, nil
 }
 
-// ListByCampaignID returns empty rows for this test stub.
-func (s *snsWebhookRepositoryStub) ListByCampaignID(ctx context.Context, campaignID string, page int, limit int) ([]*domain.Delivery, int64, error) {
-	return []*domain.Delivery{}, 0, nil
-}
-
 type snsWebhookProviderStub struct {
 	send func(ctx context.Context, request port.SendRequest) (string, error)
 }

@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"mannaiah/module/analytics/adapter/clickhouse"
 	analyticshttp "mannaiah/module/analytics/adapter/http"
@@ -216,21 +214,8 @@ func (m *Module) wireRecommendation(db *gorm.DB) error {
 
 // RegisterRoutes registers analytics routes on the provided router.
 func (m *Module) RegisterRoutes(router corehttp.Router) {
-	if m == nil {
-		return
-	}
-	if m.handler != nil {
-		m.handler.RegisterRoutes(router)
-	}
-	if m.rfmHandler != nil {
-		m.rfmHandler.RegisterRoutes(router)
-	}
-	if m.affinityHandler != nil {
-		m.affinityHandler.RegisterRoutes(router)
-	}
-	if m.recommendationHandler != nil {
-		m.recommendationHandler.RegisterRoutes(router)
-	}
+	_ = m
+	_ = router
 }
 
 // SetAuthorizer configures endpoint authentication and permission dependencies.
@@ -344,7 +329,7 @@ func (m *Module) ConfigureScheduler(scheduler corecron.Scheduler) {
 	m.scheduler = scheduler
 }
 
-// Start registers and starts affinity refresh cron behavior.
+// Start marks analytics runtime startup as complete.
 func (m *Module) Start(_ context.Context) error {
 	if m == nil {
 		return ErrModuleNotInitialized
@@ -356,33 +341,6 @@ func (m *Module) Start(_ context.Context) error {
 	if m.started {
 		return nil
 	}
-	if !m.cfg.Enabled || !m.cfg.AffinityRefreshEnabled || m.scheduler == nil || m.affinityService == nil || strings.TrimSpace(m.cfg.AffinityRefreshCron) == "" {
-		m.started = true
-		return nil
-	}
-	entryID, err := m.scheduler.AddFunc(strings.TrimSpace(m.cfg.AffinityRefreshCron), func() {
-		refreshCtx, cancel := context.WithTimeout(context.Background(), resolveAffinityRefreshTimeout(m.cfg.AffinityRefreshTimeoutMS))
-		defer cancel()
-
-		if refreshErr := m.affinityService.RefreshAll(refreshCtx); refreshErr != nil {
-			// Fail-open behavior: log and continue next scheduled execution.
-			zap.L().Warn("analytics cron affinity refresh failed", zap.Error(refreshErr))
-		}
-	})
-	if err != nil {
-		return fmt.Errorf("register analytics affinity refresh cron: %w", err)
-	}
-
-	m.affinityRefreshEntryID = entryID
-	m.scheduler.Start()
 	m.started = true
 	return nil
-}
-
-func resolveAffinityRefreshTimeout(timeoutMS int) time.Duration {
-	if timeoutMS <= 0 {
-		return 10 * time.Minute
-	}
-
-	return time.Duration(timeoutMS) * time.Millisecond
 }

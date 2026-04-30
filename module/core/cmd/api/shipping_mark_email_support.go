@@ -2,15 +2,13 @@ package main
 
 import (
 	"context"
-	"net/url"
-	"sort"
-	"strings"
-
-	campaigntemplate "mannaiah/module/campaign/application/template"
 	contactdomain "mannaiah/module/contacts/domain"
 	ordersdomain "mannaiah/module/orders/domain"
 	productdomain "mannaiah/module/products/domain/product"
 	shippingdomain "mannaiah/module/shipping/domain"
+	"net/url"
+	"sort"
+	"strings"
 )
 
 const (
@@ -96,7 +94,7 @@ func buildShippingDispatchedTemplateData(
 	meta shippingDispatchedRenderMeta,
 ) shippingDispatchedTemplateData {
 	contactName := resolveContactDisplayName(&contact)
-	firstName := firstNonEmpty(campaigntemplate.ExtractFirstName(contactName), contactName, contact.Email)
+	firstName := firstNonEmpty(extractFirstName(contactName), contactName, contact.Email)
 	shippingAddress := resolveShippingDispatchedAddress(contact, order, true)
 	billingAddress := resolveShippingDispatchedAddress(contact, order, false)
 
@@ -190,6 +188,15 @@ func resolveProductDisplayName(product productdomain.Product) string {
 	}
 
 	return firstNonEmpty(fallback, product.SKU)
+}
+
+func extractFirstName(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if idx := strings.IndexByte(trimmed, ' '); idx > 0 {
+		return trimmed[:idx]
+	}
+
+	return trimmed
 }
 
 // resolveVariantIDsBySKU resolves ordered variant variation ids for one item sku.

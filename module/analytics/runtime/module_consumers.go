@@ -19,7 +19,6 @@ const (
 	topicOrderUpdated       = "orders.v1.updated"
 	topicOrderStatusUpdated = "orders.v1.status.updated"
 	topicMembershipChanged  = "membership.v1.changed"
-	topicCampaignDelivered  = "campaign.v1.delivery"
 )
 
 type contactEventPayload struct {
@@ -69,15 +68,6 @@ type membershipChangedPayload struct {
 	OccurredAt time.Time `json:"occurredAt"`
 }
 
-type campaignDeliveryPayload struct {
-	CampaignID      string    `json:"campaignId"`
-	ContactID       string    `json:"contactId"`
-	Channel         string    `json:"channel"`
-	Status          string    `json:"status"`
-	TemplateVersion int       `json:"templateVersion"`
-	OccurredAt      time.Time `json:"occurredAt"`
-}
-
 func (m *Module) registerIntegrationHandlers(registrar bus.Registrar) error {
 	if m == nil || registrar == nil || m.service == nil || !m.cfg.Enabled || m.clickhouseClient == nil {
 		return nil
@@ -90,7 +80,6 @@ func (m *Module) registerIntegrationHandlers(registrar bus.Registrar) error {
 		topicOrderUpdated:       m.handleOrderEvent,
 		topicOrderStatusUpdated: m.handleOrderEvent,
 		topicMembershipChanged:  m.handleMembershipChanged,
-		topicCampaignDelivered:  m.handleCampaignDelivered,
 	}
 
 	for topic, handler := range handlers {
@@ -200,28 +189,6 @@ func (m *Module) handleMembershipChanged(ctx context.Context, message bus.Messag
 	}
 
 	return m.service.IngestMembershipEvents(ctx, []port.MembershipEvent{row})
-}
-
-func (m *Module) handleCampaignDelivered(ctx context.Context, message bus.Message) error {
-	payload := campaignDeliveryPayload{}
-	if err := json.Unmarshal(message.Payload, &payload); err != nil {
-		return platform.NonRetriable(fmt.Errorf("decode campaign event payload: %w", err))
-	}
-	if strings.TrimSpace(payload.CampaignID) == "" || strings.TrimSpace(payload.ContactID) == "" {
-		return platform.NonRetriable(fmt.Errorf("campaign event missing required fields"))
-	}
-
-	now := time.Now().UTC()
-	row := port.CampaignEvent{
-		CampaignID:      strings.TrimSpace(payload.CampaignID),
-		ContactID:       strings.TrimSpace(payload.ContactID),
-		Channel:         strings.TrimSpace(payload.Channel),
-		Status:          strings.TrimSpace(payload.Status),
-		TemplateVersion: payload.TemplateVersion,
-		OccurredAt:      normalizeTime(payload.OccurredAt, now),
-	}
-
-	return m.service.IngestCampaignEvents(ctx, []port.CampaignEvent{row})
 }
 
 func normalizeTime(value time.Time, fallback time.Time) time.Time {

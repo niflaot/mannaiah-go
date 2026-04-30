@@ -69,7 +69,7 @@ The intended workflow is:
    module, BigQuery, or manual review).
 2. Decide the cross-sell probability for each tag pair based on that analysis.
 3. `POST /tags/correlations` with the pair and probability.
-4. The recommendation engine (`module/campaign`) reads the correlation graph at campaign build time
+4. Any recommendation-oriented consumer reads the correlation graph when building ranked product suggestions
    to score and rank products.
 
 ### Uniqueness Constraint

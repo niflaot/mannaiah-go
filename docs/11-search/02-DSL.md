@@ -143,32 +143,9 @@ Number of items per page. Clamped to [1, 100].
 | `declared_value` | gte, lte, gt, lt, between |
 | `created_at` | gte, lte, between |
 
-### Campaigns (`/search/campaigns`)
-
-| Field | Operators |
-|-------|-----------|
-| `status` | eq, in |
-| `channel` | eq |
-| `segment_id` | eq |
-| `created_at` | gte, lte, between |
-
-### Segments (`/search/segments`)
-
-| Field | Operators |
-|-------|-----------|
-| `channel` | eq |
-| `parent_segment_id` | eq |
-| `created_at` | gte, lte, between |
-
 ---
 
 ## Complex Query Examples
-
-### Find recent active campaigns for email channel
-
-```
-GET /search/campaigns?filter[status]=ACTIVE&filter[channel]=email&sort=created_at:desc&pageSize=10
-```
 
 ### Search contacts by name with date range
 

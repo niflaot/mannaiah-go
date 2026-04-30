@@ -126,32 +126,6 @@ func (s *StoreAdapter) InsertMembershipEvents(ctx context.Context, rows []port.M
 	})
 }
 
-// InsertCampaignEvents inserts campaign event rows.
-func (s *StoreAdapter) InsertCampaignEvents(ctx context.Context, rows []port.CampaignEvent) error {
-	if len(rows) == 0 || s == nil || s.client == nil || s.client.db == nil {
-		return nil
-	}
-
-	query := `INSERT INTO campaign_events (campaign_id, contact_id, channel, status, template_version, occurred_at) VALUES (?, ?, ?, ?, ?, ?)`
-	return withPreparedInsert(ctx, s.client.db, query, len(rows), func(stmt *sql.Stmt, idx int) error {
-		row := rows[idx]
-		_, err := stmt.ExecContext(
-			ctx,
-			strings.TrimSpace(row.CampaignID),
-			strings.TrimSpace(row.ContactID),
-			strings.TrimSpace(row.Channel),
-			strings.TrimSpace(row.Status),
-			maxInt(row.TemplateVersion, 0),
-			row.OccurredAt.UTC(),
-		)
-		if err != nil {
-			return fmt.Errorf("insert campaign_events row: %w", err)
-		}
-
-		return nil
-	})
-}
-
 func withPreparedInsert(ctx context.Context, db *sql.DB, query string, size int, fn func(stmt *sql.Stmt, idx int) error) error {
 	return withTx(ctx, db, func(tx *sql.Tx) error {
 		statement, err := tx.PrepareContext(ctx, query)

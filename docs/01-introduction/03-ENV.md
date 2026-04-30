@@ -104,7 +104,7 @@ Variables marked **required** have no default and will cause a startup validatio
 |----------|---------|----------|-------------|
 | `TELEMETRY_ENABLED` | `true` | No | Master toggle for all telemetry |
 | `TELEMETRY_SERVICE_NAME` | `mannaiah-api` | No | Service name included in traces and metrics |
-| `TELEMETRY_SERVICE_VERSION` | `v1.0.0` | No | Service version included in traces |
+| `TELEMETRY_SERVICE_VERSION` | `v2.0.0` | No | Service version included in traces |
 | `TELEMETRY_TRACES_ENABLED` | `true` | No | Enable trace export |
 | `TELEMETRY_TRACES_EXPORTER` | `otlp` | No | Exporter type (`otlp`) |
 | `TELEMETRY_OTLP_ENDPOINT` | `otel-collector:4317` | No | OTLP gRPC collector address |
@@ -168,7 +168,7 @@ Variables marked **required** have no default and will cause a startup validatio
 
 ## Analytics (ClickHouse)
 
-Requires `ANALYTICS_ENABLED=true`. `SEGMENT_ENABLED=true` also requires analytics to be on.
+Requires `ANALYTICS_ENABLED=true`.
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
@@ -180,7 +180,6 @@ Requires `ANALYTICS_ENABLED=true`. `SEGMENT_ENABLED=true` also requires analytic
 | `ANALYTICS_CLICKHOUSE_BATCH_SIZE` | `1000` | No | Event ingestion batch size |
 | `ANALYTICS_CLICKHOUSE_FLUSH_INTERVAL_MS` | `5000` | No | Batch flush interval |
 | `ANALYTICS_CLICKHOUSE_MIGRATION_ENABLED` | `true` | No | Run ClickHouse schema migrations on startup |
-| `SEGMENT_ENABLED` | `false` | No | Enable audience segment resolution (requires analytics) |
 
 ---
 
@@ -229,14 +228,3 @@ Requires `ANALYTICS_ENABLED=true`. `SEGMENT_ENABLED=true` also requires analytic
 | `SHIPPING_DEFAULT_SENDER_EMAIL` | _(configured)_ | No | Default sender email address |
 
 ---
-
-## Campaign
-
-| Variable | Default | Required | Description |
-|----------|---------|----------|-------------|
-| `CAMPAIGN_ENABLED` | `true` | No | Enable the campaign module |
-| `CAMPAIGN_SEND_WORKERS` | `8` | No | Concurrent worker goroutines for campaign fan-out |
-| `CAMPAIGN_SEND_BATCH_SIZE` | `100` | No | Contacts processed per fan-out batch |
-| `CAMPAIGN_SEND_RATE_LIMIT_PER_SECOND` | `8` | No | Maximum sends per second |
-| `UNSUBSCRIBE_BASE_URL` | _(empty)_ | No | Base URL for unsubscribe links injected into campaigns |
-| `MARKETING_OPTOUT_SECRET` | _(empty)_ | Yes (if campaigns enabled) | HMAC secret for opt-out token signing |

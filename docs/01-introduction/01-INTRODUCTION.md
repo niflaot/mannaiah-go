@@ -21,12 +21,12 @@ that behaves consistently and can be extended without glue code.
 
 | Domain | Description |
 |--------|-------------|
-| **PIM** | Centralises product catalogue management, variant/attribute modelling, and marketplace-specific transformations (Falabella, WooCommerce). |
-| **CRM** | Unified contact model with consent management, RFM segmentation, audience segments, and campaign fan-out. |
+| **PIM** | Centralises product catalogue management, variant/attribute modelling, and marketplace-specific transformations. |
+| **CRM** | Unified contact model with consent management and membership state. |
 | **Orders** | Multi-channel order ingestion, normalisation, and lifecycle tracking. |
 | **Shipping & Logistics** | Carrier-agnostic quotation, label generation, dispatch batching, and parcel tracking. |
 | **Assets** | S3-compatible media storage with automated JPEG transcoding workers. |
-| **Campaigns & Email** | Template-driven campaign orchestration with delivery tracking and webhook ingestion. |
+| **Transactional Email** | Delivery tracking and webhook ingestion for operational email flows. |
 | **Analytics** | ClickHouse-backed event stream for business intelligence and reporting. |
 | **Sync Record** | Centralised execution registry for marketplace sync operations, idempotency, and audit. |
 
@@ -35,7 +35,6 @@ that behaves consistently and can be extended without glue code.
 Mannaiah connects to the external world through purpose-built integration modules:
 
 - **Falabella** — product listings, image upload, order sync, and status reconciliation against the Falabella Seller Center API.
-- **WooCommerce** — bidirectional sync for contacts, orders, and product data.
 
 New integrations are added as independent modules; core messaging routes integration events without
 tight coupling between modules.
