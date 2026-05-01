@@ -40,6 +40,9 @@ func (s *StoreAdapter) EnsureSchema(ctx context.Context) error {
 			}
 			for _, query := range splitMigrationStatements(string(statement)) {
 				if _, err := tx.ExecContext(ctx, query); err != nil {
+					if shouldIgnoreDropTypeMismatch(query, err) {
+						continue
+					}
 					return fmt.Errorf("apply clickhouse migration %q: %w", file, err)
 				}
 			}
@@ -62,6 +65,18 @@ func splitMigrationStatements(content string) []string {
 	}
 
 	return statements
+}
+
+func shouldIgnoreDropTypeMismatch(query string, err error) bool {
+	normalizedQuery := strings.ToUpper(strings.TrimSpace(query))
+	if !strings.HasPrefix(normalizedQuery, "DROP VIEW IF EXISTS ") &&
+		!strings.HasPrefix(normalizedQuery, "DROP TABLE IF EXISTS ") {
+		return false
+	}
+
+	normalizedError := strings.ToLower(err.Error())
+	return strings.Contains(normalizedError, "is not a view") ||
+		strings.Contains(normalizedError, "is not a table")
 }
 
 func withTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
