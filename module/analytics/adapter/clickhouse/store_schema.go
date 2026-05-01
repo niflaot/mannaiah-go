@@ -38,13 +38,30 @@ func (s *StoreAdapter) EnsureSchema(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("read clickhouse migration %q: %w", file, err)
 			}
-			if _, err := tx.ExecContext(ctx, string(statement)); err != nil {
-				return fmt.Errorf("apply clickhouse migration %q: %w", file, err)
+			for _, query := range splitMigrationStatements(string(statement)) {
+				if _, err := tx.ExecContext(ctx, query); err != nil {
+					return fmt.Errorf("apply clickhouse migration %q: %w", file, err)
+				}
 			}
 		}
 
 		return nil
 	})
+}
+
+// splitMigrationStatements splits one migration file into executable statements.
+func splitMigrationStatements(content string) []string {
+	parts := strings.Split(content, ";")
+	statements := make([]string, 0, len(parts))
+	for _, part := range parts {
+		statement := strings.TrimSpace(part)
+		if statement == "" {
+			continue
+		}
+		statements = append(statements, statement)
+	}
+
+	return statements
 }
 
 func withTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
