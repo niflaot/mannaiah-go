@@ -18,7 +18,7 @@ type OrderQuotationData struct {
 	DestCityCode string
 	// RecipientCity defines recipient city label values resolved from order/contact data.
 	RecipientCity string
-	// TotalValue defines the monetary total of all order items (used as COD amount).
+	// TotalValue defines the monetary total of all order items.
 	TotalValue float64
 	// CollectOnDeliveryAmount defines COD amount resolved from the order payment method.
 	// It must be zero when the order is not cash-on-delivery.

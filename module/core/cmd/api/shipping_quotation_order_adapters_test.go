@@ -63,9 +63,9 @@ func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierResolvesCODByPaym
 			expectedOrderID: "order-1",
 		},
 		{
-			name:            "cod payment method maps cod to order total",
+			name:            "cod payment method maps cod to full payable order total",
 			paymentMethod:   "cod",
-			expectedCOD:     311000,
+			expectedCOD:     326000,
 			expectedTotal:   311000,
 			expectedCity:    "11001",
 			expectedOrderID: "order-1",
@@ -89,6 +89,9 @@ func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierResolvesCODByPaym
 						Items: []ordersdomain.Item{
 							{SKU: "sku-1", Quantity: 1, Value: 157000},
 							{SKU: "sku-2", Quantity: 1, Value: 154000},
+						},
+						ShippingCharges: []ordersdomain.ShippingCharge{
+							{MethodID: "envio", MethodTitle: "Envio", Price: 15000},
 						},
 					},
 				},
@@ -114,6 +117,27 @@ func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierResolvesCODByPaym
 				t.Fatalf("row.CollectOnDeliveryAmount = %v, want %v", row.CollectOnDeliveryAmount, testCase.expectedCOD)
 			}
 		})
+	}
+}
+
+// TestCalculateOrderMonetaryTotals verifies item totals remain separate from payable order totals.
+func TestCalculateOrderMonetaryTotals(t *testing.T) {
+	t.Parallel()
+
+	itemTotalValue, orderGrandTotal := calculateOrderMonetaryTotals(&ordersdomain.Order{
+		Items: []ordersdomain.Item{
+			{SKU: "sku-1", Quantity: 1, Value: 137000},
+			{SKU: "sku-2", Quantity: 2, Value: 10000},
+		},
+		ShippingCharges: []ordersdomain.ShippingCharge{
+			{MethodID: "envio", MethodTitle: "Envio", Price: 15000},
+		},
+	})
+	if itemTotalValue != 157000 {
+		t.Fatalf("itemTotalValue = %v, want 157000", itemTotalValue)
+	}
+	if orderGrandTotal != 172000 {
+		t.Fatalf("orderGrandTotal = %v, want 172000", orderGrandTotal)
 	}
 }
 

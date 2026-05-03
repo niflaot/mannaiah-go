@@ -90,7 +90,7 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		}
 	}
 
-	var totalValue float64
+	itemTotalValue, orderGrandTotal := calculateOrderMonetaryTotals(order)
 	items := make([]shippingport.OrderQuotationItem, 0, len(order.Items))
 	for _, item := range order.Items {
 		sku := strings.TrimSpace(item.SKU)
@@ -98,14 +98,13 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		if sku == "" && productID == "" {
 			continue
 		}
-		totalValue += item.Value * float64(item.Quantity)
 		items = append(items, shippingport.OrderQuotationItem{
 			SKU:       sku,
 			ProductID: productID,
 			Quantity:  item.Quantity,
 		})
 	}
-	collectOnDeliveryAmount := resolveOrderCollectOnDeliveryAmount(totalValue, order.PaymentMethod)
+	collectOnDeliveryAmount := resolveOrderCollectOnDeliveryAmount(orderGrandTotal, order.PaymentMethod)
 	shippingAddressLine := strings.TrimSpace(strings.Join([]string{
 		strings.TrimSpace(order.ShippingAddress.Address),
 	}, " "))
@@ -124,7 +123,7 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		OrderIdentifier:         order.Identifier,
 		DestCityCode:            recipientCity,
 		RecipientCity:           recipientCity,
-		TotalValue:              totalValue,
+		TotalValue:              itemTotalValue,
 		CollectOnDeliveryAmount: collectOnDeliveryAmount,
 		RecipientName:           recipientName,
 		RecipientID:             contactDocumentNumber(contact),
@@ -135,6 +134,25 @@ func (a shippingOrderQuotationSourceAdapter) GetByIDOrIdentifier(ctx context.Con
 		RecipientEmail:          contactEmail(contact),
 		Items:                   items,
 	}, nil
+}
+
+// calculateOrderMonetaryTotals resolves item-only and payable order totals.
+func calculateOrderMonetaryTotals(order *ordersdomain.Order) (float64, float64) {
+	if order == nil {
+		return 0, 0
+	}
+
+	var itemTotalValue float64
+	for _, item := range order.Items {
+		itemTotalValue += item.Value * float64(item.Quantity)
+	}
+
+	orderGrandTotal := itemTotalValue
+	for _, charge := range order.ShippingCharges {
+		orderGrandTotal += charge.Price
+	}
+
+	return itemTotalValue, orderGrandTotal
 }
 
 // isOrderNotFound reports whether an error indicates a missing order record.
