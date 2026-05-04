@@ -33,6 +33,7 @@ require (
 	mannaiah/module/assets v0.0.0
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
+	mannaiah/module/coupons v0.0.0
 	mannaiah/module/email v0.0.0
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/membership v0.0.0
@@ -40,6 +41,7 @@ require (
 	mannaiah/module/products v0.0.0
 	mannaiah/module/shipping v0.0.0
 	mannaiah/module/syncrecord v0.0.0
+	mannaiah/module/woocommerce v0.0.0
 )
 
 require (
@@ -184,3 +186,7 @@ replace mannaiah/module/analytics => ../analytics
 replace mannaiah/module/email => ../email
 
 replace mannaiah/module/shipping => ../shipping
+
+replace mannaiah/module/coupons => ../coupons
+
+replace mannaiah/module/woocommerce => ../woocommerce

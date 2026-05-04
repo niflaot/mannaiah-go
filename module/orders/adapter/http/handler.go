@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	corehttp "mannaiah/module/core/http"
 	ordersapplication "mannaiah/module/orders/application"
@@ -77,6 +78,20 @@ type shippingChargeRequest struct {
 	Price float64 `json:"price"`
 }
 
+// appliedCouponRequest defines request payload for applied coupon values.
+type appliedCouponRequest struct {
+	// CouponID defines optional linked coupon identifiers.
+	CouponID string `json:"couponId"`
+	// Code defines coupon code values.
+	Code string `json:"code"`
+	// DiscountType defines discount type values.
+	DiscountType string `json:"discountType"`
+	// DiscountAmount defines discount value amounts.
+	DiscountAmount float64 `json:"discountAmount"`
+	// AppliedAt defines coupon application timestamps.
+	AppliedAt *time.Time `json:"appliedAt"`
+}
+
 // createRequest defines request payload for order creation.
 type createRequest struct {
 	// Identifier defines external order identifiers.
@@ -99,12 +114,8 @@ type createRequest struct {
 	ShippingCharges []shippingChargeRequest `json:"shippingCharges"`
 	// PaymentMethod defines order payment method values.
 	PaymentMethod string `json:"paymentMethod"`
-	// CouponCode defines optional order-level coupon attribution code values.
-	CouponCode string `json:"couponCode"`
-	// CouponDiscountAmount defines optional order-level coupon attribution amount values.
-	CouponDiscountAmount *float64 `json:"couponDiscountAmount"`
-	// CouponDiscountType defines optional order-level coupon attribution type values.
-	CouponDiscountType string `json:"couponDiscountType"`
+	// AppliedCoupons defines coupons applied to this order.
+	AppliedCoupons []appliedCouponRequest `json:"appliedCoupons"`
 	// Metadata defines order metadata values.
 	Metadata map[string]string `json:"metadata"`
 	// Source defines optional mutation source values.
@@ -190,20 +201,18 @@ func (h *Handler) create(ctx corehttp.Context) error {
 	}
 
 	command := ordersapplication.CreateCommand{
-		Identifier:           request.Identifier,
-		Realm:                request.Realm,
-		ContactID:            request.ContactID,
-		InitialStatus:        request.InitialStatus,
-		Author:               request.Author,
-		Description:          request.Description,
-		Items:                mapCreateItems(request.Items),
-		ShippingCharges:      mapShippingCharges(request.ShippingCharges),
-		PaymentMethod:        request.PaymentMethod,
-		CouponCode:           request.CouponCode,
-		CouponDiscountAmount: request.CouponDiscountAmount,
-		CouponDiscountType:   request.CouponDiscountType,
-		Metadata:             request.Metadata,
-		Source:               resolveCommandSource(ctx, request.Source),
+		Identifier:      request.Identifier,
+		Realm:           request.Realm,
+		ContactID:       request.ContactID,
+		InitialStatus:   request.InitialStatus,
+		Author:          request.Author,
+		Description:     request.Description,
+		Items:           mapCreateItems(request.Items),
+		ShippingCharges: mapShippingCharges(request.ShippingCharges),
+		PaymentMethod:   request.PaymentMethod,
+		AppliedCoupons:  mapAppliedCoupons(request.AppliedCoupons),
+		Metadata:        request.Metadata,
+		Source:          resolveCommandSource(ctx, request.Source),
 	}
 	if request.ShippingAddress != nil {
 		command.ShippingAddress = &ordersapplication.ShippingAddressCommand{
@@ -310,6 +319,22 @@ func mapShippingCharges(values []shippingChargeRequest) []ordersapplication.Ship
 			MethodID:    value.MethodID,
 			MethodTitle: value.MethodTitle,
 			Price:       value.Price,
+		})
+	}
+
+	return result
+}
+
+// mapAppliedCoupons maps applied coupon payloads to application command values.
+func mapAppliedCoupons(values []appliedCouponRequest) []ordersapplication.AppliedCouponCommand {
+	result := make([]ordersapplication.AppliedCouponCommand, 0, len(values))
+	for _, value := range values {
+		result = append(result, ordersapplication.AppliedCouponCommand{
+			CouponID:       value.CouponID,
+			Code:           value.Code,
+			DiscountType:   value.DiscountType,
+			DiscountAmount: value.DiscountAmount,
+			AppliedAt:      value.AppliedAt,
 		})
 	}
 

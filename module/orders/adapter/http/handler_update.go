@@ -13,12 +13,8 @@ type updateRequest struct {
 	ShippingAddress *shippingAddressRequest `json:"shippingAddress"`
 	// ShippingCharges defines optional shipping charge values.
 	ShippingCharges *[]shippingChargeRequest `json:"shippingCharges"`
-	// CouponCode defines optional order-level coupon attribution code values.
-	CouponCode *string `json:"couponCode"`
-	// CouponDiscountAmount defines optional order-level coupon attribution amount values.
-	CouponDiscountAmount *float64 `json:"couponDiscountAmount"`
-	// CouponDiscountType defines optional order-level coupon attribution type values.
-	CouponDiscountType *string `json:"couponDiscountType"`
+	// AppliedCoupons defines optional applied coupon payload values.
+	AppliedCoupons *[]appliedCouponRequest `json:"appliedCoupons"`
 	// Source defines optional mutation source values.
 	Source string `json:"source,omitempty"`
 }
@@ -31,13 +27,11 @@ func (h *Handler) update(ctx corehttp.Context) error {
 	}
 
 	command := ordersapplication.UpdateCommand{
-		Items:                mapOptionalCreateItems(request.Items),
-		ShippingAddress:      mapOptionalShippingAddress(request.ShippingAddress),
-		ShippingCharges:      mapOptionalShippingCharges(request.ShippingCharges),
-		CouponCode:           request.CouponCode,
-		CouponDiscountAmount: request.CouponDiscountAmount,
-		CouponDiscountType:   request.CouponDiscountType,
-		Source:               resolveCommandSource(ctx, request.Source),
+		Items:           mapOptionalCreateItems(request.Items),
+		ShippingAddress: mapOptionalShippingAddress(request.ShippingAddress),
+		ShippingCharges: mapOptionalShippingCharges(request.ShippingCharges),
+		AppliedCoupons:  mapOptionalAppliedCoupons(request.AppliedCoupons),
+		Source:          resolveCommandSource(ctx, request.Source),
 	}
 	entity, err := h.service.Update(ctx.Context(), ctx.Params("id"), command)
 	if err != nil {
@@ -78,5 +72,15 @@ func mapOptionalShippingCharges(values *[]shippingChargeRequest) *[]ordersapplic
 	}
 
 	rows := mapShippingCharges(*values)
+	return &rows
+}
+
+// mapOptionalAppliedCoupons maps optional applied coupon payload values to application command values.
+func mapOptionalAppliedCoupons(values *[]appliedCouponRequest) *[]ordersapplication.AppliedCouponCommand {
+	if values == nil {
+		return nil
+	}
+
+	rows := mapAppliedCoupons(*values)
 	return &rows
 }

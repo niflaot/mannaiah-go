@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"sort"
 	"strconv"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,25 +14,14 @@ import (
 
 // toOrderRecord maps order aggregate values to root storage records.
 func toOrderRecord(order ordersdomain.Order) orderRecord {
-	var couponCode *string
-	if value := strings.TrimSpace(order.CouponCode); value != "" {
-		couponCode = &value
-	}
-	var couponDiscountType *string
-	if value := strings.TrimSpace(order.CouponDiscountType); value != "" {
-		couponDiscountType = &value
-	}
 	return orderRecord{
-		ID:                   strings.TrimSpace(order.ID),
-		Identifier:           strings.TrimSpace(order.Identifier),
-		Realm:                strings.TrimSpace(order.Realm),
-		ContactID:            strings.TrimSpace(order.ContactID),
-		PaymentMethod:        strings.TrimSpace(order.PaymentMethod),
-		CouponCode:           couponCode,
-		CouponDiscountAmount: cloneOptionalFloat64(order.CouponDiscountAmount),
-		CouponDiscountType:   couponDiscountType,
-		CreatedAt:            order.CreatedAt,
-		UpdatedAt:            order.UpdatedAt,
+		ID:            strings.TrimSpace(order.ID),
+		Identifier:    strings.TrimSpace(order.Identifier),
+		Realm:         strings.TrimSpace(order.Realm),
+		ContactID:     strings.TrimSpace(order.ContactID),
+		PaymentMethod: strings.TrimSpace(order.PaymentMethod),
+		CreatedAt:     order.CreatedAt,
+		UpdatedAt:     order.UpdatedAt,
 	}
 }
 
@@ -125,6 +114,40 @@ func toShippingRecord(orderID string, shipping ordersdomain.ShippingAddress) ord
 	}
 }
 
+// toAppliedCouponRecords maps applied coupon domain values to storage rows.
+func toAppliedCouponRecords(orderID string, coupons []ordersdomain.AppliedCoupon) []orderAppliedCouponRecord {
+	rows := make([]orderAppliedCouponRecord, 0, len(coupons))
+	for _, c := range coupons {
+		rows = append(rows, orderAppliedCouponRecord{
+			OrderID:        strings.TrimSpace(orderID),
+			CouponID:       strings.TrimSpace(c.CouponID),
+			Code:           strings.TrimSpace(c.Code),
+			DiscountType:   strings.TrimSpace(c.DiscountType),
+			DiscountAmount: c.DiscountAmount,
+			AppliedAt:      c.AppliedAt.UTC(),
+		})
+	}
+	return rows
+}
+
+// toAppliedCoupons maps applied coupon storage rows to domain values.
+func toAppliedCoupons(rows []orderAppliedCouponRecord) []ordersdomain.AppliedCoupon {
+	if len(rows) == 0 {
+		return nil
+	}
+	coupons := make([]ordersdomain.AppliedCoupon, 0, len(rows))
+	for _, row := range rows {
+		coupons = append(coupons, ordersdomain.AppliedCoupon{
+			CouponID:       strings.TrimSpace(row.CouponID),
+			Code:           strings.TrimSpace(row.Code),
+			DiscountType:   strings.TrimSpace(row.DiscountType),
+			DiscountAmount: row.DiscountAmount,
+			AppliedAt:      row.AppliedAt,
+		})
+	}
+	return coupons
+}
+
 // toOrderEntity maps root and child storage rows to order aggregate values.
 func toOrderEntity(
 	record orderRecord,
@@ -134,26 +157,25 @@ func toOrderEntity(
 	shipping *orderShippingAddressRecord,
 	shippingCharges []orderShippingChargeRecord,
 	orderMetadata map[string]string,
+	appliedCoupons []orderAppliedCouponRecord,
 ) ordersdomain.Order {
 	resolvedStatus := resolveCurrentStatus(statuses)
 	entity := ordersdomain.Order{
-		ID:                   strings.TrimSpace(record.ID),
-		Identifier:           strings.TrimSpace(record.Identifier),
-		Realm:                strings.TrimSpace(record.Realm),
-		ContactID:            strings.TrimSpace(record.ContactID),
-		PaymentMethod:        strings.TrimSpace(record.PaymentMethod),
-		CouponCode:           derefString(record.CouponCode),
-		CouponDiscountAmount: cloneOptionalFloat64(record.CouponDiscountAmount),
-		CouponDiscountType:   derefString(record.CouponDiscountType),
-		CurrentStatus:        resolvedStatus.Status,
-		CreatedAt:            record.CreatedAt,
-		UpdatedAt:            record.UpdatedAt,
-		StatusHistory:        toStatusEntries(statuses),
-		Comments:             toComments(comments),
-		Items:                toItemEntities(items),
-		ShippingAddress:      ordersdomain.ShippingAddress{},
-		ShippingCharges:      toShippingCharges(shippingCharges),
-		Metadata:             orderMetadata,
+		ID:              strings.TrimSpace(record.ID),
+		Identifier:      strings.TrimSpace(record.Identifier),
+		Realm:           strings.TrimSpace(record.Realm),
+		ContactID:       strings.TrimSpace(record.ContactID),
+		PaymentMethod:   strings.TrimSpace(record.PaymentMethod),
+		CurrentStatus:   resolvedStatus.Status,
+		CreatedAt:       record.CreatedAt,
+		UpdatedAt:       record.UpdatedAt,
+		StatusHistory:   toStatusEntries(statuses),
+		Comments:        toComments(comments),
+		Items:          toItemEntities(items),
+		ShippingAddress: ordersdomain.ShippingAddress{},
+		ShippingCharges: toShippingCharges(shippingCharges),
+		AppliedCoupons:  toAppliedCoupons(appliedCoupons),
+		Metadata:        orderMetadata,
 	}
 	if shipping != nil {
 		entity.HasCustomShippingAddress = true
@@ -167,23 +189,6 @@ func toOrderEntity(
 	entity.Normalize()
 
 	return entity
-}
-
-func cloneOptionalFloat64(value *float64) *float64 {
-	if value == nil {
-		return nil
-	}
-
-	resolved := *value
-	return &resolved
-}
-
-func derefString(value *string) string {
-	if value == nil {
-		return ""
-	}
-
-	return strings.TrimSpace(*value)
 }
 
 // resolveCurrentStatus resolves current status values strictly from status-history rows.

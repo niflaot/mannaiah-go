@@ -11,10 +11,12 @@ require (
 	mannaiah/module/auth v0.0.0
 	mannaiah/module/contacts v0.0.0
 	mannaiah/module/core v0.0.0
+	mannaiah/module/coupons v0.0.0
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/orders v0.0.0
 	mannaiah/module/products v0.0.0
 	mannaiah/module/shipping v0.0.0
+	mannaiah/module/woocommerce v0.0.0
 )
 
 require (
@@ -130,6 +132,8 @@ replace mannaiah/module/contacts => ./module/contacts
 
 replace mannaiah/module/core => ./module/core
 
+replace mannaiah/module/coupons => ./module/coupons
+
 replace mannaiah/module/orders => ./module/orders
 
 replace mannaiah/module/products => ./module/products
@@ -137,3 +141,5 @@ replace mannaiah/module/products => ./module/products
 replace mannaiah/module/falabella => ./module/falabella
 
 replace mannaiah/module/shipping => ./module/shipping
+
+replace mannaiah/module/woocommerce => ./module/woocommerce

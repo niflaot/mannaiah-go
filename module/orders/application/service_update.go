@@ -16,12 +16,7 @@ func (s *OrderService) Update(ctx context.Context, id string, command UpdateComm
 	if trimmedID == "" {
 		return nil, ErrInvalidID
 	}
-	if command.Items == nil &&
-		command.ShippingAddress == nil &&
-		command.ShippingCharges == nil &&
-		command.CouponCode == nil &&
-		command.CouponDiscountAmount == nil &&
-		command.CouponDiscountType == nil {
+	if command.Items == nil && command.ShippingAddress == nil && command.ShippingCharges == nil && command.AppliedCoupons == nil {
 		return nil, ErrEmptyOrderUpdate
 	}
 
@@ -49,21 +44,8 @@ func (s *OrderService) Update(ctx context.Context, id string, command UpdateComm
 	if command.ShippingCharges != nil {
 		entity.ShippingCharges = normalizeShippingCharges(*command.ShippingCharges)
 	}
-	if command.CouponCode != nil || command.CouponDiscountAmount != nil || command.CouponDiscountType != nil {
-		if command.CouponCode != nil {
-			entity.CouponCode = strings.TrimSpace(*command.CouponCode)
-		}
-		if entity.CouponCode == "" {
-			entity.CouponDiscountAmount = nil
-			entity.CouponDiscountType = ""
-		} else {
-			if command.CouponDiscountAmount != nil {
-				entity.CouponDiscountAmount = cloneOptionalFloat64(command.CouponDiscountAmount)
-			}
-			if command.CouponDiscountType != nil {
-				entity.CouponDiscountType = strings.TrimSpace(*command.CouponDiscountType)
-			}
-		}
+	if command.AppliedCoupons != nil {
+		entity.AppliedCoupons = normalizeAppliedCoupons(*command.AppliedCoupons)
 	}
 
 	entity.Normalize()
@@ -98,12 +80,8 @@ type mutableStateSnapshot struct {
 	HasCustomShippingAddress bool
 	// ShippingCharges defines shipping-charge state values.
 	ShippingCharges []ordersdomain.ShippingCharge
-	// CouponCode defines order-level coupon attribution code values.
-	CouponCode string
-	// CouponDiscountAmount defines order-level coupon attribution amount values.
-	CouponDiscountAmount *float64
-	// CouponDiscountType defines order-level coupon attribution type values.
-	CouponDiscountType string
+	// AppliedCoupons defines applied coupon state values.
+	AppliedCoupons []ordersdomain.AppliedCoupon
 }
 
 // snapshotMutableState snapshots mutable order state values.
@@ -113,9 +91,7 @@ func snapshotMutableState(value ordersdomain.Order) mutableStateSnapshot {
 		ShippingAddress:          value.ShippingAddress,
 		HasCustomShippingAddress: value.HasCustomShippingAddress,
 		ShippingCharges:          append([]ordersdomain.ShippingCharge{}, value.ShippingCharges...),
-		CouponCode:               strings.TrimSpace(value.CouponCode),
-		CouponDiscountAmount:     cloneOptionalFloat64(value.CouponDiscountAmount),
-		CouponDiscountType:       strings.TrimSpace(value.CouponDiscountType),
+		AppliedCoupons:           append([]ordersdomain.AppliedCoupon{}, value.AppliedCoupons...),
 	}
 }
 
@@ -143,18 +119,13 @@ func hasMutableStateChanges(left mutableStateSnapshot, right mutableStateSnapsho
 			return true
 		}
 	}
-	if !strings.EqualFold(strings.TrimSpace(left.CouponCode), strings.TrimSpace(right.CouponCode)) {
+	if len(left.AppliedCoupons) != len(right.AppliedCoupons) {
 		return true
 	}
-	if !strings.EqualFold(strings.TrimSpace(left.CouponDiscountType), strings.TrimSpace(right.CouponDiscountType)) {
-		return true
-	}
-	switch {
-	case left.CouponDiscountAmount == nil && right.CouponDiscountAmount == nil:
-	case left.CouponDiscountAmount == nil || right.CouponDiscountAmount == nil:
-		return true
-	case math.Abs(*left.CouponDiscountAmount-*right.CouponDiscountAmount) > 0.000001:
-		return true
+	for index := range left.AppliedCoupons {
+		if !appliedCouponsEqual(left.AppliedCoupons[index], right.AppliedCoupons[index]) {
+			return true
+		}
 	}
 
 	return false
@@ -175,4 +146,13 @@ func shippingChargesEqual(left ordersdomain.ShippingCharge, right ordersdomain.S
 	return strings.EqualFold(strings.TrimSpace(left.MethodID), strings.TrimSpace(right.MethodID)) &&
 		strings.EqualFold(strings.TrimSpace(left.MethodTitle), strings.TrimSpace(right.MethodTitle)) &&
 		math.Abs(left.Price-right.Price) <= 0.000001
+}
+
+// appliedCouponsEqual reports whether applied coupon values are equivalent.
+func appliedCouponsEqual(left ordersdomain.AppliedCoupon, right ordersdomain.AppliedCoupon) bool {
+	return strings.EqualFold(strings.TrimSpace(left.CouponID), strings.TrimSpace(right.CouponID)) &&
+		strings.EqualFold(strings.TrimSpace(left.Code), strings.TrimSpace(right.Code)) &&
+		strings.EqualFold(strings.TrimSpace(left.DiscountType), strings.TrimSpace(right.DiscountType)) &&
+		math.Abs(left.DiscountAmount-right.DiscountAmount) <= 0.000001 &&
+		left.AppliedAt.UTC().Equal(right.AppliedAt.UTC())
 }
