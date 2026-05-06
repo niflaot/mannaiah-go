@@ -10,8 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gofiber/adaptor/v2"
-	"github.com/gofiber/fiber/v2"
 	"mannaiah/module/analytics"
 	analyticsport "mannaiah/module/analytics/port"
 	"mannaiah/module/assets"
@@ -69,6 +67,9 @@ import (
 	"mannaiah/module/woocommerce"
 	wooevent "mannaiah/module/woocommerce/adapter/event"
 	woocommerceport "mannaiah/module/woocommerce/port"
+
+	"github.com/gofiber/adaptor/v2"
+	"github.com/gofiber/fiber/v2"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"

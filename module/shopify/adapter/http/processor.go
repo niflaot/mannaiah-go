@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
 	shopifyorderservice "mannaiah/module/shopify/application/order/service"
+
+	"go.uber.org/zap"
 )
 
 var (

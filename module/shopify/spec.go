@@ -1,8 +1,9 @@
 package shopify
 
 import (
-	"github.com/getkin/kin-openapi/openapi3"
 	shopifyruntime "mannaiah/module/shopify/runtime"
+
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
 // OpenAPISpec returns Shopify module OpenAPI documentation.

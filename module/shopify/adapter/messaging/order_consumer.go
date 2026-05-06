@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 
-	"go.uber.org/zap"
 	"mannaiah/module/core/messaging/bus"
 	ordersport "mannaiah/module/orders/port"
+
+	"go.uber.org/zap"
 )
 
 var (
