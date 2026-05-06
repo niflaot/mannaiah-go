@@ -65,6 +65,8 @@ type SyncSummary struct {
 type Service interface {
 	// ValidateIntegration verifies source connectivity and credentials.
 	ValidateIntegration(ctx context.Context) error
+	// SyncContacts synchronizes all Shopify customers for the active installation.
+	SyncContacts(ctx context.Context, trigger string) (*SyncSummary, error)
 	// SyncContactByID synchronizes one Shopify customer by identifier.
 	SyncContactByID(ctx context.Context, trigger string, id string) (*SyncSummary, error)
 	// SetSyncRecorder configures sync-run recording behavior.
@@ -188,6 +190,62 @@ func (s *ContactSyncService) SyncContactByID(ctx context.Context, trigger string
 	}
 	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
 		s.logger.Warn("complete shopify contact sync run failed", zap.Error(completeErr))
+	}
+
+	return summary, nil
+}
+
+// SyncContacts synchronizes all Shopify customers for the active installation.
+func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (*SyncSummary, error) {
+	if !s.cfg.Enabled {
+		return nil, ErrSyncDisabled
+	}
+
+	const pageSize = 250
+	resolvedTrigger := resolveTrigger(trigger)
+	runID, _ := s.recorder.StartRun(ctx, "shopify.contacts", resolvedTrigger)
+	summary := &SyncSummary{RunID: runID, Trigger: resolvedTrigger}
+
+	sinceID := ""
+	for {
+		if err := ctx.Err(); err != nil {
+			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			return nil, err
+		}
+
+		var customers []shopifyport.ShopifyCustomer
+		var hasMore bool
+		err := s.executeWithBreaker(s.sourceBreaker, ErrIntegrationUnavailable, func() error {
+			var listErr error
+			customers, hasMore, listErr = s.source.ListCustomers(ctx, sinceID, pageSize)
+			return listErr
+		})
+		if err != nil {
+			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
+		}
+
+		for _, customer := range customers {
+			summary.Processed++
+			if _, upsertErr := s.target.UpsertContact(ctx, BuildContactSyncCommand(customer)); upsertErr != nil {
+				summary.Failed++
+				s.logger.Warn("shopify contact sync failed", zap.String("id", customer.ID), zap.Error(upsertErr))
+			} else {
+				summary.Succeeded++
+			}
+		}
+
+		if len(customers) > 0 {
+			sinceID = customers[len(customers)-1].ID
+		}
+
+		if !hasMore {
+			break
+		}
+	}
+
+	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
+		s.logger.Warn("complete shopify contacts sync run failed", zap.Error(completeErr))
 	}
 
 	return summary, nil

@@ -21,6 +21,9 @@ type CustomerSource interface {
 	Validate(ctx context.Context) error
 	// GetCustomer resolves one Shopify customer by identifier.
 	GetCustomer(ctx context.Context, id string) (ShopifyCustomer, error)
+	// ListCustomers returns up to limit customers with IDs greater than sinceID.
+	// Pass empty sinceID to start from the beginning. hasMore is true when there may be additional pages.
+	ListCustomers(ctx context.Context, sinceID string, limit int) (customers []ShopifyCustomer, hasMore bool, err error)
 }
 
 // OrderSource defines Shopify order retrieval behavior.
@@ -29,6 +32,9 @@ type OrderSource interface {
 	Validate(ctx context.Context) error
 	// GetOrder resolves one Shopify order by identifier.
 	GetOrder(ctx context.Context, id string) (ShopifyOrder, error)
+	// ListOrders returns up to limit orders with IDs greater than sinceID.
+	// Pass empty sinceID to start from the beginning. hasMore is true when there may be additional pages.
+	ListOrders(ctx context.Context, sinceID string, limit int) (orders []ShopifyOrder, hasMore bool, err error)
 }
 
 // OrderDestination defines Shopify order update behavior from mainstream events.

@@ -126,6 +126,33 @@ func (c *Client) GetCustomer(ctx context.Context, id string) (shopifyport.Shopif
 	return customer, nil
 }
 
+// ListCustomers returns up to limit customers with numeric IDs greater than sinceID.
+func (c *Client) ListCustomers(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyCustomer, bool, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	path := fmt.Sprintf("/customers.json?limit=%d", limit)
+	if strings.TrimSpace(sinceID) != "" {
+		path += "&since_id=" + url.QueryEscape(strings.TrimSpace(sinceID))
+	}
+
+	var response customersListResponse
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodGet, path, nil, &response); err != nil {
+		return nil, false, err
+	}
+
+	customers := make([]shopifyport.ShopifyCustomer, len(response.Customers))
+	for i, payload := range response.Customers {
+		cust := normalizeCustomer(payload)
+		cust.ShopDomain = installation.ShopDomain
+		customers[i] = cust
+	}
+
+	return customers, len(response.Customers) == limit, nil
+}
+
 // GetOrder resolves one Shopify order by identifier.
 func (c *Client) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
 	installation, err := c.resolveInstallation(ctx)
@@ -148,6 +175,36 @@ func (c *Client) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOr
 		order.Customer.ShopDomain = installation.ShopDomain
 	}
 	return order, nil
+}
+
+// ListOrders returns up to limit orders with numeric IDs greater than sinceID.
+func (c *Client) ListOrders(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyOrder, bool, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	path := fmt.Sprintf("/orders.json?status=any&limit=%d", limit)
+	if strings.TrimSpace(sinceID) != "" {
+		path += "&since_id=" + url.QueryEscape(strings.TrimSpace(sinceID))
+	}
+
+	var response ordersListResponse
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodGet, path, nil, &response); err != nil {
+		return nil, false, err
+	}
+
+	orders := make([]shopifyport.ShopifyOrder, len(response.Orders))
+	for i, payload := range response.Orders {
+		o := normalizeOrder(payload)
+		o.ShopDomain = installation.ShopDomain
+		if o.Customer != nil {
+			o.Customer.ShopDomain = installation.ShopDomain
+		}
+		orders[i] = o
+	}
+
+	return orders, len(response.Orders) == limit, nil
 }
 
 // UpdateOrderFromMainstream pushes one mainstream order-status update back to Shopify.
@@ -254,8 +311,16 @@ type customerResponse struct {
 	Customer customerPayload `json:"customer"`
 }
 
+type customersListResponse struct {
+	Customers []customerPayload `json:"customers"`
+}
+
 type orderResponse struct {
 	Order orderPayload `json:"order"`
+}
+
+type ordersListResponse struct {
+	Orders []orderPayload `json:"orders"`
 }
 
 type customerPayload struct {

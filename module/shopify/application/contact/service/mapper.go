@@ -2,6 +2,7 @@ package service
 
 import (
 	"strings"
+	"unicode"
 
 	contactsdomain "mannaiah/module/contacts/domain"
 	shopifyport "mannaiah/module/shopify/port"
@@ -9,10 +10,17 @@ import (
 
 // BuildContactSyncCommand maps one Shopify customer into normalized mainstream contact values.
 func BuildContactSyncCommand(customer shopifyport.ShopifyCustomer) shopifyport.ContactSyncCommand {
-	documentType, documentNumber := extractDocument(customer.NoteAttributes)
+	// The checkout plugin relabels the Company field as the document ID input.
+	// Strip formatting characters (dots, dashes, spaces) so "1.234.567" becomes "1234567".
+	// All Shopify e-commerce customers present a CC (Cédula de Ciudadanía).
+	documentNumber := extractCompanyDocumentNumber(customer.DefaultAddress)
+	var documentType contactsdomain.DocumentType
+	if documentNumber != "" {
+		documentType = contactsdomain.DocumentTypeCC
+	}
+
 	firstName := strings.TrimSpace(customer.FirstName)
 	lastName := strings.TrimSpace(customer.LastName)
-	legalName := ""
 	if customer.DefaultAddress != nil {
 		if firstName == "" {
 			firstName = strings.TrimSpace(customer.DefaultAddress.FirstName)
@@ -21,12 +29,7 @@ func BuildContactSyncCommand(customer shopifyport.ShopifyCustomer) shopifyport.C
 			lastName = strings.TrimSpace(customer.DefaultAddress.LastName)
 		}
 	}
-	if documentType == contactsdomain.DocumentTypeNIT && customer.DefaultAddress != nil {
-		legalName = strings.TrimSpace(customer.DefaultAddress.Company)
-		firstName = ""
-		lastName = ""
-	}
-	if legalName == "" && (firstName == "" || lastName == "") {
+	if firstName == "" || lastName == "" {
 		firstName = preferString(firstName, "Shopify")
 		lastName = preferString(lastName, "Customer")
 	}
@@ -37,7 +40,6 @@ func BuildContactSyncCommand(customer shopifyport.ShopifyCustomer) shopifyport.C
 		Email:          strings.TrimSpace(customer.Email),
 		DocumentType:   documentType,
 		DocumentNumber: documentNumber,
-		LegalName:      legalName,
 		FirstName:      firstName,
 		LastName:       lastName,
 		Phone:          strings.TrimSpace(customer.Phone),
@@ -57,38 +59,19 @@ func BuildContactSyncCommand(customer shopifyport.ShopifyCustomer) shopifyport.C
 	return command
 }
 
-func extractDocument(attributes []shopifyport.ShopifyNoteAttribute) (contactsdomain.DocumentType, string) {
-	values := map[string]string{}
-	for _, attribute := range attributes {
-		key := normalizeAttributeKey(attribute.Name)
-		if key == "" {
-			continue
-		}
-		values[key] = strings.TrimSpace(attribute.Value)
-	}
-
-	documentType := normalizeDocumentType(preferString(values["document_type"], values["documenttype"], values["doc_type"]))
-	documentNumber := preferString(values["document_number"], values["documentnumber"], values["doc_number"], values["document"])
-	return documentType, strings.TrimSpace(documentNumber)
-}
-
-func normalizeDocumentType(value string) contactsdomain.DocumentType {
-	switch strings.ToUpper(strings.TrimSpace(value)) {
-	case string(contactsdomain.DocumentTypeCC):
-		return contactsdomain.DocumentTypeCC
-	case string(contactsdomain.DocumentTypeCE):
-		return contactsdomain.DocumentTypeCE
-	case string(contactsdomain.DocumentTypeTI):
-		return contactsdomain.DocumentTypeTI
-	case string(contactsdomain.DocumentTypePAS):
-		return contactsdomain.DocumentTypePAS
-	case string(contactsdomain.DocumentTypeNIT):
-		return contactsdomain.DocumentTypeNIT
-	case string(contactsdomain.DocumentTypeOther), "OTRO":
-		return contactsdomain.DocumentTypeOther
-	default:
+// extractCompanyDocumentNumber reads the Company field from the default address and
+// returns only its digit characters. Returns empty string when no digits are found.
+func extractCompanyDocumentNumber(address *shopifyport.ShopifyAddress) string {
+	if address == nil {
 		return ""
 	}
+	var digits strings.Builder
+	for _, r := range address.Company {
+		if unicode.IsDigit(r) {
+			digits.WriteRune(r)
+		}
+	}
+	return digits.String()
 }
 
 func buildCustomerMetadata(customer shopifyport.ShopifyCustomer) map[string]string {
@@ -101,13 +84,6 @@ func buildCustomerMetadata(customer shopifyport.ShopifyCustomer) map[string]stri
 	}
 
 	return metadata
-}
-
-func normalizeAttributeKey(value string) string {
-	trimmed := strings.TrimSpace(strings.ToLower(value))
-	trimmed = strings.ReplaceAll(trimmed, "-", "_")
-	trimmed = strings.ReplaceAll(trimmed, " ", "_")
-	return trimmed
 }
 
 func preferString(values ...string) string {

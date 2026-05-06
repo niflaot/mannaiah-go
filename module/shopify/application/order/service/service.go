@@ -75,6 +75,8 @@ type SyncSummary struct {
 type Service interface {
 	// ValidateIntegration verifies source connectivity and credentials.
 	ValidateIntegration(ctx context.Context) error
+	// SyncOrders synchronizes all Shopify orders for the active installation.
+	SyncOrders(ctx context.Context, trigger string) (*SyncSummary, error)
 	// SyncOrderByID synchronizes one Shopify order by identifier.
 	SyncOrderByID(ctx context.Context, trigger string, id string) (*SyncSummary, error)
 	// SetSyncRecorder configures sync-run recording behavior.
@@ -211,6 +213,68 @@ func (s *OrderSyncService) SyncOrderByID(ctx context.Context, trigger string, id
 	}
 	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
 		s.logger.Warn("complete shopify order sync run failed", zap.Error(completeErr))
+	}
+
+	return summary, nil
+}
+
+// SyncOrders synchronizes all Shopify orders for the active installation.
+func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*SyncSummary, error) {
+	if !s.cfg.Enabled {
+		return nil, ErrSyncDisabled
+	}
+
+	const pageSize = 250
+	resolvedTrigger := resolveTrigger(trigger)
+	runID, _ := s.recorder.StartRun(ctx, "shopify.orders", resolvedTrigger)
+	summary := &SyncSummary{RunID: runID, Trigger: resolvedTrigger}
+
+	sinceID := ""
+	for {
+		if err := ctx.Err(); err != nil {
+			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			return nil, err
+		}
+
+		var orders []shopifyport.ShopifyOrder
+		var hasMore bool
+		err := s.executeWithBreaker(s.sourceBreaker, ErrIntegrationUnavailable, func() error {
+			var listErr error
+			orders, hasMore, listErr = s.source.ListOrders(ctx, sinceID, pageSize)
+			return listErr
+		})
+		if err != nil {
+			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
+		}
+
+		for _, order := range orders {
+			summary.Processed++
+			contact, contactErr := s.syncOrderContact(ctx, order)
+			if contactErr != nil {
+				summary.Failed++
+				s.logger.Warn("shopify order contact sync failed", zap.String("id", order.ID), zap.Error(contactErr))
+				continue
+			}
+			if _, upsertErr := s.target.UpsertOrder(ctx, BuildOrderSyncCommand(order, contact.ID, s.cfg.Realm, resolvedTrigger)); upsertErr != nil {
+				summary.Failed++
+				s.logger.Warn("shopify order sync failed", zap.String("id", order.ID), zap.Error(upsertErr))
+			} else {
+				summary.Succeeded++
+			}
+		}
+
+		if len(orders) > 0 {
+			sinceID = orders[len(orders)-1].ID
+		}
+
+		if !hasMore {
+			break
+		}
+	}
+
+	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
+		s.logger.Warn("complete shopify orders sync run failed", zap.Error(completeErr))
 	}
 
 	return summary, nil

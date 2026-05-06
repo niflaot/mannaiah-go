@@ -204,12 +204,17 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 func (h *Handler) syncContacts(ctx corehttp.Context) error {
 	request := parseManualSyncRequest(ctx)
 	targetID := strings.TrimSpace(request.ID)
-	if targetID == "" {
-		return h.mapError(shopifycontactservice.ErrInvalidCustomerID)
-	}
-
 	requestCtx := shopifyport.WithShopDomain(ctx.Context(), request.ShopDomain)
-	summary, err := h.contactsService.SyncContactByID(requestCtx, "manual", targetID)
+
+	var (
+		summary *shopifycontactservice.SyncSummary
+		err     error
+	)
+	if targetID != "" {
+		summary, err = h.contactsService.SyncContactByID(requestCtx, "manual", targetID)
+	} else {
+		summary, err = h.contactsService.SyncContacts(requestCtx, "manual")
+	}
 	if err != nil {
 		return h.mapError(err)
 	}
@@ -220,12 +225,17 @@ func (h *Handler) syncContacts(ctx corehttp.Context) error {
 func (h *Handler) syncOrders(ctx corehttp.Context) error {
 	request := parseManualSyncRequest(ctx)
 	targetID := strings.TrimSpace(request.ID)
-	if targetID == "" {
-		return h.mapError(shopifyorderservice.ErrInvalidOrderID)
-	}
-
 	requestCtx := shopifyport.WithShopDomain(ctx.Context(), request.ShopDomain)
-	summary, err := h.ordersService.SyncOrderByID(requestCtx, "manual", targetID)
+
+	var (
+		summary *shopifyorderservice.SyncSummary
+		err     error
+	)
+	if targetID != "" {
+		summary, err = h.ordersService.SyncOrderByID(requestCtx, "manual", targetID)
+	} else {
+		summary, err = h.ordersService.SyncOrders(requestCtx, "manual")
+	}
 	if err != nil {
 		return h.mapError(err)
 	}

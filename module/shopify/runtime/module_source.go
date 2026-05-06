@@ -90,11 +90,27 @@ func (f failingSource) GetCustomer(ctx context.Context, id string) (shopifyport.
 	return shopifyport.ShopifyCustomer{}, f.err
 }
 
+// ListCustomers returns startup validation failures.
+func (f failingSource) ListCustomers(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyCustomer, bool, error) {
+	_ = ctx
+	_ = sinceID
+	_ = limit
+	return nil, false, f.err
+}
+
 // GetOrder returns startup validation failures.
 func (f failingSource) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
 	_ = ctx
 	_ = id
 	return shopifyport.ShopifyOrder{}, f.err
+}
+
+// ListOrders returns startup validation failures.
+func (f failingSource) ListOrders(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyOrder, bool, error) {
+	_ = ctx
+	_ = sinceID
+	_ = limit
+	return nil, false, f.err
 }
 
 // UpdateOrderFromMainstream returns startup validation failures.
