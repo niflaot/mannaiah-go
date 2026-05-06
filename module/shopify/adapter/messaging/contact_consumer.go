@@ -53,6 +53,7 @@ func (c *ContactConsumer) Register(registrar bus.Registrar) error {
 
 	for _, topic := range []string{contactsapplication.TopicContactCreated, contactsapplication.TopicContactUpdated} {
 		topicValue := topic
+		c.logger.Info("register shopify contact integration handler", zap.String("topic", topicValue))
 		if err := registrar.AddHandler(topicValue, func(ctx context.Context, message bus.Message) error {
 			return c.handleMessage(ctx, topicValue, message)
 		}); err != nil {
@@ -69,11 +70,20 @@ func (c *ContactConsumer) handleMessage(ctx context.Context, topic string, messa
 		c.logger.Warn("decode shopify contact integration event failed", zap.String("topic", topic), zap.Error(err))
 		return nil
 	}
+	c.logger.Info(
+		"shopify contact integration event received",
+		zap.String("topic", topic),
+		zap.String("message_id", message.ID),
+		zap.String("contact_id", payload.ID),
+		zap.Bool("has_email", payload.Email != ""),
+		zap.Bool("has_shopify_customer_metadata", payload.Metadata["shopify_customer_id"] != ""),
+	)
 
 	if err := c.handler.HandleContactEvent(ctx, payload); err != nil {
 		c.logger.Warn("handle shopify contact integration event failed", zap.String("topic", topic), zap.Error(err))
 		return err
 	}
+	c.logger.Info("shopify contact integration event handled", zap.String("topic", topic), zap.String("contact_id", payload.ID))
 
 	return nil
 }

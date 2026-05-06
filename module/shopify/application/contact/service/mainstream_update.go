@@ -90,20 +90,31 @@ func NewMainstreamUpdateService(source shopifyport.CustomerSource, destination s
 func (s *MainstreamContactUpdateService) HandleContactEvent(ctx context.Context, payload contactsapplication.ContactEventPayload) error {
 	contactID := strings.TrimSpace(payload.ID)
 	if contactID == "" {
+		s.logger.Info("skip shopify outbound contact sync: empty contact id")
 		return nil
 	}
+	s.logger.Info(
+		"shopify outbound contact sync started",
+		zap.String("contact_id", contactID),
+		zap.Bool("has_email", strings.TrimSpace(payload.Email) != ""),
+		zap.Bool("has_shopify_customer_metadata", strings.TrimSpace(payload.Metadata[metadataKeyShopifyCustomerID]) != ""),
+	)
 
 	link, err := s.links.GetLinkByMannaiahID(ctx, shopifyport.SyncKindContact, contactID)
 	if err != nil {
+		s.logger.Warn("shopify outbound contact link lookup failed", zap.String("contact_id", contactID), zap.Error(err))
 		return err
 	}
 
 	if link == nil {
+		s.logger.Info("shopify outbound contact link not found; checking metadata", zap.String("contact_id", contactID))
 		linked, linkErr := s.linkFromPayloadMetadata(ctx, payload)
 		if linkErr != nil {
+			s.logger.Warn("shopify outbound contact metadata link failed", zap.String("contact_id", contactID), zap.Error(linkErr))
 			return linkErr
 		}
 		if linked {
+			s.logger.Info("shopify outbound contact linked from metadata; skipping write-back", zap.String("contact_id", contactID))
 			return nil
 		}
 	}
@@ -111,18 +122,22 @@ func (s *MainstreamContactUpdateService) HandleContactEvent(ctx context.Context,
 	if link == nil {
 		link, err = s.links.GetLinkByMannaiahID(ctx, shopifyport.SyncKindContact, contactID)
 		if err != nil {
+			s.logger.Warn("shopify outbound contact link reload failed", zap.String("contact_id", contactID), zap.Error(err))
 			return err
 		}
 	}
 
 	command := buildMainstreamCustomerUpsertCommand(payload)
 	if link != nil {
+		s.logger.Info("shopify outbound contact using existing link", zap.String("contact_id", contactID), zap.String("shopify_id", link.ShopifyID), zap.String("shop_domain", link.ShopDomain))
 		return s.syncLinkedCustomer(ctx, payload, command, link)
 	}
 	if strings.TrimSpace(command.Email) == "" {
+		s.logger.Info("skip shopify outbound contact sync: no link and no email", zap.String("contact_id", contactID))
 		return nil
 	}
 
+	s.logger.Info("shopify outbound contact has no link; searching by email", zap.String("contact_id", contactID))
 	return s.syncUnlinkedCustomer(ctx, payload, command)
 }
 
@@ -136,32 +151,40 @@ func (s *MainstreamContactUpdateService) linkFromPayloadMetadata(ctx context.Con
 	if err := s.upsertLink(ctx, shopDomain, shopifyID, payload.ID); err != nil {
 		return false, err
 	}
+	s.logger.Info("shopify outbound contact link persisted from metadata", zap.String("contact_id", payload.ID), zap.String("shopify_id", shopifyID), zap.String("shop_domain", shopDomain))
 
 	return true, nil
 }
 
 func (s *MainstreamContactUpdateService) syncLinkedCustomer(ctx context.Context, payload contactsapplication.ContactEventPayload, command shopifyport.MainstreamCustomerUpsertCommand, link *shopifyport.SyncLink) error {
-	customer, err := s.loadCustomer(ctx, link.ShopifyID)
+	linkedCtx := shopifyport.WithShopDomain(ctx, link.ShopDomain)
+	customer, err := s.loadCustomer(linkedCtx, link.ShopifyID)
 	if err != nil {
 		if errors.Is(err, shopifyport.ErrCustomerNotFound) {
-			return s.createAndLinkCustomer(ctx, command)
+			s.logger.Warn("shopify linked customer missing; creating replacement", zap.String("contact_id", payload.ID), zap.String("shopify_id", link.ShopifyID))
+			return s.createAndLinkCustomer(linkedCtx, command)
 		}
+		s.logger.Warn("shopify linked customer load failed", zap.String("contact_id", payload.ID), zap.String("shopify_id", link.ShopifyID), zap.Error(err))
 		return err
 	}
 
 	if customerMatchesPayload(customer, payload) {
+		s.logger.Info("skip shopify outbound contact update: linked customer already matches", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID))
 		return s.upsertLink(ctx, customer.ShopDomain, customer.ID, payload.ID)
 	}
 
+	s.logger.Info("updating linked shopify customer from contact event", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID), zap.String("shop_domain", customer.ShopDomain))
 	err = s.executeWithBreaker(s.destinationBreaker, ErrIntegrationUnavailable, func() error {
-		return s.destination.UpdateCustomerFromMainstream(ctx, customer.ID, command)
+		return s.destination.UpdateCustomerFromMainstream(linkedCtx, customer.ID, command)
 	})
 	if err != nil {
+		s.logger.Warn("update linked shopify customer failed", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID), zap.Error(err))
 		if !errors.Is(err, ErrIntegrationUnavailable) {
 			return fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 		}
 		return err
 	}
+	s.logger.Info("updated linked shopify customer from contact event", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID))
 
 	return s.upsertLink(ctx, customer.ShopDomain, customer.ID, payload.ID)
 }
@@ -169,23 +192,29 @@ func (s *MainstreamContactUpdateService) syncLinkedCustomer(ctx context.Context,
 func (s *MainstreamContactUpdateService) syncUnlinkedCustomer(ctx context.Context, payload contactsapplication.ContactEventPayload, command shopifyport.MainstreamCustomerUpsertCommand) error {
 	customer, err := s.findCustomerByEmail(ctx, command.Email)
 	if err != nil && !errors.Is(err, shopifyport.ErrCustomerNotFound) {
+		s.logger.Warn("shopify customer email lookup failed", zap.String("contact_id", payload.ID), zap.Error(err))
 		return err
 	}
 	if err == nil {
 		if !customerMatchesPayload(customer, payload) {
+			s.logger.Info("updating email-matched shopify customer from contact event", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID), zap.String("shop_domain", customer.ShopDomain))
 			updateErr := s.executeWithBreaker(s.destinationBreaker, ErrIntegrationUnavailable, func() error {
 				return s.destination.UpdateCustomerFromMainstream(ctx, customer.ID, command)
 			})
 			if updateErr != nil {
+				s.logger.Warn("update email-matched shopify customer failed", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID), zap.Error(updateErr))
 				if !errors.Is(updateErr, ErrIntegrationUnavailable) {
 					return fmt.Errorf("%w: %v", ErrIntegrationUnavailable, updateErr)
 				}
 				return updateErr
 			}
+		} else {
+			s.logger.Info("skip shopify outbound contact update: email-matched customer already matches", zap.String("contact_id", payload.ID), zap.String("shopify_id", customer.ID))
 		}
 		return s.upsertLink(ctx, customer.ShopDomain, customer.ID, payload.ID)
 	}
 
+	s.logger.Info("creating shopify customer from contact event", zap.String("contact_id", payload.ID))
 	return s.createAndLinkCustomer(ctx, command)
 }
 
@@ -197,11 +226,13 @@ func (s *MainstreamContactUpdateService) createAndLinkCustomer(ctx context.Conte
 		return createErr
 	})
 	if err != nil {
+		s.logger.Warn("create shopify customer from contact event failed", zap.String("contact_id", command.ContactID), zap.Error(err))
 		if !errors.Is(err, ErrIntegrationUnavailable) {
 			return fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 		}
 		return err
 	}
+	s.logger.Info("created shopify customer from contact event", zap.String("contact_id", command.ContactID), zap.String("shopify_id", customer.ID), zap.String("shop_domain", customer.ShopDomain))
 
 	return s.upsertLink(ctx, customer.ShopDomain, customer.ID, command.ContactID)
 }
@@ -215,6 +246,11 @@ func (s *MainstreamContactUpdateService) upsertLink(ctx context.Context, shopDom
 		MannaiahID:   strings.TrimSpace(contactID),
 		LastSyncedAt: &lastSyncedAt,
 	})
+	if err != nil {
+		s.logger.Warn("persist shopify contact link failed", zap.String("contact_id", contactID), zap.String("shopify_id", shopifyID), zap.String("shop_domain", shopDomain), zap.Error(err))
+		return err
+	}
+	s.logger.Info("persisted shopify contact link", zap.String("contact_id", contactID), zap.String("shopify_id", shopifyID), zap.String("shop_domain", shopDomain))
 	return err
 }
 
