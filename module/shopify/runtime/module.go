@@ -150,35 +150,42 @@ func New(
 		return nil, fmt.Errorf("create shopify http handler: %w", err)
 	}
 
-	mainstreamUpdateService, err := shopifyorderservice.NewMainstreamUpdateService(
-		source,
-		repository,
-		logger,
-		shopifyorderservice.CircuitBreakers{Destination: newDestinationCircuitBreaker(cfg, logger)},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create shopify mainstream update service: %w", err)
+	var contactConsumer *shopifymessaging.ContactConsumer
+	if cfg.SyncContacts {
+		mainstreamContactUpdateService, err := shopifycontactservice.NewMainstreamUpdateService(
+			source,
+			source,
+			repository,
+			logger,
+			shopifycontactservice.CircuitBreakers{
+				Source:      newSourceCircuitBreaker(cfg, logger),
+				Destination: newDestinationCircuitBreaker(cfg, logger),
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify mainstream contact update service: %w", err)
+		}
+		contactConsumer, err = shopifymessaging.NewContactConsumer(mainstreamContactUpdateService, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify contact consumer: %w", err)
+		}
 	}
-	mainstreamContactUpdateService, err := shopifycontactservice.NewMainstreamUpdateService(
-		source,
-		source,
-		repository,
-		logger,
-		shopifycontactservice.CircuitBreakers{
-			Source:      newSourceCircuitBreaker(cfg, logger),
-			Destination: newSourceCircuitBreaker(cfg, logger),
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create shopify mainstream contact update service: %w", err)
-	}
-	contactConsumer, err := shopifymessaging.NewContactConsumer(mainstreamContactUpdateService, logger)
-	if err != nil {
-		return nil, fmt.Errorf("create shopify contact consumer: %w", err)
-	}
-	orderConsumer, err := shopifymessaging.NewOrderConsumer(mainstreamUpdateService, logger)
-	if err != nil {
-		return nil, fmt.Errorf("create shopify order consumer: %w", err)
+
+	var orderConsumer *shopifymessaging.OrderConsumer
+	if cfg.SyncOrders {
+		mainstreamUpdateService, err := shopifyorderservice.NewMainstreamUpdateService(
+			source,
+			repository,
+			logger,
+			shopifyorderservice.CircuitBreakers{Destination: newDestinationCircuitBreaker(cfg, logger)},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify mainstream update service: %w", err)
+		}
+		orderConsumer, err = shopifymessaging.NewOrderConsumer(mainstreamUpdateService, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify order consumer: %w", err)
+		}
 	}
 
 	return &Module{
