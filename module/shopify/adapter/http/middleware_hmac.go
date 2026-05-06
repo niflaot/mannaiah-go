@@ -1,5 +1,4 @@
 package http
-package http
 
 import (
 	"crypto/hmac"
