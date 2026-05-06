@@ -34,7 +34,8 @@ steps:
           module/membership \
           module/analytics \
           module/email \
-          module/shipping
+          module/shipping \
+          module/shopify
         do
           echo "Running tests for $module"
           (cd "$module" && go test ./...)
@@ -88,6 +89,8 @@ steps:
     commands:
       - cd module/core
       - go test ./search -run '^$' -bench BenchmarkSpotlightFanout -benchmem -benchtime=100x -count=1
+      - cd ../woocommerce
+      - go test -run '^$' -bench . ./application/contact/service ./internal/citycode
     volumes:
       - name: go-mod-cache
         path: /go/pkg/mod
