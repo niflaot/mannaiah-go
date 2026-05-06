@@ -204,11 +204,17 @@ func TestAppLaunchRouteRedirectsToOAuthInstallWhenStoreIsMissing(t *testing.T) {
 	if err := handler.appLaunch(requestContext); err != nil {
 		t.Fatalf("appLaunch() error = %v", err)
 	}
-	if requestContext.statusCode != 302 {
-		t.Fatalf("appLaunch() status = %d, want %d", requestContext.statusCode, 302)
+	if requestContext.statusCode != 200 {
+		t.Fatalf("appLaunch() status = %d, want %d", requestContext.statusCode, 200)
 	}
-	if location := requestContext.headers["Location"]; location != "/shopify/oauth/install?shop=2axh5c-b1.myshopify.com" {
-		t.Fatalf("appLaunch() location = %q, want oauth install redirect", location)
+	if contentType := requestContext.headers["Content-Type"]; !strings.Contains(contentType, "text/html") {
+		t.Fatalf("appLaunch() content type = %q, want html", contentType)
+	}
+	if !strings.Contains(requestContext.body, "/shopify/oauth/install?shop=2axh5c-b1.myshopify.com") {
+		t.Fatalf("appLaunch() body = %q, want oauth install redirect", requestContext.body)
+	}
+	if !strings.Contains(requestContext.body, "window.top.location.replace") {
+		t.Fatalf("appLaunch() body missing top-level redirect script: %q", requestContext.body)
 	}
 	if repository.requestedShop != "2axh5c-b1.myshopify.com" {
 		t.Fatalf("appLaunch() resolved shop = %q, want %q", repository.requestedShop, "2axh5c-b1.myshopify.com")

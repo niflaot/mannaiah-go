@@ -23,8 +23,8 @@ func (h *Handler) appLaunch(ctx corehttp.Context) error {
 			return h.mapError(err)
 		}
 		if installation == nil || installation.UninstalledAt != nil {
-			ctx.SetHeader("Location", buildInstallLaunchPath(shopDomain))
-			return ctx.Status(302).SendString("")
+			ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+			return ctx.Status(200).SendString(renderInstallLaunchRedirectPage(shopDomain))
 		}
 		installed = true
 	}
@@ -43,6 +43,43 @@ func buildInstallLaunchPath(shopDomain string) string {
 	endpoint.RawQuery = query.Encode()
 
 	return endpoint.String()
+}
+
+func renderInstallLaunchRedirectPage(shopDomain string) string {
+	installPath := html.EscapeString(buildInstallLaunchPath(shopDomain))
+
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Redirecting to Shopify authorization</title>
+		<style>
+			body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111827; color: #f9fafb; }
+			main { max-width: 640px; margin: 48px auto; padding: 32px; background: #1f2937; border-radius: 16px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35); }
+			h1 { margin: 0 0 16px 0; font-size: 28px; line-height: 1.2; }
+			p { margin: 0 0 12px 0; font-size: 16px; line-height: 1.6; color: #d1d5db; }
+			a { color: #f59e0b; font-weight: 700; text-decoration: none; }
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>Redirecting to Shopify authorization</h1>
+			<p>We need a top-level browser redirect before starting OAuth so Shopify can complete the installation flow with the required state cookie.</p>
+			<p>If nothing happens automatically, continue here: <a href="%s">Start Shopify install</a></p>
+		</main>
+		<script>
+			(function() {
+				var target = %q
+				if (window.top && window.top !== window.self) {
+					window.top.location.replace(target)
+					return
+				}
+				window.location.replace(target)
+			})()
+		</script>
+	</body>
+</html>`, installPath, buildInstallLaunchPath(shopDomain))
 }
 
 // renderAppLaunchPage builds the HTML landing page returned from the Shopify App URL.
