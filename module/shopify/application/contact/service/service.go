@@ -168,7 +168,10 @@ func (s *ContactSyncService) SyncContactByID(ctx context.Context, trigger string
 	}
 
 	resolvedTrigger := resolveTrigger(trigger)
-	runID, _ := s.recorder.StartRun(ctx, "shopify.contacts", resolvedTrigger)
+	runID, err := s.recorder.StartRun(ctx, "shopify.contacts", resolvedTrigger)
+	if err != nil {
+		s.logger.Warn("start shopify contact sync run failed", zap.Error(err))
+	}
 	customer, err := s.loadCustomer(ctx, trimmedID)
 	if err != nil {
 		s.recordFailure(ctx, runID, trimmedID, err)
@@ -203,7 +206,10 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 
 	const pageSize = 250
 	resolvedTrigger := resolveTrigger(trigger)
-	runID, _ := s.recorder.StartRun(ctx, "shopify.contacts", resolvedTrigger)
+	runID, startErr := s.recorder.StartRun(ctx, "shopify.contacts", resolvedTrigger)
+	if startErr != nil {
+		s.logger.Warn("start shopify contacts sync run failed", zap.Error(startErr))
+	}
 	summary := &SyncSummary{RunID: runID, Trigger: resolvedTrigger}
 
 	sinceID := ""

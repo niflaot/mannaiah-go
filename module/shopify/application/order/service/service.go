@@ -184,7 +184,10 @@ func (s *OrderSyncService) SyncOrderByID(ctx context.Context, trigger string, id
 	}
 
 	resolvedTrigger := resolveTrigger(trigger)
-	runID, _ := s.recorder.StartRun(ctx, "shopify.orders", resolvedTrigger)
+	runID, err := s.recorder.StartRun(ctx, "shopify.orders", resolvedTrigger)
+	if err != nil {
+		s.logger.Warn("start shopify order sync run failed", zap.Error(err))
+	}
 	order, err := s.loadOrder(ctx, trimmedID)
 	if err != nil {
 		s.recordFailure(ctx, runID, trimmedID, err)
@@ -226,7 +229,10 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 
 	const pageSize = 250
 	resolvedTrigger := resolveTrigger(trigger)
-	runID, _ := s.recorder.StartRun(ctx, "shopify.orders", resolvedTrigger)
+	runID, startErr := s.recorder.StartRun(ctx, "shopify.orders", resolvedTrigger)
+	if startErr != nil {
+		s.logger.Warn("start shopify orders sync run failed", zap.Error(startErr))
+	}
 	summary := &SyncSummary{RunID: runID, Trigger: resolvedTrigger}
 
 	sinceID := ""

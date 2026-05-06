@@ -26,6 +26,10 @@ const (
 	KindMembershipMigration SyncKind = "membership.migration"
 	// KindCampaignSend defines campaign send runs.
 	KindCampaignSend SyncKind = "campaign.send"
+	// KindShopifyContacts defines Shopify contact sync runs.
+	KindShopifyContacts SyncKind = "shopify.contacts"
+	// KindShopifyOrders defines Shopify order sync runs.
+	KindShopifyOrders SyncKind = "shopify.orders"
 )
 
 // IsValid reports whether a sync kind is recognized.
@@ -40,7 +44,9 @@ func (k SyncKind) IsValid() bool {
 		KindAnalyticsSeed,
 		KindAnalyticsFlush,
 		KindMembershipMigration,
-		KindCampaignSend:
+		KindCampaignSend,
+		KindShopifyContacts,
+		KindShopifyOrders:
 		return true
 	default:
 		return false
