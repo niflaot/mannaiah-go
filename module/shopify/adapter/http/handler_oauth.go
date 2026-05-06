@@ -4,15 +4,14 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	corehttp "mannaiah/module/core/http"
@@ -20,9 +19,8 @@ import (
 )
 
 const (
-	oauthStateCookieName = "shopify_oauth_state"
-	oauthStateTTL        = 10 * time.Minute
-	shopifyOAuthScopes   = "read_orders,write_orders,read_customers,write_customers"
+	oauthStateTTL      = 10 * time.Minute
+	shopifyOAuthScopes = "read_orders,write_orders,read_customers,write_customers"
 )
 
 var (
@@ -40,10 +38,47 @@ var (
 	ErrPublicBaseURLRequired = errors.New("shopify public base url is required")
 )
 
-type oauthStateCookie struct {
+type oauthNonceEntry struct {
 	ShopDomain string
-	State      string
 	ExpiresAt  time.Time
+}
+
+// nonceStore is an in-memory store for OAuth state nonces, keyed by the random state value.
+// This avoids relying on cookies surviving the Shopify authorization redirect round-trip,
+// which is unreliable across browsers and proxy configurations.
+type nonceStore struct {
+	mu      sync.Mutex
+	entries map[string]oauthNonceEntry
+}
+
+func newNonceStore() *nonceStore {
+	return &nonceStore{entries: make(map[string]oauthNonceEntry)}
+}
+
+func (s *nonceStore) put(state string, shopDomain string, expiresAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries[state] = oauthNonceEntry{ShopDomain: shopDomain, ExpiresAt: expiresAt}
+}
+
+func (s *nonceStore) pop(state string) (oauthNonceEntry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.entries[state]
+	if ok {
+		delete(s.entries, state)
+	}
+	return entry, ok
+}
+
+func (s *nonceStore) evictExpired(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range s.entries {
+		if v.ExpiresAt.Before(now) {
+			delete(s.entries, k)
+		}
+	}
 }
 
 func (h *Handler) installOAuth(ctx corehttp.Context) error {
@@ -65,13 +100,8 @@ func (h *Handler) installOAuth(ctx corehttp.Context) error {
 		return h.mapError(err)
 	}
 	expiresAt := time.Now().UTC().Add(oauthStateTTL)
-	if err := writeOAuthStateCookie(ctx, oauthStateCookie{
-		ShopDomain: shopDomain,
-		State:      state,
-		ExpiresAt:  expiresAt,
-	}, h.clientSecret); err != nil {
-		return h.mapError(err)
-	}
+	h.nonces.put(state, shopDomain, expiresAt)
+	h.nonces.evictExpired(time.Now().UTC())
 
 	redirectURL, err := buildOAuthInstallURL(shopDomain, h.clientID, baseURL+"/shopify/oauth/callback", state)
 	if err != nil {
@@ -104,12 +134,12 @@ func (h *Handler) oauthCallback(ctx corehttp.Context) error {
 		return h.mapError(ErrOAuthCodeRequired)
 	}
 	state := strings.TrimSpace(params["state"])
-	storedState, err := readOAuthStateCookie(ctx, h.clientSecret)
-	if err != nil {
-		return h.mapError(err)
-	}
-	if storedState.State != state || storedState.ShopDomain != shopDomain {
+	entry, ok := h.nonces.pop(state)
+	if !ok || entry.ShopDomain != shopDomain {
 		return h.mapError(ErrOAuthStateInvalid)
+	}
+	if entry.ExpiresAt.Before(time.Now().UTC()) {
+		return h.mapError(ErrOAuthStateExpired)
 	}
 
 	accessToken, scopes, err := h.oauthClient.ExchangeAuthorizationCode(ctx.Context(), shopDomain, code)
@@ -139,7 +169,6 @@ func (h *Handler) oauthCallback(ctx corehttp.Context) error {
 		return h.mapError(err)
 	}
 
-	clearOAuthStateCookie(ctx)
 	payload := map[string]any{
 		"shopDomain":         installation.ShopDomain,
 		"scopes":             installation.Scopes,
@@ -283,97 +312,6 @@ func newOAuthState() (string, error) {
 	}
 
 	return hex.EncodeToString(bytes), nil
-}
-
-func writeOAuthStateCookie(ctx corehttp.Context, state oauthStateCookie, secret string) error {
-	value, err := signOAuthStateCookie(state, secret)
-	if err != nil {
-		return err
-	}
-	ctx.SetHeader("Set-Cookie", (&http.Cookie{
-		Name:     oauthStateCookieName,
-		Value:    value,
-		Path:     "/shopify/oauth",
-		MaxAge:   int(time.Until(state.ExpiresAt).Seconds()),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
-	}).String())
-
-	return nil
-}
-
-func clearOAuthStateCookie(ctx corehttp.Context) {
-	ctx.SetHeader("Set-Cookie", (&http.Cookie{
-		Name:     oauthStateCookieName,
-		Value:    "",
-		Path:     "/shopify/oauth",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
-	}).String())
-}
-
-func readOAuthStateCookie(ctx corehttp.Context, secret string) (oauthStateCookie, error) {
-	request := &http.Request{Header: http.Header{"Cookie": []string{ctx.GetHeader("Cookie", "")}}}
-	cookie, err := request.Cookie(oauthStateCookieName)
-	if err != nil {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-
-	return parseOAuthStateCookie(cookie.Value, secret)
-}
-
-func signOAuthStateCookie(state oauthStateCookie, secret string) (string, error) {
-	if !isValidShopDomain(state.ShopDomain) || strings.TrimSpace(state.State) == "" || state.ExpiresAt.IsZero() {
-		return "", ErrOAuthStateInvalid
-	}
-	payload := strings.Join([]string{
-		shopifyport.NormalizeShopDomain(state.ShopDomain),
-		strings.TrimSpace(state.State),
-		strconv.FormatInt(state.ExpiresAt.UTC().Unix(), 10),
-	}, "|")
-	signature := computeStateSignature(payload, secret)
-	return base64.RawURLEncoding.EncodeToString([]byte(payload + "." + signature)), nil
-}
-
-func parseOAuthStateCookie(value string, secret string) (oauthStateCookie, error) {
-	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(value))
-	if err != nil {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-	parts := strings.SplitN(string(decoded), ".", 2)
-	if len(parts) != 2 {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-	payload := strings.TrimSpace(parts[0])
-	received := strings.TrimSpace(parts[1])
-	if payload == "" || received == "" {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-	expected := computeStateSignature(payload, secret)
-	if !hmac.Equal([]byte(expected), []byte(received)) {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-	values := strings.Split(payload, "|")
-	if len(values) != 3 {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-	expiresUnix, err := strconv.ParseInt(values[2], 10, 64)
-	if err != nil {
-		return oauthStateCookie{}, ErrOAuthStateInvalid
-	}
-	state := oauthStateCookie{
-		ShopDomain: shopifyport.NormalizeShopDomain(values[0]),
-		State:      strings.TrimSpace(values[1]),
-		ExpiresAt:  time.Unix(expiresUnix, 0).UTC(),
-	}
-	if state.ExpiresAt.Before(time.Now().UTC()) {
-		return oauthStateCookie{}, ErrOAuthStateExpired
-	}
-
-	return state, nil
 }
 
 func computeStateSignature(payload string, secret string) string {

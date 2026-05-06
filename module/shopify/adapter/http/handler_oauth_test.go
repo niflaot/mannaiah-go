@@ -18,12 +18,14 @@ func (oauthInstallTestClient) RegisterWebhooks(ctx context.Context, shopDomain s
 	return nil
 }
 
-// TestInstallOAuthSetsCrossSiteStateCookie verifies Shopify install launches emit a state cookie usable from Shopify-admin cross-site flows.
-func TestInstallOAuthSetsCrossSiteStateCookie(t *testing.T) {
+// TestInstallOAuthStoresNonceAndRedirects verifies Shopify install launches store the state nonce in-memory and redirect to Shopify.
+func TestInstallOAuthStoresNonceAndRedirects(t *testing.T) {
+	store := newNonceStore()
 	handler := &Handler{
 		clientID:     "client-id",
 		clientSecret: "client-secret",
 		oauthClient:  oauthInstallTestClient{},
+		nonces:       store,
 	}
 	requestContext := &launchTestContext{
 		queryValues: map[string]string{"shop": "2axh5c-b1.myshopify.com"},
@@ -38,23 +40,17 @@ func TestInstallOAuthSetsCrossSiteStateCookie(t *testing.T) {
 	if requestContext.statusCode != 302 {
 		t.Fatalf("installOAuth() status = %d, want %d", requestContext.statusCode, 302)
 	}
-	if location := requestContext.headers["Location"]; !strings.Contains(location, "2axh5c-b1.myshopify.com/admin/oauth/authorize") {
+	location := requestContext.headers["Location"]
+	if !strings.Contains(location, "2axh5c-b1.myshopify.com/admin/oauth/authorize") {
 		t.Fatalf("installOAuth() location = %q, want Shopify authorize redirect", location)
 	}
-	setCookie := requestContext.headers["Set-Cookie"]
-	if !strings.Contains(setCookie, "shopify_oauth_state=") {
-		t.Fatalf("installOAuth() set-cookie = %q, want oauth state cookie", setCookie)
+	if !strings.Contains(location, "state=") {
+		t.Fatalf("installOAuth() location = %q, want state param", location)
 	}
-	if !strings.Contains(setCookie, "SameSite=None") {
-		t.Fatalf("installOAuth() set-cookie = %q, want SameSite=None", setCookie)
-	}
-	if !strings.Contains(setCookie, "Secure") {
-		t.Fatalf("installOAuth() set-cookie = %q, want Secure", setCookie)
-	}
-	if !strings.Contains(setCookie, "HttpOnly") {
-		t.Fatalf("installOAuth() set-cookie = %q, want HttpOnly", setCookie)
-	}
-	if !strings.Contains(setCookie, "Path=/shopify/oauth") {
-		t.Fatalf("installOAuth() set-cookie = %q, want oauth cookie path", setCookie)
+	store.mu.Lock()
+	nonceCount := len(store.entries)
+	store.mu.Unlock()
+	if nonceCount != 1 {
+		t.Fatalf("installOAuth() nonce store has %d entries, want 1", nonceCount)
 	}
 }

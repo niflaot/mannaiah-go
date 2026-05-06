@@ -101,6 +101,8 @@ type Handler struct {
 	clientID string
 	// clientSecret defines Shopify OAuth client secret values.
 	clientSecret string
+	// nonces stores in-flight OAuth state nonces, keyed by the random state value.
+	nonces *nonceStore
 	// authorizer defines optional auth dependencies for protected endpoints.
 	authorizer Authorizer
 }
@@ -170,6 +172,7 @@ func NewHandler(
 		ordersLookup:         ordersLookup,
 		clientID:             strings.TrimSpace(clientID),
 		clientSecret:         strings.TrimSpace(clientSecret),
+		nonces:               newNonceStore(),
 		authorizer:           authorizer,
 	}, nil
 }
