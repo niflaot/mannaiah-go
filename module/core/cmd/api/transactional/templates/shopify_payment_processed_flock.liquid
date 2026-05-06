@@ -1,0 +1,190 @@
+{% capture email_title %}Tu pago se ha procesado{% endcapture %}
+
+{% capture email_body %}
+  {% for transaction in transactions %}
+    {% if transaction.id == transaction_id %}
+      Se te cobraron <b>{{ transaction.amount | money_with_currency }}</b> por tu pedido {{ order_name }}.
+    {% endif %}
+  {% endfor %}
+{% endcapture %}
+
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>{{ email_title | strip }}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+      body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      img { border: 0; outline: none; -ms-interpolation-mode: bicubic; }
+      a { text-decoration: none; }
+
+      @media (prefers-color-scheme: dark) {
+        .bg-outer { background-color: #1a1a1a !important; }
+        .bg-card { background-color: #222222 !important; }
+        .bg-section { background-color: #2d2d2d !important; }
+        .bg-footer { background-color: #1a1a1a !important; }
+        .txt-main { color: #e8e8e8 !important; }
+        .txt-body { color: #cccccc !important; }
+        .txt-product { color: #e0e0e0 !important; }
+        .txt-dim { color: #888888 !important; }
+        .section-border { border-left-color: #444444 !important; border-top-color: #444444 !important; }
+        .btn-primary { background-color: #3a3a3a !important; color: #e8e8e8 !important; }
+        .btn-secondary { background-color: #3a3a3a !important; color: #e8e8e8 !important; }
+        .footer-store-link { color: #ffffff !important; }
+      }
+
+      @media only screen and (max-width: 600px) {
+        .card-outer { padding-left: 30px !important; padding-right: 30px !important; padding-bottom: 40px !important; }
+        .logo-col { width: 80px !important; }
+        .logo-img { width: 80px !important; }
+        .stack-col-l { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 20px 0 16px 0 !important; border-left: none !important; border-bottom: 1px solid #dddddd !important; }
+        .stack-col-r { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 16px 0 20px 0 !important; border-left: none !important; }
+        .actions-cell { display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 12px !important; }
+      }
+    </style>
+  </head>
+
+  <body class="bg-outer" style="margin:0;padding:0;background-color:#242424;font-family:Manrope,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-outer" style="background-color:#242424;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            <tr>
+              <td class="card-outer bg-card" style="background-color:#f8f8f8;padding:0 50px 60px 50px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td valign="top" style="padding:35px 12px 0 0;">
+                      <p style="margin:0;font-size:15px;line-height:22px;font-weight:700;color:#333333;" class="txt-main">Pedido</p>
+                      <p style="margin:2px 0 0 0;font-size:15px;line-height:22px;font-weight:400;color:#555555;" class="txt-body">{{ order_name }}</p>
+                      {% if po_number %}
+                        <p style="margin:8px 0 0 0;font-size:12px;line-height:18px;font-weight:500;color:#555555;" class="txt-body">Orden de compra n.º {{ po_number }}</p>
+                      {% endif %}
+                    </td>
+                    <td class="logo-col" valign="top" width="127" style="width:127px;padding:0;vertical-align:top;">
+                      {% if shop.email_logo_url %}
+                        <img class="logo-img" src="{{ shop.email_logo_url }}" alt="{{ shop.name }}" width="{{ shop.email_logo_width | default: 127 }}" style="display:block;width:127px;max-width:127px;height:auto;border:0;" />
+                      {% else %}
+                        <img class="logo-img" src="https://storageapi.flockstore.co/fl-assets/assets/d0b1a4f5-7950-4aca-b1a1-535e98e1dc77-transcational_logo_covered.png" alt="{{ shop.name }}" width="127" style="display:block;width:127px;height:auto;border:0;" />
+                      {% endif %}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:28px 0 14px 0;">
+                      <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:#333333;" class="txt-main">
+                        Hola {{ customer.first_name | default: address.first_name | default: billing_address.first_name | default: "cliente" }},
+                      </h1>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 10px 0;">
+                      <h2 style="margin:0;font-size:20px;line-height:28px;font-weight:700;color:#333333;" class="txt-main">{{ email_title | strip }}</h2>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 24px 0;">
+                      <div style="font-size:15px;line-height:24px;color:#555555;" class="txt-body">{{ email_body }}</div>
+                    </td>
+                  </tr>
+
+                  {% if order_status_url or shop.url %}
+                    <tr>
+                      <td colspan="2" style="padding:0 0 30px 0;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            {% if order_status_url %}
+                              <td class="actions-cell" valign="top" style="padding:0 12px 0 0;">
+                                <a href="{{ order_status_url }}" class="btn-primary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">VER TU PEDIDO</a>
+                              </td>
+                            {% endif %}
+                            {% if shop.url %}
+                              <td class="actions-cell" valign="top" style="padding:0;">
+                                <a href="{{ shop.url }}" class="btn-secondary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">VISITAR TIENDA</a>
+                              </td>
+                            {% endif %}
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  {% endif %}
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 16px 0;">
+                      <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Información del cliente</h3>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                        <tr>
+                          <td class="stack-col-l section-border" valign="top" width="50%" style="padding:28px 24px 28px 28px;box-sizing:border-box;">
+                            <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de facturación</p>
+                            <div style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ address | format_address }}</div>
+
+                            {% if company_location %}
+                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Sucursal</p>
+                              <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ company_location.name }}</p>
+                            {% endif %}
+                          </td>
+
+                          {% assign transaction_count = transactions | size %}
+                          {% if transaction_count > 0 %}
+                            <td class="stack-col-r section-border" valign="top" width="50%" style="padding:28px 28px 28px 24px;box-sizing:border-box;border-left:1px solid #e0e0e0;">
+                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Pago</p>
+                              {% for transaction in transactions %}
+                                {% if transaction.id == transaction_id %}
+                                  {% if transaction.status == "success" or transaction.status == "pending" %}
+                                    {% if transaction.kind == "capture" or transaction.kind == "sale" %}
+                                      {% if transaction.payment_details.type == "card" %}
+                                        <p style="margin:0 0 10px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
+                                          {{ transaction.payment_details.credit_card_company }} terminada en {{ transaction.payment_details.credit_card_last_four_digits }}<br>
+                                          <strong style="color:#333333;" class="txt-main">{{ transaction.amount | money }}</strong>
+                                        </p>
+                                      {% elsif transaction.payment_details.local_payment? %}
+                                        <p style="margin:0 0 10px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
+                                          {{ transaction.payment_details.payment_method_display_name }}<br>
+                                          <strong style="color:#333333;" class="txt-main">{{ transaction.amount | money }}</strong>
+                                        </p>
+                                      {% else %}
+                                        <p style="margin:0 0 10px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
+                                          {{ transaction.gateway_display_name }}<br>
+                                          <strong style="color:#333333;" class="txt-main">{{ transaction.amount | money }}</strong>
+                                        </p>
+                                      {% endif %}
+                                    {% endif %}
+                                  {% endif %}
+                                {% endif %}
+                              {% endfor %}
+                            </td>
+                          {% endif %}
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="bg-footer" style="padding:32px 50px;background-color:#242424;text-align:center;">
+                <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">¿Necesitas ayuda con tu pedido?</p>
+                <a href="mailto:{{ shop.email }}" target="_blank" class="btn-secondary" style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ESCRÍBENOS</a>
+                <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">Si tienes alguna pregunta, responde este correo o contáctanos en <a href="mailto:{{ shop.email }}" style="color:#aaaaaa;text-decoration:none;font-weight:700;">{{ shop.email }}</a>.</p>
+                {% if shop.url %}
+                  <p style="margin:8px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;">
+                    <a href="{{ shop.url }}" target="_blank" class="footer-store-link" style="color:#000000;text-decoration:none;font-weight:700;">Visitar tienda</a>
+                  </p>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

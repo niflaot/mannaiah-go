@@ -1,0 +1,495 @@
+{% if refund_line_items.size == item_count %}
+  {% capture email_title %}Tu pedido ha sido reembolsado{% endcapture %}
+{% elsif refund_line_items.size == 0 %}
+  {% capture email_title %}Has recibido un reembolso{% endcapture %}
+{% else %}
+  {% capture email_title %}Algunos artículos en tu pedido han sido reembolsados{% endcapture %}
+{% endif %}
+{% capture email_body %}Monto total reembolsado: <strong>{{ amount | money_with_currency }}</strong>. Este reembolso puede tardar hasta 10 días en aparecer en tu cuenta.{% endcapture %}
+
+{% assign order_discount_count = 0 %}
+{% assign total_order_discount_amount = 0 %}
+{% assign has_shipping_discount = false %}
+{% assign free_shipping = false %}
+{% assign discounted_shipping_price = shipping_price %}
+{% assign shipping_discount_title = '' %}
+{% assign discount_value_price = 0 %}
+{% assign epsilon = 0.00001 %}
+
+{% for discount_application in discount_applications %}
+  {% if discount_application.target_selection == 'all' and discount_application.target_type == 'line_item' %}
+    {% assign order_discount_count = order_discount_count | plus: 1 %}
+    {% assign total_order_discount_amount = total_order_discount_amount | plus: discount_application.total_allocated_amount %}
+  {% endif %}
+  {% if discount_application.target_type == 'shipping_line' %}
+    {% assign has_shipping_discount = true %}
+    {% assign shipping_discount_title = discount_application.title %}
+    {% assign discount_value_price = discount_application.total_allocated_amount %}
+    {% assign shipping_amount_minus_discount_value_price = shipping_price | minus: discount_value_price %}
+    {% assign shipping_amount_minus_discount_value_price_abs = shipping_amount_minus_discount_value_price | abs %}
+    {% assign discount_application_value_type = discount_application.value_type | strip %}
+    {% if shipping_amount_minus_discount_value_price_abs < epsilon or discount_application_value_type == 'percentage' and discount_application.value == 100 %}
+      {% assign free_shipping = true %}
+    {% else %}
+      {% assign discounted_shipping_price = shipping_amount_minus_discount_value_price %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+
+{% assign transaction_size = 0 %}
+{% assign transaction_amount = 0 %}
+{% for transaction in transactions %}
+  {% if transaction.status == "success" %}
+    {% if transaction.kind == "sale" or transaction.kind == "capture" %}
+      {% assign transaction_size = transaction_size | plus: 1 %}
+      {% assign transaction_amount = transaction_amount | plus: transaction.amount %}
+    {% elsif transaction.kind == "refund" or transaction.kind == "change" %}
+      {% assign transaction_size = transaction_size | plus: 1 %}
+      {% assign transaction_amount = transaction_amount | minus: transaction.amount %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>{{ email_title | strip }}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+      body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      img { border: 0; outline: none; -ms-interpolation-mode: bicubic; }
+      a { text-decoration: none; }
+
+      @media (prefers-color-scheme: dark) {
+        .bg-outer { background-color: #1a1a1a !important; }
+        .bg-card { background-color: #222222 !important; }
+        .bg-section { background-color: #2d2d2d !important; }
+        .bg-footer { background-color: #1a1a1a !important; }
+        .txt-main { color: #e8e8e8 !important; }
+        .txt-body { color: #cccccc !important; }
+        .txt-product { color: #e0e0e0 !important; }
+        .txt-dim { color: #888888 !important; }
+        .divider { border-top-color: #444444 !important; }
+        .btn-secondary { background-color: #3a3a3a !important; color: #e8e8e8 !important; }
+        .footer-store-link { color: #ffffff !important; }
+      }
+
+      @media only screen and (max-width: 600px) {
+        .card-outer { padding-left: 30px !important; padding-right: 30px !important; padding-bottom: 40px !important; }
+        .logo-col { width: 80px !important; }
+        .logo-img { width: 80px !important; }
+        .item-image-cell { width: 92px !important; padding-right: 8px !important; }
+        .item-image { width: 72px !important; }
+      }
+    </style>
+  </head>
+
+  <body class="bg-outer" style="margin:0;padding:0;background-color:#242424;font-family:Manrope,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-outer" style="background-color:#242424;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            <tr>
+              <td class="card-outer bg-card" style="background-color:#f8f8f8;padding:0 50px 60px 50px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td valign="top" style="padding:35px 12px 0 0;">
+                      <p style="margin:0;font-size:15px;line-height:22px;font-weight:700;color:#333333;" class="txt-main">Pedido</p>
+                      <p style="margin:2px 0 0 0;font-size:15px;line-height:22px;font-weight:400;color:#555555;" class="txt-body">{{ order_name }}</p>
+                      {% if po_number %}
+                        <p style="margin:8px 0 0 0;font-size:12px;line-height:18px;font-weight:500;color:#555555;" class="txt-body">Orden de compra n.º {{ po_number }}</p>
+                      {% endif %}
+                    </td>
+                    <td class="logo-col" valign="top" width="127" style="width:127px;padding:0;vertical-align:top;">
+                      {% if shop.email_logo_url %}
+                        <img class="logo-img" src="{{ shop.email_logo_url }}" alt="{{ shop.name }}" width="{{ shop.email_logo_width | default: 127 }}" style="display:block;width:127px;max-width:127px;height:auto;border:0;" />
+                      {% else %}
+                        <img class="logo-img" src="https://storageapi.flockstore.co/fl-assets/assets/d0b1a4f5-7950-4aca-b1a1-535e98e1dc77-transcational_logo_covered.png" alt="{{ shop.name }}" width="127" style="display:block;width:127px;height:auto;border:0;" />
+                      {% endif %}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:28px 0 14px 0;">
+                      <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:#333333;" class="txt-main">
+                        Hola {{ customer.first_name | default: billing_address.first_name | default: shipping_address.first_name | default: "cliente" }},
+                      </h1>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 10px 0;">
+                      <h2 style="margin:0;font-size:20px;line-height:28px;font-weight:700;color:#333333;" class="txt-main">{{ email_title | strip }}</h2>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 24px 0;">
+                      <div style="font-size:15px;line-height:24px;color:#555555;" class="txt-body">{{ email_body }}</div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 16px 0;">
+                      <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Resumen del pedido</h3>
+                    </td>
+                  </tr>
+
+                  {% if line_items_including_zero_quantity == empty %}
+                    {% for line in subtotal_line_items %}
+                      <tr>
+                        <td colspan="2" style="padding:0 0 10px 0;">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                            <tr>
+                              <td class="item-image-cell" width="106" valign="middle" style="padding:16px 8px 16px 16px;width:106px;">
+                                {% if line.image %}
+                                  <img class="item-image" src="{{ line | img_url: 'compact_cropped' }}" alt="{{ line.title }}" width="80" style="display:block;width:80px;height:auto;max-height:120px;object-fit:cover;border:0;" />
+                                {% else %}
+                                  <div style="width:80px;height:80px;background:#dddddd;font-size:10px;color:#888888;text-align:center;line-height:80px;">Sin imagen</div>
+                                {% endif %}
+                              </td>
+                              <td valign="middle" style="padding:16px 16px 16px 8px;">
+                                {% if line.product.title %}
+                                  {% assign refund_line_title = line.product.title %}
+                                {% else %}
+                                  {% assign refund_line_title = line.title %}
+                                {% endif %}
+                                <p style="margin:0 0 5px 0;font-size:14px;line-height:18px;font-weight:700;color:#1a1a1a;" class="txt-product">{{ refund_line_title }}</p>
+
+                                {% if line.variant.title != 'Default Title' %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.variant.title }}</p>
+                                {% endif %}
+
+                                {% for group in line.groups %}
+                                  {% if group.deliverable? %}
+                                    <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Para: {{ group.display_title }}</p>
+                                  {% else %}
+                                    <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Parte de: {{ group.display_title }}</p>
+                                  {% endif %}
+                                {% endfor %}
+
+                                {% if line.gift_card and line.properties["__shopify_send_gift_card_to_recipient"] %}
+                                  {% for property in line.properties %}
+                                    {% assign property_first_char = property.first | slice: 0 %}
+                                    {% if property.last != blank and property_first_char != '_' %}
+                                      <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ property.first }}: {{ property.last }}</p>
+                                    {% endif %}
+                                  {% endfor %}
+                                {% endif %}
+
+                                {% if line.selling_plan_allocation %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.selling_plan_allocation.selling_plan.name }}</p>
+                                {% endif %}
+
+                                {% if line.aggregated_update %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ line.aggregated_update }}</p>
+                                {% elsif line.refunded_quantity > 0 %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">Reembolsado</p>
+                                {% endif %}
+
+                                {% if line.discount_allocations %}
+                                  {% for discount_allocation in line.discount_allocations %}
+                                    {% if discount_allocation.discount_application.target_selection != 'all' %}
+                                      <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</p>
+                                    {% endif %}
+                                  {% endfor %}
+                                {% endif %}
+
+                                <p style="margin:0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;border-top:1px solid #cccccc;padding-top:9px;" class="txt-product">
+                                  CANTIDAD: {{ line.quantity }}
+                                  {% if line.original_line_price != line.final_line_price %}
+                                    <span style="display:block;color:#888888;text-decoration:line-through;margin-top:6px;" class="txt-dim">{{ line.original_line_price | money }}</span>
+                                  {% endif %}
+                                  <span style="display:block;margin-top:4px;">{% if line.final_line_price > 0 or line.quantity == 0 %}{{ line.final_line_price | money }}{% else %}Gratis{% endif %}</span>
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    {% for line in line_items_including_zero_quantity %}
+                      <tr>
+                        <td colspan="2" style="padding:0 0 10px 0;">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                            <tr>
+                              <td class="item-image-cell" width="106" valign="middle" style="padding:16px 8px 16px 16px;width:106px;">
+                                {% if line.image %}
+                                  <img class="item-image" src="{{ line | img_url: 'compact_cropped' }}" alt="{{ line.title }}" width="80" style="display:block;width:80px;height:auto;max-height:120px;object-fit:cover;border:0;" />
+                                {% else %}
+                                  <div style="width:80px;height:80px;background:#dddddd;font-size:10px;color:#888888;text-align:center;line-height:80px;">Sin imagen</div>
+                                {% endif %}
+                              </td>
+                              <td valign="middle" style="padding:16px 16px 16px 8px;">
+                                {% if line.product.title %}
+                                  {% assign refund_line_title = line.product.title %}
+                                {% else %}
+                                  {% assign refund_line_title = line.title %}
+                                {% endif %}
+                                <p style="margin:0 0 5px 0;font-size:14px;line-height:18px;font-weight:700;color:#1a1a1a;" class="txt-product">{{ refund_line_title }}</p>
+
+                                {% if line.variant.title != 'Default Title' %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.variant.title }}</p>
+                                {% endif %}
+
+                                {% for group in line.groups %}
+                                  {% if group.deliverable? %}
+                                    <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Para: {{ group.display_title }}</p>
+                                  {% else %}
+                                    <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Parte de: {{ group.display_title }}</p>
+                                  {% endif %}
+                                {% endfor %}
+
+                                {% if line.gift_card and line.properties["__shopify_send_gift_card_to_recipient"] %}
+                                  {% for property in line.properties %}
+                                    {% assign property_first_char = property.first | slice: 0 %}
+                                    {% if property.last != blank and property_first_char != '_' %}
+                                      <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ property.first }}: {{ property.last }}</p>
+                                    {% endif %}
+                                  {% endfor %}
+                                {% endif %}
+
+                                {% if line.selling_plan_allocation %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.selling_plan_allocation.selling_plan.name }}</p>
+                                {% endif %}
+
+                                {% if line.aggregated_update %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ line.aggregated_update }}</p>
+                                {% elsif line.refunded_quantity > 0 %}
+                                  <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">Reembolsado</p>
+                                {% endif %}
+
+                                {% if line.discount_allocations %}
+                                  {% for discount_allocation in line.discount_allocations %}
+                                    {% if discount_allocation.discount_application.target_selection != 'all' %}
+                                      <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</p>
+                                    {% endif %}
+                                  {% endfor %}
+                                {% endif %}
+
+                                <p style="margin:0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;border-top:1px solid #cccccc;padding-top:9px;" class="txt-product">
+                                  CANTIDAD: {{ line.quantity }}
+                                  {% if line.original_line_price != line.final_line_price %}
+                                    <span style="display:block;color:#888888;text-decoration:line-through;margin-top:6px;" class="txt-dim">{{ line.original_line_price | money }}</span>
+                                  {% endif %}
+                                  <span style="display:block;margin-top:4px;">{% if line.final_line_price > 0 or line.quantity == 0 %}{{ line.final_line_price | money }}{% else %}Gratis{% endif %}</span>
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% endif %}
+
+                  <tr>
+                    <td colspan="2" style="padding:14px 0 0 0;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                        <tr>
+                          <td style="padding:22px 24px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                              <tr>
+                                <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Subtotal</td>
+                                <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ subtotal_price | plus: total_order_discount_amount | money }}</td>
+                              </tr>
+
+                              {% if order_discount_count > 0 %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">{% if order_discount_count == 1 %}Descuento en pedido{% else %}Descuentos en pedidos{% endif %}</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">-{{ total_order_discount_amount | money }}</td>
+                                </tr>
+                              {% endif %}
+
+                              {% unless retail_delivery_only %}
+                                {% if delivery_method == 'pick-up' %}
+                                  <tr>
+                                    <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Retiro</td>
+                                    <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ shipping_price | money }}</td>
+                                  </tr>
+                                {% else %}
+                                  {% if has_shipping_discount %}
+                                    <tr>
+                                      <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Envío</td>
+                                      <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">
+                                        {% if free_shipping == true %}
+                                          Gratis
+                                        {% else %}
+                                          {{ discounted_shipping_price | money }}
+                                        {% endif %}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td style="padding:0 0 12px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ shipping_discount_title }}{% if discount_value_price != 0 %} (-{{ discount_value_price | money }}){% endif %}</td>
+                                      <td align="right" style="padding:0 0 12px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body"></td>
+                                    </tr>
+                                  {% else %}
+                                    <tr>
+                                      <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Envío</td>
+                                      <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ shipping_price | money }}</td>
+                                    </tr>
+                                  {% endif %}
+                                {% endif %}
+                              {% endunless %}
+
+                              {% if total_duties %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Aranceles</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ total_duties | money }}</td>
+                                </tr>
+                              {% endif %}
+
+                              {% for fee in fees %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">{{ fee.title }}</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ fee.subtotal | money }}</td>
+                                </tr>
+                              {% endfor %}
+
+                              <tr>
+                                <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Impuestos</td>
+                                <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ tax_price | money }}</td>
+                              </tr>
+
+                              {% if total_tip and total_tip > 0 %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Tip</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ total_tip | money }}</td>
+                                </tr>
+                              {% endif %}
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:14px 0 0 0;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                        <tr>
+                          <td style="padding:22px 24px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                              {% if payment_terms and payment_terms.automatic_capture_at_fulfillment == false or b2b? %}
+                                {% assign next_payment = payment_terms.next_payment %}
+                                {% assign due_at_date = next_payment.due_at | date: "%b %d, %Y" %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Total pagado hoy</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ transaction_amount | money_with_currency }}</td>
+                                </tr>
+
+                                {% assign next_amount_due = total_price %}
+                                {% if next_payment %}
+                                  {% assign next_amount_due = next_payment.amount_due %}
+                                {% endif %}
+
+                                <tr>
+                                  <td style="padding:14px 0 0 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;border-top:1px solid #d8d8d8;" class="txt-main divider">
+                                    {% if payment_terms.type == 'receipt' %}
+                                      Total a pagar al momento de la recepción
+                                    {% elsif payment_terms.type == 'fulfillment' %}
+                                      Total a pagar al preparar el pedido
+                                    {% else %}
+                                      Total a pagar el {{ due_at_date }}
+                                    {% endif %}
+                                  </td>
+                                  <td align="right" style="padding:14px 0 0 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;border-top:1px solid #d8d8d8;" class="txt-main divider">{{ next_amount_due | money_with_currency }}</td>
+                                </tr>
+                              {% elsif transaction_amount != total_price %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;" class="txt-main">Total</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;" class="txt-main">{{ total_price | money_with_currency }}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding:14px 0 0 0;font-size:13px;line-height:18px;color:#555555;border-top:1px solid #d8d8d8;" class="txt-body divider">Total pagado</td>
+                                  <td align="right" style="padding:14px 0 0 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;border-top:1px solid #d8d8d8;" class="txt-main divider">{{ transaction_amount | money_with_currency }}</td>
+                                </tr>
+                              {% else %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;" class="txt-main">Total</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;" class="txt-main">{{ total_price | money_with_currency }}</td>
+                                </tr>
+                              {% endif %}
+                            </table>
+
+                            {% if total_discounts > 0 %}
+                              <p style="margin:14px 0 0 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Ahorraste <strong style="color:#333333;" class="txt-main">{{ total_discounts | money }}</strong></p>
+                            {% endif %}
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  {% unless payment_terms %}
+                    {% if transaction_size > 1 or transaction_amount < total_price %}
+                      <tr>
+                        <td colspan="2" style="padding:14px 0 0 0;">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                            <tr>
+                              <td style="padding:22px 24px;">
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                  {% for transaction in transactions %}
+                                    {% if transaction.status == "success" and transaction.kind == "capture" or transaction.kind == "sale" %}
+                                      {% if transaction.payment_details.credit_card_company %}
+                                        {% capture transaction_name %}{{ transaction.payment_details.credit_card_company }} (que termina en {{ transaction.payment_details.credit_card_last_four_digits }}){% endcapture %}
+                                      {% else %}
+                                        {% capture transaction_name %}{{ transaction.gateway_display_name }}{% endcapture %}
+                                      {% endif %}
+                                      <tr>
+                                        <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">{{ transaction_name }}</td>
+                                        <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ transaction.amount | money }}</td>
+                                      </tr>
+                                    {% endif %}
+
+                                    {% if transaction.kind == 'refund' and transaction.gateway != "shop_offer" %}
+                                      {% if transaction.payment_details.credit_card_company %}
+                                        {% assign refund_method_title = transaction.payment_details.credit_card_company %}
+                                      {% else %}
+                                        {% assign refund_method_title = transaction.gateway_display_name %}
+                                      {% endif %}
+                                      {% if transaction.gateway == 'shopify_store_credit' %}
+                                        {% assign link_url = routes.account_profile_url %}
+                                        {% capture link_text %}Ver{% endcapture %}
+                                      {% else %}
+                                        {% assign link_url = nil %}
+                                        {% assign link_text = nil %}
+                                      {% endif %}
+                                      <tr>
+                                        <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Reembolso<br><span style="font-size:11px;">{{ refund_method_title | replace: '_', ' ' | capitalize }}</span>{% if link_url %}<span>&nbsp;&nbsp;<a href="{{ link_url }}" style="color:#555555;text-decoration:none;">{{ link_text }}</a></span>{% endif %}</td>
+                                        <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ transaction.amount | times: -1 | money }}</td>
+                                      </tr>
+                                    {% endif %}
+                                  {% endfor %}
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    {% endif %}
+                  {% endunless %}
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="bg-footer" style="padding:32px 50px;background-color:#242424;text-align:center;">
+                <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">¿Necesitas ayuda con tu pedido?</p>
+                <a href="mailto:{{ shop.email }}" target="_blank" class="btn-secondary" style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ESCRÍBENOS</a>
+                <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">Si tienes alguna pregunta, responde este correo o contáctanos en <a href="mailto:{{ shop.email }}" style="color:#aaaaaa;text-decoration:none;font-weight:700;">{{ shop.email }}</a>.</p>
+                {% if shop.url %}
+                  <p style="margin:8px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;">
+                    <a href="{{ shop.url }}" target="_blank" class="footer-store-link" style="color:#000000;text-decoration:none;font-weight:700;">Visitar tienda</a>
+                  </p>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

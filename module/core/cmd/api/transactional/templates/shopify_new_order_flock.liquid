@@ -1,88 +1,12 @@
 {% assign delivery_method_types = delivery_agreements | map: 'delivery_method_type' | uniq %}
-{% assign has_split_cart = false %}
-{% assign non_none_count = 0 %}
-{% for type in delivery_method_types %}
-  {% unless type == 'none' %}
-    {% assign non_none_count = non_none_count | plus: 1 %}
-  {% endunless %}
-{% endfor %}
-{% if non_none_count > 1 %}
+{% if delivery_method_types.size > 1 %}
   {% assign has_split_cart = true %}
+{% else %}
+  {% assign has_split_cart = false %}
 {% endif %}
 
-{% assign non_none_agreements_count = 0 %}
-{% for agreement in delivery_agreements %}
-  {% unless agreement.delivery_method_type == 'none' %}
-    {% assign non_none_agreements_count = non_none_agreements_count | plus: 1 %}
-  {% endunless %}
-{% endfor %}
-
-{% capture email_title %}
-  {% if has_pending_payment %}
-    ¡Gracias por tu pedido!
-  {% else %}
-    ¡Gracias por tu pedido!
-  {% endif %}
-{% endcapture %}
-
-{% capture email_body %}
-  {% if has_pending_payment %}
-    {% if buyer_action_required %}
-      Cuando se complete el pago, recibirás un correo electrónico de confirmación.
-    {% else %}
-      El pago se está procesando. Recibirás un correo electrónico cuando se confirme el pedido.
-    {% endif %}
-  {% else %}
-    {% if requires_shipping %}
-      {% if split_ship_pickup_notifications and has_split_cart %}
-        {% case split_cart_delivery_method %}
-          {% when 'pick-up' %}
-            Recibirás un correo electrónico cuando tu pedido esté listo para ser retirado.
-          {% when 'local' %}
-            Hola {{ customer.first_name }}, estamos preparando tu pedido para la entrega.
-          {% when 'shipping' %}
-            Estamos preparando tu pedido para enviarlo. Te notificaremos cuando haya sido enviado.
-          {% else %}
-            Estamos preparando tu pedido para enviarlo. Te notificaremos cuando haya sido enviado.
-        {% endcase %}
-      {% else %}
-        {% case delivery_method %}
-          {% when 'pick-up' %}
-            Recibirás un correo electrónico cuando tu pedido esté listo para ser retirado.
-          {% when 'local' %}
-            Hola {{ customer.first_name }}, estamos preparando tu pedido para la entrega.
-          {% else %}
-            Estamos preparando tu pedido para enviarlo. Te notificaremos cuando haya sido enviado.
-        {% endcase %}
-      {% endif %}
-      {% if delivery_instructions != blank %}
-        <p><b>Información de entrega:</b> {{ delivery_instructions }}</p>
-      {% endif %}
-      {% unless split_ship_pickup_notifications and delivery_method_types.size > 1 %}
-        {% if consolidated_estimated_delivery_time %}
-          {% if non_none_agreements_count > 1 %}
-            <p><b>Entrega estimada:</b> {{ consolidated_estimated_delivery_time }}</p>
-          {% else %}
-            <p>Entrega estimada <b>{{ consolidated_estimated_delivery_time }}</b></p>
-          {% endif %}
-        {% endif %}
-      {% endunless %}
-    {% endif %}
-  {% endif %}
-  {% assign gift_card_line_items = line_items | where: "gift_card" %}
-  {% assign found_gift_card_with_recipient_email = false %}
-  {% for line_item in gift_card_line_items %}
-    {% if line_item.properties["__shopify_send_gift_card_to_recipient"] and line_item.properties["Recipient email"] %}
-      {% assign found_gift_card_with_recipient_email = true %}
-      {% break %}
-    {% endif %}
-  {% endfor %}
-  {% if found_gift_card_with_recipient_email %}
-    <p>La persona destinataria de la tarjeta de regalo recibirá un correo electrónico con el código.</p>
-  {% elsif gift_card_line_items.first %}
-    <p>Recibirás correos electrónicos por separado para las tarjetas de regalo.</p>
-  {% endif %}
-{% endcapture %}
+{% assign resolved_email_title = email_title | default: "Nuevo pedido" %}
+{% assign admin_order_url = "https://" | append: shop.permanent_domain | append: "/admin/orders/" | append: id %}
 
 {% assign order_discount_count = 0 %}
 {% assign total_order_discount_amount = 0 %}
@@ -114,55 +38,21 @@
 {% endfor %}
 
 {% capture payment_lines %}
-  {% if payment_terms and payment_terms.automatic_capture_at_fulfillment == false %}
-    {% assign due_date = payment_terms.next_payment.due_at | default: nil %}
-    {% if payment_terms.type == 'receipt' or payment_terms.type == 'fulfillment' and payment_terms.next_payment.due_at == nil %}
-      {{ payment_terms.translated_name }}<br>
-    {% else %}
-      {{ payment_terms.translated_name }}: pagadero al {{ due_date | date: format: 'date' }}<br>
-    {% endif %}
-  {% endif %}
-  {% if transactions.size > 0 %}
-    {% for transaction in transactions %}
-      {% if transaction.status == "success" or transaction.status == "pending" %}
-        {% if transaction.kind == "capture" or transaction.kind == "sale" %}
-          {% if transaction.payment_details.gift_card_last_four_digits %}
-            Tarjeta de regalo terminada en {{ transaction.payment_details.gift_card_last_four_digits }}<br>
-          {% elsif transaction.payment_details.type == "shop_pay_installments" and transaction.payment_details.credit_card_company == "unknown" %}
-            Shop Pay Installments<br>
-          {% elsif transaction.payment_details.type == "card" %}
-            {{ transaction.payment_details.credit_card_company }} terminada en {{ transaction.payment_details.credit_card_last_four_digits }}<br>
-            {% if transaction.first_installment_amount %}
-              {{ transaction.first_installment_amount | money }}/mes durante {{ transaction.installment_count }} meses<br>
-            {% endif %}
-          {% elsif transaction.gateway_display_name == "Gift card" %}
-            Tarjeta de regalo terminada en {{ transaction.payment_details.gift_card.last_four_characters | upcase }}<br>
-          {% elsif transaction.payment_details.local_payment? %}
-            {{ transaction.payment_details.payment_method_display_name }}<br>
-          {% elsif transaction.gateway_display_name != "Shop Cash" and transaction.gateway != "shop_offer" %}
-            {{ transaction.gateway_display_name }}<br>
-          {% endif %}
-        {% elsif transaction.kind == "authorization" and transaction.gateway_display_name == "Shop Cash" %}
-          Shop Cash<br>
-        {% endif %}
-      {% endif %}
-    {% endfor %}
+  {% if order.transactions.size > 0 %}
+    {{ order.transactions | map: "gateway_display_name" | uniq | join: ", " }}
   {% endif %}
 {% endcapture %}
 
-{% assign show_payment_section = false %}
-{% if b2b? %}
-  {% assign show_payment_section = true %}
-{% endif %}
 {% assign payment_lines_stripped = payment_lines | strip %}
-{% if payment_lines_stripped != "" %}
+{% assign show_payment_section = false %}
+{% if payment_lines_stripped != "" or payment_terms %}
   {% assign show_payment_section = true %}
 {% endif %}
 
 <!DOCTYPE html>
 <html lang="es" xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <title>{{ email_title | strip }}</title>
+    <title>{{ resolved_email_title | strip }}</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style type="text/css">
@@ -175,10 +65,12 @@
         .bg-outer { background-color: #1a1a1a !important; }
         .bg-card { background-color: #222222 !important; }
         .bg-section { background-color: #2d2d2d !important; }
+        .bg-alert { background-color: #3a2626 !important; }
         .bg-footer { background-color: #1a1a1a !important; }
         .txt-main { color: #e8e8e8 !important; }
         .txt-body { color: #cccccc !important; }
         .txt-product { color: #e0e0e0 !important; }
+        .txt-alert { color: #ffd4d4 !important; }
         .txt-dim { color: #888888 !important; }
         .divider { border-top-color: #444444 !important; }
         .section-border { border-left-color: #444444 !important; border-top-color: #444444 !important; }
@@ -191,7 +83,6 @@
         .card-outer { padding-left: 30px !important; padding-right: 30px !important; padding-bottom: 40px !important; }
         .logo-col { width: 80px !important; }
         .logo-img { width: 80px !important; }
-        .stack-col { display: block !important; width: 100% !important; box-sizing: border-box !important; }
         .stack-col-l { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 20px 0 16px 0 !important; border-left: none !important; border-bottom: 1px solid #dddddd !important; }
         .stack-col-r { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 16px 0 20px 0 !important; border-left: none !important; }
         .item-image-cell { width: 92px !important; padding-right: 8px !important; }
@@ -206,6 +97,26 @@
       <tr>
         <td align="center" style="padding:32px 16px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            {% if fulfillment_aborted or has_high_risks? %}
+              <tr>
+                <td style="padding:0 0 16px 0;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-alert" style="background-color:#fdecec;border-radius:2px;">
+                    <tr>
+                      <td style="padding:18px 20px;">
+                        {% if fulfillment_aborted %}
+                          <p style="margin:0 0 8px 0;font-size:14px;line-height:22px;font-weight:700;color:#8f1d1d;" class="txt-alert">El pedido no se preparó automáticamente</p>
+                          <p style="margin:0;font-size:13px;line-height:20px;color:#8f1d1d;" class="txt-alert">Alto riesgo de fraude detectado. Antes de preparar este pedido o capturar el pago, revisa el análisis de riesgos y determina si este pedido es fraudulento.</p>
+                        {% else %}
+                          <p style="margin:0 0 8px 0;font-size:14px;line-height:22px;font-weight:700;color:#8f1d1d;" class="txt-alert">Alto riesgo de fraude detectado</p>
+                          <p style="margin:0;font-size:13px;line-height:20px;color:#8f1d1d;" class="txt-alert">Antes de preparar este pedido o capturar el pago, revisa el análisis de riesgos y determina si este pedido es fraudulento.</p>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            {% endif %}
+
             <tr>
               <td class="card-outer bg-card" style="background-color:#f8f8f8;padding:0 50px 60px 50px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -227,84 +138,55 @@
                   </tr>
 
                   <tr>
-                    <td colspan="2" style="padding:28px 0 14px 0;">
-                      <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:#333333;" class="txt-main">
-                        Hola {{ customer.first_name | default: billing_address.first_name | default: shipping_address.first_name | default: "cliente" }},
-                      </h1>
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td colspan="2" style="padding:0 0 10px 0;">
-                      <h2 style="margin:0;font-size:20px;line-height:28px;font-weight:700;color:#333333;" class="txt-main">{{ email_title | strip }}</h2>
+                    <td colspan="2" style="padding:28px 0 10px 0;">
+                      <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:#333333;" class="txt-main">{{ resolved_email_title | strip }}</h1>
                     </td>
                   </tr>
 
                   <tr>
                     <td colspan="2" style="padding:0 0 24px 0;">
-                      <div style="font-size:15px;line-height:24px;color:#555555;" class="txt-body">{{ email_body }}</div>
+                      <div style="font-size:15px;line-height:24px;color:#555555;" class="txt-body">
+                        {% assign current_date = date | date: "%b %d" %}
+                        {% assign current_time = date | date: "%l:%M %P" %}
+                        {% if customer.name %}
+                          {{ customer.name }} realizó el pedido {{ name }} el {{ current_date }} a las {{ current_time | strip }}.
+                        {% else %}
+                          Alguien realizó el pedido {{ name }} el {{ current_date }} a las {{ current_time | strip }}.
+                        {% endif %}
+                      </div>
                     </td>
                   </tr>
 
-                  {% assign transaction_count = transactions | size %}
-                  {% if transaction_count > 0 %}
-                    {% for transaction in transactions %}
-                      {% if transaction.show_buyer_pending_payment_instructions? %}
-                        <tr>
-                          <td colspan="2" style="padding:0 0 12px 0;">
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
-                              <tr>
-                                <td style="padding:18px 20px;">
-                                  <p style="margin:0 0 14px 0;font-size:14px;line-height:22px;color:#555555;" class="txt-body">{{ transaction.buyer_pending_payment_notice }}</p>
-                                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                    <tr>
-                                      {% for instruction in transaction.buyer_pending_payment_instructions %}
-                                        <td style="padding:0 12px 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ instruction.header }}</td>
-                                      {% endfor %}
-                                      <td style="padding:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">Cantidad</td>
-                                    </tr>
-                                    <tr>
-                                      {% for instruction in transaction.buyer_pending_payment_instructions %}
-                                        <td style="padding:0 12px 0 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ instruction.value }}</td>
-                                      {% endfor %}
-                                      <td style="padding:0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ transaction.amount | money }}</td>
-                                    </tr>
-                                  </table>
-                                </td>
-                              </tr>
-                            </table>
-                          </td>
-                        </tr>
-                      {% endif %}
-                    {% endfor %}
-                  {% endif %}
-
-                  {% if order_status_url or shop.url %}
-                    <tr>
-                      <td colspan="2" style="padding:0 0 30px 0;">
-                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                          <tr>
-                            {% if order_status_url %}
-                              <td class="actions-cell" valign="top" style="padding:0 12px 0 0;">
-                                <a href="{{ order_status_url }}" class="btn-primary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">VER TU PEDIDO</a>
-                              </td>
-                            {% endif %}
-                            {% if shop.url %}
-                              <td class="actions-cell" valign="top" style="padding:0;">
-                                <a href="{{ shop.url }}" class="btn-secondary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">VISITAR TIENDA</a>
-                              </td>
-                            {% endif %}
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
-                  {% endif %}
+                  <tr>
+                    <td colspan="2" style="padding:0 0 30px 0;">
+                      <a href="{{ admin_order_url }}" class="btn-primary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">VER PEDIDO</a>
+                    </td>
+                  </tr>
 
                   <tr>
                     <td colspan="2" style="padding:0 0 16px 0;">
                       <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Resumen del pedido</h3>
                     </td>
                   </tr>
+
+                  {% if has_split_cart %}
+                    {% for delivery_agreement in delivery_agreements %}
+                      {% if delivery_agreement.line_items != blank and delivery_agreements.size > 1 %}
+                        <tr>
+                          <td colspan="2" style="padding:0 0 10px 0;">
+                            <p style="margin:0;font-size:13px;line-height:20px;font-weight:700;color:#333333;" class="txt-main">
+                              {{ delivery_agreement.delivery_method_name }} artículos
+                              {% if delivery_agreement.presentment_title %}
+                                <span style="font-weight:500;color:#555555;" class="txt-body"> · {{ delivery_agreement.presentment_title }}</span>
+                              {% elsif delivery_agreement.estimated_delivery_date %}
+                                <span style="font-weight:500;color:#555555;" class="txt-body"> · {{ delivery_agreement.estimated_delivery_date }}</span>
+                              {% endif %}
+                            </p>
+                          </td>
+                        </tr>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
 
                   {% for line in subtotal_line_items %}
                     <tr>
@@ -329,32 +211,31 @@
                               <p style="margin:0 0 5px 0;font-size:14px;line-height:18px;font-weight:700;color:#1a1a1a;" class="txt-product">{{ line_title }}</p>
 
                               {% if line.variant.title != 'Default Title' %}
-                                <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.variant.title }}</p>
+                                <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.variant.title }}</p>
                               {% endif %}
 
+                              {% if line.sku != blank %}
+                                <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">SKU: {{ line.sku }}</p>
+                              {% endif %}
+
+                              {% for group in line.groups %}
+                                {% if group.deliverable? %}
+                                  <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Para: {{ group.display_title }}</p>
+                                {% else %}
+                                  <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">Parte de: {{ group.display_title }}</p>
+                                {% endif %}
+                              {% endfor %}
+
                               {% if line.selling_plan_allocation %}
-                                <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.selling_plan_allocation.selling_plan.name }}</p>
+                                <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.selling_plan_allocation.selling_plan.name }}</p>
                               {% endif %}
 
                               {% if line.discount_allocations %}
                                 {% for discount_allocation in line.discount_allocations %}
                                   {% if discount_allocation.discount_application.target_selection != 'all' %}
-                                    <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</p>
+                                    <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</p>
                                   {% endif %}
                                 {% endfor %}
-                              {% endif %}
-
-                              {% if line.gift_card and line.properties["__shopify_send_gift_card_to_recipient"] %}
-                                {% for property in line.properties %}
-                                  {% assign property_first_char = property.first | slice: 0 %}
-                                  {% if property.last != blank and property_first_char != '_' %}
-                                    <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ property.first }}: {{ property.last }}</p>
-                                  {% endif %}
-                                {% endfor %}
-                              {% endif %}
-
-                              {% if line.refunded_quantity > 0 %}
-                                <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">Reembolsado</p>
                               {% endif %}
 
                               <p style="margin:0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;border-top:1px solid #cccccc;padding-top:9px;" class="txt-product divider">
@@ -390,7 +271,36 @@
                               {% endif %}
 
                               {% unless retail_delivery_only %}
-                                {% if delivery_method == 'pick-up' %}
+                                {% if split_ship_pickup_notifications %}
+                                  {% assign shipping_type_total = 0 %}
+                                  {% assign pickup_type_total = 0 %}
+                                  {% for method in shipping_methods %}
+                                    {% assign shipping_type_total = shipping_type_total | plus: method.price_with_discounts %}
+                                  {% endfor %}
+                                  {% for method in pickup_methods %}
+                                    {% assign pickup_type_total = pickup_type_total | plus: method.price_with_discounts %}
+                                  {% endfor %}
+
+                                  {% if shipping_methods.size > 0 %}
+                                    <tr>
+                                      <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Envío</td>
+                                      <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">
+                                        {% if has_shipping_discount and shipping_type_total == 0 %}
+                                          Gratis
+                                        {% else %}
+                                          {{ shipping_type_total | money }}
+                                        {% endif %}
+                                      </td>
+                                    </tr>
+                                  {% endif %}
+
+                                  {% if pickup_methods.size > 0 %}
+                                    <tr>
+                                      <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Retiro</td>
+                                      <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ pickup_type_total | money }}</td>
+                                    </tr>
+                                  {% endif %}
+                                {% elsif delivery_method == 'pick-up' %}
                                   <tr>
                                     <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Retiro</td>
                                     <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ shipping_price | money }}</td>
@@ -457,7 +367,7 @@
 
                   <tr>
                     <td colspan="2" style="padding:28px 0 16px 0;">
-                      <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Información del cliente</h3>
+                      <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Información operativa</h3>
                     </td>
                   </tr>
 
@@ -466,6 +376,14 @@
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
                         <tr>
                           <td class="stack-col-l section-border" valign="top" width="50%" style="padding:28px 24px 28px 28px;box-sizing:border-box;">
+                            {% if customer.name or customer.email %}
+                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Cliente</p>
+                              <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
+                                {% if customer.name %}{{ customer.name }}<br>{% endif %}
+                                {% if customer.email %}{{ customer.email }}{% endif %}
+                              </p>
+                            {% endif %}
+
                             {% if requires_shipping and shipping_address %}
                               <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de envío</p>
                               <div style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ shipping_address | format_address }}</div>
@@ -473,55 +391,45 @@
 
                             {% if billing_address %}
                               <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de facturación</p>
-                              <div style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ billing_address | format_address }}</div>
-                            {% endif %}
-
-                            {% if company_location %}
-                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Sucursal</p>
-                              <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ company_location.name }}</p>
+                              <div style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ billing_address | format_address }}</div>
                             {% endif %}
                           </td>
 
                           <td class="stack-col-r section-border" valign="top" width="50%" style="padding:28px 28px 28px 24px;box-sizing:border-box;border-left:1px solid #e0e0e0;">
-                            {% if show_payment_section %}
-                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Pago</p>
-                              <div style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ payment_lines }}</div>
+                            {% if payment_lines_stripped != "" %}
+                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Método de procesamiento de pagos</p>
+                              <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ payment_lines }}</p>
+                            {% endif %}
+
+                            {% if payment_terms %}
+                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Condiciones del pago</p>
+                              <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ payment_terms.translated_name }}</p>
                             {% endif %}
 
                             {% if requires_shipping and shipping_address %}
                               {% if split_ship_pickup_notifications %}
                                 {% assign unique_shipping_titles = shipping_methods | map: 'title' | uniq %}
                                 {% if unique_shipping_titles.size > 0 %}
-                                  <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Método de envío</p>
-                                  <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
-                                    {% if unique_shipping_titles.size == 1 and delivery_promise_branded_shipping_line %}
-                                      {{ delivery_promise_branded_shipping_line }}
-                                    {% else %}
-                                      {% for shipping_title in unique_shipping_titles %}
-                                        {{ shipping_title }}{% unless forloop.last %}<br>{% endunless %}
-                                      {% endfor %}
-                                    {% endif %}
-                                  </p>
-                                {% elsif shipping_method %}
-                                  <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Método de envío</p>
-                                  <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
-                                    {% if delivery_promise_branded_shipping_line %}
-                                      {{ delivery_promise_branded_shipping_line }}
-                                    {% else %}
-                                      {{ shipping_method.title }}
-                                    {% endif %}
+                                  <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Forma de entrega</p>
+                                  <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
+                                    {% for shipping_title in unique_shipping_titles %}
+                                      {{ shipping_title }}{% unless forloop.last %}<br>{% endunless %}
+                                    {% endfor %}
                                   </p>
                                 {% endif %}
-                              {% elsif shipping_method %}
-                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Método de envío</p>
-                                <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
-                                  {% if delivery_promise_branded_shipping_line %}
-                                    {{ delivery_promise_branded_shipping_line }}
-                                  {% else %}
-                                    {{ shipping_method.title }}
-                                  {% endif %}
+                              {% elsif shipping_methods.first %}
+                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Forma de entrega</p>
+                                <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">
+                                  {% for shipping_method in shipping_methods %}
+                                    {{ shipping_method.title }}{% unless forloop.last %}<br>{% endunless %}
+                                  {% endfor %}
                                 </p>
                               {% endif %}
+                            {% endif %}
+
+                            {% if po_number %}
+                              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Número de orden de compra</p>
+                              <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">#{{ po_number }}</p>
                             {% endif %}
                           </td>
                         </tr>
@@ -534,9 +442,9 @@
 
             <tr>
               <td class="bg-footer" style="padding:32px 50px;background-color:#242424;text-align:center;">
-                <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">¿Necesitas ayuda con tu pedido?</p>
-                <a href="mailto:{{ shop.email }}" target="_blank" class="btn-secondary" style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ESCRÍBENOS</a>
-                <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">Si tienes alguna pregunta, responde este correo o contáctanos en <a href="mailto:{{ shop.email }}" style="color:#aaaaaa;text-decoration:none;font-weight:700;">{{ shop.email }}</a>.</p>
+                <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">Notificación administrativa de Shopify</p>
+                <a href="{{ admin_order_url }}" target="_blank" class="btn-secondary" style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ABRIR PEDIDO EN ADMIN</a>
+                <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">Correo interno para {{ shop.name }} sobre el pedido {{ order_name }}.</p>
                 {% if shop.url %}
                   <p style="margin:8px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;">
                     <a href="{{ shop.url }}" target="_blank" class="footer-store-link" style="color:#000000;text-decoration:none;font-weight:700;">Visitar tienda</a>
