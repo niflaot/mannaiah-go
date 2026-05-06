@@ -45,12 +45,18 @@ func (r *launchTestInstallationRepo) MarkUninstalled(ctx context.Context, shopDo
 type launchTestContext struct {
 	// queryValues defines query-string inputs exposed to the handler.
 	queryValues map[string]string
+	// pathParams defines path parameters exposed to the handler.
+	pathParams map[string]string
 	// headers captures response header values written by the handler.
 	headers map[string]string
+	// locals captures request-local values used across middleware and handlers.
+	locals map[string]any
 	// statusCode captures the final response status code.
 	statusCode int
 	// body captures the plain-text response payload.
 	body string
+	// jsonBody captures JSON response payloads.
+	jsonBody any
 }
 
 // Context returns a background request context for the test handler invocation.
@@ -82,6 +88,7 @@ func (c *launchTestContext) Status(code int) corehttp.Context {
 
 // JSON satisfies the context interface for tests that do not emit JSON.
 func (c *launchTestContext) JSON(body any) error {
+	c.jsonBody = body
 	return nil
 }
 
@@ -113,6 +120,9 @@ func (c *launchTestContext) SendBytes(body []byte) error {
 
 // Params returns empty path parameters because the launch page has none.
 func (c *launchTestContext) Params(key string, defaultValue ...string) string {
+	if value, ok := c.pathParams[key]; ok {
+		return value
+	}
 	if len(defaultValue) > 0 {
 		return defaultValue[0]
 	}
@@ -155,7 +165,14 @@ func (c *launchTestContext) FormValue(key string, defaultValue ...string) string
 
 // Locals satisfies the context interface for tests that do not use request locals.
 func (c *launchTestContext) Locals(key string, value ...any) any {
-	return nil
+	if c.locals == nil {
+		c.locals = map[string]any{}
+	}
+	if len(value) > 0 {
+		c.locals[key] = value[0]
+		return value[0]
+	}
+	return c.locals[key]
 }
 
 // TestAppLaunchRouteReturnsLandingPage verifies Shopify App URL launches render a deterministic landing page.

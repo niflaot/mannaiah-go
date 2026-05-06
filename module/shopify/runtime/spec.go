@@ -374,6 +374,7 @@ func shopifyExtensionOrderSummarySchema() *openapi3.Schema {
 	return openapi3.NewObjectSchema().
 		WithProperty("linked", openapi3.NewBoolSchema()).
 		WithProperty("mannaiahId", openapi3.NewStringSchema()).
+		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("status", openapi3.NewStringSchema()).
 		WithProperty("contactName", openapi3.NewStringSchema()).
 		WithProperty("lastSyncedAt", openapi3.NewDateTimeSchema()).
@@ -385,6 +386,7 @@ func shopifyExtensionContactSummarySchema() *openapi3.Schema {
 		WithProperty("linked", openapi3.NewBoolSchema()).
 		WithProperty("mannaiahId", openapi3.NewStringSchema()).
 		WithProperty("displayName", openapi3.NewStringSchema()).
+		WithProperty("createdAt", openapi3.NewDateTimeSchema()).
 		WithProperty("lastSyncedAt", openapi3.NewDateTimeSchema()).
 		WithRequired([]string{"linked"})
 }

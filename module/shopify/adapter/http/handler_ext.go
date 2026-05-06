@@ -18,6 +18,7 @@ const extensionOrigin = "https://admin.shopify.com"
 type ExtensionOrderSummary struct {
 	Linked       bool       `json:"linked"`
 	MannaiahID   string     `json:"mannaiahId,omitempty"`
+	CreatedAt    *time.Time `json:"createdAt,omitempty"`
 	Status       string     `json:"status,omitempty"`
 	ContactName  string     `json:"contactName,omitempty"`
 	LastSyncedAt *time.Time `json:"lastSyncedAt,omitempty"`
@@ -28,6 +29,7 @@ type ExtensionContactSummary struct {
 	Linked       bool       `json:"linked"`
 	MannaiahID   string     `json:"mannaiahId,omitempty"`
 	DisplayName  string     `json:"displayName,omitempty"`
+	CreatedAt    *time.Time `json:"createdAt,omitempty"`
 	LastSyncedAt *time.Time `json:"lastSyncedAt,omitempty"`
 }
 
@@ -80,6 +82,7 @@ func (h *Handler) getExtensionOrder(ctx corehttp.Context) error {
 	return ctx.Status(200).JSON(ExtensionOrderSummary{
 		Linked:       true,
 		MannaiahID:   strings.TrimSpace(order.ID),
+		CreatedAt:    extensionTimePointer(order.CreatedAt),
 		Status:       strings.TrimSpace(string(order.CurrentStatus)),
 		ContactName:  contactName,
 		LastSyncedAt: link.LastSyncedAt,
@@ -127,6 +130,7 @@ func (h *Handler) getExtensionContact(ctx corehttp.Context) error {
 		Linked:       true,
 		MannaiahID:   strings.TrimSpace(contact.ID),
 		DisplayName:  buildContactDisplayName(*contact),
+		CreatedAt:    extensionTimePointer(contact.CreatedAt),
 		LastSyncedAt: link.LastSyncedAt,
 	})
 }
@@ -172,4 +176,12 @@ func buildContactDisplayName(contact contactsdomain.Contact) string {
 	}
 
 	return strings.TrimSpace(contact.Email)
+}
+
+func extensionTimePointer(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	resolvedValue := value.UTC()
+	return &resolvedValue
 }
