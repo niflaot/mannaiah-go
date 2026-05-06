@@ -212,6 +212,8 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 	}
 	summary := &SyncSummary{RunID: runID, Trigger: resolvedTrigger}
 
+	s.logger.Info("shopify contacts bulk sync started", zap.String("trigger", resolvedTrigger))
+
 	sinceID := ""
 	for {
 		if err := ctx.Err(); err != nil {
@@ -227,9 +229,12 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			return listErr
 		})
 		if err != nil {
+			s.logger.Error("shopify contacts list page failed", zap.String("sinceID", sinceID), zap.Error(err))
 			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
 			return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 		}
+
+		s.logger.Info("shopify contacts page fetched", zap.Int("count", len(customers)), zap.String("sinceID", sinceID), zap.Bool("hasMore", hasMore))
 
 		for _, customer := range customers {
 			summary.Processed++
@@ -238,6 +243,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 				s.logger.Warn("shopify contact sync failed", zap.String("id", customer.ID), zap.Error(upsertErr))
 			} else {
 				summary.Succeeded++
+				s.logger.Info("shopify contact synced", zap.String("id", customer.ID))
 			}
 		}
 
@@ -249,6 +255,8 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			break
 		}
 	}
+
+	s.logger.Info("shopify contacts bulk sync completed", zap.Int("processed", summary.Processed), zap.Int("succeeded", summary.Succeeded), zap.Int("failed", summary.Failed))
 
 	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
 		s.logger.Warn("complete shopify contacts sync run failed", zap.Error(completeErr))
