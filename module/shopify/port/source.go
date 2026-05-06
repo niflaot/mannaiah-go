@@ -43,6 +43,8 @@ type OrderSource interface {
 type OrderDestination interface {
 	// Validate verifies destination connectivity and credentials.
 	Validate(ctx context.Context) error
+	// CreateOrderFromMainstream creates one Shopify order from mainstream order values.
+	CreateOrderFromMainstream(ctx context.Context, command MainstreamOrderCreateCommand) (ShopifyOrder, error)
 	// UpdateOrderFromMainstream pushes one mainstream order-status update back to Shopify.
 	UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command MainstreamOrderUpdateCommand) error
 }
@@ -224,6 +226,46 @@ type ShopifyOrder struct {
 	// DiscountCodes defines discount-code values.
 	DiscountCodes []ShopifyDiscountCode
 	// CreatedAt defines source creation timestamps.
+	CreatedAt time.Time
+}
+
+// MainstreamOrderCreateItem defines one outbound Shopify order item payload value.
+type MainstreamOrderCreateItem struct {
+	// SKU defines item SKU values.
+	SKU string
+	// Title defines item title values.
+	Title string
+	// Quantity defines item quantity values.
+	Quantity int
+	// Price defines item unit-price values.
+	Price float64
+}
+
+// MainstreamOrderCreateShippingCharge defines one outbound Shopify shipping line.
+type MainstreamOrderCreateShippingCharge struct {
+	// Code defines shipping method identifiers.
+	Code string
+	// Title defines shipping method display titles.
+	Title string
+	// Price defines shipping price values.
+	Price float64
+}
+
+// MainstreamOrderCreateCommand defines outbound Shopify order creation payload values.
+type MainstreamOrderCreateCommand struct {
+	// OrderID defines the Mannaiah order identifier being synced.
+	OrderID string
+	// Identifier defines public/external order identifiers.
+	Identifier string
+	// CustomerID defines the linked Shopify customer identifier.
+	CustomerID string
+	// Status defines mainstream order status values.
+	Status ordersdomain.Status
+	// Items defines order item values.
+	Items []MainstreamOrderCreateItem
+	// ShippingCharges defines shipping charge values.
+	ShippingCharges []MainstreamOrderCreateShippingCharge
+	// CreatedAt defines optional creation timestamps.
 	CreatedAt time.Time
 }
 

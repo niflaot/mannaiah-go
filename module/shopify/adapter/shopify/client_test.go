@@ -145,6 +145,109 @@ func TestClientUpdateOrderFromMainstreamAddsCompletedTag(t *testing.T) {
 	}
 }
 
+// TestClientCreateOrderFromMainstreamAssignsCustomer verifies outbound order creation payloads.
+func TestClientCreateOrderFromMainstreamAssignsCustomer(t *testing.T) {
+	var postBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("request method = %q, want POST", request.Method)
+		}
+		if request.URL.Path != "/orders.json" {
+			t.Fatalf("request path = %q, want /orders.json", request.URL.Path)
+		}
+		var err error
+		postBody, err = io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatalf("ReadAll(request.Body) error = %v", err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"order":{"id":987,"name":"#987","customer":{"id":123},"line_items":[],"shipping_lines":[],"discount_codes":[],"payment_gateway_names":[],"created_at":"2026-05-06T12:00:00Z"}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	order, err := client.CreateOrderFromMainstream(shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com"), shopifyport.MainstreamOrderCreateCommand{
+		OrderID:    "ord-1",
+		Identifier: "M-1001",
+		CustomerID: "123",
+		Status:     ordersdomain.StatusPending,
+		Items: []shopifyport.MainstreamOrderCreateItem{{
+			SKU:      "sku-1",
+			Title:    "Product 1",
+			Quantity: 2,
+			Price:    15.5,
+		}},
+		ShippingCharges: []shopifyport.MainstreamOrderCreateShippingCharge{{
+			Code:  "flat_rate",
+			Title: "Flat Rate",
+			Price: 5,
+		}},
+		CreatedAt: time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreateOrderFromMainstream() error = %v", err)
+	}
+	if order.ID != "987" {
+		t.Fatalf("order ID = %q, want 987", order.ID)
+	}
+
+	var requestBody struct {
+		Order struct {
+			Customer struct {
+				ID json.Number `json:"id"`
+			} `json:"customer"`
+			FinancialStatus string `json:"financial_status"`
+			Tags            string `json:"tags"`
+			Note            string `json:"note"`
+			LineItems       []struct {
+				SKU      string `json:"sku"`
+				Title    string `json:"title"`
+				Quantity int    `json:"quantity"`
+				Price    string `json:"price"`
+			} `json:"line_items"`
+			ShippingLines []struct {
+				Code  string `json:"code"`
+				Title string `json:"title"`
+				Price string `json:"price"`
+			} `json:"shipping_lines"`
+		} `json:"order"`
+	}
+	if err := json.Unmarshal(postBody, &requestBody); err != nil {
+		t.Fatalf("json.Unmarshal(postBody) error = %v", err)
+	}
+	if requestBody.Order.Customer.ID.String() != "123" {
+		t.Fatalf("customer id = %q, want 123", requestBody.Order.Customer.ID)
+	}
+	if requestBody.Order.FinancialStatus != "pending" {
+		t.Fatalf("financial status = %q, want pending", requestBody.Order.FinancialStatus)
+	}
+	if !strings.Contains(requestBody.Order.Tags, "mannaiah:synced") || !strings.Contains(requestBody.Order.Tags, "mannaiah:pending") {
+		t.Fatalf("tags = %q, want sync and pending tags", requestBody.Order.Tags)
+	}
+	if !strings.Contains(requestBody.Order.Note, "order_id=ord-1") {
+		t.Fatalf("note = %q, want order marker", requestBody.Order.Note)
+	}
+	if len(requestBody.Order.LineItems) != 1 || requestBody.Order.LineItems[0].SKU != "sku-1" || requestBody.Order.LineItems[0].Price != "15.50" {
+		t.Fatalf("line items = %#v, want mapped item", requestBody.Order.LineItems)
+	}
+	if len(requestBody.Order.ShippingLines) != 1 || requestBody.Order.ShippingLines[0].Code != "flat_rate" || requestBody.Order.ShippingLines[0].Price != "5.00" {
+		t.Fatalf("shipping lines = %#v, want mapped shipping", requestBody.Order.ShippingLines)
+	}
+}
+
 // TestBuildOutboundTagsCleansStatusTransitions verifies outbound status tag hygiene.
 func TestBuildOutboundTagsCleansStatusTransitions(t *testing.T) {
 	tests := []struct {

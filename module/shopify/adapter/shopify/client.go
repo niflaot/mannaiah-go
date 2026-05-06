@@ -311,6 +311,29 @@ func (c *Client) ListOrders(ctx context.Context, sinceID string, limit int) ([]s
 	return orders, len(response.Orders) == limit, nil
 }
 
+// CreateOrderFromMainstream creates one Shopify order from mainstream order values.
+func (c *Client) CreateOrderFromMainstream(ctx context.Context, command shopifyport.MainstreamOrderCreateCommand) (shopifyport.ShopifyOrder, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return shopifyport.ShopifyOrder{}, err
+	}
+
+	requestBody := createOrderRequest{
+		Order: buildOrderCreatePayload(command),
+	}
+	var response orderResponse
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPost, "/orders.json", requestBody, &response); err != nil {
+		return shopifyport.ShopifyOrder{}, err
+	}
+
+	order := normalizeOrder(response.Order)
+	order.ShopDomain = installation.ShopDomain
+	if order.Customer != nil {
+		order.Customer.ShopDomain = installation.ShopDomain
+	}
+	return order, nil
+}
+
 // UpdateOrderFromMainstream pushes one mainstream order-status update back to Shopify.
 func (c *Client) UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command shopifyport.MainstreamOrderUpdateCommand) error {
 	order, err := c.GetOrder(ctx, shopifyID)
@@ -505,6 +528,40 @@ type discountCodePayload struct {
 
 type updateOrderRequest struct {
 	Order updateOrderPayload `json:"order"`
+}
+
+type createOrderRequest struct {
+	Order createOrderPayload `json:"order"`
+}
+
+type createOrderPayload struct {
+	Customer               *orderCustomerReferencePayload `json:"customer,omitempty"`
+	FinancialStatus        string                         `json:"financial_status,omitempty"`
+	InventoryBehaviour     string                         `json:"inventory_behaviour,omitempty"`
+	LineItems              []createLineItemPayload        `json:"line_items,omitempty"`
+	ShippingLines          []createShippingLinePayload    `json:"shipping_lines,omitempty"`
+	Note                   string                         `json:"note,omitempty"`
+	Tags                   string                         `json:"tags,omitempty"`
+	CreatedAt              string                         `json:"created_at,omitempty"`
+	SendReceipt            bool                           `json:"send_receipt"`
+	SendFulfillmentReceipt bool                           `json:"send_fulfillment_receipt"`
+}
+
+type orderCustomerReferencePayload struct {
+	ID any `json:"id"`
+}
+
+type createLineItemPayload struct {
+	SKU      string `json:"sku,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Quantity int    `json:"quantity,omitempty"`
+	Price    string `json:"price,omitempty"`
+}
+
+type createShippingLinePayload struct {
+	Code  string `json:"code,omitempty"`
+	Title string `json:"title,omitempty"`
+	Price string `json:"price,omitempty"`
 }
 
 type updateOrderPayload struct {
@@ -931,6 +988,122 @@ func buildCustomerContactNote(contactID string) string {
 		return ""
 	}
 	return fmt.Sprintf("[Mannaiah] contact_id=%s", trimmedID)
+}
+
+func buildOrderCreatePayload(command shopifyport.MainstreamOrderCreateCommand) createOrderPayload {
+	payload := createOrderPayload{
+		Customer: &orderCustomerReferencePayload{
+			ID: encodeShopifyID(command.CustomerID),
+		},
+		FinancialStatus:        mapOutboundFinancialStatus(command.Status),
+		InventoryBehaviour:     "bypass",
+		LineItems:              buildOrderCreateLineItems(command),
+		ShippingLines:          buildOrderCreateShippingLines(command.ShippingCharges),
+		Note:                   buildOrderCreateNote(command),
+		Tags:                   mergeTags(buildOutboundTags("", command.Status), []string{"mannaiah:synced"}),
+		SendReceipt:            false,
+		SendFulfillmentReceipt: false,
+	}
+	if command.CreatedAt.IsZero() {
+		return payload
+	}
+	payload.CreatedAt = command.CreatedAt.UTC().Format(time.RFC3339)
+	return payload
+}
+
+func buildOrderCreateLineItems(command shopifyport.MainstreamOrderCreateCommand) []createLineItemPayload {
+	items := make([]createLineItemPayload, 0, len(command.Items))
+	for _, value := range command.Items {
+		title := preferNonEmpty(value.Title, value.SKU, "Mannaiah item")
+		quantity := value.Quantity
+		if quantity <= 0 {
+			quantity = 1
+		}
+		items = append(items, createLineItemPayload{
+			SKU:      strings.TrimSpace(value.SKU),
+			Title:    strings.TrimSpace(title),
+			Quantity: quantity,
+			Price:    formatShopifyMoney(value.Price),
+		})
+	}
+	if len(items) > 0 {
+		return items
+	}
+
+	return []createLineItemPayload{{
+		Title:    preferNonEmpty(command.Identifier, command.OrderID, "Mannaiah order"),
+		Quantity: 1,
+		Price:    "0.00",
+	}}
+}
+
+func buildOrderCreateShippingLines(values []shopifyport.MainstreamOrderCreateShippingCharge) []createShippingLinePayload {
+	lines := make([]createShippingLinePayload, 0, len(values))
+	for _, value := range values {
+		code := strings.TrimSpace(value.Code)
+		title := strings.TrimSpace(value.Title)
+		price := value.Price
+		if code == "" && title == "" && price == 0 {
+			continue
+		}
+		lines = append(lines, createShippingLinePayload{
+			Code:  code,
+			Title: preferNonEmpty(title, code, "Shipping"),
+			Price: formatShopifyMoney(price),
+		})
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+
+	return lines
+}
+
+func buildOrderCreateNote(command shopifyport.MainstreamOrderCreateCommand) string {
+	parts := []string{}
+	if strings.TrimSpace(command.OrderID) != "" {
+		parts = append(parts, fmt.Sprintf("order_id=%s", strings.TrimSpace(command.OrderID)))
+	}
+	if strings.TrimSpace(command.Identifier) != "" {
+		parts = append(parts, fmt.Sprintf("identifier=%s", strings.TrimSpace(command.Identifier)))
+	}
+	if strings.TrimSpace(string(command.Status)) != "" {
+		parts = append(parts, fmt.Sprintf("status=%s", strings.TrimSpace(string(command.Status))))
+	}
+	if len(parts) == 0 {
+		return "[Mannaiah] Order created from Mannaiah"
+	}
+
+	return "[Mannaiah] " + strings.Join(parts, " ")
+}
+
+func mapOutboundFinancialStatus(status ordersdomain.Status) string {
+	switch status {
+	case ordersdomain.StatusCompleted:
+		return "paid"
+	case ordersdomain.StatusCancelled:
+		return "voided"
+	default:
+		return "pending"
+	}
+}
+
+func formatShopifyMoney(value float64) string {
+	if value < 0 {
+		value = 0
+	}
+	return strconv.FormatFloat(value, 'f', 2, 64)
+}
+
+func encodeShopifyID(value string) any {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	if _, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return json.Number(trimmed)
+	}
+	return trimmed
 }
 
 func resolveCustomerFirstName(command shopifyport.MainstreamCustomerUpsertCommand) string {

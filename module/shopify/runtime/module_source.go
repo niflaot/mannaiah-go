@@ -152,6 +152,13 @@ func (f failingSource) ListOrders(ctx context.Context, sinceID string, limit int
 	return nil, false, f.err
 }
 
+// CreateOrderFromMainstream returns startup validation failures.
+func (f failingSource) CreateOrderFromMainstream(ctx context.Context, command shopifyport.MainstreamOrderCreateCommand) (shopifyport.ShopifyOrder, error) {
+	_ = ctx
+	_ = command
+	return shopifyport.ShopifyOrder{}, f.err
+}
+
 // UpdateOrderFromMainstream returns startup validation failures.
 func (f failingSource) UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command shopifyport.MainstreamOrderUpdateCommand) error {
 	_ = ctx

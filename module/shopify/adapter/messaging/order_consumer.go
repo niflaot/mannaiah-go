@@ -55,6 +55,7 @@ func (c *OrderConsumer) Register(registrar bus.Registrar) error {
 
 	for _, topic := range []string{ordersport.TopicOrderCreated, ordersport.TopicOrderUpdated, ordersport.TopicOrderStatusUpdated} {
 		topicValue := topic
+		c.logger.Info("register shopify order integration handler", zap.String("topic", topicValue))
 		if err := registrar.AddHandler(topicValue, func(ctx context.Context, message bus.Message) error {
 			return c.handleMessage(ctx, topicValue, message)
 		}); err != nil {
@@ -74,11 +75,23 @@ func (c *OrderConsumer) handleMessage(ctx context.Context, topic string, message
 	if payload.Source == "" && message.Metadata != nil {
 		payload.Source = message.Metadata["source"]
 	}
+	c.logger.Info(
+		"shopify order integration event received",
+		zap.String("topic", topic),
+		zap.String("message_id", message.ID),
+		zap.String("order_id", payload.ID),
+		zap.String("identifier", payload.Identifier),
+		zap.String("contact_id", payload.ContactID),
+		zap.String("realm", payload.Realm),
+		zap.String("source", payload.Source),
+		zap.String("status", payload.CurrentStatus),
+	)
 
 	if err := c.handler.HandleOrderEvent(ctx, payload); err != nil {
 		c.logger.Warn("handle shopify order integration event failed", zap.String("topic", topic), zap.Error(err))
 		return err
 	}
+	c.logger.Info("shopify order integration event handled", zap.String("topic", topic), zap.String("order_id", payload.ID))
 
 	return nil
 }

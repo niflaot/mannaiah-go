@@ -1,6 +1,6 @@
 # Shopify Admin Adapter
 
-This package wraps the Shopify Admin REST API for targeted customer reads, targeted order reads, customer sync markers, and outbound order status updates.
+This package wraps the Shopify Admin REST API for targeted customer reads, targeted order reads, customer sync markers, outbound order creation, and outbound order status updates.
 
 ## Key methods / endpoints / events
 - `shopify.NewClient(cfg)`
@@ -9,4 +9,5 @@ This package wraps the Shopify Admin REST API for targeted customer reads, targe
 - `(*Client).UpdateCustomerTags(ctx, id, tags)`
 - `(*Client).AppendCustomerNote(ctx, id, note)`
 - `(*Client).GetOrder(ctx, id)`
+- `(*Client).CreateOrderFromMainstream(ctx, command)`
 - `(*Client).UpdateOrderFromMainstream(ctx, shopifyID, command)`

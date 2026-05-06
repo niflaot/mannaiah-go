@@ -23,3 +23,4 @@ The Shopify module now uses OAuth-backed, per-store installations persisted in `
 Manual sync routes accept a targeted Shopify identifier and may optionally include `shopDomain` when multiple Shopify stores are installed.
 Webhook ingestion resolves the emitting shop from `X-Shopify-Shop-Domain`, and Shopify Admin extension routes require a signed session token tied to one installed store.
 Contact synchronization now persists `shopify_sync_links`, stitches inbound-created links before outbound fan-out, and pushes mainstream contact changes back to Shopify without re-emitting equivalent webhook echoes.
+Order synchronization uses the same link table: linked orders receive status/tag updates, while unlinked Mannaiah orders create Shopify orders only when the order contact already has a Shopify customer link so the created order is assigned to the correct customer.
