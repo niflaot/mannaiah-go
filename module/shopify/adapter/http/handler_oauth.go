@@ -297,7 +297,7 @@ func writeOAuthStateCookie(ctx corehttp.Context, state oauthStateCookie, secret 
 		MaxAge:   int(time.Until(state.ExpiresAt).Seconds()),
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	}).String())
 
 	return nil
@@ -311,7 +311,7 @@ func clearOAuthStateCookie(ctx corehttp.Context) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	}).String())
 }
 
