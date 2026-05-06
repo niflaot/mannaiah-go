@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	ordersdomain "mannaiah/module/orders/domain"
 )
 
 var (
@@ -37,54 +35,6 @@ type OrderSource interface {
 	// ListOrders returns up to limit orders with IDs greater than sinceID.
 	// Pass empty sinceID to start from the beginning. hasMore is true when there may be additional pages.
 	ListOrders(ctx context.Context, sinceID string, limit int) (orders []ShopifyOrder, hasMore bool, err error)
-}
-
-// OrderDestination defines Shopify order update behavior from mainstream events.
-type OrderDestination interface {
-	// Validate verifies destination connectivity and credentials.
-	Validate(ctx context.Context) error
-	// CreateOrderFromMainstream creates one Shopify order from mainstream order values.
-	CreateOrderFromMainstream(ctx context.Context, command MainstreamOrderCreateCommand) (ShopifyOrder, error)
-	// UpdateOrderFromMainstream pushes one mainstream order-status update back to Shopify.
-	UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command MainstreamOrderUpdateCommand) error
-}
-
-// CustomerDestination defines Shopify customer update behavior from mainstream sync.
-type CustomerDestination interface {
-	// Validate verifies destination connectivity and credentials.
-	Validate(ctx context.Context) error
-	// CreateCustomerFromMainstream creates one Shopify customer from mainstream contact values.
-	CreateCustomerFromMainstream(ctx context.Context, command MainstreamCustomerUpsertCommand) (ShopifyCustomer, error)
-	// UpdateCustomerFromMainstream updates one Shopify customer from mainstream contact values.
-	UpdateCustomerFromMainstream(ctx context.Context, id string, command MainstreamCustomerUpsertCommand) error
-	// UpdateCustomerTags merges one or more customer tags into Shopify.
-	UpdateCustomerTags(ctx context.Context, id string, tags []string) error
-	// AppendCustomerNote appends one customer note entry when it is not already present.
-	AppendCustomerNote(ctx context.Context, id string, note string) error
-}
-
-// MainstreamCustomerUpsertCommand defines outbound Shopify customer payload values.
-type MainstreamCustomerUpsertCommand struct {
-	// ContactID defines the Mannaiah contact identifier being synced.
-	ContactID string
-	// Email defines customer email values.
-	Email string
-	// LegalName defines legal-name values.
-	LegalName string
-	// FirstName defines customer first-name values.
-	FirstName string
-	// LastName defines customer last-name values.
-	LastName string
-	// Phone defines customer phone values.
-	Phone string
-	// DocumentNumber defines customer document-number values.
-	DocumentNumber string
-	// Address defines address line 1 values.
-	Address string
-	// AddressExtra defines address line 2 values.
-	AddressExtra string
-	// CityCode defines normalized city-code values.
-	CityCode string
 }
 
 // ShopifyNoteAttribute defines one normalized Shopify note attribute.
@@ -227,50 +177,4 @@ type ShopifyOrder struct {
 	DiscountCodes []ShopifyDiscountCode
 	// CreatedAt defines source creation timestamps.
 	CreatedAt time.Time
-}
-
-// MainstreamOrderCreateItem defines one outbound Shopify order item payload value.
-type MainstreamOrderCreateItem struct {
-	// SKU defines item SKU values.
-	SKU string
-	// Title defines item title values.
-	Title string
-	// Quantity defines item quantity values.
-	Quantity int
-	// Price defines item unit-price values.
-	Price float64
-}
-
-// MainstreamOrderCreateShippingCharge defines one outbound Shopify shipping line.
-type MainstreamOrderCreateShippingCharge struct {
-	// Code defines shipping method identifiers.
-	Code string
-	// Title defines shipping method display titles.
-	Title string
-	// Price defines shipping price values.
-	Price float64
-}
-
-// MainstreamOrderCreateCommand defines outbound Shopify order creation payload values.
-type MainstreamOrderCreateCommand struct {
-	// OrderID defines the Mannaiah order identifier being synced.
-	OrderID string
-	// Identifier defines public/external order identifiers.
-	Identifier string
-	// CustomerID defines the linked Shopify customer identifier.
-	CustomerID string
-	// Status defines mainstream order status values.
-	Status ordersdomain.Status
-	// Items defines order item values.
-	Items []MainstreamOrderCreateItem
-	// ShippingCharges defines shipping charge values.
-	ShippingCharges []MainstreamOrderCreateShippingCharge
-	// CreatedAt defines optional creation timestamps.
-	CreatedAt time.Time
-}
-
-// MainstreamOrderUpdateCommand defines outbound Shopify status update payload values.
-type MainstreamOrderUpdateCommand struct {
-	// Status defines mainstream order status values.
-	Status ordersdomain.Status
 }

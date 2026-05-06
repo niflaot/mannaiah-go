@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	contactsapplication "mannaiah/module/contacts/application"
@@ -85,53 +84,12 @@ func (s *contactLinkRepositoryStub) UpdateLastKnownStatus(ctx context.Context, k
 	return nil
 }
 
-type customerDestinationStub struct {
-	tagsCalls int
-	noteCalls int
-	err       error
-}
-
-func (s *customerDestinationStub) Validate(ctx context.Context) error {
-	_ = ctx
-	return nil
-}
-
-func (s *customerDestinationStub) CreateCustomerFromMainstream(ctx context.Context, command shopifyport.MainstreamCustomerUpsertCommand) (shopifyport.ShopifyCustomer, error) {
-	_ = ctx
-	_ = command
-	return shopifyport.ShopifyCustomer{}, s.err
-}
-
-func (s *customerDestinationStub) UpdateCustomerFromMainstream(ctx context.Context, id string, command shopifyport.MainstreamCustomerUpsertCommand) error {
-	_ = ctx
-	_ = id
-	_ = command
-	return s.err
-}
-
-func (s *customerDestinationStub) UpdateCustomerTags(ctx context.Context, id string, tags []string) error {
-	_ = ctx
-	_ = id
-	_ = tags
-	s.tagsCalls++
-	return s.err
-}
-
-func (s *customerDestinationStub) AppendCustomerNote(ctx context.Context, id string, note string) error {
-	_ = ctx
-	_ = id
-	_ = note
-	s.noteCalls++
-	return s.err
-}
-
-// TestContactUpserterWritesBackAfterSuccessfulUpsert verifies customer sync markers are pushed after mainstream success.
-func TestContactUpserterWritesBackAfterSuccessfulUpsert(t *testing.T) {
-	destination := &customerDestinationStub{}
+// TestContactUpserterUpsertsLinkAfterSuccessfulCreate verifies Shopify imports persist local sync links.
+func TestContactUpserterUpsertsLinkAfterSuccessfulCreate(t *testing.T) {
+	links := &contactLinkRepositoryStub{}
 	upserter, err := NewUpserter(
 		&contactsServiceStub{createResult: &contactsdomain.Contact{ID: "contact-1", FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com"}},
-		&contactLinkRepositoryStub{},
-		destination,
+		links,
 		zap.NewNop(),
 	)
 	if err != nil {
@@ -150,61 +108,40 @@ func TestContactUpserterWritesBackAfterSuccessfulUpsert(t *testing.T) {
 	if contact.ID != "contact-1" {
 		t.Fatalf("contact ID = %q, want contact-1", contact.ID)
 	}
-	if destination.tagsCalls != 1 {
-		t.Fatalf("tag write-back calls = %d, want 1", destination.tagsCalls)
-	}
-	if destination.noteCalls != 1 {
-		t.Fatalf("note write-back calls = %d, want 1", destination.noteCalls)
+	if links.upserts != 1 {
+		t.Fatalf("link upserts = %d, want 1", links.upserts)
 	}
 }
 
-// TestContactUpserterDoesNotAppendNoteForExistingLink verifies contact notes are only appended on new links.
-func TestContactUpserterDoesNotAppendNoteForExistingLink(t *testing.T) {
-	destination := &customerDestinationStub{}
+// TestContactUpserterUpdatesExistingContact verifies Shopify imports deduplicate by email before updating.
+func TestContactUpserterUpdatesExistingContact(t *testing.T) {
+	existing := contactsdomain.Contact{ID: "contact-1", FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com"}
+	links := &contactLinkRepositoryStub{existing: &shopifyport.SyncLink{ShopifyID: "123", MannaiahID: "contact-1"}}
 	upserter, err := NewUpserter(
-		&contactsServiceStub{createResult: &contactsdomain.Contact{ID: "contact-1", FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com"}},
-		&contactLinkRepositoryStub{existing: &shopifyport.SyncLink{ShopifyID: "123", MannaiahID: "contact-1"}},
-		destination,
+		&contactsServiceStub{
+			updateResult: &contactsdomain.Contact{ID: "contact-1", FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com"},
+			listResult:   &contactsapplication.ListResult{Data: []contactsdomain.Contact{existing}},
+		},
+		links,
 		zap.NewNop(),
 	)
 	if err != nil {
 		t.Fatalf("NewUpserter() error = %v", err)
 	}
 
-	if _, err := upserter.UpsertContact(context.Background(), shopifyport.ContactSyncCommand{
+	contact, err := upserter.UpsertContact(context.Background(), shopifyport.ContactSyncCommand{
 		ShopifyID: "123",
 		Email:     "ada@example.com",
 		FirstName: "Ada",
 		LastName:  "Lovelace",
-	}); err != nil {
-		t.Fatalf("UpsertContact() error = %v", err)
-	}
-	if destination.tagsCalls != 1 {
-		t.Fatalf("tag write-back calls = %d, want 1", destination.tagsCalls)
-	}
-	if destination.noteCalls != 0 {
-		t.Fatalf("note write-back calls = %d, want 0", destination.noteCalls)
-	}
-}
-
-// TestContactUpserterWriteBackFailureIsWarnOnly verifies Shopify write-back failures do not fail sync.
-func TestContactUpserterWriteBackFailureIsWarnOnly(t *testing.T) {
-	upserter, err := NewUpserter(
-		&contactsServiceStub{createResult: &contactsdomain.Contact{ID: "contact-1", FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com"}},
-		&contactLinkRepositoryStub{},
-		&customerDestinationStub{err: errors.New("shopify unavailable")},
-		zap.NewNop(),
-	)
+	})
 	if err != nil {
-		t.Fatalf("NewUpserter() error = %v", err)
-	}
-
-	if _, err := upserter.UpsertContact(context.Background(), shopifyport.ContactSyncCommand{
-		ShopifyID: "123",
-		Email:     "ada@example.com",
-		FirstName: "Ada",
-		LastName:  "Lovelace",
-	}); err != nil {
 		t.Fatalf("UpsertContact() error = %v", err)
+	}
+	if contact.ID != "contact-1" {
+		t.Fatalf("contact ID = %q, want contact-1", contact.ID)
+	}
+	if links.upserts != 1 {
+		t.Fatalf("link upserts = %d, want 1", links.upserts)
 	}
 }

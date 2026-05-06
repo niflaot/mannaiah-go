@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -51,11 +50,6 @@ func resolveDurationMS(valueMS int) time.Duration {
 	}
 
 	return time.Duration(valueMS) * time.Millisecond
-}
-
-// isBidirectionalSyncEnabled reports whether local-to-Shopify sync is enabled.
-func isBidirectionalSyncEnabled(mode string) bool {
-	return strings.EqualFold(strings.TrimSpace(mode), "bidirectional")
 }
 
 // resolveSyncWorkers resolves webhook worker counts.

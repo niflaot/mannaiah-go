@@ -9,7 +9,6 @@ import (
 	"mannaiah/module/core/messaging/bus"
 	ordersapplication "mannaiah/module/orders/application"
 	shopifyhttp "mannaiah/module/shopify/adapter/http"
-	shopifymessaging "mannaiah/module/shopify/adapter/messaging"
 	shopifystore "mannaiah/module/shopify/adapter/store"
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
 	shopifyorderservice "mannaiah/module/shopify/application/order/service"
@@ -46,14 +45,6 @@ type Module struct {
 	contactSyncService *shopifycontactservice.ContactSyncService
 	// orderSyncService defines targeted order sync dependencies.
 	orderSyncService *shopifyorderservice.OrderSyncService
-	// contactConsumer defines outbound contact event consumer dependencies.
-	contactConsumer *shopifymessaging.ContactConsumer
-	// orderConsumer defines outbound order event consumer dependencies.
-	orderConsumer *shopifymessaging.OrderConsumer
-	// registrar defines optional integration-event registration dependencies.
-	registrar bus.Registrar
-	// consumerRegistered reports whether integration handlers were registered.
-	consumerRegistered bool
 }
 
 // Loader defines bootstrap hooks required by Shopify modules.
@@ -75,6 +66,7 @@ func New(
 	publishers ...shopifyport.IntegrationEventPublisher,
 ) (*Module, error) {
 	_ = publishers
+	_ = registrar
 	if db == nil {
 		return nil, ErrNilDB
 	}
@@ -85,7 +77,6 @@ func New(
 		return nil, ErrNilOrderService
 	}
 	logger := resolveLogger(providedLogger)
-	bidirectionalSync := isBidirectionalSyncEnabled(cfg.SyncMode)
 	repository, err := shopifystore.NewRepository(db)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify repository: %w", err)
@@ -98,30 +89,13 @@ func New(
 		source = failingSource{err: sourceErr}
 	}
 
-	contactTarget, err := shopifycontactservice.NewUpserter(contactService, repository, source, logger)
+	contactTarget, err := shopifycontactservice.NewUpserter(contactService, repository, logger)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify contact target: %w", err)
 	}
 	orderTarget, err := shopifyorderservice.NewUpserter(orderService, repository)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify order target: %w", err)
-	}
-
-	var mainstreamContactUpdateService *shopifycontactservice.MainstreamContactUpdateService
-	if bidirectionalSync && (cfg.SyncContacts || cfg.SyncOrders) {
-		mainstreamContactUpdateService, err = shopifycontactservice.NewMainstreamUpdateService(
-			source,
-			source,
-			repository,
-			logger,
-			shopifycontactservice.CircuitBreakers{
-				Source:      newSourceCircuitBreaker(cfg, logger),
-				Destination: newDestinationCircuitBreaker(cfg, logger),
-			},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("create shopify mainstream contact update service: %w", err)
-		}
 	}
 
 	contactSyncService, err := shopifycontactservice.NewService(
@@ -133,9 +107,6 @@ func New(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify contact sync service: %w", err)
-	}
-	if bidirectionalSync && mainstreamContactUpdateService != nil {
-		contactSyncService.SetMainstreamBackfill(contactService, mainstreamContactUpdateService)
 	}
 	orderSyncService, err := shopifyorderservice.NewService(
 		shopifyorderservice.SyncConfig{Enabled: cfg.SyncOrders, Realm: "shopify"},
@@ -171,35 +142,6 @@ func New(
 		return nil, fmt.Errorf("create shopify http handler: %w", err)
 	}
 
-	var contactConsumer *shopifymessaging.ContactConsumer
-	if bidirectionalSync && cfg.SyncContacts && mainstreamContactUpdateService != nil {
-		contactConsumer, err = shopifymessaging.NewContactConsumer(mainstreamContactUpdateService, logger)
-		if err != nil {
-			return nil, fmt.Errorf("create shopify contact consumer: %w", err)
-		}
-	}
-
-	var orderConsumer *shopifymessaging.OrderConsumer
-	if bidirectionalSync && cfg.SyncOrders {
-		mainstreamUpdateService, err := shopifyorderservice.NewMainstreamUpdateService(
-			source,
-			repository,
-			logger,
-			shopifyorderservice.CircuitBreakers{Destination: newDestinationCircuitBreaker(cfg, logger)},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("create shopify mainstream update service: %w", err)
-		}
-		if mainstreamContactUpdateService != nil {
-			mainstreamUpdateService.SetContactResolver(contactService, mainstreamContactUpdateService)
-		}
-		orderSyncService.SetMainstreamBackfill(orderService, mainstreamUpdateService)
-		orderConsumer, err = shopifymessaging.NewOrderConsumer(mainstreamUpdateService, logger)
-		if err != nil {
-			return nil, fmt.Errorf("create shopify order consumer: %w", err)
-		}
-	}
-
 	return &Module{
 		cfg:                  cfg,
 		logger:               logger,
@@ -208,9 +150,6 @@ func New(
 		processor:            processor,
 		contactSyncService:   contactSyncService,
 		orderSyncService:     orderSyncService,
-		contactConsumer:      contactConsumer,
-		orderConsumer:        orderConsumer,
-		registrar:            registrar,
 	}, nil
 }
 

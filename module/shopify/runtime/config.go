@@ -10,8 +10,6 @@ type Config struct {
 	SyncOrders bool `mapstructure:"SHOPIFY_SYNC_ORDERS" default:"false"`
 	// SyncContacts enables contact sync behavior.
 	SyncContacts bool `mapstructure:"SHOPIFY_SYNC_CONTACTS" default:"false"`
-	// SyncMode defines sync direction. Supported values: shopify, bidirectional.
-	SyncMode string `mapstructure:"SHOPIFY_SYNC_MODE" default:"shopify"`
 	// SyncWorkers defines webhook worker counts.
 	SyncWorkers int `mapstructure:"SHOPIFY_SYNC_WORKERS" default:"4"`
 	// SyncTimeoutMS defines sync timeout values in milliseconds.

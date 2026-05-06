@@ -179,7 +179,7 @@ func (r *Repository) UpsertLink(ctx context.Context, input shopifyport.UpsertSyn
 	return &link, nil
 }
 
-// UpdateLastKnownStatus persists the last pushed outbound status for one linked aggregate.
+// UpdateLastKnownStatus persists the latest imported status for one linked aggregate.
 func (r *Repository) UpdateLastKnownStatus(ctx context.Context, kind shopifyport.SyncKind, mannaiahID string, status string) error {
 	updates := map[string]any{
 		"last_known_status": strings.TrimSpace(status),

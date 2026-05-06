@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -27,8 +26,6 @@ type ContactUpserter struct {
 	service contactsapplication.Service
 	// links defines Shopify sync-link persistence dependencies.
 	links shopifyport.SyncLinkRepository
-	// destination defines Shopify customer write-back dependencies.
-	destination shopifyport.CustomerDestination
 	// logger defines optional warning sinks.
 	logger *zap.Logger
 }
@@ -39,7 +36,7 @@ var (
 )
 
 // NewUpserter creates mainstream contact upsert adapters for Shopify sync flows.
-func NewUpserter(service contactsapplication.Service, links shopifyport.SyncLinkRepository, destination shopifyport.CustomerDestination, providedLogger *zap.Logger) (*ContactUpserter, error) {
+func NewUpserter(service contactsapplication.Service, links shopifyport.SyncLinkRepository, providedLogger *zap.Logger) (*ContactUpserter, error) {
 	if service == nil {
 		return nil, ErrNilContactsService
 	}
@@ -50,7 +47,7 @@ func NewUpserter(service contactsapplication.Service, links shopifyport.SyncLink
 		providedLogger = zap.NewNop()
 	}
 
-	return &ContactUpserter{service: service, links: links, destination: destination, logger: providedLogger}, nil
+	return &ContactUpserter{service: service, links: links, logger: providedLogger}, nil
 }
 
 // UpsertContact creates or updates one mainstream contact from Shopify values.
@@ -64,11 +61,10 @@ func (u *ContactUpserter) UpsertContact(ctx context.Context, command shopifyport
 		if updateErr != nil {
 			return nil, updateErr
 		}
-		createdLink, linkErr := u.upsertLink(ctx, command.ShopifyID, updated.ID)
+		_, linkErr := u.upsertLink(ctx, command.ShopifyID, updated.ID)
 		if linkErr != nil {
 			return nil, linkErr
 		}
-		u.writeBackCustomer(ctx, command.ShopifyID, updated.ID, createdLink)
 		return updated, nil
 	}
 
@@ -88,18 +84,16 @@ func (u *ContactUpserter) UpsertContact(ctx context.Context, command shopifyport
 		if updateErr != nil {
 			return nil, updateErr
 		}
-		createdLink, linkErr := u.upsertLink(ctx, command.ShopifyID, updated.ID)
+		_, linkErr := u.upsertLink(ctx, command.ShopifyID, updated.ID)
 		if linkErr != nil {
 			return nil, linkErr
 		}
-		u.writeBackCustomer(ctx, command.ShopifyID, updated.ID, createdLink)
 		return updated, nil
 	}
-	createdLink, linkErr := u.upsertLink(ctx, command.ShopifyID, created.ID)
+	_, linkErr := u.upsertLink(ctx, command.ShopifyID, created.ID)
 	if linkErr != nil {
 		return nil, linkErr
 	}
-	u.writeBackCustomer(ctx, command.ShopifyID, created.ID, createdLink)
 
 	return created, nil
 }
@@ -161,22 +155,6 @@ func (u *ContactUpserter) upsertLink(ctx context.Context, shopifyID string, cont
 		LastSyncedAt: &lastSyncedAt,
 	})
 	return existing == nil, err
-}
-
-func (u *ContactUpserter) writeBackCustomer(ctx context.Context, shopifyID string, contactID string, createdLink bool) {
-	if u.destination == nil || strings.TrimSpace(shopifyID) == "" {
-		return
-	}
-	if err := u.destination.UpdateCustomerTags(ctx, shopifyID, []string{"mannaiah:synced"}); err != nil {
-		u.logger.Warn("shopify customer tag write-back failed", zap.Error(err))
-	}
-	if !createdLink || strings.TrimSpace(contactID) == "" {
-		return
-	}
-	note := fmt.Sprintf("[Mannaiah] contact_id=%s", strings.TrimSpace(contactID))
-	if err := u.destination.AppendCustomerNote(ctx, shopifyID, note); err != nil {
-		u.logger.Warn("shopify customer note write-back failed", zap.Error(err))
-	}
 }
 
 func buildContactCreateCommand(command shopifyport.ContactSyncCommand) contactsapplication.CreateCommand {

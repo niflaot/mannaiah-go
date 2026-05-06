@@ -27,7 +27,7 @@ type SyncLink struct {
 	ShopifyID string
 	// MannaiahID defines Mannaiah aggregate identifiers.
 	MannaiahID string
-	// LastKnownStatus defines the last pushed outbound status.
+	// LastKnownStatus defines the latest imported status for linked aggregates.
 	LastKnownStatus string
 	// LastSyncedAt defines the latest successful synchronization timestamp.
 	LastSyncedAt *time.Time
@@ -47,7 +47,7 @@ type UpsertSyncLinkInput struct {
 	ShopifyID string
 	// MannaiahID defines Mannaiah aggregate identifiers.
 	MannaiahID string
-	// LastKnownStatus defines the last pushed outbound status.
+	// LastKnownStatus defines the latest imported status for linked aggregates.
 	LastKnownStatus string
 	// LastSyncedAt defines the latest successful synchronization timestamp.
 	LastSyncedAt *time.Time
@@ -61,7 +61,7 @@ type SyncLinkRepository interface {
 	GetLinkByMannaiahID(ctx context.Context, kind SyncKind, mannaiahID string) (*SyncLink, error)
 	// UpsertLink creates or updates one link row.
 	UpsertLink(ctx context.Context, input UpsertSyncLinkInput) (*SyncLink, error)
-	// UpdateLastKnownStatus persists the latest outbound status for one linked aggregate.
+	// UpdateLastKnownStatus persists the latest imported status for one linked aggregate.
 	UpdateLastKnownStatus(ctx context.Context, kind SyncKind, mannaiahID string, status string) error
 }
 

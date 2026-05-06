@@ -8,7 +8,6 @@ import (
 	shopifyhttp "mannaiah/module/shopify/adapter/http"
 	shopifyadapter "mannaiah/module/shopify/adapter/shopify"
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
-	shopifyorderservice "mannaiah/module/shopify/application/order/service"
 	shopifyport "mannaiah/module/shopify/port"
 
 	"go.uber.org/zap"
@@ -16,13 +15,11 @@ import (
 
 type sourceGateway interface {
 	shopifyport.CustomerSource
-	shopifyport.CustomerDestination
 	shopifyport.OrderSource
-	shopifyport.OrderDestination
 	shopifyhttp.OAuthClient
 }
 
-// newSource creates Shopify source and destination adapters from module config values.
+// newSource creates Shopify source adapters from module config values.
 func newSource(cfg Config, resolver shopifyport.InstallationResolver) (sourceGateway, error) {
 	return shopifyadapter.NewClient(shopifyadapter.Config{
 		ClientID:                  cfg.ClientID,
@@ -42,26 +39,6 @@ func newSourceCircuitBreaker(cfg Config, providedLogger *zap.Logger) shopifycont
 
 	breaker, err := corecircuitbreaker.NewBreaker(corecircuitbreaker.Config{
 		Name:             "shopify-source",
-		MaxRequests:      cfg.CircuitBreakerMaxRequests,
-		IntervalMS:       cfg.CircuitBreakerIntervalMS,
-		TimeoutMS:        cfg.CircuitBreakerTimeoutMS,
-		FailureThreshold: cfg.CircuitBreakerFailureThreshold,
-	}, providedLogger)
-	if err != nil {
-		return nil
-	}
-
-	return breaker
-}
-
-// newDestinationCircuitBreaker creates Shopify destination circuit-breaker dependencies from module config values.
-func newDestinationCircuitBreaker(cfg Config, providedLogger *zap.Logger) shopifyorderservice.CircuitBreaker {
-	if !cfg.CircuitBreakerEnabled {
-		return nil
-	}
-
-	breaker, err := corecircuitbreaker.NewBreaker(corecircuitbreaker.Config{
-		Name:             "shopify-destination",
 		MaxRequests:      cfg.CircuitBreakerMaxRequests,
 		IntervalMS:       cfg.CircuitBreakerIntervalMS,
 		TimeoutMS:        cfg.CircuitBreakerTimeoutMS,
@@ -108,37 +85,6 @@ func (f failingSource) ListCustomers(ctx context.Context, sinceID string, limit 
 	return nil, false, f.err
 }
 
-// CreateCustomerFromMainstream returns startup validation failures.
-func (f failingSource) CreateCustomerFromMainstream(ctx context.Context, command shopifyport.MainstreamCustomerUpsertCommand) (shopifyport.ShopifyCustomer, error) {
-	_ = ctx
-	_ = command
-	return shopifyport.ShopifyCustomer{}, f.err
-}
-
-// UpdateCustomerFromMainstream returns startup validation failures.
-func (f failingSource) UpdateCustomerFromMainstream(ctx context.Context, id string, command shopifyport.MainstreamCustomerUpsertCommand) error {
-	_ = ctx
-	_ = id
-	_ = command
-	return f.err
-}
-
-// UpdateCustomerTags returns startup validation failures.
-func (f failingSource) UpdateCustomerTags(ctx context.Context, id string, tags []string) error {
-	_ = ctx
-	_ = id
-	_ = tags
-	return f.err
-}
-
-// AppendCustomerNote returns startup validation failures.
-func (f failingSource) AppendCustomerNote(ctx context.Context, id string, note string) error {
-	_ = ctx
-	_ = id
-	_ = note
-	return f.err
-}
-
 // GetOrder returns startup validation failures.
 func (f failingSource) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
 	_ = ctx
@@ -152,21 +98,6 @@ func (f failingSource) ListOrders(ctx context.Context, sinceID string, limit int
 	_ = sinceID
 	_ = limit
 	return nil, false, f.err
-}
-
-// CreateOrderFromMainstream returns startup validation failures.
-func (f failingSource) CreateOrderFromMainstream(ctx context.Context, command shopifyport.MainstreamOrderCreateCommand) (shopifyport.ShopifyOrder, error) {
-	_ = ctx
-	_ = command
-	return shopifyport.ShopifyOrder{}, f.err
-}
-
-// UpdateOrderFromMainstream returns startup validation failures.
-func (f failingSource) UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command shopifyport.MainstreamOrderUpdateCommand) error {
-	_ = ctx
-	_ = shopifyID
-	_ = command
-	return f.err
 }
 
 // ExchangeAuthorizationCode returns startup validation failures.
