@@ -7,6 +7,9 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
+	contactsapplication "mannaiah/module/contacts/application"
+	contactsdomain "mannaiah/module/contacts/domain"
+	contactsport "mannaiah/module/contacts/port"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -75,6 +78,18 @@ type Service interface {
 	SetSyncRecorder(recorder shopifyport.SyncRecorder)
 }
 
+// MainstreamContactSource defines local contact listing behavior for outbound backfills.
+type MainstreamContactSource interface {
+	// List handles paginated contact querying.
+	List(ctx context.Context, query contactsport.ListQuery) (*contactsapplication.ListResult, error)
+}
+
+// MainstreamContactEventHandler defines local contact outbound synchronization behavior.
+type MainstreamContactEventHandler interface {
+	// HandleContactEvent pushes one local contact to Shopify when needed.
+	HandleContactEvent(ctx context.Context, payload contactsapplication.ContactEventPayload) error
+}
+
 // ContactSyncService defines Shopify contact synchronization behavior.
 type ContactSyncService struct {
 	// cfg defines feature configuration values.
@@ -89,6 +104,10 @@ type ContactSyncService struct {
 	recorder shopifyport.SyncRecorder
 	// sourceBreaker defines optional Shopify source breaker behavior.
 	sourceBreaker CircuitBreaker
+	// mainstreamSource defines local contact listing dependencies for outbound backfills.
+	mainstreamSource MainstreamContactSource
+	// mainstreamHandler defines local-to-Shopify sync dependencies for outbound backfills.
+	mainstreamHandler MainstreamContactEventHandler
 }
 
 var (
@@ -135,6 +154,15 @@ func (s *ContactSyncService) SetSyncRecorder(recorder shopifyport.SyncRecorder) 
 	}
 
 	s.recorder = recorder
+}
+
+// SetMainstreamBackfill configures local-to-Shopify contact reconciliation during bulk sync.
+func (s *ContactSyncService) SetMainstreamBackfill(source MainstreamContactSource, handler MainstreamContactEventHandler) {
+	if s == nil {
+		return
+	}
+	s.mainstreamSource = source
+	s.mainstreamHandler = handler
 }
 
 // ValidateIntegration verifies source connectivity and credentials.
@@ -261,6 +289,11 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 		}
 	}
 
+	if err := s.backfillMainstreamContacts(ctx, summary); err != nil {
+		s.failRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+		return nil, err
+	}
+
 	s.logger.Info("shopify contacts bulk sync completed", zap.Int("processed", summary.Processed), zap.Int("succeeded", summary.Succeeded), zap.Int("failed", summary.Failed))
 
 	if strings.TrimSpace(runID) != "" {
@@ -271,6 +304,71 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 	}
 
 	return summary, nil
+}
+
+func (s *ContactSyncService) backfillMainstreamContacts(ctx context.Context, summary *SyncSummary) error {
+	if s.mainstreamSource == nil || s.mainstreamHandler == nil {
+		return nil
+	}
+
+	const pageSize = 250
+	for page := 1; ; page++ {
+		result, err := s.mainstreamSource.List(ctx, contactsport.ListQuery{Page: page, Limit: pageSize})
+		if err != nil {
+			return fmt.Errorf("list mainstream contacts for shopify backfill: %w", err)
+		}
+		if result == nil || len(result.Data) == 0 {
+			return nil
+		}
+
+		s.logger.Info("shopify contacts outbound backfill page fetched", zap.Int("page", page), zap.Int("count", len(result.Data)))
+		for _, contact := range result.Data {
+			summary.Processed++
+			if err := s.mainstreamHandler.HandleContactEvent(ctx, buildContactEventPayload(contact)); err != nil {
+				summary.Failed++
+				s.logger.Warn("shopify contact outbound backfill failed", zap.String("contact_id", contact.ID), zap.Error(err))
+				continue
+			}
+			summary.Succeeded++
+		}
+
+		if result.TotalPages > 0 && page >= result.TotalPages {
+			return nil
+		}
+		if len(result.Data) < pageSize {
+			return nil
+		}
+	}
+}
+
+func buildContactEventPayload(contact contactsdomain.Contact) contactsapplication.ContactEventPayload {
+	return contactsapplication.ContactEventPayload{
+		ID:             strings.TrimSpace(contact.ID),
+		DocumentType:   contact.DocumentType,
+		DocumentNumber: strings.TrimSpace(contact.DocumentNumber),
+		LegalName:      strings.TrimSpace(contact.LegalName),
+		FirstName:      strings.TrimSpace(contact.FirstName),
+		LastName:       strings.TrimSpace(contact.LastName),
+		Email:          strings.TrimSpace(contact.Email),
+		Phone:          strings.TrimSpace(contact.Phone),
+		Address:        strings.TrimSpace(contact.Address),
+		AddressExtra:   strings.TrimSpace(contact.AddressExtra),
+		CityCode:       strings.TrimSpace(contact.CityCode),
+		Metadata:       cloneStringMap(contact.Metadata),
+		CreatedAt:      contact.CreatedAt,
+		UpdatedAt:      contact.UpdatedAt,
+	}
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (s *ContactSyncService) loadCustomer(ctx context.Context, id string) (shopifyport.ShopifyCustomer, error) {

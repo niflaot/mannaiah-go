@@ -5,7 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	contactsapplication "mannaiah/module/contacts/application"
 	contactsdomain "mannaiah/module/contacts/domain"
+	contactsport "mannaiah/module/contacts/port"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -41,6 +43,29 @@ func (contactServiceTargetStub) UpsertContact(ctx context.Context, command shopi
 	_ = ctx
 	_ = command
 	return &contactsdomain.Contact{ID: "contact-1"}, nil
+}
+
+type mainstreamContactSourceStub struct {
+	rows []contactsdomain.Contact
+}
+
+func (s mainstreamContactSourceStub) List(ctx context.Context, query contactsport.ListQuery) (*contactsapplication.ListResult, error) {
+	_ = ctx
+	_ = query
+	return &contactsapplication.ListResult{Data: s.rows, Page: 1, Limit: 250, Total: int64(len(s.rows)), TotalPages: 1}, nil
+}
+
+type mainstreamContactHandlerStub struct {
+	calls   int
+	last    contactsapplication.ContactEventPayload
+	lastErr error
+}
+
+func (s *mainstreamContactHandlerStub) HandleContactEvent(ctx context.Context, payload contactsapplication.ContactEventPayload) error {
+	_ = ctx
+	s.calls++
+	s.last = payload
+	return s.lastErr
 }
 
 type contactServiceRecorderStub struct {
@@ -122,5 +147,35 @@ func TestSyncContactsSkipsCompletionWhenRunStartFails(t *testing.T) {
 	}
 	if recorder.failCalls != 0 {
 		t.Fatalf("FailRun calls = %d, want 0", recorder.failCalls)
+	}
+}
+
+// TestSyncContactsBackfillsMainstreamContacts verifies bulk sync reconciles local-only contacts into Shopify.
+func TestSyncContactsBackfillsMainstreamContacts(t *testing.T) {
+	service, err := NewService(SyncConfig{Enabled: true}, contactServiceCustomerSourceStub{}, contactServiceTargetStub{}, nil)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	handler := &mainstreamContactHandlerStub{}
+	service.SetMainstreamBackfill(mainstreamContactSourceStub{rows: []contactsdomain.Contact{{
+		ID:        "contact-9",
+		FirstName: "Ada",
+		LastName:  "Lovelace",
+		Email:     "ada@example.com",
+		Metadata:  map[string]string{"source": "test"},
+	}}}, handler)
+
+	summary, err := service.SyncContacts(context.Background(), "manual")
+	if err != nil {
+		t.Fatalf("SyncContacts() error = %v", err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("contact backfill calls = %d, want 1", handler.calls)
+	}
+	if handler.last.ID != "contact-9" || handler.last.Email != "ada@example.com" {
+		t.Fatalf("contact payload = %#v, want local contact payload", handler.last)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("summary = %#v, want one successful outbound backfill", summary)
 	}
 }

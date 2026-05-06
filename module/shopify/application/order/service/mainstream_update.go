@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	contactsapplication "mannaiah/module/contacts/application"
+	contactsdomain "mannaiah/module/contacts/domain"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
 	shopifyport "mannaiah/module/shopify/port"
@@ -29,6 +31,18 @@ type OrderEventHandler interface {
 	HandleOrderEvent(ctx context.Context, payload ordersport.OrderEventPayload) error
 }
 
+// ContactSource defines local contact lookup behavior needed before Shopify order creation.
+type ContactSource interface {
+	// Get handles contact retrieval by id.
+	Get(ctx context.Context, id string) (*contactsdomain.Contact, error)
+}
+
+// ContactEventHandler defines local contact outbound synchronization behavior.
+type ContactEventHandler interface {
+	// HandleContactEvent pushes one local contact to Shopify when needed.
+	HandleContactEvent(ctx context.Context, payload contactsapplication.ContactEventPayload) error
+}
+
 // MainstreamUpdateService defines outbound Shopify order update behavior.
 type MainstreamUpdateService struct {
 	// destination defines Shopify destination dependencies.
@@ -39,6 +53,10 @@ type MainstreamUpdateService struct {
 	logger *zap.Logger
 	// destinationBreaker defines optional outbound breaker behavior.
 	destinationBreaker CircuitBreaker
+	// contactSource defines optional local contact lookup dependencies.
+	contactSource ContactSource
+	// contactHandler defines optional local-to-Shopify contact sync dependencies.
+	contactHandler ContactEventHandler
 }
 
 var (
@@ -70,6 +88,15 @@ func NewMainstreamUpdateService(destination shopifyport.OrderDestination, links 
 		logger:             logger,
 		destinationBreaker: resolvedBreaker.Destination,
 	}, nil
+}
+
+// SetContactResolver configures contact creation/linking before missing Shopify order creation.
+func (s *MainstreamUpdateService) SetContactResolver(source ContactSource, handler ContactEventHandler) {
+	if s == nil {
+		return
+	}
+	s.contactSource = source
+	s.contactHandler = handler
 }
 
 // HandleOrderEvent pushes one mainstream order event back to Shopify when appropriate.
@@ -149,8 +176,18 @@ func (s *MainstreamUpdateService) createAndLinkOrder(ctx context.Context, payloa
 		return err
 	}
 	if contactLink == nil || strings.TrimSpace(contactLink.ShopifyID) == "" {
-		s.logger.Warn("skip shopify outbound order create: contact is not linked to a shopify customer", zap.String("order_id", payload.ID), zap.String("contact_id", contactID))
-		return nil
+		if ensureErr := s.ensureContactLinked(ctx, contactID); ensureErr != nil {
+			return ensureErr
+		}
+		contactLink, err = s.links.GetLinkByMannaiahID(ctx, shopifyport.SyncKindContact, contactID)
+		if err != nil {
+			s.logger.Warn("shopify outbound order customer link reload failed", zap.String("order_id", payload.ID), zap.String("contact_id", contactID), zap.Error(err))
+			return err
+		}
+		if contactLink == nil || strings.TrimSpace(contactLink.ShopifyID) == "" {
+			s.logger.Warn("skip shopify outbound order create: contact is not linked to a shopify customer", zap.String("order_id", payload.ID), zap.String("contact_id", contactID))
+			return nil
+		}
 	}
 
 	command := buildMainstreamOrderCreateCommand(payload, status, contactLink.ShopifyID)
@@ -187,6 +224,27 @@ func (s *MainstreamUpdateService) createAndLinkOrder(ctx context.Context, payloa
 	}
 	s.logger.Info("created shopify order from order event", zap.String("order_id", payload.ID), zap.String("shopify_id", created.ID), zap.String("shop_domain", preferNonEmpty(created.ShopDomain, contactLink.ShopDomain)), zap.String("shopify_customer_id", contactLink.ShopifyID))
 
+	return nil
+}
+
+func (s *MainstreamUpdateService) ensureContactLinked(ctx context.Context, contactID string) error {
+	if s.contactSource == nil || s.contactHandler == nil {
+		s.logger.Warn("skip shopify contact pre-sync before order create: contact resolver is unavailable", zap.String("contact_id", contactID))
+		return nil
+	}
+	contact, err := s.contactSource.Get(ctx, contactID)
+	if err != nil {
+		s.logger.Warn("shopify contact pre-sync lookup failed before order create", zap.String("contact_id", contactID), zap.Error(err))
+		return err
+	}
+	if contact == nil {
+		s.logger.Warn("skip shopify contact pre-sync before order create: contact not found", zap.String("contact_id", contactID))
+		return nil
+	}
+	if err := s.contactHandler.HandleContactEvent(ctx, buildContactEventPayload(*contact)); err != nil {
+		s.logger.Warn("shopify contact pre-sync failed before order create", zap.String("contact_id", contactID), zap.Error(err))
+		return err
+	}
 	return nil
 }
 
@@ -259,4 +317,34 @@ func preferNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func buildContactEventPayload(contact contactsdomain.Contact) contactsapplication.ContactEventPayload {
+	return contactsapplication.ContactEventPayload{
+		ID:             strings.TrimSpace(contact.ID),
+		DocumentType:   contact.DocumentType,
+		DocumentNumber: strings.TrimSpace(contact.DocumentNumber),
+		LegalName:      strings.TrimSpace(contact.LegalName),
+		FirstName:      strings.TrimSpace(contact.FirstName),
+		LastName:       strings.TrimSpace(contact.LastName),
+		Email:          strings.TrimSpace(contact.Email),
+		Phone:          strings.TrimSpace(contact.Phone),
+		Address:        strings.TrimSpace(contact.Address),
+		AddressExtra:   strings.TrimSpace(contact.AddressExtra),
+		CityCode:       strings.TrimSpace(contact.CityCode),
+		Metadata:       cloneStringMap(contact.Metadata),
+		CreatedAt:      contact.CreatedAt,
+		UpdatedAt:      contact.UpdatedAt,
+	}
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }

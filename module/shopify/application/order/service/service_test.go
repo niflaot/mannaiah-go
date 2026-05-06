@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	contactsdomain "mannaiah/module/contacts/domain"
+	ordersapplication "mannaiah/module/orders/application"
 	ordersdomain "mannaiah/module/orders/domain"
+	ordersport "mannaiah/module/orders/port"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -44,6 +46,29 @@ func (orderServiceTargetStub) UpsertOrder(ctx context.Context, command shopifypo
 	_ = ctx
 	_ = command
 	return &ordersdomain.Order{ID: "order-1"}, nil
+}
+
+type mainstreamOrderSourceStub struct {
+	rows []ordersdomain.Order
+}
+
+func (s mainstreamOrderSourceStub) List(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error) {
+	_ = ctx
+	_ = query
+	return &ordersapplication.ListResult{Data: s.rows, Page: 1, Limit: 250, Total: int64(len(s.rows)), TotalPages: 1}, nil
+}
+
+type mainstreamOrderHandlerStub struct {
+	calls int
+	last  ordersport.OrderEventPayload
+	err   error
+}
+
+func (s *mainstreamOrderHandlerStub) HandleOrderEvent(ctx context.Context, payload ordersport.OrderEventPayload) error {
+	_ = ctx
+	s.calls++
+	s.last = payload
+	return s.err
 }
 
 type orderServiceRecorderStub struct {
@@ -131,5 +156,44 @@ func TestSyncOrdersSkipsCompletionWhenRunStartFails(t *testing.T) {
 	}
 	if recorder.failCalls != 0 {
 		t.Fatalf("FailRun calls = %d, want 0", recorder.failCalls)
+	}
+}
+
+// TestSyncOrdersBackfillsMainstreamOrders verifies bulk sync reconciles local Shopify-realm orders.
+func TestSyncOrdersBackfillsMainstreamOrders(t *testing.T) {
+	service, err := NewService(
+		SyncConfig{Enabled: true, Realm: "shopify"},
+		orderServiceSourceStub{},
+		orderServiceContactTargetStub{},
+		orderServiceTargetStub{},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	status := ordersdomain.StatusPending
+	handler := &mainstreamOrderHandlerStub{}
+	service.SetMainstreamBackfill(mainstreamOrderSourceStub{rows: []ordersdomain.Order{{
+		ID:            "order-9",
+		Identifier:    "M-1009",
+		Realm:         "shopify",
+		ContactID:     "contact-9",
+		CurrentStatus: status,
+		StatusHistory: []ordersdomain.StatusEntry{{Status: status, Author: "test"}},
+		Items:         []ordersdomain.Item{{SKU: "sku-9", Quantity: 1, Value: 12.5}},
+	}}}, handler)
+
+	summary, err := service.SyncOrders(context.Background(), "manual")
+	if err != nil {
+		t.Fatalf("SyncOrders() error = %v", err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("order backfill calls = %d, want 1", handler.calls)
+	}
+	if handler.last.ID != "order-9" || handler.last.Source != "mannaiah_backfill" || handler.last.ContactID != "contact-9" {
+		t.Fatalf("order payload = %#v, want local order payload", handler.last)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("summary = %#v, want one successful outbound backfill", summary)
 	}
 }

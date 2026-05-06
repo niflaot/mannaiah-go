@@ -106,6 +106,23 @@ func New(
 		return nil, fmt.Errorf("create shopify order target: %w", err)
 	}
 
+	var mainstreamContactUpdateService *shopifycontactservice.MainstreamContactUpdateService
+	if cfg.SyncContacts || cfg.SyncOrders {
+		mainstreamContactUpdateService, err = shopifycontactservice.NewMainstreamUpdateService(
+			source,
+			source,
+			repository,
+			logger,
+			shopifycontactservice.CircuitBreakers{
+				Source:      newSourceCircuitBreaker(cfg, logger),
+				Destination: newDestinationCircuitBreaker(cfg, logger),
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify mainstream contact update service: %w", err)
+		}
+	}
+
 	contactSyncService, err := shopifycontactservice.NewService(
 		shopifycontactservice.SyncConfig{Enabled: cfg.SyncContacts},
 		source,
@@ -115,6 +132,9 @@ func New(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify contact sync service: %w", err)
+	}
+	if mainstreamContactUpdateService != nil {
+		contactSyncService.SetMainstreamBackfill(contactService, mainstreamContactUpdateService)
 	}
 	orderSyncService, err := shopifyorderservice.NewService(
 		shopifyorderservice.SyncConfig{Enabled: cfg.SyncOrders, Realm: "shopify"},
@@ -151,20 +171,7 @@ func New(
 	}
 
 	var contactConsumer *shopifymessaging.ContactConsumer
-	if cfg.SyncContacts {
-		mainstreamContactUpdateService, err := shopifycontactservice.NewMainstreamUpdateService(
-			source,
-			source,
-			repository,
-			logger,
-			shopifycontactservice.CircuitBreakers{
-				Source:      newSourceCircuitBreaker(cfg, logger),
-				Destination: newDestinationCircuitBreaker(cfg, logger),
-			},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("create shopify mainstream contact update service: %w", err)
-		}
+	if cfg.SyncContacts && mainstreamContactUpdateService != nil {
 		contactConsumer, err = shopifymessaging.NewContactConsumer(mainstreamContactUpdateService, logger)
 		if err != nil {
 			return nil, fmt.Errorf("create shopify contact consumer: %w", err)
@@ -182,6 +189,10 @@ func New(
 		if err != nil {
 			return nil, fmt.Errorf("create shopify mainstream update service: %w", err)
 		}
+		if mainstreamContactUpdateService != nil {
+			mainstreamUpdateService.SetContactResolver(contactService, mainstreamContactUpdateService)
+		}
+		orderSyncService.SetMainstreamBackfill(orderService, mainstreamUpdateService)
 		orderConsumer, err = shopifymessaging.NewOrderConsumer(mainstreamUpdateService, logger)
 		if err != nil {
 			return nil, fmt.Errorf("create shopify order consumer: %w", err)

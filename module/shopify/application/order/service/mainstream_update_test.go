@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	contactsapplication "mannaiah/module/contacts/application"
+	contactsdomain "mannaiah/module/contacts/domain"
 	ordersdomain "mannaiah/module/orders/domain"
 	ordersport "mannaiah/module/orders/port"
 	shopifyport "mannaiah/module/shopify/port"
@@ -45,6 +47,30 @@ type linkRepositoryStub struct {
 	upserted        *shopifyport.UpsertSyncLinkInput
 	updatedMannaiah string
 	updatedStatus   string
+}
+
+type orderContactSourceStub struct {
+	contact *contactsdomain.Contact
+}
+
+func (s orderContactSourceStub) Get(ctx context.Context, id string) (*contactsdomain.Contact, error) {
+	_ = ctx
+	_ = id
+	return s.contact, nil
+}
+
+type orderContactHandlerStub struct {
+	calls int
+	links *linkRepositoryStub
+}
+
+func (s *orderContactHandlerStub) HandleContactEvent(ctx context.Context, payload contactsapplication.ContactEventPayload) error {
+	_ = ctx
+	s.calls++
+	if s.links != nil {
+		s.links.contactLink = &shopifyport.SyncLink{ShopDomain: "flock-6591.myshopify.com", ShopifyID: "created-customer-1", MannaiahID: payload.ID}
+	}
+	return nil
 }
 
 func (s *linkRepositoryStub) GetLinkByShopifyID(ctx context.Context, kind shopifyport.SyncKind, shopDomain string, shopifyID string) (*shopifyport.SyncLink, error) {
@@ -204,6 +230,44 @@ func TestMainstreamUpdateServiceHandleOrderEvent(t *testing.T) {
 		}
 		if links.upserted != nil {
 			t.Fatalf("upserted link = %#v, want nil", links.upserted)
+		}
+	})
+
+	t.Run("creates missing contact before creating missing shopify order", func(t *testing.T) {
+		destination := &destinationStub{}
+		links := &linkRepositoryStub{}
+		contactHandler := &orderContactHandlerStub{links: links}
+		service, err := NewMainstreamUpdateService(destination, links, zap.NewNop())
+		if err != nil {
+			t.Fatalf("NewMainstreamUpdateService() error = %v", err)
+		}
+		service.SetContactResolver(orderContactSourceStub{contact: &contactsdomain.Contact{
+			ID:        "contact-10",
+			FirstName: "Grace",
+			LastName:  "Hopper",
+			Email:     "grace@example.com",
+		}}, contactHandler)
+
+		err = service.HandleOrderEvent(context.Background(), ordersport.OrderEventPayload{
+			ID:            "ord-10",
+			Identifier:    "M-1010",
+			Realm:         "shopify",
+			Source:        "api",
+			ContactID:     "contact-10",
+			CurrentStatus: "PENDING",
+			Items:         []ordersport.OrderEventItem{{SKU: "sku-10", Quantity: 1, Value: 10}},
+		})
+		if err != nil {
+			t.Fatalf("HandleOrderEvent() error = %v", err)
+		}
+		if contactHandler.calls != 1 {
+			t.Fatalf("contact pre-sync calls = %d, want 1", contactHandler.calls)
+		}
+		if destination.createCalls != 1 {
+			t.Fatalf("order create calls = %d, want 1", destination.createCalls)
+		}
+		if destination.lastCreateCommand.CustomerID != "created-customer-1" {
+			t.Fatalf("create customer = %q, want created-customer-1", destination.lastCreateCommand.CustomerID)
 		}
 	})
 }

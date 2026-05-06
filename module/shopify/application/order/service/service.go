@@ -7,6 +7,9 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
+	ordersapplication "mannaiah/module/orders/application"
+	ordersdomain "mannaiah/module/orders/domain"
+	ordersport "mannaiah/module/orders/port"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -83,6 +86,18 @@ type Service interface {
 	SetSyncRecorder(recorder shopifyport.SyncRecorder)
 }
 
+// MainstreamOrderSource defines local order listing behavior for outbound backfills.
+type MainstreamOrderSource interface {
+	// List lists paginated order aggregate values.
+	List(ctx context.Context, query ordersapplication.ListQuery) (*ordersapplication.ListResult, error)
+}
+
+// MainstreamOrderEventHandler defines local order outbound synchronization behavior.
+type MainstreamOrderEventHandler interface {
+	// HandleOrderEvent pushes one local order to Shopify when needed.
+	HandleOrderEvent(ctx context.Context, payload ordersport.OrderEventPayload) error
+}
+
 // OrderSyncService defines Shopify order synchronization behavior.
 type OrderSyncService struct {
 	// cfg defines feature configuration values.
@@ -99,6 +114,10 @@ type OrderSyncService struct {
 	recorder shopifyport.SyncRecorder
 	// sourceBreaker defines optional Shopify source breaker behavior.
 	sourceBreaker CircuitBreaker
+	// mainstreamSource defines local order listing dependencies for outbound backfills.
+	mainstreamSource MainstreamOrderSource
+	// mainstreamHandler defines local-to-Shopify sync dependencies for outbound backfills.
+	mainstreamHandler MainstreamOrderEventHandler
 }
 
 var (
@@ -149,6 +168,15 @@ func (s *OrderSyncService) SetSyncRecorder(recorder shopifyport.SyncRecorder) {
 	}
 
 	s.recorder = recorder
+}
+
+// SetMainstreamBackfill configures local-to-Shopify order reconciliation during bulk sync.
+func (s *OrderSyncService) SetMainstreamBackfill(source MainstreamOrderSource, handler MainstreamOrderEventHandler) {
+	if s == nil {
+		return
+	}
+	s.mainstreamSource = source
+	s.mainstreamHandler = handler
 }
 
 // ValidateIntegration verifies source connectivity and credentials.
@@ -282,6 +310,11 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 		}
 	}
 
+	if err := s.backfillMainstreamOrders(ctx, summary); err != nil {
+		s.failRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+		return nil, err
+	}
+
 	if strings.TrimSpace(runID) != "" {
 		completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped)
 		if completeErr != nil {
@@ -290,6 +323,128 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 	}
 
 	return summary, nil
+}
+
+func (s *OrderSyncService) backfillMainstreamOrders(ctx context.Context, summary *SyncSummary) error {
+	if s.mainstreamSource == nil || s.mainstreamHandler == nil {
+		return nil
+	}
+
+	const pageSize = 250
+	realm := strings.TrimSpace(s.cfg.Realm)
+	for page := 1; ; page++ {
+		result, err := s.mainstreamSource.List(ctx, ordersapplication.ListQuery{Page: page, Limit: pageSize, Realm: realm})
+		if err != nil {
+			return fmt.Errorf("list mainstream orders for shopify backfill: %w", err)
+		}
+		if result == nil || len(result.Data) == 0 {
+			return nil
+		}
+
+		s.logger.Info("shopify orders outbound backfill page fetched", zap.Int("page", page), zap.Int("count", len(result.Data)))
+		for _, order := range result.Data {
+			summary.Processed++
+			if err := s.mainstreamHandler.HandleOrderEvent(ctx, buildOrderEventPayload(order)); err != nil {
+				summary.Failed++
+				s.logger.Warn("shopify order outbound backfill failed", zap.String("order_id", order.ID), zap.Error(err))
+				continue
+			}
+			summary.Succeeded++
+		}
+
+		if result.TotalPages > 0 && page >= result.TotalPages {
+			return nil
+		}
+		if len(result.Data) < pageSize {
+			return nil
+		}
+	}
+}
+
+func buildOrderEventPayload(order ordersdomain.Order) ordersport.OrderEventPayload {
+	return ordersport.OrderEventPayload{
+		ID:                       strings.TrimSpace(order.ID),
+		Identifier:               strings.TrimSpace(order.Identifier),
+		Realm:                    strings.TrimSpace(order.Realm),
+		ContactID:                strings.TrimSpace(order.ContactID),
+		Source:                   "mannaiah_backfill",
+		CurrentStatus:            strings.TrimSpace(string(order.CurrentStatus)),
+		LatestStatus:             buildLatestStatusPayload(order.StatusHistory, order.CurrentStatus),
+		Items:                    buildOrderEventItems(order.Items),
+		ShippingAddress:          buildOrderEventShippingAddress(order.ShippingAddress),
+		HasCustomShippingAddress: order.HasCustomShippingAddress,
+		ShippingCharges:          buildOrderEventShippingCharges(order.ShippingCharges),
+		Metadata:                 cloneOrderStringMap(order.Metadata),
+		CreatedAt:                order.CreatedAt,
+		UpdatedAt:                order.UpdatedAt,
+	}
+}
+
+func buildLatestStatusPayload(history []ordersdomain.StatusEntry, fallback ordersdomain.Status) ordersport.OrderEventStatus {
+	var latest ordersdomain.StatusEntry
+	for _, entry := range history {
+		if latest.OccurredAt.IsZero() || entry.OccurredAt.After(latest.OccurredAt) {
+			latest = entry
+		}
+	}
+	if strings.TrimSpace(string(latest.Status)) == "" {
+		latest.Status = fallback
+	}
+	return ordersport.OrderEventStatus{
+		Status:      strings.TrimSpace(string(latest.Status)),
+		Author:      strings.TrimSpace(latest.Author),
+		Description: strings.TrimSpace(latest.Description),
+		NoteOwner:   strings.TrimSpace(latest.NoteOwner),
+		Note:        strings.TrimSpace(latest.Note),
+		OccurredAt:  latest.OccurredAt,
+	}
+}
+
+func buildOrderEventItems(values []ordersdomain.Item) []ordersport.OrderEventItem {
+	items := make([]ordersport.OrderEventItem, 0, len(values))
+	for _, value := range values {
+		items = append(items, ordersport.OrderEventItem{
+			SKU:              strings.TrimSpace(value.SKU),
+			AlternateName:    strings.TrimSpace(value.AlternateName),
+			Quantity:         value.Quantity,
+			Value:            value.Value,
+			ProductID:        strings.TrimSpace(value.ProductID),
+			ResolutionSource: strings.TrimSpace(string(value.ResolutionSource)),
+		})
+	}
+	return items
+}
+
+func buildOrderEventShippingAddress(value ordersdomain.ShippingAddress) ordersport.OrderEventShippingAddress {
+	return ordersport.OrderEventShippingAddress{
+		Address:  strings.TrimSpace(value.Address),
+		Address2: strings.TrimSpace(value.Address2),
+		Phone:    strings.TrimSpace(value.Phone),
+		CityCode: strings.TrimSpace(value.CityCode),
+	}
+}
+
+func buildOrderEventShippingCharges(values []ordersdomain.ShippingCharge) []ordersport.OrderEventShippingCharge {
+	charges := make([]ordersport.OrderEventShippingCharge, 0, len(values))
+	for _, value := range values {
+		charges = append(charges, ordersport.OrderEventShippingCharge{
+			MethodID:    strings.TrimSpace(value.MethodID),
+			MethodTitle: strings.TrimSpace(value.MethodTitle),
+			Price:       value.Price,
+		})
+	}
+	return charges
+}
+
+func cloneOrderStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (s *OrderSyncService) loadOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
