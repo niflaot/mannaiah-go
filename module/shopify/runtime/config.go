@@ -16,6 +16,10 @@ type Config struct {
 	SyncTimeoutMS int `mapstructure:"SHOPIFY_SYNC_TIMEOUT_MS" default:"600000"`
 	// RequestTimeoutMS defines Shopify API timeout values in milliseconds.
 	RequestTimeoutMS int `mapstructure:"SHOPIFY_REQUEST_TIMEOUT_MS" default:"10000"`
+	// AdminRateLimitIntervalMS defines minimum spacing between Shopify Admin API calls.
+	AdminRateLimitIntervalMS int `mapstructure:"SHOPIFY_ADMIN_RATE_LIMIT_INTERVAL_MS" default:"600"`
+	// TooManyRequestsRetryDelayMS defines fallback wait time after Shopify 429 responses.
+	TooManyRequestsRetryDelayMS int `mapstructure:"SHOPIFY_429_RETRY_DELAY_MS" default:"1100"`
 	// CircuitBreakerEnabled defines whether Shopify source/destination requests use circuit breakers.
 	CircuitBreakerEnabled bool `mapstructure:"SHOPIFY_CIRCUIT_BREAKER_ENABLED" default:"true"`
 	// CircuitBreakerMaxRequests defines half-open max concurrent requests.

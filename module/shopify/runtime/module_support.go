@@ -43,6 +43,15 @@ func resolveRequestTimeout(timeoutMS int) time.Duration {
 	return time.Duration(timeoutMS) * time.Millisecond
 }
 
+// resolveDurationMS resolves optional millisecond config inputs.
+func resolveDurationMS(valueMS int) time.Duration {
+	if valueMS <= 0 {
+		return 0
+	}
+
+	return time.Duration(valueMS) * time.Millisecond
+}
+
 // resolveSyncWorkers resolves webhook worker counts.
 func resolveSyncWorkers(workers int) int {
 	if workers <= 0 {

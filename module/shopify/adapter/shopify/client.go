@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	ordersdomain "mannaiah/module/orders/domain"
@@ -18,9 +19,11 @@ import (
 )
 
 const (
-	apiVersion     = "2026-04"
-	defaultTimeout = 5 * time.Second
-	maxRetries     = 2
+	apiVersion                    = "2026-04"
+	defaultTimeout                = 5 * time.Second
+	defaultAdminRateLimitInterval = 600 * time.Millisecond
+	defaultTooManyRequestsDelay   = 1100 * time.Millisecond
+	maxRetries                    = 2
 )
 
 var (
@@ -50,6 +53,10 @@ type Config struct {
 	TokenResolver shopifyport.InstallationResolver
 	// Timeout defines request timeout values.
 	Timeout time.Duration
+	// AdminRateLimitInterval defines minimum spacing between Shopify Admin API calls.
+	AdminRateLimitInterval time.Duration
+	// TooManyRequestsRetryDelay defines fallback wait time after 429 responses without Retry-After.
+	TooManyRequestsRetryDelay time.Duration
 	// BaseURL overrides the computed Shopify Admin base URL for testing.
 	BaseURL string
 }
@@ -66,6 +73,14 @@ type Client struct {
 	baseURL string
 	// httpClient defines HTTP transport dependencies.
 	httpClient *http.Client
+	// rateLimitInterval defines minimum spacing between Shopify Admin API calls.
+	rateLimitInterval time.Duration
+	// tooManyRequestsRetryDelay defines fallback wait time after 429 responses without Retry-After.
+	tooManyRequestsRetryDelay time.Duration
+	// rateMu serializes per-shop Admin API pacing.
+	rateMu sync.Mutex
+	// lastAdminRequestAt stores the latest Admin API request timestamp per shop.
+	lastAdminRequestAt map[string]time.Time
 }
 
 // NewClient creates Shopify Admin REST clients.
@@ -84,13 +99,27 @@ func NewClient(cfg Config) (*Client, error) {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
+	rateLimitInterval := cfg.AdminRateLimitInterval
+	if rateLimitInterval == 0 && strings.TrimSpace(cfg.BaseURL) == "" {
+		rateLimitInterval = defaultAdminRateLimitInterval
+	}
+	if rateLimitInterval < 0 {
+		rateLimitInterval = 0
+	}
+	tooManyRequestsRetryDelay := cfg.TooManyRequestsRetryDelay
+	if tooManyRequestsRetryDelay <= 0 {
+		tooManyRequestsRetryDelay = defaultTooManyRequestsDelay
+	}
 
 	return &Client{
-		clientID:      strings.TrimSpace(cfg.ClientID),
-		clientSecret:  strings.TrimSpace(cfg.ClientSecret),
-		tokenResolver: cfg.TokenResolver,
-		baseURL:       strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
-		httpClient:    &http.Client{Timeout: timeout},
+		clientID:                  strings.TrimSpace(cfg.ClientID),
+		clientSecret:              strings.TrimSpace(cfg.ClientSecret),
+		tokenResolver:             cfg.TokenResolver,
+		baseURL:                   strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
+		httpClient:                &http.Client{Timeout: timeout},
+		rateLimitInterval:         rateLimitInterval,
+		tooManyRequestsRetryDelay: tooManyRequestsRetryDelay,
+		lastAdminRequestAt:        make(map[string]time.Time),
 	}, nil
 }
 
@@ -615,16 +644,23 @@ func (c *Client) resolveInstallation(ctx context.Context) (*shopifyport.Installa
 
 func (c *Client) doJSONWithToken(ctx context.Context, shopDomain string, accessToken string, method string, path string, requestBody any, response any) error {
 	requestURL := c.buildAdminBaseURL(shopDomain) + path
-	return c.doJSONAbsolute(ctx, requestURL, accessToken, method, requestBody, response)
+	return c.doJSON(ctx, requestURL, accessToken, method, requestBody, response, shopDomain)
 }
 
 func (c *Client) doJSONAbsolute(ctx context.Context, requestURL string, accessToken string, method string, requestBody any, response any) error {
+	return c.doJSON(ctx, requestURL, accessToken, method, requestBody, response, "")
+}
+
+func (c *Client) doJSON(ctx context.Context, requestURL string, accessToken string, method string, requestBody any, response any, rateLimitKey string) error {
 	body, err := marshalRequest(requestBody)
 	if err != nil {
 		return err
 	}
 
 	for attempt := 0; ; attempt++ {
+		if err := c.waitForAdminRateLimit(ctx, rateLimitKey); err != nil {
+			return err
+		}
 		request, requestErr := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewReader(body))
 		if requestErr != nil {
 			return requestErr
@@ -662,11 +698,34 @@ func (c *Client) doJSONAbsolute(ctx context.Context, requestURL string, accessTo
 		waitFor := retryAfter
 		if waitFor <= 0 {
 			waitFor = retryDelay(attempt)
+			if statusErr.Code == http.StatusTooManyRequests && waitFor < c.tooManyRequestsRetryDelay {
+				waitFor = c.tooManyRequestsRetryDelay
+			}
 		}
 		if waitErr := waitWithContext(ctx, waitFor); waitErr != nil {
 			return waitErr
 		}
 	}
+}
+
+func (c *Client) waitForAdminRateLimit(ctx context.Context, shopDomain string) error {
+	key := shopifyport.NormalizeShopDomain(shopDomain)
+	if c == nil || c.rateLimitInterval <= 0 || strings.TrimSpace(key) == "" {
+		return nil
+	}
+
+	c.rateMu.Lock()
+	defer c.rateMu.Unlock()
+
+	last := c.lastAdminRequestAt[key]
+	waitFor := c.rateLimitInterval - time.Since(last)
+	if waitFor > 0 {
+		if err := waitWithContext(ctx, waitFor); err != nil {
+			return err
+		}
+	}
+	c.lastAdminRequestAt[key] = time.Now()
+	return nil
 }
 
 func (c *Client) buildAdminBaseURL(shopDomain string) string {

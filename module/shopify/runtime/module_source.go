@@ -25,10 +25,12 @@ type sourceGateway interface {
 // newSource creates Shopify source and destination adapters from module config values.
 func newSource(cfg Config, resolver shopifyport.InstallationResolver) (sourceGateway, error) {
 	return shopifyadapter.NewClient(shopifyadapter.Config{
-		ClientID:      cfg.ClientID,
-		ClientSecret:  cfg.ClientSecret,
-		TokenResolver: resolver,
-		Timeout:       time.Duration(resolveRequestTimeout(cfg.RequestTimeoutMS)),
+		ClientID:                  cfg.ClientID,
+		ClientSecret:              cfg.ClientSecret,
+		TokenResolver:             resolver,
+		Timeout:                   time.Duration(resolveRequestTimeout(cfg.RequestTimeoutMS)),
+		AdminRateLimitInterval:    time.Duration(resolveDurationMS(cfg.AdminRateLimitIntervalMS)),
+		TooManyRequestsRetryDelay: time.Duration(resolveDurationMS(cfg.TooManyRequestsRetryDelayMS)),
 	})
 }
 
