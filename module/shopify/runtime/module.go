@@ -85,6 +85,7 @@ func New(
 		return nil, ErrNilOrderService
 	}
 	logger := resolveLogger(providedLogger)
+	bidirectionalSync := isBidirectionalSyncEnabled(cfg.SyncMode)
 	repository, err := shopifystore.NewRepository(db)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify repository: %w", err)
@@ -107,7 +108,7 @@ func New(
 	}
 
 	var mainstreamContactUpdateService *shopifycontactservice.MainstreamContactUpdateService
-	if cfg.SyncContacts || cfg.SyncOrders {
+	if bidirectionalSync && (cfg.SyncContacts || cfg.SyncOrders) {
 		mainstreamContactUpdateService, err = shopifycontactservice.NewMainstreamUpdateService(
 			source,
 			source,
@@ -133,7 +134,7 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("create shopify contact sync service: %w", err)
 	}
-	if mainstreamContactUpdateService != nil {
+	if bidirectionalSync && mainstreamContactUpdateService != nil {
 		contactSyncService.SetMainstreamBackfill(contactService, mainstreamContactUpdateService)
 	}
 	orderSyncService, err := shopifyorderservice.NewService(
@@ -171,7 +172,7 @@ func New(
 	}
 
 	var contactConsumer *shopifymessaging.ContactConsumer
-	if cfg.SyncContacts && mainstreamContactUpdateService != nil {
+	if bidirectionalSync && cfg.SyncContacts && mainstreamContactUpdateService != nil {
 		contactConsumer, err = shopifymessaging.NewContactConsumer(mainstreamContactUpdateService, logger)
 		if err != nil {
 			return nil, fmt.Errorf("create shopify contact consumer: %w", err)
@@ -179,7 +180,7 @@ func New(
 	}
 
 	var orderConsumer *shopifymessaging.OrderConsumer
-	if cfg.SyncOrders {
+	if bidirectionalSync && cfg.SyncOrders {
 		mainstreamUpdateService, err := shopifyorderservice.NewMainstreamUpdateService(
 			source,
 			repository,

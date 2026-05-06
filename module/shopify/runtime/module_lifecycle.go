@@ -21,6 +21,7 @@ func (m *Module) Start(ctx context.Context) error {
 		"shopify consumers startup",
 		zap.Bool("sync_contacts_enabled", m.cfg.SyncContacts),
 		zap.Bool("sync_orders_enabled", m.cfg.SyncOrders),
+		zap.String("sync_mode", m.cfg.SyncMode),
 		zap.Bool("has_registrar", m.registrar != nil),
 		zap.Bool("has_contact_consumer", m.contactConsumer != nil),
 		zap.Bool("has_order_consumer", m.orderConsumer != nil),
@@ -31,7 +32,7 @@ func (m *Module) Start(ctx context.Context) error {
 			if err := m.contactConsumer.Register(m.registrar); err != nil {
 				return fmt.Errorf("register shopify contact consumer: %w", err)
 			}
-		} else if m.cfg.SyncContacts {
+		} else if m.cfg.SyncContacts && isBidirectionalSyncEnabled(m.cfg.SyncMode) {
 			m.logger.Warn("shopify contacts sync enabled but contact consumer is unavailable")
 		}
 		if m.orderConsumer != nil {
@@ -39,7 +40,7 @@ func (m *Module) Start(ctx context.Context) error {
 			if err := m.orderConsumer.Register(m.registrar); err != nil {
 				return fmt.Errorf("register shopify order consumer: %w", err)
 			}
-		} else if m.cfg.SyncOrders {
+		} else if m.cfg.SyncOrders && isBidirectionalSyncEnabled(m.cfg.SyncMode) {
 			m.logger.Warn("shopify orders sync enabled but order consumer is unavailable")
 		}
 		m.consumerRegistered = true

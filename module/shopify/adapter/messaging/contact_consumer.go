@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	contactsapplication "mannaiah/module/contacts/application"
 	"mannaiah/module/core/messaging/bus"
@@ -80,10 +81,18 @@ func (c *ContactConsumer) handleMessage(ctx context.Context, topic string, messa
 	)
 
 	if err := c.handler.HandleContactEvent(ctx, payload); err != nil {
+		if isTemporaryShopifyUnavailable(err) {
+			c.logger.Warn("defer shopify contact integration event: shopify is temporarily unavailable", zap.String("topic", topic), zap.String("contact_id", payload.ID), zap.Error(err))
+			return nil
+		}
 		c.logger.Warn("handle shopify contact integration event failed", zap.String("topic", topic), zap.Error(err))
 		return err
 	}
 	c.logger.Info("shopify contact integration event handled", zap.String("topic", topic), zap.String("contact_id", payload.ID))
 
 	return nil
+}
+
+func isTemporaryShopifyUnavailable(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "shopify integration is unavailable")
 }

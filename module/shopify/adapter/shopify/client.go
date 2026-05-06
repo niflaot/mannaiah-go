@@ -21,8 +21,8 @@ import (
 const (
 	apiVersion                    = "2026-04"
 	defaultTimeout                = 5 * time.Second
-	defaultAdminRateLimitInterval = 600 * time.Millisecond
-	defaultTooManyRequestsDelay   = 1100 * time.Millisecond
+	defaultAdminRateLimitInterval = 1200 * time.Millisecond
+	defaultTooManyRequestsDelay   = 5 * time.Second
 	maxRetries                    = 2
 )
 

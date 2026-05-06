@@ -88,6 +88,10 @@ func (c *OrderConsumer) handleMessage(ctx context.Context, topic string, message
 	)
 
 	if err := c.handler.HandleOrderEvent(ctx, payload); err != nil {
+		if isTemporaryShopifyUnavailable(err) {
+			c.logger.Warn("defer shopify order integration event: shopify is temporarily unavailable", zap.String("topic", topic), zap.String("order_id", payload.ID), zap.Error(err))
+			return nil
+		}
 		c.logger.Warn("handle shopify order integration event failed", zap.String("topic", topic), zap.Error(err))
 		return err
 	}

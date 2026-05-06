@@ -10,6 +10,8 @@ type Config struct {
 	SyncOrders bool `mapstructure:"SHOPIFY_SYNC_ORDERS" default:"false"`
 	// SyncContacts enables contact sync behavior.
 	SyncContacts bool `mapstructure:"SHOPIFY_SYNC_CONTACTS" default:"false"`
+	// SyncMode defines sync direction. Supported values: shopify, bidirectional.
+	SyncMode string `mapstructure:"SHOPIFY_SYNC_MODE" default:"shopify"`
 	// SyncWorkers defines webhook worker counts.
 	SyncWorkers int `mapstructure:"SHOPIFY_SYNC_WORKERS" default:"4"`
 	// SyncTimeoutMS defines sync timeout values in milliseconds.
@@ -17,9 +19,9 @@ type Config struct {
 	// RequestTimeoutMS defines Shopify API timeout values in milliseconds.
 	RequestTimeoutMS int `mapstructure:"SHOPIFY_REQUEST_TIMEOUT_MS" default:"10000"`
 	// AdminRateLimitIntervalMS defines minimum spacing between Shopify Admin API calls.
-	AdminRateLimitIntervalMS int `mapstructure:"SHOPIFY_ADMIN_RATE_LIMIT_INTERVAL_MS" default:"600"`
+	AdminRateLimitIntervalMS int `mapstructure:"SHOPIFY_ADMIN_RATE_LIMIT_INTERVAL_MS" default:"1200"`
 	// TooManyRequestsRetryDelayMS defines fallback wait time after Shopify 429 responses.
-	TooManyRequestsRetryDelayMS int `mapstructure:"SHOPIFY_429_RETRY_DELAY_MS" default:"1100"`
+	TooManyRequestsRetryDelayMS int `mapstructure:"SHOPIFY_429_RETRY_DELAY_MS" default:"5000"`
 	// CircuitBreakerEnabled defines whether Shopify source/destination requests use circuit breakers.
 	CircuitBreakerEnabled bool `mapstructure:"SHOPIFY_CIRCUIT_BREAKER_ENABLED" default:"true"`
 	// CircuitBreakerMaxRequests defines half-open max concurrent requests.
