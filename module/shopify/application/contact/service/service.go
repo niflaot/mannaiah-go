@@ -191,8 +191,11 @@ func (s *ContactSyncService) SyncContactByID(ctx context.Context, trigger string
 		Succeeded: 1,
 		ContactID: strings.TrimSpace(entity.ID),
 	}
-	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
-		s.logger.Warn("complete shopify contact sync run failed", zap.Error(completeErr))
+	if strings.TrimSpace(runID) != "" {
+		completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped)
+		if completeErr != nil {
+			s.logger.Warn("complete shopify contact sync run failed", zap.Error(completeErr))
+		}
 	}
 
 	return summary, nil
@@ -217,7 +220,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 	sinceID := ""
 	for {
 		if err := ctx.Err(); err != nil {
-			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			s.failRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
 			return nil, err
 		}
 
@@ -230,7 +233,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 		})
 		if err != nil {
 			s.logger.Error("shopify contacts list page failed", zap.String("sinceID", sinceID), zap.Error(err))
-			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			s.failRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
 			return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 		}
 
@@ -258,8 +261,11 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 
 	s.logger.Info("shopify contacts bulk sync completed", zap.Int("processed", summary.Processed), zap.Int("succeeded", summary.Succeeded), zap.Int("failed", summary.Failed))
 
-	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
-		s.logger.Warn("complete shopify contacts sync run failed", zap.Error(completeErr))
+	if strings.TrimSpace(runID) != "" {
+		completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped)
+		if completeErr != nil {
+			s.logger.Warn("complete shopify contacts sync run failed", zap.Error(completeErr))
+		}
 	}
 
 	return summary, nil
@@ -287,7 +293,14 @@ func (s *ContactSyncService) loadCustomer(ctx context.Context, id string) (shopi
 
 func (s *ContactSyncService) recordFailure(ctx context.Context, runID string, id string, err error) {
 	syncErr := shopifyport.SyncError{Type: "contact", Code: strings.TrimSpace(id), Message: err.Error()}
-	if failErr := s.recorder.FailRun(ctx, runID, 1, 0, 1, 0, []shopifyport.SyncError{syncErr}); failErr != nil {
+	s.failRun(ctx, runID, 1, 0, 1, 0, []shopifyport.SyncError{syncErr})
+}
+
+func (s *ContactSyncService) failRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []shopifyport.SyncError) {
+	if strings.TrimSpace(runID) == "" {
+		return
+	}
+	if failErr := s.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, syncErrors); failErr != nil {
 		s.logger.Warn("fail shopify contact sync run failed", zap.Error(failErr))
 	}
 }
@@ -314,9 +327,12 @@ func (s *ContactSyncService) executeWithBreaker(breaker CircuitBreaker, unavaila
 
 func resolveTrigger(trigger string) string {
 	trimmed := strings.TrimSpace(trigger)
-	if trimmed != "" {
+	switch strings.ToLower(trimmed) {
+	case "":
+		return "manual"
+	case "webhook":
+		return "event"
+	default:
 		return trimmed
 	}
-
-	return "manual"
 }

@@ -214,8 +214,11 @@ func (s *OrderSyncService) SyncOrderByID(ctx context.Context, trigger string, id
 		OrderID:   strings.TrimSpace(entity.ID),
 		ContactID: strings.TrimSpace(contact.ID),
 	}
-	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
-		s.logger.Warn("complete shopify order sync run failed", zap.Error(completeErr))
+	if strings.TrimSpace(runID) != "" {
+		completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped)
+		if completeErr != nil {
+			s.logger.Warn("complete shopify order sync run failed", zap.Error(completeErr))
+		}
 	}
 
 	return summary, nil
@@ -238,7 +241,7 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 	sinceID := ""
 	for {
 		if err := ctx.Err(); err != nil {
-			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			s.failRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
 			return nil, err
 		}
 
@@ -250,7 +253,7 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 			return listErr
 		})
 		if err != nil {
-			_ = s.recorder.FailRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
+			s.failRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped, nil)
 			return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 		}
 
@@ -279,8 +282,11 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 		}
 	}
 
-	if completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped); completeErr != nil {
-		s.logger.Warn("complete shopify orders sync run failed", zap.Error(completeErr))
+	if strings.TrimSpace(runID) != "" {
+		completeErr := s.recorder.CompleteRun(ctx, runID, summary.Processed, summary.Succeeded, summary.Failed, summary.Skipped)
+		if completeErr != nil {
+			s.logger.Warn("complete shopify orders sync run failed", zap.Error(completeErr))
+		}
 	}
 
 	return summary, nil
@@ -320,7 +326,14 @@ func (s *OrderSyncService) syncOrderContact(ctx context.Context, order shopifypo
 
 func (s *OrderSyncService) recordFailure(ctx context.Context, runID string, id string, err error) {
 	syncErr := shopifyport.SyncError{Type: "order", Code: strings.TrimSpace(id), Message: err.Error()}
-	if failErr := s.recorder.FailRun(ctx, runID, 1, 0, 1, 0, []shopifyport.SyncError{syncErr}); failErr != nil {
+	s.failRun(ctx, runID, 1, 0, 1, 0, []shopifyport.SyncError{syncErr})
+}
+
+func (s *OrderSyncService) failRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []shopifyport.SyncError) {
+	if strings.TrimSpace(runID) == "" {
+		return
+	}
+	if failErr := s.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, syncErrors); failErr != nil {
 		s.logger.Warn("fail shopify order sync run failed", zap.Error(failErr))
 	}
 }
@@ -351,12 +364,12 @@ type shopifyportContact struct {
 
 func resolveTrigger(trigger string) string {
 	trimmed := strings.TrimSpace(trigger)
-	if trimmed == "" {
-		return "shopify_sync"
-	}
-	if strings.HasPrefix(trimmed, "shopify_") {
+	switch strings.ToLower(trimmed) {
+	case "":
+		return "manual"
+	case "webhook":
+		return "event"
+	default:
 		return trimmed
 	}
-
-	return "shopify_" + trimmed
 }
