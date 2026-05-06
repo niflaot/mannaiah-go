@@ -73,6 +73,8 @@ type ShopifyAddress struct {
 
 // ShopifyCustomer defines one normalized Shopify customer payload.
 type ShopifyCustomer struct {
+	// ShopDomain defines the Shopify store domain that owns this customer.
+	ShopDomain string
 	// ID defines Shopify customer identifiers.
 	ID string
 	// Email defines customer email values.
@@ -129,6 +131,8 @@ type ShopifyDiscountCode struct {
 
 // ShopifyOrder defines one normalized Shopify order payload.
 type ShopifyOrder struct {
+	// ShopDomain defines the Shopify store domain that owns this order.
+	ShopDomain string
 	// ID defines Shopify order identifiers.
 	ID string
 	// Name defines public Shopify order names.

@@ -21,6 +21,8 @@ type SyncLink struct {
 	ID string
 	// Kind defines linked aggregate kinds.
 	Kind SyncKind
+	// ShopDomain defines the Shopify store domain associated with the link.
+	ShopDomain string
 	// ShopifyID defines Shopify aggregate identifiers.
 	ShopifyID string
 	// MannaiahID defines Mannaiah aggregate identifiers.
@@ -39,6 +41,8 @@ type SyncLink struct {
 type UpsertSyncLinkInput struct {
 	// Kind defines linked aggregate kinds.
 	Kind SyncKind
+	// ShopDomain defines the Shopify store domain associated with the link.
+	ShopDomain string
 	// ShopifyID defines Shopify aggregate identifiers.
 	ShopifyID string
 	// MannaiahID defines Mannaiah aggregate identifiers.
@@ -52,7 +56,7 @@ type UpsertSyncLinkInput struct {
 // SyncLinkRepository defines persisted Shopify linkage behavior.
 type SyncLinkRepository interface {
 	// GetLinkByShopifyID resolves one link row by Shopify identifier.
-	GetLinkByShopifyID(ctx context.Context, kind SyncKind, shopifyID string) (*SyncLink, error)
+	GetLinkByShopifyID(ctx context.Context, kind SyncKind, shopDomain string, shopifyID string) (*SyncLink, error)
 	// GetLinkByMannaiahID resolves one link row by Mannaiah identifier.
 	GetLinkByMannaiahID(ctx context.Context, kind SyncKind, mannaiahID string) (*SyncLink, error)
 	// UpsertLink creates or updates one link row.
@@ -65,4 +69,50 @@ type SyncLinkRepository interface {
 type WebhookDeliveryRepository interface {
 	// CreateDeliveryIfAbsent stores one webhook delivery id and reports whether it was new.
 	CreateDeliveryIfAbsent(ctx context.Context, deliveryID string, topic string) (bool, error)
+}
+
+// Installation defines one persisted Shopify app installation.
+type Installation struct {
+	// ID defines installation identifiers.
+	ID string
+	// ShopDomain defines Shopify store domains.
+	ShopDomain string
+	// AccessToken defines permanent Shopify offline access tokens.
+	AccessToken string
+	// Scopes defines granted installation scopes.
+	Scopes string
+	// InstalledAt defines installation timestamps.
+	InstalledAt time.Time
+	// UninstalledAt defines uninstall timestamps.
+	UninstalledAt *time.Time
+	// CreatedAt defines creation timestamps.
+	CreatedAt time.Time
+	// UpdatedAt defines update timestamps.
+	UpdatedAt time.Time
+}
+
+// UpsertInstallationInput defines persisted Shopify installation payload values.
+type UpsertInstallationInput struct {
+	// ShopDomain defines Shopify store domains.
+	ShopDomain string
+	// AccessToken defines permanent Shopify offline access tokens.
+	AccessToken string
+	// Scopes defines granted installation scopes.
+	Scopes string
+	// InstalledAt defines installation timestamps.
+	InstalledAt time.Time
+	// UninstalledAt defines uninstall timestamps.
+	UninstalledAt *time.Time
+}
+
+// InstallationRepository defines persisted Shopify installation behavior.
+type InstallationRepository interface {
+	// UpsertInstallation creates or updates one installation row.
+	UpsertInstallation(ctx context.Context, input UpsertInstallationInput) (*Installation, error)
+	// FindByShopDomain resolves one installation row by Shopify store domain.
+	FindByShopDomain(ctx context.Context, shopDomain string) (*Installation, error)
+	// ListActive lists non-uninstalled Shopify installations.
+	ListActive(ctx context.Context) ([]Installation, error)
+	// MarkUninstalled sets uninstall timestamps for one Shopify installation.
+	MarkUninstalled(ctx context.Context, shopDomain string, uninstalledAt time.Time) error
 }

@@ -35,9 +35,10 @@ type linkRepositoryStub struct {
 	updatedStatus   string
 }
 
-func (s *linkRepositoryStub) GetLinkByShopifyID(ctx context.Context, kind shopifyport.SyncKind, shopifyID string) (*shopifyport.SyncLink, error) {
+func (s *linkRepositoryStub) GetLinkByShopifyID(ctx context.Context, kind shopifyport.SyncKind, shopDomain string, shopifyID string) (*shopifyport.SyncLink, error) {
 	_ = ctx
 	_ = kind
+	_ = shopDomain
 	_ = shopifyID
 	return nil, nil
 }

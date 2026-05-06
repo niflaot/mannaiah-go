@@ -9,6 +9,7 @@ import (
 
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
 	shopifyorderservice "mannaiah/module/shopify/application/order/service"
+	shopifyport "mannaiah/module/shopify/port"
 
 	"go.uber.org/zap"
 )
@@ -25,11 +26,12 @@ var (
 // WebhookProcessor defines asynchronous Shopify webhook processing behavior.
 type WebhookProcessor interface {
 	// Enqueue schedules one Shopify webhook job.
-	Enqueue(ctx context.Context, topic string, shopifyID string) error
+	Enqueue(ctx context.Context, topic string, shopDomain string, shopifyID string) error
 }
 
 type webhookJob struct {
 	topic     string
+	shopDomain string
 	shopifyID string
 }
 
@@ -94,8 +96,8 @@ func NewProcessor(workers int, timeout time.Duration, contactsService shopifycon
 }
 
 // Enqueue schedules one Shopify webhook job.
-func (p *Processor) Enqueue(ctx context.Context, topic string, shopifyID string) error {
-	job := webhookJob{topic: strings.TrimSpace(topic), shopifyID: strings.TrimSpace(shopifyID)}
+func (p *Processor) Enqueue(ctx context.Context, topic string, shopDomain string, shopifyID string) error {
+	job := webhookJob{topic: strings.TrimSpace(topic), shopDomain: shopifyport.NormalizeShopDomain(shopDomain), shopifyID: strings.TrimSpace(shopifyID)}
 	select {
 	case <-p.closed:
 		return ErrProcessorClosed
@@ -133,7 +135,7 @@ func (p *Processor) runWorker() {
 		if strings.TrimSpace(job.shopifyID) == "" {
 			continue
 		}
-		jobCtx, cancel := context.WithTimeout(context.Background(), p.timeout)
+		jobCtx, cancel := context.WithTimeout(shopifyport.WithShopDomain(context.Background(), job.shopDomain), p.timeout)
 		p.processJob(jobCtx, job)
 		cancel()
 	}
@@ -148,7 +150,7 @@ func (p *Processor) processJob(ctx context.Context, job webhookJob) {
 		_, err = p.ordersService.SyncOrderByID(ctx, "webhook", job.shopifyID)
 	}
 	if err != nil {
-		p.logger.Warn("process shopify webhook failed", zap.String("topic", job.topic), zap.String("shopify_id", job.shopifyID), zap.Error(err))
+		p.logger.Warn("process shopify webhook failed", zap.String("topic", job.topic), zap.String("shop_domain", job.shopDomain), zap.String("shopify_id", job.shopifyID), zap.Error(err))
 	}
 }
 

@@ -32,6 +32,7 @@ func BuildContactSyncCommand(customer shopifyport.ShopifyCustomer) shopifyport.C
 	}
 
 	command := shopifyport.ContactSyncCommand{
+		ShopDomain:     strings.TrimSpace(customer.ShopDomain),
 		ShopifyID:      strings.TrimSpace(customer.ID),
 		Email:          strings.TrimSpace(customer.Email),
 		DocumentType:   documentType,

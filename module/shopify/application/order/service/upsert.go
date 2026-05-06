@@ -112,6 +112,7 @@ func (u *OrderUpserter) upsertLink(ctx context.Context, command shopifyport.Orde
 	lastSyncedAt := time.Now().UTC()
 	_, err := u.links.UpsertLink(ctx, shopifyport.UpsertSyncLinkInput{
 		Kind:            shopifyport.SyncKindOrder,
+		ShopDomain:      strings.TrimSpace(command.ShopDomain),
 		ShopifyID:       strings.TrimSpace(command.ShopifyID),
 		MannaiahID:      strings.TrimSpace(orderID),
 		LastKnownStatus: strings.TrimSpace(string(currentStatus)),

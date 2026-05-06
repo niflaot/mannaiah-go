@@ -16,6 +16,8 @@ type Context interface {
 	Context() context.Context
 	// GetHeader reads request header values.
 	GetHeader(key string, defaultValue ...string) string
+	// Queries reads all query-string values.
+	Queries() map[string]string
 	// Status sets the response status code.
 	Status(code int) Context
 	// JSON writes a JSON response payload.
@@ -48,6 +50,8 @@ type Context interface {
 type Router interface {
 	// Get registers a GET route handler.
 	Get(path string, handler Handler)
+	// Options registers an OPTIONS route handler.
+	Options(path string, handler Handler)
 	// Post registers a POST route handler.
 	Post(path string, handler Handler)
 	// Put registers a PUT route handler.

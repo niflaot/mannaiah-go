@@ -55,6 +55,8 @@ type OrderSyncAppliedCouponCommand struct {
 
 // OrderSyncCommand defines normalized order upsert payload values.
 type OrderSyncCommand struct {
+	// ShopDomain defines the source Shopify store domain.
+	ShopDomain string
 	// ShopifyID defines the source Shopify order identifier.
 	ShopifyID string
 	// Identifier defines public/external order identifiers used in Mannaiah.

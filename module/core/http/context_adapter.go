@@ -24,6 +24,11 @@ func (a *fiberContextAdapter) GetHeader(key string, defaultValue ...string) stri
 	return a.ctx.Get(key, defaultValue...)
 }
 
+// Queries reads all query-string values.
+func (a *fiberContextAdapter) Queries() map[string]string {
+	return a.ctx.Queries()
+}
+
 // Status sets the response status code.
 func (a *fiberContextAdapter) Status(code int) Context {
 	a.ctx.Status(code)

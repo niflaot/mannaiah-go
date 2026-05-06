@@ -2,12 +2,10 @@ package runtime
 
 // Config defines Shopify integration configuration values.
 type Config struct {
-	// ShopDomain defines the Shopify shop domain.
-	ShopDomain string `mapstructure:"SHOPIFY_SHOP_DOMAIN" default:""`
-	// AccessToken defines the Shopify Admin API token.
-	AccessToken string `mapstructure:"SHOPIFY_ACCESS_TOKEN" default:""`
-	// WebhookSecret defines the inbound webhook HMAC secret.
-	WebhookSecret string `mapstructure:"SHOPIFY_WEBHOOK_SECRET" default:""`
+	// ClientID defines Shopify OAuth client identifier values.
+	ClientID string `mapstructure:"SHOPIFY_CLIENT_ID" default:""`
+	// ClientSecret defines Shopify OAuth client secret values and webhook/session HMAC verification keys.
+	ClientSecret string `mapstructure:"SHOPIFY_CLIENT_SECRET" default:""`
 	// SyncOrders enables order sync behavior.
 	SyncOrders bool `mapstructure:"SHOPIFY_SYNC_ORDERS" default:"false"`
 	// SyncContacts enables contact sync behavior.

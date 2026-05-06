@@ -135,6 +135,7 @@ func (u *ContactUpserter) upsertLink(ctx context.Context, shopifyID string, cont
 	lastSyncedAt := time.Now().UTC()
 	_, err := u.links.UpsertLink(ctx, shopifyport.UpsertSyncLinkInput{
 		Kind:         shopifyport.SyncKindContact,
+		ShopDomain:   shopifyport.ShopDomainFromContext(ctx),
 		ShopifyID:    strings.TrimSpace(shopifyID),
 		MannaiahID:   strings.TrimSpace(contactID),
 		LastSyncedAt: &lastSyncedAt,

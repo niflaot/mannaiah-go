@@ -5,6 +5,7 @@ import (
 	"time"
 
 	corecircuitbreaker "mannaiah/module/core/circuitbreaker"
+	shopifyhttp "mannaiah/module/shopify/adapter/http"
 	shopifyadapter "mannaiah/module/shopify/adapter/shopify"
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
 	shopifyorderservice "mannaiah/module/shopify/application/order/service"
@@ -17,14 +18,16 @@ type sourceGateway interface {
 	shopifyport.CustomerSource
 	shopifyport.OrderSource
 	shopifyport.OrderDestination
+	shopifyhttp.OAuthClient
 }
 
 // newSource creates Shopify source and destination adapters from module config values.
-func newSource(cfg Config) (sourceGateway, error) {
+func newSource(cfg Config, resolver shopifyport.InstallationResolver) (sourceGateway, error) {
 	return shopifyadapter.NewClient(shopifyadapter.Config{
-		Domain:      cfg.ShopDomain,
-		AccessToken: cfg.AccessToken,
-		Timeout:     time.Duration(resolveRequestTimeout(cfg.RequestTimeoutMS)),
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		TokenResolver: resolver,
+		Timeout:      time.Duration(resolveRequestTimeout(cfg.RequestTimeoutMS)),
 	})
 }
 
@@ -99,5 +102,22 @@ func (f failingSource) UpdateOrderFromMainstream(ctx context.Context, shopifyID 
 	_ = ctx
 	_ = shopifyID
 	_ = command
+	return f.err
+}
+
+// ExchangeAuthorizationCode returns startup validation failures.
+func (f failingSource) ExchangeAuthorizationCode(ctx context.Context, shopDomain string, code string) (string, string, error) {
+	_ = ctx
+	_ = shopDomain
+	_ = code
+	return "", "", f.err
+}
+
+// RegisterWebhooks returns startup validation failures.
+func (f failingSource) RegisterWebhooks(ctx context.Context, shopDomain string, accessToken string, address string) error {
+	_ = ctx
+	_ = shopDomain
+	_ = accessToken
+	_ = address
 	return f.err
 }

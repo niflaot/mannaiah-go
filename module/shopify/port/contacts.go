@@ -9,6 +9,8 @@ import (
 
 // ContactSyncCommand defines normalized contact upsert payload values.
 type ContactSyncCommand struct {
+	// ShopDomain defines the source Shopify store domain.
+	ShopDomain string
 	// ShopifyID defines the source Shopify customer identifier.
 	ShopifyID string
 	// Email defines customer email values.

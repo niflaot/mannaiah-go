@@ -36,6 +36,8 @@ type Module struct {
 	cfg Config
 	// logger defines structured logging dependencies.
 	logger *zap.Logger
+	// installationResolver defines cached Shopify installation lookup dependencies.
+	installationResolver shopifyport.InstallationResolver
 	// handler defines HTTP route handler dependencies.
 	handler *shopifyhttp.Handler
 	// processor defines asynchronous webhook processing dependencies.
@@ -85,8 +87,9 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("create shopify repository: %w", err)
 	}
+	installationResolver := newInstallationResolver(repository)
 
-	source, sourceErr := newSource(cfg)
+	source, sourceErr := newSource(cfg, installationResolver)
 	if sourceErr != nil {
 		logger.Warn("shopify source initialization failed; integration will stay unavailable", zap.Error(sourceErr))
 		source = failingSource{err: sourceErr}
@@ -127,7 +130,20 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("create shopify webhook processor: %w", err)
 	}
-	handler, err := shopifyhttp.NewHandler(contactSyncService, orderSyncService, processor, repository, cfg.WebhookSecret)
+	handler, err := shopifyhttp.NewHandler(
+		contactSyncService,
+		orderSyncService,
+		processor,
+		repository,
+		repository,
+		repository,
+		installationResolver,
+		source,
+		contactService,
+		orderService,
+		cfg.ClientID,
+		cfg.ClientSecret,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify http handler: %w", err)
 	}
@@ -149,6 +165,7 @@ func New(
 	return &Module{
 		cfg:                cfg,
 		logger:             logger,
+		installationResolver: installationResolver,
 		handler:            handler,
 		processor:          processor,
 		contactSyncService: contactSyncService,

@@ -18,6 +18,11 @@ func (a *fiberRouterAdapter) Get(path string, handler Handler) {
 	a.router.Get(path, adaptHandler(handler))
 }
 
+// Options registers an OPTIONS route handler.
+func (a *fiberRouterAdapter) Options(path string, handler Handler) {
+	a.router.Options(path, adaptHandler(handler))
+}
+
 // Post registers a POST route handler.
 func (a *fiberRouterAdapter) Post(path string, handler Handler) {
 	a.router.Post(path, adaptHandler(handler))

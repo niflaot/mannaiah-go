@@ -18,24 +18,36 @@ import (
 )
 
 const (
-	apiVersion     = "2026-01"
+	apiVersion     = "2026-04"
 	defaultTimeout = 5 * time.Second
 	maxRetries     = 2
 )
 
 var (
-	// ErrDomainRequired is returned when the Shopify shop domain is empty.
+	// ErrDomainRequired is returned when Shopify shop domains are empty.
 	ErrDomainRequired = errors.New("shopify domain is required")
-	// ErrAccessTokenRequired is returned when the Shopify access token is empty.
+	// ErrAccessTokenRequired is returned when Shopify access tokens are empty.
 	ErrAccessTokenRequired = errors.New("shopify access token is required")
+	// ErrClientIDRequired is returned when Shopify OAuth client identifiers are empty.
+	ErrClientIDRequired = errors.New("shopify client id is required")
+	// ErrClientSecretRequired is returned when Shopify client secrets are empty.
+	ErrClientSecretRequired = errors.New("shopify client secret is required")
+	// ErrTokenResolverRequired is returned when installation token resolvers are nil.
+	ErrTokenResolverRequired = errors.New("shopify token resolver is required")
+	// ErrCodeRequired is returned when Shopify OAuth codes are empty.
+	ErrCodeRequired = errors.New("shopify authorization code is required")
+	// ErrWebhookAddressRequired is returned when webhook callback addresses are empty.
+	ErrWebhookAddressRequired = errors.New("shopify webhook address is required")
 )
 
 // Config defines Shopify Admin API client configuration values.
 type Config struct {
-	// Domain defines the Shopify store domain.
-	Domain string
-	// AccessToken defines private/admin access token values.
-	AccessToken string
+	// ClientID defines Shopify OAuth client identifier values.
+	ClientID string
+	// ClientSecret defines Shopify client secret values.
+	ClientSecret string
+	// TokenResolver defines active-installation lookup behavior.
+	TokenResolver shopifyport.InstallationResolver
 	// Timeout defines request timeout values.
 	Timeout time.Duration
 	// BaseURL overrides the computed Shopify Admin base URL for testing.
@@ -44,21 +56,28 @@ type Config struct {
 
 // Client defines the Shopify Admin REST adapter.
 type Client struct {
-	// baseURL defines Shopify Admin API base URLs.
+	// clientID defines Shopify OAuth client identifier values.
+	clientID string
+	// clientSecret defines Shopify OAuth client secret values.
+	clientSecret string
+	// tokenResolver defines active-installation lookup behavior.
+	tokenResolver shopifyport.InstallationResolver
+	// baseURL defines optional base URL overrides for tests.
 	baseURL string
-	// accessToken defines Admin API authentication tokens.
-	accessToken string
 	// httpClient defines HTTP transport dependencies.
 	httpClient *http.Client
 }
 
 // NewClient creates Shopify Admin REST clients.
 func NewClient(cfg Config) (*Client, error) {
-	if strings.TrimSpace(cfg.Domain) == "" && strings.TrimSpace(cfg.BaseURL) == "" {
-		return nil, ErrDomainRequired
+	if strings.TrimSpace(cfg.ClientID) == "" {
+		return nil, ErrClientIDRequired
 	}
-	if strings.TrimSpace(cfg.AccessToken) == "" {
-		return nil, ErrAccessTokenRequired
+	if strings.TrimSpace(cfg.ClientSecret) == "" {
+		return nil, ErrClientSecretRequired
+	}
+	if cfg.TokenResolver == nil {
+		return nil, ErrTokenResolverRequired
 	}
 
 	timeout := cfg.Timeout
@@ -66,56 +85,78 @@ func NewClient(cfg Config) (*Client, error) {
 		timeout = defaultTimeout
 	}
 
-	baseURL := strings.TrimSpace(cfg.BaseURL)
-	if baseURL == "" {
-		baseURL = fmt.Sprintf("https://%s/admin/api/%s", normalizeDomain(cfg.Domain), apiVersion)
-	}
-	baseURL = strings.TrimRight(baseURL, "/")
-
 	return &Client{
-		baseURL:     baseURL,
-		accessToken: strings.TrimSpace(cfg.AccessToken),
-		httpClient:  &http.Client{Timeout: timeout},
+		clientID:      strings.TrimSpace(cfg.ClientID),
+		clientSecret:  strings.TrimSpace(cfg.ClientSecret),
+		tokenResolver: cfg.TokenResolver,
+		baseURL:       strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
+		httpClient:    &http.Client{Timeout: timeout},
 	}, nil
 }
 
 // Validate verifies connectivity and credentials against the Shopify Admin API.
 func (c *Client) Validate(ctx context.Context) error {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+
 	var response map[string]any
-	return c.doJSON(ctx, http.MethodGet, "/shop.json", nil, &response)
+	return c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodGet, "/shop.json", nil, &response)
 }
 
 // GetCustomer resolves one Shopify customer by identifier.
 func (c *Client) GetCustomer(ctx context.Context, id string) (shopifyport.ShopifyCustomer, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return shopifyport.ShopifyCustomer{}, err
+	}
+
 	var response customerResponse
 	path := fmt.Sprintf("/customers/%s.json", url.PathEscape(strings.TrimSpace(id)))
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodGet, path, nil, &response); err != nil {
 		if statusErr := (*statusError)(nil); errors.As(err, &statusErr) && statusErr.Code == http.StatusNotFound {
 			return shopifyport.ShopifyCustomer{}, shopifyport.ErrCustomerNotFound
 		}
 		return shopifyport.ShopifyCustomer{}, err
 	}
 
-	return normalizeCustomer(response.Customer), nil
+	customer := normalizeCustomer(response.Customer)
+	customer.ShopDomain = installation.ShopDomain
+	return customer, nil
 }
 
 // GetOrder resolves one Shopify order by identifier.
 func (c *Client) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return shopifyport.ShopifyOrder{}, err
+	}
+
 	var response orderResponse
 	path := fmt.Sprintf("/orders/%s.json?status=any", url.PathEscape(strings.TrimSpace(id)))
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodGet, path, nil, &response); err != nil {
 		if statusErr := (*statusError)(nil); errors.As(err, &statusErr) && statusErr.Code == http.StatusNotFound {
 			return shopifyport.ShopifyOrder{}, shopifyport.ErrOrderNotFound
 		}
 		return shopifyport.ShopifyOrder{}, err
 	}
 
-	return normalizeOrder(response.Order), nil
+	order := normalizeOrder(response.Order)
+	order.ShopDomain = installation.ShopDomain
+	if order.Customer != nil {
+		order.Customer.ShopDomain = installation.ShopDomain
+	}
+	return order, nil
 }
 
 // UpdateOrderFromMainstream pushes one mainstream order-status update back to Shopify.
 func (c *Client) UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command shopifyport.MainstreamOrderUpdateCommand) error {
 	order, err := c.GetOrder(ctx, shopifyID)
+	if err != nil {
+		return err
+	}
+	installation, err := c.resolveInstallation(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,8 +171,71 @@ func (c *Client) UpdateOrderFromMainstream(ctx context.Context, shopifyID string
 	}
 
 	path := fmt.Sprintf("/orders/%s.json", url.PathEscape(strings.TrimSpace(shopifyID)))
-	if err := c.doJSON(ctx, http.MethodPut, path, requestBody, nil); err != nil {
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPut, path, requestBody, nil); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// ExchangeAuthorizationCode exchanges one OAuth code for a permanent offline token.
+func (c *Client) ExchangeAuthorizationCode(ctx context.Context, shopDomain string, code string) (string, string, error) {
+	resolvedShop := shopifyport.NormalizeShopDomain(shopDomain)
+	if resolvedShop == "" {
+		return "", "", ErrDomainRequired
+	}
+	if strings.TrimSpace(code) == "" {
+		return "", "", ErrCodeRequired
+	}
+
+	requestBody := map[string]string{
+		"client_id":     c.clientID,
+		"client_secret": c.clientSecret,
+		"code":          strings.TrimSpace(code),
+	}
+	var response struct {
+		AccessToken string `json:"access_token"`
+		Scope       string `json:"scope"`
+	}
+	if err := c.doJSONAbsolute(ctx, c.buildOAuthAccessTokenURL(resolvedShop), "", http.MethodPost, requestBody, &response); err != nil {
+		return "", "", err
+	}
+
+	return strings.TrimSpace(response.AccessToken), strings.TrimSpace(response.Scope), nil
+}
+
+// RegisterWebhooks registers required webhook topics for one Shopify installation.
+func (c *Client) RegisterWebhooks(ctx context.Context, shopDomain string, accessToken string, address string) error {
+	resolvedShop := shopifyport.NormalizeShopDomain(shopDomain)
+	if resolvedShop == "" {
+		return ErrDomainRequired
+	}
+	trimmedToken := strings.TrimSpace(accessToken)
+	if trimmedToken == "" {
+		return ErrAccessTokenRequired
+	}
+	trimmedAddress := strings.TrimSpace(address)
+	if trimmedAddress == "" {
+		return ErrWebhookAddressRequired
+	}
+
+	for _, topic := range []string{"orders/create", "orders/updated", "customers/create", "customers/update", "app/uninstalled"} {
+		requestBody := webhookRegistrationRequest{
+			Webhook: webhookRegistrationPayload{
+				Topic:   topic,
+				Address: trimmedAddress,
+				Format:  "json",
+			},
+		}
+		err := c.doJSONWithToken(ctx, resolvedShop, trimmedToken, http.MethodPost, "/webhooks.json", requestBody, nil)
+		if statusErr := (*statusError)(nil); errors.As(err, &statusErr) {
+			if statusErr.Code == http.StatusConflict || statusErr.Code == http.StatusUnprocessableEntity {
+				continue
+			}
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -238,20 +342,55 @@ type updateOrderPayload struct {
 	Tags string `json:"tags,omitempty"`
 }
 
-func (c *Client) doJSON(ctx context.Context, method string, path string, requestBody any, response any) error {
+type webhookRegistrationRequest struct {
+	Webhook webhookRegistrationPayload `json:"webhook"`
+}
+
+type webhookRegistrationPayload struct {
+	Topic   string `json:"topic"`
+	Address string `json:"address"`
+	Format  string `json:"format"`
+}
+
+func (c *Client) resolveInstallation(ctx context.Context) (*shopifyport.Installation, error) {
+	if c == nil || c.tokenResolver == nil {
+		return nil, ErrTokenResolverRequired
+	}
+	shopDomain := shopifyport.ShopDomainFromContext(ctx)
+	installation, err := c.tokenResolver.ResolveInstallation(ctx, shopDomain)
+	if err != nil {
+		return nil, err
+	}
+	if installation == nil {
+		return nil, shopifyport.ErrInstallationNotFound
+	}
+	if strings.TrimSpace(installation.AccessToken) == "" {
+		return nil, ErrAccessTokenRequired
+	}
+
+	return installation, nil
+}
+
+func (c *Client) doJSONWithToken(ctx context.Context, shopDomain string, accessToken string, method string, path string, requestBody any, response any) error {
+	requestURL := c.buildAdminBaseURL(shopDomain) + path
+	return c.doJSONAbsolute(ctx, requestURL, accessToken, method, requestBody, response)
+}
+
+func (c *Client) doJSONAbsolute(ctx context.Context, requestURL string, accessToken string, method string, requestBody any, response any) error {
 	body, err := marshalRequest(requestBody)
 	if err != nil {
 		return err
 	}
 
-	requestURL := c.baseURL + path
 	for attempt := 0; ; attempt++ {
 		request, requestErr := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewReader(body))
 		if requestErr != nil {
 			return requestErr
 		}
 		request.Header.Set("Accept", "application/json")
-		request.Header.Set("X-Shopify-Access-Token", c.accessToken)
+		if strings.TrimSpace(accessToken) != "" {
+			request.Header.Set("X-Shopify-Access-Token", strings.TrimSpace(accessToken))
+		}
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
 		}
@@ -286,6 +425,22 @@ func (c *Client) doJSON(ctx context.Context, method string, path string, request
 			return waitErr
 		}
 	}
+}
+
+func (c *Client) buildAdminBaseURL(shopDomain string) string {
+	if strings.TrimSpace(c.baseURL) != "" {
+		return strings.TrimRight(c.baseURL, "/")
+	}
+
+	return fmt.Sprintf("https://%s/admin/api/%s", shopifyport.NormalizeShopDomain(shopDomain), apiVersion)
+}
+
+func (c *Client) buildOAuthAccessTokenURL(shopDomain string) string {
+	if strings.TrimSpace(c.baseURL) != "" {
+		return strings.TrimRight(c.baseURL, "/") + "/admin/oauth/access_token"
+	}
+
+	return fmt.Sprintf("https://%s/admin/oauth/access_token", shopifyport.NormalizeShopDomain(shopDomain))
 }
 
 func handleResponse(httpResponse *http.Response, response any) (*statusError, time.Duration, error) {
@@ -513,13 +668,6 @@ func cloneStrings(values []string) []string {
 	}
 
 	return result
-}
-
-func normalizeDomain(domain string) string {
-	trimmed := strings.TrimSpace(domain)
-	trimmed = strings.TrimPrefix(trimmed, "https://")
-	trimmed = strings.TrimPrefix(trimmed, "http://")
-	return strings.TrimRight(trimmed, "/")
 }
 
 func appendNote(existing string, entry string) string {

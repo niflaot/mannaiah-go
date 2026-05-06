@@ -38,6 +38,7 @@ func BuildOrderContactSyncCommand(order shopifyport.ShopifyOrder) (shopifyport.C
 	}
 
 	command := shopifyport.ContactSyncCommand{
+		ShopDomain:     strings.TrimSpace(order.ShopDomain),
 		ShopifyID:      customerID(order.Customer),
 		Email:          email,
 		DocumentType:   documentType,
@@ -62,6 +63,7 @@ func BuildOrderContactSyncCommand(order shopifyport.ShopifyOrder) (shopifyport.C
 // BuildOrderSyncCommand maps one Shopify order into normalized mainstream order values.
 func BuildOrderSyncCommand(order shopifyport.ShopifyOrder, contactID string, realm string, trigger string) shopifyport.OrderSyncCommand {
 	command := shopifyport.OrderSyncCommand{
+		ShopDomain:        strings.TrimSpace(order.ShopDomain),
 		ShopifyID:         strings.TrimSpace(order.ID),
 		Identifier:        resolveOrderIdentifier(order),
 		Realm:             resolveRealm(realm),
