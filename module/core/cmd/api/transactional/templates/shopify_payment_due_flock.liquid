@@ -1,0 +1,446 @@
+{% assign delivery_method_types = delivery_agreements | map: 'delivery_method_type' | uniq %}
+{% if delivery_method_types.size > 1 %}
+  {% assign has_split_cart = true %}
+{% else %}
+  {% assign has_split_cart = false %}
+{% endif %}
+
+{% if payment_terms.type == 'fulfillment' and payment_terms.next_payment.due_at == nil %}
+  {% assign due_on_fulfilllment_terms = true %}
+{% else %}
+  {% assign due_on_fulfilllment_terms = false %}
+{% endif %}
+
+{% if source_name == 'shopify_draft_order' and financial_status == 'pending' %}
+  {% assign order_from_draft = true %}
+{% else %}
+  {% assign order_from_draft = false %}
+{% endif %}
+
+{% if payment_terms.type == 'receipt' and payment_terms.next_payment.due_at == nil %}
+  {% assign due_date = 'now' %}
+{% else %}
+  {% assign due_date = payment_terms.next_payment.due_at | default: nil %}
+{% endif %}
+
+{% assign show_prepare_payment_message = false %}
+{% if due_on_fulfilllment_terms == true and payment_terms.automatic_capture_at_fulfillment == false %}
+  {% assign show_prepare_payment_message = true %}
+{% endif %}
+{% if payment_terms.automatic_capture_at_fulfillment == true and order_from_draft == true %}
+  {% assign show_prepare_payment_message = true %}
+{% endif %}
+
+{% capture email_title %}
+  {% if show_prepare_payment_message %}
+    El pago de {{ order.total_outstanding | money }} se debe completar al preparar el pedido.
+  {% else %}
+    El pago de {{ order.total_outstanding | money }} vence el {{ due_date | date: format: 'date' }}
+  {% endif %}
+{% endcapture %}
+
+{% assign order_discount_count = 0 %}
+{% assign total_order_discount_amount = 0 %}
+{% assign has_shipping_discount = false %}
+{% assign free_shipping = false %}
+{% assign discounted_shipping_price = shipping_price %}
+{% assign shipping_discount_title = '' %}
+{% assign discount_value_price = 0 %}
+{% assign epsilon = 0.00001 %}
+
+{% for discount_application in discount_applications %}
+  {% if discount_application.target_selection == 'all' and discount_application.target_type == 'line_item' %}
+    {% assign order_discount_count = order_discount_count | plus: 1 %}
+    {% assign total_order_discount_amount = total_order_discount_amount | plus: discount_application.total_allocated_amount %}
+  {% endif %}
+  {% if discount_application.target_type == 'shipping_line' %}
+    {% assign has_shipping_discount = true %}
+    {% assign shipping_discount_title = discount_application.title %}
+    {% assign discount_value_price = discount_application.total_allocated_amount %}
+    {% assign shipping_amount_minus_discount_value_price = shipping_price | minus: discount_value_price %}
+    {% assign shipping_amount_minus_discount_value_price_abs = shipping_amount_minus_discount_value_price | abs %}
+    {% assign discount_application_value_type = discount_application.value_type | strip %}
+    {% if shipping_amount_minus_discount_value_price_abs < epsilon or discount_application_value_type == 'percentage' and discount_application.value == 100 %}
+      {% assign free_shipping = true %}
+    {% else %}
+      {% assign discounted_shipping_price = shipping_amount_minus_discount_value_price %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>{{ email_title | strip }}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+      body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      img { border: 0; outline: none; -ms-interpolation-mode: bicubic; }
+      a { text-decoration: none; }
+
+      @media (prefers-color-scheme: dark) {
+        .bg-outer { background-color: #1a1a1a !important; }
+        .bg-card { background-color: #222222 !important; }
+        .bg-section { background-color: #2d2d2d !important; }
+        .bg-footer { background-color: #1a1a1a !important; }
+        .txt-main { color: #e8e8e8 !important; }
+        .txt-body { color: #cccccc !important; }
+        .txt-product { color: #e0e0e0 !important; }
+        .txt-dim { color: #888888 !important; }
+        .divider { border-top-color: #444444 !important; }
+        .section-border { border-left-color: #444444 !important; border-top-color: #444444 !important; }
+        .btn-primary { background-color: #3a3a3a !important; color: #e8e8e8 !important; }
+        .btn-secondary { background-color: #3a3a3a !important; color: #e8e8e8 !important; }
+        .footer-store-link { color: #ffffff !important; }
+      }
+
+      @media only screen and (max-width: 600px) {
+        .card-outer { padding-left: 30px !important; padding-right: 30px !important; padding-bottom: 40px !important; }
+        .logo-col { width: 80px !important; }
+        .logo-img { width: 80px !important; }
+        .stack-col-l { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 20px 0 16px 0 !important; border-left: none !important; border-bottom: 1px solid #dddddd !important; }
+        .stack-col-r { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 16px 0 20px 0 !important; border-left: none !important; }
+        .item-image-cell { width: 92px !important; padding-right: 8px !important; }
+        .item-image { width: 72px !important; }
+        .actions-cell { display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 12px !important; }
+      }
+    </style>
+  </head>
+
+  <body class="bg-outer" style="margin:0;padding:0;background-color:#242424;font-family:Manrope,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-outer" style="background-color:#242424;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            <tr>
+              <td class="card-outer bg-card" style="background-color:#f8f8f8;padding:0 50px 60px 50px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td valign="top" style="padding:35px 12px 0 0;">
+                      <p style="margin:0;font-size:15px;line-height:22px;font-weight:700;color:#333333;" class="txt-main">Factura</p>
+                      <p style="margin:2px 0 0 0;font-size:15px;line-height:22px;font-weight:400;color:#555555;" class="txt-body">{{ order_name }}</p>
+                      {% if po_number %}
+                        <p style="margin:8px 0 0 0;font-size:12px;line-height:18px;font-weight:500;color:#555555;" class="txt-body">Orden de compra n.º {{ po_number }}</p>
+                      {% endif %}
+                    </td>
+                    <td class="logo-col" valign="top" width="127" style="width:127px;padding:0;vertical-align:top;">
+                      {% if shop.email_logo_url %}
+                        <img class="logo-img" src="{{ shop.email_logo_url }}" alt="{{ shop.name }}" width="{{ shop.email_logo_width | default: 127 }}" style="display:block;width:127px;max-width:127px;height:auto;border:0;" />
+                      {% else %}
+                        <img class="logo-img" src="https://storageapi.flockstore.co/fl-assets/assets/d0b1a4f5-7950-4aca-b1a1-535e98e1dc77-transcational_logo_covered.png" alt="{{ shop.name }}" width="127" style="display:block;width:127px;height:auto;border:0;" />
+                      {% endif %}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:28px 0 14px 0;">
+                      <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:#333333;" class="txt-main">
+                        Hola {{ customer.first_name | default: billing_address.first_name | default: shipping_address.first_name | default: "cliente" }},
+                      </h1>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 10px 0;">
+                      <h2 style="margin:0;font-size:20px;line-height:28px;font-weight:700;color:#333333;" class="txt-main">{{ email_title | strip }}</h2>
+                    </td>
+                  </tr>
+
+                  {% if custom_message != blank %}
+                    <tr>
+                      <td colspan="2" style="padding:0 0 24px 0;">
+                        <div style="font-size:15px;line-height:24px;color:#555555;" class="txt-body">{{ custom_message }}</div>
+                      </td>
+                    </tr>
+                  {% endif %}
+
+                  {% if checkout_payment_collection_url %}
+                    <tr>
+                      <td colspan="2" style="padding:0 0 30px 0;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td class="actions-cell" valign="top" style="padding:0 12px 0 0;">
+                              <a href="{{ checkout_payment_collection_url }}" class="btn-primary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">PAGAR AHORA</a>
+                            </td>
+                            {% if shop.url %}
+                              <td class="actions-cell" valign="top" style="padding:0;">
+                                <a href="{{ shop.url }}" class="btn-secondary" style="display:inline-block;padding:11px 22px;background-color:#f0f0f0;font-size:14px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">VISITAR TIENDA</a>
+                              </td>
+                            {% endif %}
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  {% endif %}
+
+                  <tr>
+                    <td colspan="2" style="padding:0 0 16px 0;">
+                      <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Resumen del pedido</h3>
+                    </td>
+                  </tr>
+
+                  {% if has_split_cart %}
+                    {% for delivery_agreement in delivery_agreements %}
+                      {% if delivery_agreement.line_items != blank and delivery_agreements.size > 1 %}
+                        <tr>
+                          <td colspan="2" style="padding:0 0 10px 0;">
+                            <p style="margin:0;font-size:13px;line-height:20px;font-weight:700;color:#333333;" class="txt-main">
+                              {{ delivery_agreement.delivery_method_name }} artículos
+                              {% if delivery_agreement.estimated_delivery_date %}
+                                <span style="font-weight:500;color:#555555;" class="txt-body"> · {{ delivery_agreement.estimated_delivery_date }}</span>
+                              {% endif %}
+                            </p>
+                          </td>
+                        </tr>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+
+                  {% for line in subtotal_line_items %}
+                    <tr>
+                      <td colspan="2" style="padding:0 0 10px 0;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                          <tr>
+                            <td class="item-image-cell" width="106" valign="middle" style="padding:16px 8px 16px 16px;width:106px;">
+                              {% if line.image %}
+                                <img class="item-image" src="{{ line | img_url: 'compact_cropped' }}" alt="{{ line.title }}" width="80" style="display:block;width:80px;height:auto;max-height:120px;object-fit:cover;border:0;" />
+                              {% else %}
+                                <div style="width:80px;height:80px;background:#dddddd;font-size:10px;color:#888888;text-align:center;line-height:80px;">Sin imagen</div>
+                              {% endif %}
+                            </td>
+                            <td valign="middle" style="padding:16px 16px 16px 8px;">
+                              {% if line.presentment_title %}
+                                {% assign line_title = line.presentment_title %}
+                              {% elsif line.title %}
+                                {% assign line_title = line.title %}
+                              {% else %}
+                                {% assign line_title = line.product.title %}
+                              {% endif %}
+                              <p style="margin:0 0 5px 0;font-size:14px;line-height:18px;font-weight:700;color:#1a1a1a;" class="txt-product">{{ line_title }}</p>
+
+                              {% if line.variant.title != 'Default Title' %}
+                                <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.variant.title }}</p>
+                              {% endif %}
+
+                              {% if line.selling_plan_allocation %}
+                                <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ line.selling_plan_allocation.selling_plan.name }}</p>
+                              {% endif %}
+
+                              {% if line.discount_allocations %}
+                                {% for discount_allocation in line.discount_allocations %}
+                                  {% if discount_allocation.discount_application.target_selection != 'all' %}
+                                    <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</p>
+                                  {% endif %}
+                                {% endfor %}
+                              {% endif %}
+
+                              {% if line.gift_card and line.properties["__shopify_send_gift_card_to_recipient"] %}
+                                {% for property in line.properties %}
+                                  {% assign property_first_char = property.first | slice: 0 %}
+                                  {% if property.last != blank and property_first_char != '_' %}
+                                    <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ property.first }}: {{ property.last }}</p>
+                                  {% endif %}
+                                {% endfor %}
+                              {% endif %}
+
+                              {% if line.refunded_quantity > 0 %}
+                                <p style="margin:0 0 8px 0;font-size:12px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">Reembolsado</p>
+                              {% endif %}
+
+                              <p style="margin:0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;border-top:1px solid #cccccc;padding-top:9px;" class="txt-product divider">
+                                CANTIDAD: {{ line.quantity }}
+                                {% if line.original_line_price != line.final_line_price %}
+                                  <span style="display:block;color:#888888;text-decoration:line-through;margin-top:6px;" class="txt-dim">{{ line.original_line_price | money }}</span>
+                                {% endif %}
+                                <span style="display:block;margin-top:4px;">{% if line.final_line_price > 0 %}{{ line.final_line_price | money }}{% else %}Gratis{% endif %}</span>
+                              </p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  {% endfor %}
+
+                  {% for fee in fees %}
+                    <tr>
+                      <td colspan="2" style="padding:0 0 10px 0;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                          <tr>
+                            <td style="padding:18px 24px;font-size:13px;line-height:18px;color:#555555;" class="txt-body">{{ fee.title }}</td>
+                            <td align="right" style="padding:18px 24px;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ fee.subtotal | money }}</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  {% endfor %}
+
+                  <tr>
+                    <td colspan="2" style="padding:14px 0 0 0;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                        <tr>
+                          <td style="padding:22px 24px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                              <tr>
+                                <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Subtotal</td>
+                                <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ subtotal_price | plus: total_order_discount_amount | money }}</td>
+                              </tr>
+
+                              {% if order_discount_count > 0 %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">{% if order_discount_count == 1 %}Descuento en pedido{% else %}Descuentos en pedidos{% endif %}</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">-{{ total_order_discount_amount | money }}</td>
+                                </tr>
+                              {% endif %}
+
+                              {% if has_shipping_discount %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Envío</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">
+                                    {% if free_shipping == true %}
+                                      Gratis
+                                    {% else %}
+                                      {{ discounted_shipping_price | money }}
+                                    {% endif %}
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body">{{ shipping_discount_title }}{% if discount_value_price != 0 %} (-{{ discount_value_price | money }}){% endif %}</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:12px;line-height:18px;color:#555555;" class="txt-body"></td>
+                                </tr>
+                              {% else %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Envío</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ shipping_price | money }}</td>
+                                </tr>
+                              {% endif %}
+
+                              {% if total_duties %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Aranceles</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ total_duties | money }}</td>
+                                </tr>
+                              {% endif %}
+
+                              <tr>
+                                <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Impuestos estimados</td>
+                                <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ tax_price | money }}</td>
+                              </tr>
+
+                              {% if total_tip_received and total_tip_received > 0 %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Tip</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ total_tip_received | money }}</td>
+                                </tr>
+                              {% endif %}
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2" style="padding:14px 0 0 0;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                        <tr>
+                          <td style="padding:22px 24px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                              {% if total_price > total_outstanding %}
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Total actualizado</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ total_price | money }}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding:0 0 12px 0;font-size:13px;line-height:18px;color:#555555;" class="txt-body">Ya pagada</td>
+                                  <td align="right" style="padding:0 0 12px 0;font-size:13px;line-height:18px;font-weight:700;color:#333333;" class="txt-main">{{ net_payment | money }}</td>
+                                </tr>
+                              {% endif %}
+
+                              <tr>
+                                <td style="padding:14px 0 0 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;border-top:1px solid #d8d8d8;" class="txt-main divider">Monto a pagar</td>
+                                <td align="right" style="padding:14px 0 0 0;font-size:15px;line-height:20px;font-weight:700;color:#333333;border-top:1px solid #d8d8d8;" class="txt-main divider">{{ total_outstanding | money_with_currency }}</td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  {% if shipping_address or billing_address or shipping_method or company_location or payment_terms and payment_terms.automatic_capture_at_fulfillment == false %}
+                    <tr>
+                      <td colspan="2" style="padding:28px 0 16px 0;">
+                        <h3 style="margin:0;font-size:18px;line-height:24px;font-weight:700;color:#333333;" class="txt-main">Información del cliente</h3>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td colspan="2" style="padding:0;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
+                          <tr>
+                            <td class="stack-col-l section-border" valign="top" width="50%" style="padding:28px 24px 28px 28px;box-sizing:border-box;">
+                              {% if shipping_address %}
+                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de envío</p>
+                                <div style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ shipping_address | format_address }}</div>
+                              {% endif %}
+
+                              {% if billing_address %}
+                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Dirección de facturación</p>
+                                <div style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ billing_address | format_address }}</div>
+                              {% endif %}
+
+                              {% if company_location %}
+                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Sucursal</p>
+                                <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ company_location.name }}</p>
+                              {% endif %}
+                            </td>
+
+                            <td class="stack-col-r section-border" valign="top" width="50%" style="padding:28px 28px 28px 24px;box-sizing:border-box;border-left:1px solid #e0e0e0;">
+                              {% if payment_terms and payment_terms.automatic_capture_at_fulfillment == false %}
+                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Pago</p>
+                                {% if payment_terms.type == 'receipt' and payment_terms.next_payment.due_at == nil %}
+                                  {% assign customer_due_date = 'now' %}
+                                {% else %}
+                                  {% assign customer_due_date = payment_terms.next_payment.due_at | default: nil %}
+                                {% endif %}
+                                {% if payment_terms.type == 'fulfillment' and payment_terms.next_payment.due_at == nil %}
+                                  <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ payment_terms.translated_name }}</p>
+                                {% else %}
+                                  <p style="margin:0 0 20px 0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ payment_terms.translated_name }}: vencimiento el {{ customer_due_date | date: format: 'date' }}</p>
+                                {% endif %}
+                              {% endif %}
+
+                              {% if shipping_method %}
+                                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#1a1a1a;" class="txt-product">Método de envío</p>
+                                <p style="margin:0;font-size:12px;line-height:20px;color:#555555;" class="txt-body">{{ shipping_method.title }}<br>{{ shipping_method.price | money }}</p>
+                              {% endif %}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  {% endif %}
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="bg-footer" style="padding:32px 50px;background-color:#242424;text-align:center;">
+                <p style="margin:0 0 16px 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:17px;line-height:22px;font-weight:800;color:#757575;" class="txt-dim">¿Necesitas ayuda con tu pedido?</p>
+                <a href="mailto:{{ shop.email }}" target="_blank" class="btn-secondary" style="display:inline-block;padding:10px 20px;background-color:#f3f3f3;font-size:13px;line-height:20px;font-weight:700;color:#333333;text-decoration:none;letter-spacing:0.4px;">ESCRÍBENOS</a>
+                <p style="margin:20px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;color:#888888;">Si tienes alguna pregunta, responde este correo o contáctanos en <a href="mailto:{{ shop.email }}" style="color:#aaaaaa;text-decoration:none;font-weight:700;">{{ shop.email }}</a>.</p>
+                {% if shop.url %}
+                  <p style="margin:8px 0 0 0;font-family:Roboto,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:18px;">
+                    <a href="{{ shop.url }}" target="_blank" class="footer-store-link" style="color:#000000;text-decoration:none;font-weight:700;">Visitar tienda</a>
+                  </p>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

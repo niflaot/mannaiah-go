@@ -5,9 +5,41 @@ import (
 	"mime/multipart"
 	"strings"
 	"testing"
+	"time"
 
 	corehttp "mannaiah/module/core/http"
+	shopifyport "mannaiah/module/shopify/port"
 )
+
+type launchTestInstallationRepo struct {
+	installation  *shopifyport.Installation
+	err           error
+	requestedShop string
+}
+
+// UpsertInstallation satisfies the installation repository interface for launch-page tests.
+func (r *launchTestInstallationRepo) UpsertInstallation(ctx context.Context, input shopifyport.UpsertInstallationInput) (*shopifyport.Installation, error) {
+	return r.installation, r.err
+}
+
+// FindByShopDomain returns the configured installation for launch-page tests.
+func (r *launchTestInstallationRepo) FindByShopDomain(ctx context.Context, shopDomain string) (*shopifyport.Installation, error) {
+	r.requestedShop = shopDomain
+	return r.installation, r.err
+}
+
+// ListActive satisfies the installation repository interface for launch-page tests.
+func (r *launchTestInstallationRepo) ListActive(ctx context.Context) ([]shopifyport.Installation, error) {
+	if r.installation == nil {
+		return nil, r.err
+	}
+	return []shopifyport.Installation{*r.installation}, r.err
+}
+
+// MarkUninstalled satisfies the installation repository interface for launch-page tests.
+func (r *launchTestInstallationRepo) MarkUninstalled(ctx context.Context, shopDomain string, uninstalledAt time.Time) error {
+	return r.err
+}
 
 // launchTestContext defines the minimal request context used to exercise the app-launch landing page.
 type launchTestContext struct {
@@ -157,5 +189,53 @@ func TestAppLaunchRouteReturnsLandingPage(t *testing.T) {
 	}
 	if !strings.Contains(requestContext.body, "/docs") {
 		t.Fatalf("appLaunch() body missing docs link: %q", requestContext.body)
+	}
+}
+
+// TestAppLaunchRouteRedirectsToOAuthInstallWhenStoreIsMissing verifies first launches start OAuth when no installation exists.
+func TestAppLaunchRouteRedirectsToOAuthInstallWhenStoreIsMissing(t *testing.T) {
+	repository := &launchTestInstallationRepo{}
+	handler := &Handler{installations: repository}
+	requestContext := &launchTestContext{
+		queryValues: map[string]string{"shop": "2axh5c-b1.myshopify.com"},
+		headers:     map[string]string{},
+	}
+
+	if err := handler.appLaunch(requestContext); err != nil {
+		t.Fatalf("appLaunch() error = %v", err)
+	}
+	if requestContext.statusCode != 302 {
+		t.Fatalf("appLaunch() status = %d, want %d", requestContext.statusCode, 302)
+	}
+	if location := requestContext.headers["Location"]; location != "/shopify/oauth/install?shop=2axh5c-b1.myshopify.com" {
+		t.Fatalf("appLaunch() location = %q, want oauth install redirect", location)
+	}
+	if repository.requestedShop != "2axh5c-b1.myshopify.com" {
+		t.Fatalf("appLaunch() resolved shop = %q, want %q", repository.requestedShop, "2axh5c-b1.myshopify.com")
+	}
+}
+
+// TestAppLaunchRouteReturnsInstalledStateForExistingStore verifies persisted installations render the success landing state.
+func TestAppLaunchRouteReturnsInstalledStateForExistingStore(t *testing.T) {
+	repository := &launchTestInstallationRepo{
+		installation: &shopifyport.Installation{ShopDomain: "2axh5c-b1.myshopify.com"},
+	}
+	handler := &Handler{installations: repository}
+	requestContext := &launchTestContext{
+		queryValues: map[string]string{"shop": "2axh5c-b1.myshopify.com"},
+		headers:     map[string]string{},
+	}
+
+	if err := handler.appLaunch(requestContext); err != nil {
+		t.Fatalf("appLaunch() error = %v", err)
+	}
+	if requestContext.statusCode != 200 {
+		t.Fatalf("appLaunch() status = %d, want %d", requestContext.statusCode, 200)
+	}
+	if !strings.Contains(requestContext.body, "Instalacion de Shopify completada") {
+		t.Fatalf("appLaunch() body missing install headline: %q", requestContext.body)
+	}
+	if repository.requestedShop != "2axh5c-b1.myshopify.com" {
+		t.Fatalf("appLaunch() resolved shop = %q, want %q", repository.requestedShop, "2axh5c-b1.myshopify.com")
 	}
 }

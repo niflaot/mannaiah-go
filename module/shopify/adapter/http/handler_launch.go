@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"html"
+	"net/url"
 	"strings"
 
 	corehttp "mannaiah/module/core/http"
@@ -11,15 +12,37 @@ import (
 
 // appLaunch handles Shopify App URL launches for backend-only installations.
 func (h *Handler) appLaunch(ctx corehttp.Context) error {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-
 	shopDomain := shopifyport.NormalizeShopDomain(ctx.Query("shop", ""))
 	if !isValidShopDomain(shopDomain) {
 		shopDomain = ""
 	}
 	installed := strings.TrimSpace(ctx.Query("installed", "")) == "1"
+	if shopDomain != "" && !installed && h != nil && h.installations != nil {
+		installation, err := h.installations.FindByShopDomain(ctx.Context(), shopDomain)
+		if err != nil {
+			return h.mapError(err)
+		}
+		if installation == nil || installation.UninstalledAt != nil {
+			ctx.SetHeader("Location", buildInstallLaunchPath(shopDomain))
+			return ctx.Status(302).SendString("")
+		}
+		installed = true
+	}
+
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 
 	return ctx.Status(200).SendString(renderAppLaunchPage(shopDomain, installed))
+}
+
+func buildInstallLaunchPath(shopDomain string) string {
+	endpoint := url.URL{Path: "/shopify/oauth/install"}
+	query := endpoint.Query()
+	if normalizedShopDomain := shopifyport.NormalizeShopDomain(shopDomain); isValidShopDomain(normalizedShopDomain) {
+		query.Set("shop", normalizedShopDomain)
+	}
+	endpoint.RawQuery = query.Encode()
+
+	return endpoint.String()
 }
 
 // renderAppLaunchPage builds the HTML landing page returned from the Shopify App URL.
