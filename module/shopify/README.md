@@ -14,6 +14,7 @@
 - `POST /shopify/ext/orders/:shopifyOrderId/sync`
 - `GET /shopify/ext/contacts/:shopifyCustomerId`
 - `POST /shopify/ext/contacts/:shopifyCustomerId/sync`
+- contact integration event consumer for `contacts.v1.created` and `contacts.v1.updated`
 - order integration event consumer for `orders.v1.created`, `orders.v1.updated`, and `orders.v1.status.updated`
 
 ## Context and usage
@@ -21,3 +22,4 @@
 The Shopify module now uses OAuth-backed, per-store installations persisted in `shopify_installations`.
 Manual sync routes accept a targeted Shopify identifier and may optionally include `shopDomain` when multiple Shopify stores are installed.
 Webhook ingestion resolves the emitting shop from `X-Shopify-Shop-Domain`, and Shopify Admin extension routes require a signed session token tied to one installed store.
+Contact synchronization now persists `shopify_sync_links`, stitches inbound-created links before outbound fan-out, and pushes mainstream contact changes back to Shopify without re-emitting equivalent webhook echoes.

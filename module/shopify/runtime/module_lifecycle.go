@@ -15,9 +15,16 @@ func (m *Module) Start(ctx context.Context) error {
 			return fmt.Errorf("refresh shopify installations: %w", err)
 		}
 	}
-	if m.orderConsumer != nil && m.registrar != nil && !m.consumerRegistered {
-		if err := m.orderConsumer.Register(m.registrar); err != nil {
-			return fmt.Errorf("register shopify order consumer: %w", err)
+	if m.registrar != nil && !m.consumerRegistered {
+		if m.contactConsumer != nil {
+			if err := m.contactConsumer.Register(m.registrar); err != nil {
+				return fmt.Errorf("register shopify contact consumer: %w", err)
+			}
+		}
+		if m.orderConsumer != nil {
+			if err := m.orderConsumer.Register(m.registrar); err != nil {
+				return fmt.Errorf("register shopify order consumer: %w", err)
+			}
 		}
 		m.consumerRegistered = true
 	}

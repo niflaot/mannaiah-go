@@ -22,6 +22,12 @@ func (contactServiceCustomerSourceStub) GetCustomer(ctx context.Context, id stri
 	return shopifyport.ShopifyCustomer{}, shopifyport.ErrCustomerNotFound
 }
 
+func (contactServiceCustomerSourceStub) FindCustomerByEmail(ctx context.Context, email string) (shopifyport.ShopifyCustomer, error) {
+	_ = ctx
+	_ = email
+	return shopifyport.ShopifyCustomer{}, shopifyport.ErrCustomerNotFound
+}
+
 func (contactServiceCustomerSourceStub) ListCustomers(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyCustomer, bool, error) {
 	_ = ctx
 	_ = sinceID

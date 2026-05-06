@@ -46,6 +46,8 @@ type Module struct {
 	contactSyncService *shopifycontactservice.ContactSyncService
 	// orderSyncService defines targeted order sync dependencies.
 	orderSyncService *shopifyorderservice.OrderSyncService
+	// contactConsumer defines outbound contact event consumer dependencies.
+	contactConsumer *shopifymessaging.ContactConsumer
 	// orderConsumer defines outbound order event consumer dependencies.
 	orderConsumer *shopifymessaging.OrderConsumer
 	// registrar defines optional integration-event registration dependencies.
@@ -157,6 +159,23 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("create shopify mainstream update service: %w", err)
 	}
+	mainstreamContactUpdateService, err := shopifycontactservice.NewMainstreamUpdateService(
+		source,
+		source,
+		repository,
+		logger,
+		shopifycontactservice.CircuitBreakers{
+			Source:      newSourceCircuitBreaker(cfg, logger),
+			Destination: newSourceCircuitBreaker(cfg, logger),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create shopify mainstream contact update service: %w", err)
+	}
+	contactConsumer, err := shopifymessaging.NewContactConsumer(mainstreamContactUpdateService, logger)
+	if err != nil {
+		return nil, fmt.Errorf("create shopify contact consumer: %w", err)
+	}
 	orderConsumer, err := shopifymessaging.NewOrderConsumer(mainstreamUpdateService, logger)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify order consumer: %w", err)
@@ -170,6 +189,7 @@ func New(
 		processor:            processor,
 		contactSyncService:   contactSyncService,
 		orderSyncService:     orderSyncService,
+		contactConsumer:      contactConsumer,
 		orderConsumer:        orderConsumer,
 		registrar:            registrar,
 	}, nil

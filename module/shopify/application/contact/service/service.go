@@ -35,6 +35,8 @@ type CircuitBreaker interface {
 type CircuitBreakers struct {
 	// Source defines breaker behavior for Shopify source requests.
 	Source CircuitBreaker
+	// Destination defines breaker behavior for Shopify destination requests.
+	Destination CircuitBreaker
 }
 
 // SyncConfig defines targeted contact synchronization configuration values.

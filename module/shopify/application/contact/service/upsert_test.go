@@ -96,6 +96,19 @@ func (s *customerDestinationStub) Validate(ctx context.Context) error {
 	return nil
 }
 
+func (s *customerDestinationStub) CreateCustomerFromMainstream(ctx context.Context, command shopifyport.MainstreamCustomerUpsertCommand) (shopifyport.ShopifyCustomer, error) {
+	_ = ctx
+	_ = command
+	return shopifyport.ShopifyCustomer{}, s.err
+}
+
+func (s *customerDestinationStub) UpdateCustomerFromMainstream(ctx context.Context, id string, command shopifyport.MainstreamCustomerUpsertCommand) error {
+	_ = ctx
+	_ = id
+	_ = command
+	return s.err
+}
+
 func (s *customerDestinationStub) UpdateCustomerTags(ctx context.Context, id string, tags []string) error {
 	_ = ctx
 	_ = id

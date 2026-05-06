@@ -91,12 +91,34 @@ func (f failingSource) GetCustomer(ctx context.Context, id string) (shopifyport.
 	return shopifyport.ShopifyCustomer{}, f.err
 }
 
+// FindCustomerByEmail returns startup validation failures.
+func (f failingSource) FindCustomerByEmail(ctx context.Context, email string) (shopifyport.ShopifyCustomer, error) {
+	_ = ctx
+	_ = email
+	return shopifyport.ShopifyCustomer{}, f.err
+}
+
 // ListCustomers returns startup validation failures.
 func (f failingSource) ListCustomers(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyCustomer, bool, error) {
 	_ = ctx
 	_ = sinceID
 	_ = limit
 	return nil, false, f.err
+}
+
+// CreateCustomerFromMainstream returns startup validation failures.
+func (f failingSource) CreateCustomerFromMainstream(ctx context.Context, command shopifyport.MainstreamCustomerUpsertCommand) (shopifyport.ShopifyCustomer, error) {
+	_ = ctx
+	_ = command
+	return shopifyport.ShopifyCustomer{}, f.err
+}
+
+// UpdateCustomerFromMainstream returns startup validation failures.
+func (f failingSource) UpdateCustomerFromMainstream(ctx context.Context, id string, command shopifyport.MainstreamCustomerUpsertCommand) error {
+	_ = ctx
+	_ = id
+	_ = command
+	return f.err
 }
 
 // UpdateCustomerTags returns startup validation failures.

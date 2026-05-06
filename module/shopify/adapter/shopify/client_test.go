@@ -276,6 +276,112 @@ func TestClientAppendCustomerNoteDoesNotDuplicate(t *testing.T) {
 	}
 }
 
+// TestClientFindCustomerByEmail verifies Shopify customer email search behavior.
+func TestClientFindCustomerByEmail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/customers/search.json" {
+			t.Fatalf("request path = %q, want /customers/search.json", request.URL.Path)
+		}
+		if got := request.URL.Query().Get("query"); got != "email:shop@example.com" {
+			t.Fatalf("query = %q, want email:shop@example.com", got)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"customers":[{"id":123,"email":"shop@example.com","first_name":"Shop","last_name":"Customer"}]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	customer, err := client.FindCustomerByEmail(shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com"), "shop@example.com")
+	if err != nil {
+		t.Fatalf("FindCustomerByEmail() error = %v", err)
+	}
+	if customer.ID != "123" {
+		t.Fatalf("customer ID = %q, want 123", customer.ID)
+	}
+}
+
+// TestClientCreateCustomerFromMainstreamAddsSyncMarkers verifies outbound customer creation sends stable sync markers.
+func TestClientCreateCustomerFromMainstreamAddsSyncMarkers(t *testing.T) {
+	var postBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("request method = %q, want POST", request.Method)
+		}
+		if request.URL.Path != "/customers.json" {
+			t.Fatalf("request path = %q, want /customers.json", request.URL.Path)
+		}
+		var err error
+		postBody, err = io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatalf("ReadAll(request.Body) error = %v", err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"customer":{"id":123,"email":"sync@example.com","first_name":"Sync","last_name":"Customer"}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.CreateCustomerFromMainstream(shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com"), shopifyport.MainstreamCustomerUpsertCommand{
+		ContactID:      "contact-9",
+		Email:          "sync@example.com",
+		FirstName:      "Sync",
+		LastName:       "Customer",
+		Phone:          "3001234567",
+		DocumentNumber: "12345678",
+		Address:        "Street 123",
+		CityCode:       "Bogota",
+	})
+	if err != nil {
+		t.Fatalf("CreateCustomerFromMainstream() error = %v", err)
+	}
+
+	var requestBody struct {
+		Customer struct {
+			Email string `json:"email"`
+			Tags  string `json:"tags"`
+			Note  string `json:"note"`
+		} `json:"customer"`
+	}
+	if err := json.Unmarshal(postBody, &requestBody); err != nil {
+		t.Fatalf("json.Unmarshal(postBody) error = %v", err)
+	}
+	if requestBody.Customer.Email != "sync@example.com" {
+		t.Fatalf("customer email = %q, want sync@example.com", requestBody.Customer.Email)
+	}
+	if !strings.Contains(requestBody.Customer.Tags, "mannaiah:synced") {
+		t.Fatalf("customer tags = %q, want mannaiah:synced", requestBody.Customer.Tags)
+	}
+	if !strings.Contains(requestBody.Customer.Note, "[Mannaiah] contact_id=contact-9") {
+		t.Fatalf("customer note = %q, want contact note marker", requestBody.Customer.Note)
+	}
+}
+
 // TestClientExchangeAuthorizationCode verifies Shopify OAuth token exchange behavior.
 func TestClientExchangeAuthorizationCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

@@ -21,6 +21,8 @@ type CustomerSource interface {
 	Validate(ctx context.Context) error
 	// GetCustomer resolves one Shopify customer by identifier.
 	GetCustomer(ctx context.Context, id string) (ShopifyCustomer, error)
+	// FindCustomerByEmail resolves one Shopify customer by email address.
+	FindCustomerByEmail(ctx context.Context, email string) (ShopifyCustomer, error)
 	// ListCustomers returns up to limit customers with IDs greater than sinceID.
 	// Pass empty sinceID to start from the beginning. hasMore is true when there may be additional pages.
 	ListCustomers(ctx context.Context, sinceID string, limit int) (customers []ShopifyCustomer, hasMore bool, err error)
@@ -49,10 +51,38 @@ type OrderDestination interface {
 type CustomerDestination interface {
 	// Validate verifies destination connectivity and credentials.
 	Validate(ctx context.Context) error
+	// CreateCustomerFromMainstream creates one Shopify customer from mainstream contact values.
+	CreateCustomerFromMainstream(ctx context.Context, command MainstreamCustomerUpsertCommand) (ShopifyCustomer, error)
+	// UpdateCustomerFromMainstream updates one Shopify customer from mainstream contact values.
+	UpdateCustomerFromMainstream(ctx context.Context, id string, command MainstreamCustomerUpsertCommand) error
 	// UpdateCustomerTags merges one or more customer tags into Shopify.
 	UpdateCustomerTags(ctx context.Context, id string, tags []string) error
 	// AppendCustomerNote appends one customer note entry when it is not already present.
 	AppendCustomerNote(ctx context.Context, id string, note string) error
+}
+
+// MainstreamCustomerUpsertCommand defines outbound Shopify customer payload values.
+type MainstreamCustomerUpsertCommand struct {
+	// ContactID defines the Mannaiah contact identifier being synced.
+	ContactID string
+	// Email defines customer email values.
+	Email string
+	// LegalName defines legal-name values.
+	LegalName string
+	// FirstName defines customer first-name values.
+	FirstName string
+	// LastName defines customer last-name values.
+	LastName string
+	// Phone defines customer phone values.
+	Phone string
+	// DocumentNumber defines customer document-number values.
+	DocumentNumber string
+	// Address defines address line 1 values.
+	Address string
+	// AddressExtra defines address line 2 values.
+	AddressExtra string
+	// CityCode defines normalized city-code values.
+	CityCode string
 }
 
 // ShopifyNoteAttribute defines one normalized Shopify note attribute.

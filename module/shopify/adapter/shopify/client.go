@@ -126,6 +126,32 @@ func (c *Client) GetCustomer(ctx context.Context, id string) (shopifyport.Shopif
 	return customer, nil
 }
 
+// FindCustomerByEmail resolves one Shopify customer by email address.
+func (c *Client) FindCustomerByEmail(ctx context.Context, email string) (shopifyport.ShopifyCustomer, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return shopifyport.ShopifyCustomer{}, err
+	}
+
+	trimmedEmail := strings.TrimSpace(email)
+	if trimmedEmail == "" {
+		return shopifyport.ShopifyCustomer{}, shopifyport.ErrCustomerNotFound
+	}
+
+	path := "/customers/search.json?query=" + url.QueryEscape("email:"+trimmedEmail)
+	var response customersListResponse
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodGet, path, nil, &response); err != nil {
+		return shopifyport.ShopifyCustomer{}, err
+	}
+	if len(response.Customers) == 0 {
+		return shopifyport.ShopifyCustomer{}, shopifyport.ErrCustomerNotFound
+	}
+
+	customer := normalizeCustomer(response.Customers[0])
+	customer.ShopDomain = installation.ShopDomain
+	return customer, nil
+}
+
 // ListCustomers returns up to limit customers with numeric IDs greater than sinceID.
 func (c *Client) ListCustomers(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyCustomer, bool, error) {
 	installation, err := c.resolveInstallation(ctx)
@@ -151,6 +177,44 @@ func (c *Client) ListCustomers(ctx context.Context, sinceID string, limit int) (
 	}
 
 	return customers, len(response.Customers) == limit, nil
+}
+
+// CreateCustomerFromMainstream creates one Shopify customer from mainstream contact values.
+func (c *Client) CreateCustomerFromMainstream(ctx context.Context, command shopifyport.MainstreamCustomerUpsertCommand) (shopifyport.ShopifyCustomer, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return shopifyport.ShopifyCustomer{}, err
+	}
+
+	requestBody := updateCustomerRequest{
+		Customer: buildCustomerWritePayload(shopifyport.ShopifyCustomer{}, command),
+	}
+	var response customerResponse
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPost, "/customers.json", requestBody, &response); err != nil {
+		return shopifyport.ShopifyCustomer{}, err
+	}
+
+	customer := normalizeCustomer(response.Customer)
+	customer.ShopDomain = installation.ShopDomain
+	return customer, nil
+}
+
+// UpdateCustomerFromMainstream updates one Shopify customer from mainstream contact values.
+func (c *Client) UpdateCustomerFromMainstream(ctx context.Context, id string, command shopifyport.MainstreamCustomerUpsertCommand) error {
+	customer, err := c.GetCustomer(ctx, id)
+	if err != nil {
+		return err
+	}
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+
+	requestBody := updateCustomerRequest{
+		Customer: buildCustomerWritePayload(customer, command),
+	}
+	path := fmt.Sprintf("/customers/%s.json", url.PathEscape(strings.TrimSpace(id)))
+	return c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPut, path, requestBody, nil)
 }
 
 // UpdateCustomerTags merges one or more customer tags into Shopify.
@@ -453,8 +517,14 @@ type updateCustomerRequest struct {
 }
 
 type updateCustomerPayload struct {
-	Note string `json:"note,omitempty"`
-	Tags string `json:"tags,omitempty"`
+	ID        string           `json:"id,omitempty"`
+	Email     string           `json:"email,omitempty"`
+	FirstName string           `json:"first_name,omitempty"`
+	LastName  string           `json:"last_name,omitempty"`
+	Phone     string           `json:"phone,omitempty"`
+	Note      string           `json:"note,omitempty"`
+	Tags      string           `json:"tags,omitempty"`
+	Addresses []addressPayload `json:"addresses,omitempty"`
 }
 
 type webhookRegistrationRequest struct {
@@ -800,6 +870,85 @@ func appendNote(existing string, entry string) string {
 	}
 
 	return trimmedExisting + "\n" + trimmedEntry
+}
+
+func buildCustomerWritePayload(current shopifyport.ShopifyCustomer, command shopifyport.MainstreamCustomerUpsertCommand) updateCustomerPayload {
+	payload := updateCustomerPayload{
+		ID:        strings.TrimSpace(current.ID),
+		Email:     strings.TrimSpace(command.Email),
+		FirstName: resolveCustomerFirstName(command),
+		LastName:  resolveCustomerLastName(command),
+		Phone:     preferNonEmpty(command.Phone, current.Phone),
+		Note:      appendNote(current.Note, buildCustomerContactNote(command.ContactID)),
+		Tags:      mergeTags(current.Tags, []string{"mannaiah:synced"}),
+		Addresses: buildCustomerAddresses(current, command),
+	}
+	if strings.TrimSpace(payload.Note) == "" {
+		payload.Note = current.Note
+	}
+	if strings.TrimSpace(payload.Tags) == "" {
+		payload.Tags = current.Tags
+	}
+	return payload
+}
+
+func buildCustomerAddresses(current shopifyport.ShopifyCustomer, command shopifyport.MainstreamCustomerUpsertCommand) []addressPayload {
+	firstName := resolveCustomerFirstName(command)
+	lastName := resolveCustomerLastName(command)
+	address := addressPayload{
+		FirstName: firstName,
+		LastName:  lastName,
+		Company:   strings.TrimSpace(command.DocumentNumber),
+		Address1:  strings.TrimSpace(command.Address),
+		Address2:  strings.TrimSpace(command.AddressExtra),
+		City:      strings.TrimSpace(command.CityCode),
+		Phone:     preferNonEmpty(command.Phone, current.Phone),
+	}
+	if current.DefaultAddress != nil {
+		address.Province = strings.TrimSpace(current.DefaultAddress.Province)
+		address.Country = strings.TrimSpace(current.DefaultAddress.Country)
+		address.Zip = strings.TrimSpace(current.DefaultAddress.Zip)
+	}
+	if strings.TrimSpace(address.FirstName) == "" &&
+		strings.TrimSpace(address.LastName) == "" &&
+		strings.TrimSpace(address.Company) == "" &&
+		strings.TrimSpace(address.Address1) == "" &&
+		strings.TrimSpace(address.Address2) == "" &&
+		strings.TrimSpace(address.City) == "" &&
+		strings.TrimSpace(address.Phone) == "" &&
+		strings.TrimSpace(address.Province) == "" &&
+		strings.TrimSpace(address.Country) == "" &&
+		strings.TrimSpace(address.Zip) == "" {
+		return nil
+	}
+
+	return []addressPayload{address}
+}
+
+func buildCustomerContactNote(contactID string) string {
+	trimmedID := strings.TrimSpace(contactID)
+	if trimmedID == "" {
+		return ""
+	}
+	return fmt.Sprintf("[Mannaiah] contact_id=%s", trimmedID)
+}
+
+func resolveCustomerFirstName(command shopifyport.MainstreamCustomerUpsertCommand) string {
+	return preferNonEmpty(command.FirstName, command.LegalName, "Mannaiah")
+}
+
+func resolveCustomerLastName(command shopifyport.MainstreamCustomerUpsertCommand) string {
+	return preferNonEmpty(command.LastName, "Contact")
+}
+
+func preferNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func buildOutboundNote(status ordersdomain.Status) string {

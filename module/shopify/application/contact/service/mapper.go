@@ -76,6 +76,9 @@ func extractCompanyDocumentNumber(address *shopifyport.ShopifyAddress) string {
 
 func buildCustomerMetadata(customer shopifyport.ShopifyCustomer) map[string]string {
 	metadata := map[string]string{}
+	if customer.ShopDomain != "" {
+		metadata["shopify_shop_domain"] = strings.TrimSpace(customer.ShopDomain)
+	}
 	if customer.ID != "" {
 		metadata["shopify_customer_id"] = strings.TrimSpace(customer.ID)
 	}
