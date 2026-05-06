@@ -25,7 +25,6 @@ import (
 	contactapplication "mannaiah/module/contacts/application"
 	contactdomain "mannaiah/module/contacts/domain"
 	contactport "mannaiah/module/contacts/port"
-	"mannaiah/module/coupons"
 	coreconfig "mannaiah/module/core/config"
 	corecron "mannaiah/module/core/cron"
 	coredatabase "mannaiah/module/core/database"
@@ -40,6 +39,7 @@ import (
 	corestorage "mannaiah/module/core/storage"
 	"mannaiah/module/core/swagger"
 	coretelemetry "mannaiah/module/core/telemetry"
+	"mannaiah/module/coupons"
 	"mannaiah/module/email"
 	"mannaiah/module/falabella"
 	falabellaproducts "mannaiah/module/falabella/adapter/products"
@@ -61,6 +61,8 @@ import (
 	"mannaiah/module/shipping"
 	shippingevent "mannaiah/module/shipping/adapter/event"
 	shippingsearch "mannaiah/module/shipping/adapter/search"
+	"mannaiah/module/shopify"
+	shopifyport "mannaiah/module/shopify/port"
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
@@ -95,6 +97,7 @@ func run(ctx context.Context, envFile string) error {
 	var assetsCfg assets.Config
 	var falabellaCfg falabella.Config
 	var wooCfg woocommerce.Config
+	var shopifyCfg shopify.Config
 	var analyticsCfg analytics.Config
 	var emailCfg email.Config
 	var membershipCfg membership.Config
@@ -117,6 +120,7 @@ func run(ctx context.Context, envFile string) error {
 		&assetsCfg,
 		&falabellaCfg,
 		&wooCfg,
+		&shopifyCfg,
 		&analyticsCfg,
 		&emailCfg,
 		&membershipCfg,
@@ -577,6 +581,31 @@ func run(ctx context.Context, envFile string) error {
 		_ = wooModule.Stop(stopCtx)
 	}()
 
+	shopifyModule, err := shopify.New(
+		shopifyCfg,
+		db,
+		contactsModule.Service(),
+		ordersModule.Service(),
+		logger,
+		messaging.Registrar(),
+	)
+	if err != nil {
+		return fmt.Errorf("initialize shopify module: %w", err)
+	}
+	shopifyModule.SetSyncRecorder(shopifySyncRecorderAdapter{recorder: recorderAdapter})
+	shopifyModule.SetAuthorizer(authModule)
+	if err := shopifyModule.Load(runtime); err != nil {
+		return fmt.Errorf("load shopify module: %w", err)
+	}
+	if err := shopifyModule.Start(ctx); err != nil {
+		return fmt.Errorf("start shopify module: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shopifyModule.Stop(stopCtx)
+	}()
+
 	if err := registerShippingMarkOrderCompletionConsumer(
 		messaging.Registrar(),
 		ordersModule.Service(),
@@ -770,6 +799,32 @@ func (a wooSyncRecorderAdapter) CompleteRun(ctx context.Context, runID string, p
 
 // FailRun marks one synchronization run as failed.
 func (a wooSyncRecorderAdapter) FailRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []woocommerceport.SyncError) error {
+	adapted := make([]errorPayload, 0, len(syncErrors))
+	for _, syncErr := range syncErrors {
+		adapted = append(adapted, errorPayload{Type: syncErr.Type, Code: syncErr.Code, Message: syncErr.Message})
+	}
+
+	return a.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, adapted)
+}
+
+// shopifySyncRecorderAdapter adapts sync recorders for Shopify sync recorder ports.
+type shopifySyncRecorderAdapter struct {
+	// recorder defines base sync recorder dependencies.
+	recorder syncRecordRecorderAdapter
+}
+
+// StartRun starts one synchronization run and returns a run identifier.
+func (a shopifySyncRecorderAdapter) StartRun(ctx context.Context, kind string, trigger string) (string, error) {
+	return a.recorder.StartRun(ctx, kind, trigger)
+}
+
+// CompleteRun marks one synchronization run as completed.
+func (a shopifySyncRecorderAdapter) CompleteRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int) error {
+	return a.recorder.CompleteRun(ctx, runID, processed, succeeded, failed, skipped)
+}
+
+// FailRun marks one synchronization run as failed.
+func (a shopifySyncRecorderAdapter) FailRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []shopifyport.SyncError) error {
 	adapted := make([]errorPayload, 0, len(syncErrors))
 	for _, syncErr := range syncErrors {
 		adapted = append(adapted, errorPayload{Type: syncErr.Type, Code: syncErr.Code, Message: syncErr.Message})

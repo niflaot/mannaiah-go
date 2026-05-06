@@ -1,0 +1,182 @@
+package port
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	ordersdomain "mannaiah/module/orders/domain"
+)
+
+var (
+	// ErrCustomerNotFound is returned when a Shopify customer cannot be resolved.
+	ErrCustomerNotFound = errors.New("shopify customer not found")
+	// ErrOrderNotFound is returned when a Shopify order cannot be resolved.
+	ErrOrderNotFound = errors.New("shopify order not found")
+)
+
+// CustomerSource defines Shopify customer retrieval behavior.
+type CustomerSource interface {
+	// Validate verifies source connectivity and credentials.
+	Validate(ctx context.Context) error
+	// GetCustomer resolves one Shopify customer by identifier.
+	GetCustomer(ctx context.Context, id string) (ShopifyCustomer, error)
+}
+
+// OrderSource defines Shopify order retrieval behavior.
+type OrderSource interface {
+	// Validate verifies source connectivity and credentials.
+	Validate(ctx context.Context) error
+	// GetOrder resolves one Shopify order by identifier.
+	GetOrder(ctx context.Context, id string) (ShopifyOrder, error)
+}
+
+// OrderDestination defines Shopify order update behavior from mainstream events.
+type OrderDestination interface {
+	// Validate verifies destination connectivity and credentials.
+	Validate(ctx context.Context) error
+	// UpdateOrderFromMainstream pushes one mainstream order-status update back to Shopify.
+	UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command MainstreamOrderUpdateCommand) error
+}
+
+// ShopifyNoteAttribute defines one normalized Shopify note attribute.
+type ShopifyNoteAttribute struct {
+	// Name defines note attribute names.
+	Name string
+	// Value defines note attribute values.
+	Value string
+}
+
+// ShopifyAddress defines one normalized Shopify address payload.
+type ShopifyAddress struct {
+	// FirstName defines address first-name values.
+	FirstName string
+	// LastName defines address last-name values.
+	LastName string
+	// Company defines company values.
+	Company string
+	// Address1 defines address line 1 values.
+	Address1 string
+	// Address2 defines address line 2 values.
+	Address2 string
+	// City defines city values.
+	City string
+	// Province defines province/state values.
+	Province string
+	// Country defines country values.
+	Country string
+	// Zip defines postal-code values.
+	Zip string
+	// Phone defines phone values.
+	Phone string
+}
+
+// ShopifyCustomer defines one normalized Shopify customer payload.
+type ShopifyCustomer struct {
+	// ID defines Shopify customer identifiers.
+	ID string
+	// Email defines customer email values.
+	Email string
+	// FirstName defines customer first-name values.
+	FirstName string
+	// LastName defines customer last-name values.
+	LastName string
+	// Phone defines customer phone values.
+	Phone string
+	// Tags defines customer tag values.
+	Tags string
+	// DefaultAddress defines optional default address values.
+	DefaultAddress *ShopifyAddress
+	// NoteAttributes defines structured note attribute values.
+	NoteAttributes []ShopifyNoteAttribute
+	// CreatedAt defines source creation timestamps.
+	CreatedAt time.Time
+}
+
+// ShopifyLineItem defines one normalized Shopify order line item.
+type ShopifyLineItem struct {
+	// SKU defines SKU values.
+	SKU string
+	// Title defines product-title values.
+	Title string
+	// VariantTitle defines variant-title values.
+	VariantTitle string
+	// Quantity defines ordered quantity values.
+	Quantity int
+	// Price defines unit-price values.
+	Price string
+}
+
+// ShopifyShippingLine defines one normalized Shopify shipping line.
+type ShopifyShippingLine struct {
+	// Code defines shipping code values.
+	Code string
+	// Title defines shipping title values.
+	Title string
+	// Price defines shipping price values.
+	Price string
+}
+
+// ShopifyDiscountCode defines one normalized Shopify discount code.
+type ShopifyDiscountCode struct {
+	// Code defines discount code values.
+	Code string
+	// Amount defines discount amount values.
+	Amount string
+	// Type defines discount type values.
+	Type string
+}
+
+// ShopifyOrder defines one normalized Shopify order payload.
+type ShopifyOrder struct {
+	// ID defines Shopify order identifiers.
+	ID string
+	// Name defines public Shopify order names.
+	Name string
+	// ContactEmail defines order email values.
+	ContactEmail string
+	// FinancialStatus defines Shopify financial-status values.
+	FinancialStatus string
+	// FulfillmentStatus defines Shopify fulfillment-status values.
+	FulfillmentStatus string
+	// Currency defines order currency values.
+	Currency string
+	// TotalPrice defines total order amount values.
+	TotalPrice string
+	// TotalTax defines total tax amount values.
+	TotalTax string
+	// TotalDiscounts defines total discount amount values.
+	TotalDiscounts string
+	// Note defines current order note values.
+	Note string
+	// Tags defines current order tags.
+	Tags string
+	// CancelReason defines cancellation reason values.
+	CancelReason string
+	// CancelledAt defines optional cancellation timestamps.
+	CancelledAt *time.Time
+	// PaymentGatewayNames defines payment gateway names.
+	PaymentGatewayNames []string
+	// Customer defines optional customer values.
+	Customer *ShopifyCustomer
+	// BillingAddress defines billing-address values.
+	BillingAddress *ShopifyAddress
+	// ShippingAddress defines shipping-address values.
+	ShippingAddress *ShopifyAddress
+	// NoteAttributes defines structured note attributes.
+	NoteAttributes []ShopifyNoteAttribute
+	// LineItems defines order item values.
+	LineItems []ShopifyLineItem
+	// ShippingLines defines shipping-charge values.
+	ShippingLines []ShopifyShippingLine
+	// DiscountCodes defines discount-code values.
+	DiscountCodes []ShopifyDiscountCode
+	// CreatedAt defines source creation timestamps.
+	CreatedAt time.Time
+}
+
+// MainstreamOrderUpdateCommand defines outbound Shopify status update payload values.
+type MainstreamOrderUpdateCommand struct {
+	// Status defines mainstream order status values.
+	Status ordersdomain.Status
+}

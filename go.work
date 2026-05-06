@@ -16,4 +16,5 @@ use (
 	./module/woocommerce
 	./module/analytics
 	./module/shipping
+	./module/shopify
 )
