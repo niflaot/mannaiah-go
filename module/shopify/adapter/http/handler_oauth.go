@@ -140,12 +140,22 @@ func (h *Handler) oauthCallback(ctx corehttp.Context) error {
 	}
 
 	clearOAuthStateCookie(ctx)
-	return ctx.Status(200).JSON(map[string]any{
-		"shopDomain": installation.ShopDomain,
-		"scopes": installation.Scopes,
-		"installedAt": installation.InstalledAt,
+	payload := map[string]any{
+		"shopDomain":         installation.ShopDomain,
+		"scopes":             installation.Scopes,
+		"installedAt":        installation.InstalledAt,
 		"webhooksRegistered": true,
-	})
+	}
+	if prefersJSONOAuthCallbackResponse(ctx.GetHeader("Accept", "")) {
+		return ctx.Status(200).JSON(payload)
+	}
+
+	launchURL, err := buildAppLaunchURL(baseURL, installation.ShopDomain, true)
+	if err != nil {
+		return h.mapError(err)
+	}
+	ctx.SetHeader("Location", launchURL)
+	return ctx.Status(302).SendString("")
 }
 
 // VerifyOAuthCallbackSignature verifies the callback query-string HMAC using the Shopify client secret.
@@ -214,6 +224,38 @@ func buildOAuthInstallURL(shopDomain string, clientID string, redirectURI string
 	query.Set("state", strings.TrimSpace(state))
 	endpoint.RawQuery = query.Encode()
 	return endpoint.String(), nil
+}
+
+func buildAppLaunchURL(baseURL string, shopDomain string, installed bool) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", ErrPublicBaseURLRequired
+	}
+
+	endpoint := url.URL{
+		Scheme: parsed.Scheme,
+		Host:   parsed.Host,
+		Path:   "/shopify/app",
+	}
+	query := endpoint.Query()
+	if normalizedShopDomain := shopifyport.NormalizeShopDomain(shopDomain); isValidShopDomain(normalizedShopDomain) {
+		query.Set("shop", normalizedShopDomain)
+	}
+	if installed {
+		query.Set("installed", "1")
+	}
+	endpoint.RawQuery = query.Encode()
+
+	return endpoint.String(), nil
+}
+
+func prefersJSONOAuthCallbackResponse(acceptHeader string) bool {
+	acceptHeader = strings.ToLower(strings.TrimSpace(acceptHeader))
+	if acceptHeader == "" {
+		return false
+	}
+
+	return strings.Contains(acceptHeader, "application/json") && !strings.Contains(acceptHeader, "text/html")
 }
 
 func resolveExternalBaseURL(ctx corehttp.Context) (string, error) {

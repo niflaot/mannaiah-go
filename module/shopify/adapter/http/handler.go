@@ -158,19 +158,19 @@ func NewHandler(
 	}
 
 	return &Handler{
-		contactsService:     contactsService,
-		ordersService:       ordersService,
-		processor:           processor,
-		links:               links,
-		deliveries:          deliveries,
-		installations:       installations,
+		contactsService:      contactsService,
+		ordersService:        ordersService,
+		processor:            processor,
+		links:                links,
+		deliveries:           deliveries,
+		installations:        installations,
 		installationResolver: installationResolver,
-		oauthClient:         oauthClient,
-		contactsLookup:      contactsLookup,
-		ordersLookup:        ordersLookup,
-		clientID:            strings.TrimSpace(clientID),
-		clientSecret:        strings.TrimSpace(clientSecret),
-		authorizer:          authorizer,
+		oauthClient:          oauthClient,
+		contactsLookup:       contactsLookup,
+		ordersLookup:         ordersLookup,
+		clientID:             strings.TrimSpace(clientID),
+		clientSecret:         strings.TrimSpace(clientSecret),
+		authorizer:           authorizer,
 	}, nil
 }
 
@@ -185,6 +185,7 @@ func (h *Handler) SetAuthorizer(authorizer Authorizer) {
 
 // RegisterRoutes registers Shopify integration routes.
 func (h *Handler) RegisterRoutes(router corehttp.Router) {
+	router.Get("/shopify/app", h.appLaunch)
 	router.Get("/shopify/oauth/install", h.installOAuth)
 	router.Get("/shopify/oauth/callback", h.oauthCallback)
 	router.Post("/shopify/sync/contacts", h.protect("contact:sync", h.syncContacts))

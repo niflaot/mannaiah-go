@@ -16,6 +16,7 @@ func TestOpenAPISpec(t *testing.T) {
 	}
 
 	expectedPaths := []string{
+		"/shopify/app",
 		"/shopify/oauth/install",
 		"/shopify/oauth/callback",
 		"/shopify/sync/contacts",

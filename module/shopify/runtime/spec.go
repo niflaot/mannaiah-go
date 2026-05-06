@@ -12,12 +12,12 @@ const (
 	// sessionBearerSecurityScheme defines OpenAPI security scheme keys used for Admin extension session-token auth.
 	sessionBearerSecurityScheme = "shopifySessionBearer"
 
-	shopifyManualSyncRequestSchemaRef      = "#/components/schemas/ShopifyManualSyncRequest"
-	shopifyContactSyncSummarySchemaRef     = "#/components/schemas/ShopifyContactSyncSummary"
-	shopifyOrderSyncSummarySchemaRef       = "#/components/schemas/ShopifyOrderSyncSummary"
-	shopifyOAuthCallbackResponseSchemaRef  = "#/components/schemas/ShopifyOAuthCallbackResponse"
-	shopifyWebhookPayloadSchemaRef         = "#/components/schemas/ShopifyWebhookPayload"
-	shopifyExtensionOrderSummarySchemaRef  = "#/components/schemas/ShopifyExtensionOrderSummary"
+	shopifyManualSyncRequestSchemaRef       = "#/components/schemas/ShopifyManualSyncRequest"
+	shopifyContactSyncSummarySchemaRef      = "#/components/schemas/ShopifyContactSyncSummary"
+	shopifyOrderSyncSummarySchemaRef        = "#/components/schemas/ShopifyOrderSyncSummary"
+	shopifyOAuthCallbackResponseSchemaRef   = "#/components/schemas/ShopifyOAuthCallbackResponse"
+	shopifyWebhookPayloadSchemaRef          = "#/components/schemas/ShopifyWebhookPayload"
+	shopifyExtensionOrderSummarySchemaRef   = "#/components/schemas/ShopifyExtensionOrderSummary"
 	shopifyExtensionContactSummarySchemaRef = "#/components/schemas/ShopifyExtensionContactSummary"
 )
 
@@ -42,6 +42,7 @@ func OpenAPISpec() *openapi3.T {
 		OpenAPI: "3.0.3",
 		Info:    &openapi3.Info{Title: "Shopify API", Version: "2.2.0"},
 		Paths: openapi3.NewPaths(
+			openapi3.WithPath("/shopify/app", &openapi3.PathItem{Get: appLaunchOperation()}),
 			openapi3.WithPath("/shopify/oauth/install", &openapi3.PathItem{Get: installOAuthOperation()}),
 			openapi3.WithPath("/shopify/oauth/callback", &openapi3.PathItem{Get: oauthCallbackOperation()}),
 			openapi3.WithPath("/shopify/sync/contacts", &openapi3.PathItem{Post: syncContactsOperation()}),
@@ -57,6 +58,19 @@ func OpenAPISpec() *openapi3.T {
 			&openapi3.Tag{Name: shopifyTag},
 			&openapi3.Tag{Name: shopifyExtensionTag},
 		},
+	}
+}
+
+// appLaunchOperation defines OpenAPI operations for Shopify App URL launch landings.
+func appLaunchOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShopifyApp_launch",
+		Summary:     "Render Shopify app launch landing page",
+		Description: "Returns a simple HTML page when Shopify opens the configured App URL after installation or from the Admin app launcher.",
+		Tags:        []string{shopifyTag},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, responseWithDescription("HTML launch landing page returned.")),
+		),
 	}
 }
 
@@ -94,6 +108,7 @@ func oauthCallbackOperation() *openapi3.Operation {
 			requiredQueryParameter("timestamp", "Unix timestamp emitted by Shopify for callback freshness validation.", openapi3.NewStringSchema()),
 		},
 		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(302, responseWithDescription("Redirected to the Shopify app landing page.")),
 			openapi3.WithStatus(200, jsonResponse("OAuth callback completed successfully.", shopifyOAuthCallbackResponseSchemaRef)),
 			openapi3.WithStatus(400, responseWithDescription("Invalid OAuth callback request.")),
 			openapi3.WithStatus(401, responseWithDescription("OAuth callback authentication failed.")),
