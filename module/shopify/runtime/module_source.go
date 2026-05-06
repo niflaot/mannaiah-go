@@ -16,6 +16,7 @@ import (
 
 type sourceGateway interface {
 	shopifyport.CustomerSource
+	shopifyport.CustomerDestination
 	shopifyport.OrderSource
 	shopifyport.OrderDestination
 	shopifyhttp.OAuthClient
@@ -24,10 +25,10 @@ type sourceGateway interface {
 // newSource creates Shopify source and destination adapters from module config values.
 func newSource(cfg Config, resolver shopifyport.InstallationResolver) (sourceGateway, error) {
 	return shopifyadapter.NewClient(shopifyadapter.Config{
-		ClientID:     cfg.ClientID,
-		ClientSecret: cfg.ClientSecret,
+		ClientID:      cfg.ClientID,
+		ClientSecret:  cfg.ClientSecret,
 		TokenResolver: resolver,
-		Timeout:      time.Duration(resolveRequestTimeout(cfg.RequestTimeoutMS)),
+		Timeout:       time.Duration(resolveRequestTimeout(cfg.RequestTimeoutMS)),
 	})
 }
 
@@ -96,6 +97,22 @@ func (f failingSource) ListCustomers(ctx context.Context, sinceID string, limit 
 	_ = sinceID
 	_ = limit
 	return nil, false, f.err
+}
+
+// UpdateCustomerTags returns startup validation failures.
+func (f failingSource) UpdateCustomerTags(ctx context.Context, id string, tags []string) error {
+	_ = ctx
+	_ = id
+	_ = tags
+	return f.err
+}
+
+// AppendCustomerNote returns startup validation failures.
+func (f failingSource) AppendCustomerNote(ctx context.Context, id string, note string) error {
+	_ = ctx
+	_ = id
+	_ = note
+	return f.err
 }
 
 // GetOrder returns startup validation failures.

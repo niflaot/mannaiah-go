@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	contactsdomain "mannaiah/module/contacts/domain"
 	ordersdomain "mannaiah/module/orders/domain"
@@ -18,11 +19,11 @@ func BuildOrderContactSyncCommand(order shopifyport.ShopifyOrder) (shopifyport.C
 		return shopifyport.ContactSyncCommand{}, ErrOrderContactEmailRequired
 	}
 
-	attributes := order.NoteAttributes
-	if len(attributes) == 0 && order.Customer != nil {
-		attributes = order.Customer.NoteAttributes
+	documentNumber := extractDefaultAddressDocumentNumber(order.Customer)
+	var documentType contactsdomain.DocumentType
+	if documentNumber != "" {
+		documentType = contactsdomain.DocumentTypeCC
 	}
-	documentType, documentNumber := extractDocument(attributes)
 	address := resolvePrimaryAddress(order)
 	firstName := preferString(customerFirstName(order.Customer), addressFirstName(address), billingFirstName(order.BillingAddress))
 	lastName := preferString(customerLastName(order.Customer), addressLastName(address), billingLastName(order.BillingAddress))
@@ -375,45 +376,17 @@ func billingPhone(address *shopifyport.ShopifyAddress) string {
 	return addressPhone(address)
 }
 
-func extractDocument(attributes []shopifyport.ShopifyNoteAttribute) (contactsdomain.DocumentType, string) {
-	values := map[string]string{}
-	for _, attribute := range attributes {
-		key := normalizeAttributeKey(attribute.Name)
-		if key == "" {
-			continue
-		}
-		values[key] = strings.TrimSpace(attribute.Value)
-	}
-
-	documentType := normalizeDocumentType(preferString(values["document_type"], values["documenttype"], values["doc_type"]))
-	documentNumber := preferString(values["document_number"], values["documentnumber"], values["doc_number"], values["document"])
-	return documentType, strings.TrimSpace(documentNumber)
-}
-
-func normalizeDocumentType(value string) contactsdomain.DocumentType {
-	switch strings.ToUpper(strings.TrimSpace(value)) {
-	case string(contactsdomain.DocumentTypeCC):
-		return contactsdomain.DocumentTypeCC
-	case string(contactsdomain.DocumentTypeCE):
-		return contactsdomain.DocumentTypeCE
-	case string(contactsdomain.DocumentTypeTI):
-		return contactsdomain.DocumentTypeTI
-	case string(contactsdomain.DocumentTypePAS):
-		return contactsdomain.DocumentTypePAS
-	case string(contactsdomain.DocumentTypeNIT):
-		return contactsdomain.DocumentTypeNIT
-	case string(contactsdomain.DocumentTypeOther), "OTRO":
-		return contactsdomain.DocumentTypeOther
-	default:
+func extractDefaultAddressDocumentNumber(customer *shopifyport.ShopifyCustomer) string {
+	if customer == nil || customer.DefaultAddress == nil {
 		return ""
 	}
-}
-
-func normalizeAttributeKey(value string) string {
-	trimmed := strings.TrimSpace(strings.ToLower(value))
-	trimmed = strings.ReplaceAll(trimmed, "-", "_")
-	trimmed = strings.ReplaceAll(trimmed, " ", "_")
-	return trimmed
+	var digits strings.Builder
+	for _, r := range customer.DefaultAddress.Company {
+		if unicode.IsDigit(r) {
+			digits.WriteRune(r)
+		}
+	}
+	return digits.String()
 }
 
 func preferString(values ...string) string {

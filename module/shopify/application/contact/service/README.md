@@ -7,4 +7,4 @@ This package validates Shopify customer access, maps Shopify customers into norm
 - `(*ContactSyncService).ValidateIntegration(ctx)`
 - `(*ContactSyncService).SyncContactByID(ctx, trigger, id)`
 - `service.BuildContactSyncCommand(customer)`
-- `service.NewUpserter(contactsService, links)`
+- `service.NewUpserter(contactsService, links, customerDestination, logger)`

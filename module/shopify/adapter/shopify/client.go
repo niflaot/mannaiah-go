@@ -153,6 +153,46 @@ func (c *Client) ListCustomers(ctx context.Context, sinceID string, limit int) (
 	return customers, len(response.Customers) == limit, nil
 }
 
+// UpdateCustomerTags merges one or more customer tags into Shopify.
+func (c *Client) UpdateCustomerTags(ctx context.Context, id string, tags []string) error {
+	customer, err := c.GetCustomer(ctx, id)
+	if err != nil {
+		return err
+	}
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+
+	requestBody := updateCustomerRequest{
+		Customer: updateCustomerPayload{
+			Tags: mergeTags(customer.Tags, tags),
+		},
+	}
+	path := fmt.Sprintf("/customers/%s.json", url.PathEscape(strings.TrimSpace(id)))
+	return c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPut, path, requestBody, nil)
+}
+
+// AppendCustomerNote appends one customer note entry when it is not already present.
+func (c *Client) AppendCustomerNote(ctx context.Context, id string, note string) error {
+	customer, err := c.GetCustomer(ctx, id)
+	if err != nil {
+		return err
+	}
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+
+	requestBody := updateCustomerRequest{
+		Customer: updateCustomerPayload{
+			Note: appendNote(customer.Note, note),
+		},
+	}
+	path := fmt.Sprintf("/customers/%s.json", url.PathEscape(strings.TrimSpace(id)))
+	return c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPut, path, requestBody, nil)
+}
+
 // GetOrder resolves one Shopify order by identifier.
 func (c *Client) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
 	installation, err := c.resolveInstallation(ctx)
@@ -330,6 +370,7 @@ type customerPayload struct {
 	LastName       string                 `json:"last_name"`
 	Phone          string                 `json:"phone"`
 	Tags           string                 `json:"tags"`
+	Note           string                 `json:"note"`
 	DefaultAddress *addressPayload        `json:"default_address"`
 	NoteAttributes []noteAttributePayload `json:"note_attributes"`
 	CreatedAt      time.Time              `json:"created_at"`
@@ -403,6 +444,15 @@ type updateOrderRequest struct {
 }
 
 type updateOrderPayload struct {
+	Note string `json:"note,omitempty"`
+	Tags string `json:"tags,omitempty"`
+}
+
+type updateCustomerRequest struct {
+	Customer updateCustomerPayload `json:"customer"`
+}
+
+type updateCustomerPayload struct {
 	Note string `json:"note,omitempty"`
 	Tags string `json:"tags,omitempty"`
 }
@@ -594,6 +644,7 @@ func normalizeCustomer(payload customerPayload) shopifyport.ShopifyCustomer {
 		LastName:       strings.TrimSpace(payload.LastName),
 		Phone:          strings.TrimSpace(payload.Phone),
 		Tags:           strings.TrimSpace(payload.Tags),
+		Note:           strings.TrimSpace(payload.Note),
 		NoteAttributes: normalizeNoteAttributes(payload.NoteAttributes),
 		CreatedAt:      payload.CreatedAt.UTC(),
 	}
@@ -767,25 +818,80 @@ func buildOutboundNote(status ordersdomain.Status) string {
 }
 
 func buildOutboundTags(existing string, status ordersdomain.Status) string {
-	set := map[string]struct{}{}
-	for _, value := range strings.Split(existing, ",") {
+	add, remove := outboundStatusTagTransition(status)
+	return replaceTags(existing, add, remove)
+}
+
+func outboundStatusTagTransition(status ordersdomain.Status) (string, []string) {
+	switch status {
+	case ordersdomain.StatusCompleted:
+		return "mannaiah:completed", []string{"mannaiah:pending", "mannaiah:hold"}
+	case ordersdomain.StatusCancelled:
+		return "mannaiah:cancelled", []string{"mannaiah:pending", "mannaiah:completed", "mannaiah:hold"}
+	case ordersdomain.StatusPending:
+		return "mannaiah:pending", nil
+	case ordersdomain.StatusHold:
+		return "mannaiah:hold", []string{"mannaiah:pending"}
+	default:
+		return "mannaiah:created", nil
+	}
+}
+
+func mergeTags(existing string, tags []string) string {
+	return replaceTags(existing, "", nil, tags...)
+}
+
+func replaceTags(existing string, add string, remove []string, extraAdds ...string) string {
+	ordered := parseTags(existing)
+	removed := map[string]struct{}{}
+	for _, value := range remove {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
 			continue
 		}
+		removed[trimmed] = struct{}{}
+	}
+	filtered := make([]string, 0, len(ordered)+len(extraAdds)+1)
+	set := map[string]struct{}{}
+	for _, value := range ordered {
+		if _, shouldRemove := removed[value]; shouldRemove {
+			continue
+		}
+		if _, exists := set[value]; exists {
+			continue
+		}
+		set[value] = struct{}{}
+		filtered = append(filtered, value)
+	}
+	for _, value := range append([]string{add}, extraAdds...) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := set[trimmed]; exists {
+			continue
+		}
 		set[trimmed] = struct{}{}
-	}
-	if status == ordersdomain.StatusCompleted {
-		set["mannaiah:completed"] = struct{}{}
+		filtered = append(filtered, trimmed)
 	}
 
-	ordered := make([]string, 0, len(set))
-	for value := range set {
-		ordered = append(ordered, value)
-	}
-	if len(ordered) == 0 {
-		return ""
-	}
+	return strings.Join(filtered, ", ")
+}
 
-	return strings.Join(ordered, ", ")
+func parseTags(existing string) []string {
+	values := strings.Split(existing, ",")
+	ordered := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		ordered = append(ordered, trimmed)
+	}
+	return ordered
 }

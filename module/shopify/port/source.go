@@ -45,6 +45,16 @@ type OrderDestination interface {
 	UpdateOrderFromMainstream(ctx context.Context, shopifyID string, command MainstreamOrderUpdateCommand) error
 }
 
+// CustomerDestination defines Shopify customer update behavior from mainstream sync.
+type CustomerDestination interface {
+	// Validate verifies destination connectivity and credentials.
+	Validate(ctx context.Context) error
+	// UpdateCustomerTags merges one or more customer tags into Shopify.
+	UpdateCustomerTags(ctx context.Context, id string, tags []string) error
+	// AppendCustomerNote appends one customer note entry when it is not already present.
+	AppendCustomerNote(ctx context.Context, id string, note string) error
+}
+
 // ShopifyNoteAttribute defines one normalized Shopify note attribute.
 type ShopifyNoteAttribute struct {
 	// Name defines note attribute names.
@@ -93,6 +103,8 @@ type ShopifyCustomer struct {
 	Phone string
 	// Tags defines customer tag values.
 	Tags string
+	// Note defines customer note values.
+	Note string
 	// DefaultAddress defines optional default address values.
 	DefaultAddress *ShopifyAddress
 	// NoteAttributes defines structured note attribute values.

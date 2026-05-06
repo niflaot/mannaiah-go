@@ -95,7 +95,7 @@ func New(
 		source = failingSource{err: sourceErr}
 	}
 
-	contactTarget, err := shopifycontactservice.NewUpserter(contactService, repository)
+	contactTarget, err := shopifycontactservice.NewUpserter(contactService, repository, source, logger)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify contact target: %w", err)
 	}
@@ -163,15 +163,15 @@ func New(
 	}
 
 	return &Module{
-		cfg:                cfg,
-		logger:             logger,
+		cfg:                  cfg,
+		logger:               logger,
 		installationResolver: installationResolver,
-		handler:            handler,
-		processor:          processor,
-		contactSyncService: contactSyncService,
-		orderSyncService:   orderSyncService,
-		orderConsumer:      orderConsumer,
-		registrar:          registrar,
+		handler:              handler,
+		processor:            processor,
+		contactSyncService:   contactSyncService,
+		orderSyncService:     orderSyncService,
+		orderConsumer:        orderConsumer,
+		registrar:            registrar,
 	}, nil
 }
 

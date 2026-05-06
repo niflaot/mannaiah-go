@@ -145,6 +145,137 @@ func TestClientUpdateOrderFromMainstreamAddsCompletedTag(t *testing.T) {
 	}
 }
 
+// TestBuildOutboundTagsCleansStatusTransitions verifies outbound status tag hygiene.
+func TestBuildOutboundTagsCleansStatusTransitions(t *testing.T) {
+	tests := []struct {
+		name     string
+		existing string
+		status   ordersdomain.Status
+		want     string
+	}{
+		{name: "completed removes stale pending hold", existing: "vip, mannaiah:pending, mannaiah:hold", status: ordersdomain.StatusCompleted, want: "vip, mannaiah:completed"},
+		{name: "cancelled removes stale active tags", existing: "vip, mannaiah:pending, mannaiah:completed, mannaiah:hold", status: ordersdomain.StatusCancelled, want: "vip, mannaiah:cancelled"},
+		{name: "pending retains existing", existing: "vip", status: ordersdomain.StatusPending, want: "vip, mannaiah:pending"},
+		{name: "hold removes pending", existing: "vip, mannaiah:pending", status: ordersdomain.StatusHold, want: "vip, mannaiah:hold"},
+		{name: "created adds created", existing: "vip", status: ordersdomain.StatusCreated, want: "vip, mannaiah:created"},
+		{name: "deduplicates existing", existing: "vip, vip, mannaiah:pending", status: ordersdomain.StatusPending, want: "vip, mannaiah:pending"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := buildOutboundTags(tc.existing, tc.status); got != tc.want {
+				t.Fatalf("buildOutboundTags() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestClientUpdateCustomerTagsMergesWithoutDuplicates verifies customer tag write-back deduplication.
+func TestClientUpdateCustomerTagsMergesWithoutDuplicates(t *testing.T) {
+	var putBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.Method {
+		case http.MethodGet:
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"customer":{"id":123,"email":"buyer@example.com","tags":"vip, mannaiah:synced"}}`))
+		case http.MethodPut:
+			var err error
+			putBody, err = io.ReadAll(request.Body)
+			if err != nil {
+				t.Fatalf("ReadAll(request.Body) error = %v", err)
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"customer":{"id":123}}`))
+		default:
+			t.Fatalf("request method = %q, want GET or PUT", request.Method)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if err := client.UpdateCustomerTags(shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com"), "123", []string{"mannaiah:synced", "new"}); err != nil {
+		t.Fatalf("UpdateCustomerTags() error = %v", err)
+	}
+
+	var requestBody struct {
+		Customer struct {
+			Tags string `json:"tags"`
+		} `json:"customer"`
+	}
+	if err := json.Unmarshal(putBody, &requestBody); err != nil {
+		t.Fatalf("json.Unmarshal(putBody) error = %v", err)
+	}
+	if requestBody.Customer.Tags != "vip, mannaiah:synced, new" {
+		t.Fatalf("updated tags = %q, want deduplicated merge", requestBody.Customer.Tags)
+	}
+}
+
+// TestClientAppendCustomerNoteDoesNotDuplicate verifies customer note append idempotency.
+func TestClientAppendCustomerNoteDoesNotDuplicate(t *testing.T) {
+	var putBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.Method {
+		case http.MethodGet:
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"customer":{"id":123,"email":"buyer@example.com","note":"existing\n[Mannaiah] contact_id=contact-1"}}`))
+		case http.MethodPut:
+			var err error
+			putBody, err = io.ReadAll(request.Body)
+			if err != nil {
+				t.Fatalf("ReadAll(request.Body) error = %v", err)
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"customer":{"id":123}}`))
+		default:
+			t.Fatalf("request method = %q, want GET or PUT", request.Method)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if err := client.AppendCustomerNote(shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com"), "123", "[Mannaiah] contact_id=contact-1"); err != nil {
+		t.Fatalf("AppendCustomerNote() error = %v", err)
+	}
+
+	var requestBody struct {
+		Customer struct {
+			Note string `json:"note"`
+		} `json:"customer"`
+	}
+	if err := json.Unmarshal(putBody, &requestBody); err != nil {
+		t.Fatalf("json.Unmarshal(putBody) error = %v", err)
+	}
+	if strings.Count(requestBody.Customer.Note, "[Mannaiah] contact_id=contact-1") != 1 {
+		t.Fatalf("updated note = %q, want one contact note", requestBody.Customer.Note)
+	}
+}
+
 // TestClientExchangeAuthorizationCode verifies Shopify OAuth token exchange behavior.
 func TestClientExchangeAuthorizationCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
