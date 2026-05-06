@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	corehttp "mannaiah/module/core/http"
@@ -38,47 +37,43 @@ var (
 	ErrPublicBaseURLRequired = errors.New("shopify public base url is required")
 )
 
-type oauthNonceEntry struct {
-	ShopDomain string
-	ExpiresAt  time.Time
-}
-
-// nonceStore is an in-memory store for OAuth state nonces, keyed by the random state value.
-// This avoids relying on cookies surviving the Shopify authorization redirect round-trip,
-// which is unreliable across browsers and proxy configurations.
-type nonceStore struct {
-	mu      sync.Mutex
-	entries map[string]oauthNonceEntry
-}
-
-func newNonceStore() *nonceStore {
-	return &nonceStore{entries: make(map[string]oauthNonceEntry)}
-}
-
-func (s *nonceStore) put(state string, shopDomain string, expiresAt time.Time) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.entries[state] = oauthNonceEntry{ShopDomain: shopDomain, ExpiresAt: expiresAt}
-}
-
-func (s *nonceStore) pop(state string) (oauthNonceEntry, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entry, ok := s.entries[state]
-	if ok {
-		delete(s.entries, state)
+// newSignedState builds a stateless OAuth state token: "{timestamp}.{HMAC(shopDomain|timestamp, secret)}".
+// No server-side storage needed — the state self-verifies on callback using the client secret.
+func newSignedState(shopDomain string, secret string, now time.Time) (string, error) {
+	ts := strconv.FormatInt(now.UTC().Unix(), 10)
+	payload := shopifyport.NormalizeShopDomain(shopDomain) + "|" + ts
+	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(secret)))
+	if _, err := rand.Read(make([]byte, 0)); err != nil {
+		return "", err
 	}
-	return entry, ok
+	_, _ = mac.Write([]byte(payload))
+	sig := hex.EncodeToString(mac.Sum(nil))
+	return ts + "." + sig, nil
 }
 
-func (s *nonceStore) evictExpired(now time.Time) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for k, v := range s.entries {
-		if v.ExpiresAt.Before(now) {
-			delete(s.entries, k)
-		}
+// verifySignedState validates a state token produced by newSignedState.
+func verifySignedState(state string, shopDomain string, secret string, now time.Time, maxAge time.Duration) error {
+	parts := strings.SplitN(strings.TrimSpace(state), ".", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return ErrOAuthStateInvalid
 	}
+	ts, sig := parts[0], parts[1]
+	seconds, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil || seconds <= 0 {
+		return ErrOAuthStateInvalid
+	}
+	issued := time.Unix(seconds, 0).UTC()
+	if now.Sub(issued) > maxAge || issued.After(now.Add(maxAge)) {
+		return ErrOAuthStateExpired
+	}
+	payload := shopifyport.NormalizeShopDomain(shopDomain) + "|" + ts
+	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(secret)))
+	_, _ = mac.Write([]byte(payload))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(expected), []byte(strings.ToLower(sig))) {
+		return ErrOAuthStateInvalid
+	}
+	return nil
 }
 
 func (h *Handler) installOAuth(ctx corehttp.Context) error {
@@ -95,13 +90,10 @@ func (h *Handler) installOAuth(ctx corehttp.Context) error {
 	if err != nil {
 		return h.mapError(err)
 	}
-	state, err := newOAuthState()
+	state, err := newSignedState(shopDomain, h.clientSecret, time.Now().UTC())
 	if err != nil {
 		return h.mapError(err)
 	}
-	expiresAt := time.Now().UTC().Add(oauthStateTTL)
-	h.nonces.put(state, shopDomain, expiresAt)
-	h.nonces.evictExpired(time.Now().UTC())
 
 	redirectURL, err := buildOAuthInstallURL(shopDomain, h.clientID, baseURL+"/shopify/oauth/callback", state)
 	if err != nil {
@@ -134,12 +126,8 @@ func (h *Handler) oauthCallback(ctx corehttp.Context) error {
 		return h.mapError(ErrOAuthCodeRequired)
 	}
 	state := strings.TrimSpace(params["state"])
-	entry, ok := h.nonces.pop(state)
-	if !ok || entry.ShopDomain != shopDomain {
-		return h.mapError(ErrOAuthStateInvalid)
-	}
-	if entry.ExpiresAt.Before(time.Now().UTC()) {
-		return h.mapError(ErrOAuthStateExpired)
+	if err := verifySignedState(state, shopDomain, h.clientSecret, time.Now().UTC(), oauthStateTTL); err != nil {
+		return h.mapError(err)
 	}
 
 	accessToken, scopes, err := h.oauthClient.ExchangeAuthorizationCode(ctx.Context(), shopDomain, code)
@@ -305,14 +293,6 @@ func resolveExternalBaseURL(ctx corehttp.Context) (string, error) {
 	return proto + "://" + host, nil
 }
 
-func newOAuthState() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(bytes), nil
-}
 
 func computeStateSignature(payload string, secret string) string {
 	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(secret)))

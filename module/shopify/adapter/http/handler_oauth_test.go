@@ -18,27 +18,23 @@ func (oauthInstallTestClient) RegisterWebhooks(ctx context.Context, shopDomain s
 	return nil
 }
 
-// TestInstallOAuthStoresNonceAndRedirects verifies Shopify install launches store the state nonce in-memory and redirect to Shopify.
-func TestInstallOAuthStoresNonceAndRedirects(t *testing.T) {
-	store := newNonceStore()
+// TestInstallOAuthRedirectsWithSignedState verifies Shopify install launches redirect to Shopify with a signed state param.
+func TestInstallOAuthRedirectsWithSignedState(t *testing.T) {
 	handler := &Handler{
 		clientID:     "client-id",
 		clientSecret: "client-secret",
 		oauthClient:  oauthInstallTestClient{},
-		nonces:       store,
 	}
 	requestContext := &launchTestContext{
 		queryValues: map[string]string{"shop": "2axh5c-b1.myshopify.com"},
-		headers: map[string]string{
-			"Host": "api.flockstore.co",
-		},
+		headers:     map[string]string{"Host": "api.flockstore.co"},
 	}
 
 	if err := handler.installOAuth(requestContext); err != nil {
 		t.Fatalf("installOAuth() error = %v", err)
 	}
 	if requestContext.statusCode != 302 {
-		t.Fatalf("installOAuth() status = %d, want %d", requestContext.statusCode, 302)
+		t.Fatalf("installOAuth() status = %d, want 302", requestContext.statusCode)
 	}
 	location := requestContext.headers["Location"]
 	if !strings.Contains(location, "2axh5c-b1.myshopify.com/admin/oauth/authorize") {
@@ -46,11 +42,5 @@ func TestInstallOAuthStoresNonceAndRedirects(t *testing.T) {
 	}
 	if !strings.Contains(location, "state=") {
 		t.Fatalf("installOAuth() location = %q, want state param", location)
-	}
-	store.mu.Lock()
-	nonceCount := len(store.entries)
-	store.mu.Unlock()
-	if nonceCount != 1 {
-		t.Fatalf("installOAuth() nonce store has %d entries, want 1", nonceCount)
 	}
 }
