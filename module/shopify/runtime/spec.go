@@ -49,9 +49,7 @@ func OpenAPISpec() *openapi3.T {
 			openapi3.WithPath("/shopify/sync/orders", &openapi3.PathItem{Post: syncOrdersOperation()}),
 			openapi3.WithPath("/shopify/webhooks", &openapi3.PathItem{Post: webhookOperation()}),
 			openapi3.WithPath("/shopify/ext/orders/{shopifyOrderId}", &openapi3.PathItem{Get: extensionOrderSummaryOperation()}),
-			openapi3.WithPath("/shopify/ext/orders/{shopifyOrderId}/sync", &openapi3.PathItem{Post: extensionOrderSyncOperation()}),
 			openapi3.WithPath("/shopify/ext/contacts/{shopifyCustomerId}", &openapi3.PathItem{Get: extensionContactSummaryOperation()}),
-			openapi3.WithPath("/shopify/ext/contacts/{shopifyCustomerId}/sync", &openapi3.PathItem{Post: extensionContactSyncOperation()}),
 		),
 		Components: &components,
 		Tags: openapi3.Tags{
@@ -200,27 +198,6 @@ func extensionOrderSummaryOperation() *openapi3.Operation {
 	}
 }
 
-// extensionOrderSyncOperation defines OpenAPI operations for order sync actions inside the Shopify Admin extension.
-func extensionOrderSyncOperation() *openapi3.Operation {
-	return &openapi3.Operation{
-		OperationID: "ShopifyExtension_syncOrder",
-		Summary:     "Sync one Shopify order from the Admin extension",
-		Description: "Triggers one targeted order synchronization for the authenticated Shopify Admin extension store session.",
-		Tags:        []string{shopifyExtensionTag},
-		Security:    sessionBearerSecurityRequirements(),
-		Parameters: openapi3.Parameters{
-			pathParameter("shopifyOrderId", "Shopify order identifier.", openapi3.NewStringSchema()),
-		},
-		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, jsonResponse("Order sync completed successfully.", shopifyOrderSyncSummarySchemaRef)),
-			openapi3.WithStatus(400, responseWithDescription("Invalid Shopify order identifier.")),
-			openapi3.WithStatus(401, responseWithDescription("Invalid or missing Shopify Admin session token.")),
-			openapi3.WithStatus(404, responseWithDescription("Shopify order not found.")),
-			openapi3.WithStatus(503, responseWithDescription("Shopify integration unavailable or disabled.")),
-		),
-	}
-}
-
 // extensionContactSummaryOperation defines OpenAPI operations for contact summaries inside the Shopify Admin extension.
 func extensionContactSummaryOperation() *openapi3.Operation {
 	return &openapi3.Operation{
@@ -236,27 +213,6 @@ func extensionContactSummaryOperation() *openapi3.Operation {
 			openapi3.WithStatus(200, jsonResponse("Extension contact summary resolved successfully.", shopifyExtensionContactSummarySchemaRef)),
 			openapi3.WithStatus(401, responseWithDescription("Invalid or missing Shopify Admin session token.")),
 			openapi3.WithStatus(503, responseWithDescription("Shopify installation resolution or Mannaiah integration is unavailable.")),
-		),
-	}
-}
-
-// extensionContactSyncOperation defines OpenAPI operations for contact sync actions inside the Shopify Admin extension.
-func extensionContactSyncOperation() *openapi3.Operation {
-	return &openapi3.Operation{
-		OperationID: "ShopifyExtension_syncContact",
-		Summary:     "Sync one Shopify customer from the Admin extension",
-		Description: "Triggers one targeted contact synchronization for the authenticated Shopify Admin extension store session.",
-		Tags:        []string{shopifyExtensionTag},
-		Security:    sessionBearerSecurityRequirements(),
-		Parameters: openapi3.Parameters{
-			pathParameter("shopifyCustomerId", "Shopify customer identifier.", openapi3.NewStringSchema()),
-		},
-		Responses: openapi3.NewResponses(
-			openapi3.WithStatus(200, jsonResponse("Contact sync completed successfully.", shopifyContactSyncSummarySchemaRef)),
-			openapi3.WithStatus(400, responseWithDescription("Invalid Shopify customer identifier.")),
-			openapi3.WithStatus(401, responseWithDescription("Invalid or missing Shopify Admin session token.")),
-			openapi3.WithStatus(404, responseWithDescription("Shopify customer not found.")),
-			openapi3.WithStatus(503, responseWithDescription("Shopify integration unavailable or disabled.")),
 		),
 	}
 }

@@ -89,21 +89,6 @@ func (h *Handler) getExtensionOrder(ctx corehttp.Context) error {
 	})
 }
 
-func (h *Handler) syncExtensionOrder(ctx corehttp.Context) error {
-	setExtensionCORSHeaders(ctx)
-	shopifyOrderID := strings.TrimSpace(ctx.Params("shopifyOrderId", ""))
-	if shopifyOrderID == "" {
-		return h.mapError(shopifyorderservice.ErrInvalidOrderID)
-	}
-
-	summary, err := h.ordersService.SyncOrderByID(extensionRequestContext(ctx), "extension", shopifyOrderID)
-	if err != nil {
-		return h.mapError(err)
-	}
-
-	return ctx.Status(200).JSON(summary)
-}
-
 func (h *Handler) getExtensionContact(ctx corehttp.Context) error {
 	setExtensionCORSHeaders(ctx)
 	shopifyCustomerID := strings.TrimSpace(ctx.Params("shopifyCustomerId", ""))
@@ -135,21 +120,6 @@ func (h *Handler) getExtensionContact(ctx corehttp.Context) error {
 	})
 }
 
-func (h *Handler) syncExtensionContact(ctx corehttp.Context) error {
-	setExtensionCORSHeaders(ctx)
-	shopifyCustomerID := strings.TrimSpace(ctx.Params("shopifyCustomerId", ""))
-	if shopifyCustomerID == "" {
-		return h.mapError(shopifycontactservice.ErrInvalidCustomerID)
-	}
-
-	summary, err := h.contactsService.SyncContactByID(extensionRequestContext(ctx), "extension", shopifyCustomerID)
-	if err != nil {
-		return h.mapError(err)
-	}
-
-	return ctx.Status(200).JSON(summary)
-}
-
 func extensionRequestContext(ctx corehttp.Context) context.Context {
 	return shopifyport.WithShopDomain(ctx.Context(), extensionShopDomain(ctx))
 }
@@ -162,7 +132,7 @@ func extensionShopDomain(ctx corehttp.Context) string {
 func setExtensionCORSHeaders(ctx corehttp.Context) {
 	ctx.SetHeader("Access-Control-Allow-Origin", extensionOrigin)
 	ctx.SetHeader("Access-Control-Allow-Headers", "Authorization, Content-Type")
-	ctx.SetHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	ctx.SetHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
 	ctx.SetHeader("Vary", "Origin")
 }
 

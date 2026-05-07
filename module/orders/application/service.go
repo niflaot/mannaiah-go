@@ -36,6 +36,8 @@ type CreateItemCommand struct {
 	SKU string
 	// AlternateName defines alternate product-name values.
 	AlternateName string
+	// ProductID defines pre-resolved product identifiers.
+	ProductID string
 	// Quantity defines ordered quantity values.
 	Quantity int
 	// Value defines item monetary value values.

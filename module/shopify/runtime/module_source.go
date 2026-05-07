@@ -5,6 +5,7 @@ import (
 	"time"
 
 	corecircuitbreaker "mannaiah/module/core/circuitbreaker"
+	ordersport "mannaiah/module/orders/port"
 	shopifyhttp "mannaiah/module/shopify/adapter/http"
 	shopifyadapter "mannaiah/module/shopify/adapter/shopify"
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
@@ -16,6 +17,8 @@ import (
 type sourceGateway interface {
 	shopifyport.CustomerSource
 	shopifyport.OrderSource
+	shopifyport.ShopifyOrderDestination
+	shopifyport.ShopifyFulfillmentDestination
 	shopifyhttp.OAuthClient
 }
 
@@ -114,5 +117,36 @@ func (f failingSource) RegisterWebhooks(ctx context.Context, shopDomain string, 
 	_ = shopDomain
 	_ = accessToken
 	_ = address
+	return f.err
+}
+
+// ApplyOrderUpdate returns startup validation failures.
+func (f failingSource) ApplyOrderUpdate(ctx context.Context, shopifyOrderID string, payload ordersport.OrderEventPayload, variantResolver shopifyport.ShopifyVariantResolver) error {
+	_ = ctx
+	_ = shopifyOrderID
+	_ = payload
+	_ = variantResolver
+	return f.err
+}
+
+// CancelOrder returns startup validation failures.
+func (f failingSource) CancelOrder(ctx context.Context, shopifyOrderID string, reason string) error {
+	_ = ctx
+	_ = shopifyOrderID
+	_ = reason
+	return f.err
+}
+
+// FulfillOrder returns startup validation failures.
+func (f failingSource) FulfillOrder(ctx context.Context, input shopifyport.ShopifyFulfillOrderInput) (string, error) {
+	_ = ctx
+	_ = input
+	return "", f.err
+}
+
+// CancelFulfillment returns startup validation failures.
+func (f failingSource) CancelFulfillment(ctx context.Context, fulfillmentID string) error {
+	_ = ctx
+	_ = fulfillmentID
 	return f.err
 }

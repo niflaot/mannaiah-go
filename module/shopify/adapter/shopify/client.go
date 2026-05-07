@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	ordersport "mannaiah/module/orders/port"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -324,13 +325,392 @@ func (c *Client) RegisterWebhooks(ctx context.Context, shopDomain string, access
 	return nil
 }
 
+// ApplyOrderUpdate applies safe order edits to one Shopify order.
+func (c *Client) ApplyOrderUpdate(ctx context.Context, shopifyOrderID string, payload ordersport.OrderEventPayload, variantResolver shopifyport.ShopifyVariantResolver) error {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+	orderGID := orderGID(shopifyOrderID)
+	begin, err := c.beginOrderEdit(ctx, installation, orderGID)
+	if err != nil {
+		return err
+	}
+	calculatedOrderID := strings.TrimSpace(begin.CalculatedOrder.ID)
+	if calculatedOrderID == "" {
+		return errors.New("shopify order edit calculated order id is empty")
+	}
+	existing := mapCalculatedLineItems(begin.CalculatedOrder.LineItems.Nodes)
+	for _, item := range payload.Items {
+		sku := strings.TrimSpace(item.SKU)
+		if line, ok := existing[strings.ToLower(sku)]; ok {
+			if line.Quantity != item.Quantity {
+				if err := c.orderEditSetQuantity(ctx, installation, calculatedOrderID, line.ID, item.Quantity); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if variantResolver == nil {
+			continue
+		}
+		variantID, resolveErr := variantResolver.ResolveVariantID(ctx, item.ProductID)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if strings.TrimSpace(variantID) == "" {
+			continue
+		}
+		if err := c.orderEditAddVariant(ctx, installation, calculatedOrderID, variantID, item.Quantity); err != nil {
+			return err
+		}
+	}
+	return c.orderEditCommit(ctx, installation, calculatedOrderID, false, "Updated from Mannaiah")
+}
+
+// CancelOrder cancels one Shopify order without notifying customers.
+func (c *Client) CancelOrder(ctx context.Context, shopifyOrderID string, reason string) error {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+	var response graphqlResponse[struct {
+		OrderCancel struct {
+			OrderCancelUserErrors []graphqlUserError `json:"orderCancelUserErrors"`
+			UserErrors            []graphqlUserError `json:"userErrors"`
+		} `json:"orderCancel"`
+	}]
+	err = c.doGraphQL(ctx, installation, `mutation orderCancel($orderId: ID!, $notifyCustomer: Boolean, $refundMethod: OrderCancelRefundMethodInput!, $restock: Boolean!, $reason: OrderCancelReason!, $staffNote: String) {
+  orderCancel(orderId: $orderId, notifyCustomer: $notifyCustomer, refundMethod: $refundMethod, restock: $restock, reason: $reason, staffNote: $staffNote) {
+    orderCancelUserErrors { field message }
+    userErrors { field message }
+  }
+}`, map[string]any{
+		"orderId":        orderGID(shopifyOrderID),
+		"notifyCustomer": false,
+		"refundMethod":   map[string]any{"originalPaymentMethodsRefund": false},
+		"restock":        true,
+		"reason":         "OTHER",
+		"staffNote":      strings.TrimSpace(reason),
+	}, &response)
+	if err != nil {
+		return err
+	}
+	if err := graphQLUserError(response.Data.OrderCancel.OrderCancelUserErrors); err != nil {
+		return err
+	}
+	return graphQLUserError(response.Data.OrderCancel.UserErrors)
+}
+
+// FulfillOrder creates a Shopify fulfillment for one order.
+func (c *Client) FulfillOrder(ctx context.Context, input shopifyport.ShopifyFulfillOrderInput) (string, error) {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return "", err
+	}
+	fulfillmentOrders, err := c.listFulfillmentOrders(ctx, installation, orderGID(input.ShopifyOrderID))
+	if err != nil {
+		return "", err
+	}
+	lineItemsByFulfillmentOrder := make([]map[string]any, 0, len(fulfillmentOrders))
+	for _, fulfillmentOrder := range fulfillmentOrders {
+		if strings.EqualFold(fulfillmentOrder.Status, "closed") || strings.EqualFold(fulfillmentOrder.Status, "cancelled") {
+			continue
+		}
+		lineItemsByFulfillmentOrder = append(lineItemsByFulfillmentOrder, map[string]any{"fulfillmentOrderId": fulfillmentOrder.ID})
+	}
+	if len(lineItemsByFulfillmentOrder) == 0 {
+		return "", errors.New("shopify fulfillment order is not fulfillable")
+	}
+	fulfillment := map[string]any{
+		"lineItemsByFulfillmentOrder": lineItemsByFulfillmentOrder,
+		"notifyCustomer":              input.NotifyCustomer,
+	}
+	trackingInfo := map[string]any{}
+	if strings.TrimSpace(input.TrackingNumber) != "" {
+		trackingInfo["number"] = strings.TrimSpace(input.TrackingNumber)
+	}
+	if strings.TrimSpace(input.TrackingCompany) != "" {
+		trackingInfo["company"] = strings.TrimSpace(input.TrackingCompany)
+	}
+	if strings.TrimSpace(input.TrackingURL) != "" {
+		trackingInfo["url"] = strings.TrimSpace(input.TrackingURL)
+	}
+	if len(trackingInfo) > 0 {
+		fulfillment["trackingInfo"] = trackingInfo
+	}
+	var response graphqlResponse[struct {
+		FulfillmentCreate struct {
+			Fulfillment *struct {
+				ID string `json:"id"`
+			} `json:"fulfillment"`
+			UserErrors []graphqlUserError `json:"userErrors"`
+		} `json:"fulfillmentCreate"`
+	}]
+	err = c.doGraphQL(ctx, installation, `mutation fulfillmentCreate($fulfillment: FulfillmentInput!) {
+  fulfillmentCreate(fulfillment: $fulfillment) {
+    fulfillment { id }
+    userErrors { field message }
+  }
+}`, map[string]any{"fulfillment": fulfillment}, &response)
+	if err != nil {
+		return "", err
+	}
+	if err := graphQLUserError(response.Data.FulfillmentCreate.UserErrors); err != nil {
+		return "", err
+	}
+	if response.Data.FulfillmentCreate.Fulfillment == nil || strings.TrimSpace(response.Data.FulfillmentCreate.Fulfillment.ID) == "" {
+		return "", errors.New("shopify fulfillment id is empty")
+	}
+	return strings.TrimSpace(response.Data.FulfillmentCreate.Fulfillment.ID), nil
+}
+
+// CancelFulfillment cancels one Shopify fulfillment.
+func (c *Client) CancelFulfillment(ctx context.Context, fulfillmentID string) error {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+	var response graphqlResponse[struct {
+		FulfillmentCancel struct {
+			UserErrors []graphqlUserError `json:"userErrors"`
+		} `json:"fulfillmentCancel"`
+	}]
+	err = c.doGraphQL(ctx, installation, `mutation fulfillmentCancel($id: ID!) {
+  fulfillmentCancel(id: $id) {
+    userErrors { field message }
+  }
+}`, map[string]any{"id": strings.TrimSpace(fulfillmentID)}, &response)
+	if err != nil {
+		return err
+	}
+	return graphQLUserError(response.Data.FulfillmentCancel.UserErrors)
+}
+
 type statusError struct {
 	Code int
 	Body string
 }
 
+type graphqlRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables,omitempty"`
+}
+
+type graphqlResponse[T any] struct {
+	Data   T              `json:"data"`
+	Errors []graphqlError `json:"errors,omitempty"`
+}
+
+type graphqlError struct {
+	Message string `json:"message"`
+}
+
+type graphqlUserError struct {
+	Field   []string `json:"field"`
+	Message string   `json:"message"`
+}
+
+type orderEditBeginResult struct {
+	CalculatedOrder struct {
+		ID        string `json:"id"`
+		LineItems struct {
+			Nodes []calculatedLineItem `json:"nodes"`
+		} `json:"lineItems"`
+	} `json:"calculatedOrder"`
+	UserErrors []graphqlUserError `json:"userErrors"`
+}
+
+type calculatedLineItem struct {
+	ID       string `json:"id"`
+	SKU      string `json:"sku"`
+	Quantity int    `json:"quantity"`
+	Variant  *struct {
+		ID string `json:"id"`
+	} `json:"variant"`
+}
+
+type fulfillmentOrderNode struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
 func (e *statusError) Error() string {
 	return fmt.Sprintf("shopify api returned status %d: %s", e.Code, strings.TrimSpace(e.Body))
+}
+
+func (c *Client) doGraphQL(ctx context.Context, installation *shopifyport.Installation, query string, variables map[string]any, response any) error {
+	if installation == nil {
+		return shopifyport.ErrInstallationNotFound
+	}
+	if err := c.doJSONWithToken(ctx, installation.ShopDomain, installation.AccessToken, http.MethodPost, "/graphql.json", graphqlRequest{
+		Query:     query,
+		Variables: variables,
+	}, response); err != nil {
+		return err
+	}
+	if withErrors, ok := response.(interface{ graphQLErrors() []graphqlError }); ok {
+		if err := graphQLErrors(withErrors.graphQLErrors()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r graphqlResponse[T]) graphQLErrors() []graphqlError {
+	return r.Errors
+}
+
+func (c *Client) beginOrderEdit(ctx context.Context, installation *shopifyport.Installation, orderID string) (orderEditBeginResult, error) {
+	var response graphqlResponse[struct {
+		OrderEditBegin orderEditBeginResult `json:"orderEditBegin"`
+	}]
+	err := c.doGraphQL(ctx, installation, `mutation orderEditBegin($id: ID!) {
+  orderEditBegin(id: $id) {
+    calculatedOrder {
+      id
+      lineItems(first: 100) {
+        nodes {
+          id
+          sku
+          quantity
+          variant { id }
+        }
+      }
+    }
+    userErrors { field message }
+  }
+}`, map[string]any{"id": orderID}, &response)
+	if err != nil {
+		return orderEditBeginResult{}, err
+	}
+	if err := graphQLUserError(response.Data.OrderEditBegin.UserErrors); err != nil {
+		return orderEditBeginResult{}, err
+	}
+	return response.Data.OrderEditBegin, nil
+}
+
+func (c *Client) orderEditSetQuantity(ctx context.Context, installation *shopifyport.Installation, calculatedOrderID string, lineItemID string, quantity int) error {
+	var response graphqlResponse[struct {
+		OrderEditSetQuantity struct {
+			UserErrors []graphqlUserError `json:"userErrors"`
+		} `json:"orderEditSetQuantity"`
+	}]
+	err := c.doGraphQL(ctx, installation, `mutation orderEditSetQuantity($id: ID!, $lineItemId: ID!, $quantity: Int!) {
+  orderEditSetQuantity(id: $id, lineItemId: $lineItemId, quantity: $quantity) {
+    userErrors { field message }
+  }
+}`, map[string]any{"id": calculatedOrderID, "lineItemId": lineItemID, "quantity": quantity}, &response)
+	if err != nil {
+		return err
+	}
+	return graphQLUserError(response.Data.OrderEditSetQuantity.UserErrors)
+}
+
+func (c *Client) orderEditAddVariant(ctx context.Context, installation *shopifyport.Installation, calculatedOrderID string, variantID string, quantity int) error {
+	if quantity <= 0 {
+		return nil
+	}
+	var response graphqlResponse[struct {
+		OrderEditAddVariant struct {
+			UserErrors []graphqlUserError `json:"userErrors"`
+		} `json:"orderEditAddVariant"`
+	}]
+	err := c.doGraphQL(ctx, installation, `mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
+  orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
+    userErrors { field message }
+  }
+}`, map[string]any{"id": calculatedOrderID, "variantId": strings.TrimSpace(variantID), "quantity": quantity}, &response)
+	if err != nil {
+		return err
+	}
+	return graphQLUserError(response.Data.OrderEditAddVariant.UserErrors)
+}
+
+func (c *Client) orderEditCommit(ctx context.Context, installation *shopifyport.Installation, calculatedOrderID string, notifyCustomer bool, staffNote string) error {
+	var response graphqlResponse[struct {
+		OrderEditCommit struct {
+			UserErrors []graphqlUserError `json:"userErrors"`
+		} `json:"orderEditCommit"`
+	}]
+	err := c.doGraphQL(ctx, installation, `mutation orderEditCommit($id: ID!, $notifyCustomer: Boolean!, $staffNote: String) {
+  orderEditCommit(id: $id, notifyCustomer: $notifyCustomer, staffNote: $staffNote) {
+    userErrors { field message }
+  }
+}`, map[string]any{"id": calculatedOrderID, "notifyCustomer": notifyCustomer, "staffNote": strings.TrimSpace(staffNote)}, &response)
+	if err != nil {
+		return err
+	}
+	return graphQLUserError(response.Data.OrderEditCommit.UserErrors)
+}
+
+func (c *Client) listFulfillmentOrders(ctx context.Context, installation *shopifyport.Installation, orderID string) ([]fulfillmentOrderNode, error) {
+	var response graphqlResponse[struct {
+		Order *struct {
+			FulfillmentOrders struct {
+				Nodes []fulfillmentOrderNode `json:"nodes"`
+			} `json:"fulfillmentOrders"`
+		} `json:"order"`
+	}]
+	err := c.doGraphQL(ctx, installation, `query orderFulfillmentOrders($id: ID!) {
+  order(id: $id) {
+    fulfillmentOrders(first: 25) {
+      nodes { id status }
+    }
+  }
+}`, map[string]any{"id": orderID}, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Data.Order == nil {
+		return nil, shopifyport.ErrOrderNotFound
+	}
+	return response.Data.Order.FulfillmentOrders.Nodes, nil
+}
+
+func graphQLErrors(values []graphqlError) error {
+	messages := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value.Message) != "" {
+			messages = append(messages, strings.TrimSpace(value.Message))
+		}
+	}
+	if len(messages) == 0 {
+		return nil
+	}
+	return errors.New("shopify graphql error: " + strings.Join(messages, "; "))
+}
+
+func graphQLUserError(values []graphqlUserError) error {
+	messages := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value.Message) != "" {
+			messages = append(messages, strings.TrimSpace(value.Message))
+		}
+	}
+	if len(messages) == 0 {
+		return nil
+	}
+	return errors.New("shopify graphql user error: " + strings.Join(messages, "; "))
+}
+
+func mapCalculatedLineItems(values []calculatedLineItem) map[string]calculatedLineItem {
+	result := make(map[string]calculatedLineItem, len(values))
+	for _, value := range values {
+		sku := strings.ToLower(strings.TrimSpace(value.SKU))
+		if sku != "" {
+			result[sku] = value
+		}
+	}
+	return result
+}
+
+func orderGID(id string) string {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" || strings.HasPrefix(trimmed, "gid://") {
+		return trimmed
+	}
+	return "gid://shopify/Order/" + trimmed
 }
 
 type customerResponse struct {
@@ -350,16 +730,18 @@ type ordersListResponse struct {
 }
 
 type customerPayload struct {
-	ID             any                    `json:"id"`
-	Email          string                 `json:"email"`
-	FirstName      string                 `json:"first_name"`
-	LastName       string                 `json:"last_name"`
-	Phone          string                 `json:"phone"`
-	Tags           string                 `json:"tags"`
-	Note           string                 `json:"note"`
-	DefaultAddress *addressPayload        `json:"default_address"`
-	NoteAttributes []noteAttributePayload `json:"note_attributes"`
-	CreatedAt      time.Time              `json:"created_at"`
+	ID                    any                      `json:"id"`
+	Email                 string                   `json:"email"`
+	FirstName             string                   `json:"first_name"`
+	LastName              string                   `json:"last_name"`
+	Phone                 string                   `json:"phone"`
+	Tags                  string                   `json:"tags"`
+	Note                  string                   `json:"note"`
+	EmailMarketingConsent *marketingConsentPayload `json:"email_marketing_consent"`
+	SMSMarketingConsent   *marketingConsentPayload `json:"sms_marketing_consent"`
+	DefaultAddress        *addressPayload          `json:"default_address"`
+	NoteAttributes        []noteAttributePayload   `json:"note_attributes"`
+	CreatedAt             time.Time                `json:"created_at"`
 }
 
 type orderPayload struct {
@@ -405,12 +787,23 @@ type noteAttributePayload struct {
 	Value string `json:"value"`
 }
 
+type marketingConsentPayload struct {
+	State            string     `json:"state"`
+	MarketingState   string     `json:"marketing_state"`
+	ConsentUpdatedAt *time.Time `json:"consent_updated_at"`
+	UpdatedAt        *time.Time `json:"updated_at"`
+}
+
 type lineItemPayload struct {
-	SKU          string `json:"sku"`
-	Title        string `json:"title"`
-	VariantTitle string `json:"variant_title"`
-	Quantity     int    `json:"quantity"`
-	Price        string `json:"price"`
+	ID           any                    `json:"id"`
+	ProductID    any                    `json:"product_id"`
+	VariantID    any                    `json:"variant_id"`
+	SKU          string                 `json:"sku"`
+	Title        string                 `json:"title"`
+	VariantTitle string                 `json:"variant_title"`
+	Properties   []noteAttributePayload `json:"properties"`
+	Quantity     int                    `json:"quantity"`
+	Price        string                 `json:"price"`
 }
 
 type shippingLinePayload struct {
@@ -646,6 +1039,14 @@ func normalizeCustomer(payload customerPayload) shopifyport.ShopifyCustomer {
 		NoteAttributes: normalizeNoteAttributes(payload.NoteAttributes),
 		CreatedAt:      payload.CreatedAt.UTC(),
 	}
+	if payload.EmailMarketingConsent != nil {
+		customer.EmailMarketingState = normalizeMarketingState(*payload.EmailMarketingConsent)
+		customer.EmailMarketingConsentUpdatedAt = normalizeMarketingTime(*payload.EmailMarketingConsent)
+	}
+	if payload.SMSMarketingConsent != nil {
+		customer.SMSMarketingState = normalizeMarketingState(*payload.SMSMarketingConsent)
+		customer.SMSMarketingConsentUpdatedAt = normalizeMarketingTime(*payload.SMSMarketingConsent)
+	}
 	if payload.DefaultAddress != nil {
 		address := normalizeAddress(*payload.DefaultAddress)
 		customer.DefaultAddress = &address
@@ -720,15 +1121,70 @@ func normalizeLineItems(values []lineItemPayload) []shopifyport.ShopifyLineItem 
 	items := make([]shopifyport.ShopifyLineItem, 0, len(values))
 	for _, value := range values {
 		items = append(items, shopifyport.ShopifyLineItem{
-			SKU:          strings.TrimSpace(value.SKU),
-			Title:        strings.TrimSpace(value.Title),
-			VariantTitle: strings.TrimSpace(value.VariantTitle),
-			Quantity:     value.Quantity,
-			Price:        strings.TrimSpace(value.Price),
+			ID:                extractID(value.ID),
+			SKU:               strings.TrimSpace(value.SKU),
+			Title:             strings.TrimSpace(value.Title),
+			VariantTitle:      strings.TrimSpace(value.VariantTitle),
+			ProductID:         shopifyProductGID(value.ProductID),
+			VariantID:         shopifyVariantGID(value.VariantID),
+			MannaiahProductID: extractProperty(value.Properties, "mannaiah_product_id"),
+			Quantity:          value.Quantity,
+			Price:             strings.TrimSpace(value.Price),
 		})
 	}
 
 	return items
+}
+
+func normalizeMarketingState(payload marketingConsentPayload) string {
+	return strings.TrimSpace(preferNonEmpty(payload.MarketingState, payload.State))
+}
+
+func normalizeMarketingTime(payload marketingConsentPayload) *time.Time {
+	if payload.ConsentUpdatedAt != nil && !payload.ConsentUpdatedAt.IsZero() {
+		resolved := payload.ConsentUpdatedAt.UTC()
+		return &resolved
+	}
+	if payload.UpdatedAt != nil && !payload.UpdatedAt.IsZero() {
+		resolved := payload.UpdatedAt.UTC()
+		return &resolved
+	}
+	return nil
+}
+
+func extractProperty(values []noteAttributePayload, key string) string {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value.Name), strings.TrimSpace(key)) {
+			return strings.TrimSpace(value.Value)
+		}
+	}
+	return ""
+}
+
+func shopifyProductGID(value any) string {
+	id := extractID(value)
+	if id == "" || strings.HasPrefix(id, "gid://") {
+		return id
+	}
+	return "gid://shopify/Product/" + id
+}
+
+func shopifyVariantGID(value any) string {
+	id := extractID(value)
+	if id == "" || strings.HasPrefix(id, "gid://") {
+		return id
+	}
+	return "gid://shopify/ProductVariant/" + id
+}
+
+func preferNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func normalizeShippingLines(values []shippingLinePayload) []shopifyport.ShopifyShippingLine {

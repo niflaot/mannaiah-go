@@ -23,9 +23,7 @@ func TestOpenAPISpec(t *testing.T) {
 		"/shopify/sync/orders",
 		"/shopify/webhooks",
 		"/shopify/ext/orders/{shopifyOrderId}",
-		"/shopify/ext/orders/{shopifyOrderId}/sync",
 		"/shopify/ext/contacts/{shopifyCustomerId}",
-		"/shopify/ext/contacts/{shopifyCustomerId}/sync",
 	}
 	for _, path := range expectedPaths {
 		if spec.Paths.Find(path) == nil {

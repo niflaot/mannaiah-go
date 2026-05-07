@@ -616,6 +616,13 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("initialize shopify module: %w", err)
 	}
+	if shopifyCfg.SyncContacts || shopifyCfg.SyncOrders {
+		shopifyScheduler, schedulerErr := corecron.NewScheduler(cronCfg, logger)
+		if schedulerErr != nil {
+			return fmt.Errorf("create shopify scheduler: %w", schedulerErr)
+		}
+		shopifyModule.ConfigureScheduler(shopifyScheduler)
+	}
 	shopifyModule.SetSyncRecorder(shopifySyncRecorderAdapter{recorder: recorderAdapter})
 	shopifyModule.SetAuthorizer(authModule)
 	if err := shopifyModule.Load(runtime); err != nil {

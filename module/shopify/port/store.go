@@ -13,6 +13,12 @@ const (
 	SyncKindContact SyncKind = "contact"
 	// SyncKindOrder defines order link rows.
 	SyncKindOrder SyncKind = "order"
+	// SyncKindProduct defines product link rows.
+	SyncKindProduct SyncKind = "product"
+	// SyncKindVariant defines product-variant link rows.
+	SyncKindVariant SyncKind = "variant"
+	// SyncKindFulfillment defines shipping-mark to Shopify fulfillment link rows.
+	SyncKindFulfillment SyncKind = "fulfillment"
 )
 
 // SyncLink defines one persisted Shopify-to-Mannaiah link row.

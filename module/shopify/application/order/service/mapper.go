@@ -103,7 +103,7 @@ func mapOrderStatus(order shopifyport.ShopifyOrder) ordersdomain.Status {
 
 	switch financialStatus {
 	case "paid":
-		return ordersdomain.StatusCompleted
+		return ordersdomain.StatusCreated
 	case "voided", "refunded":
 		return ordersdomain.StatusCancelled
 	case "pending", "authorized", "partially_paid":
@@ -125,10 +125,13 @@ func buildOrderItems(values []shopifyport.ShopifyLineItem) []shopifyport.OrderSy
 	items := make([]shopifyport.OrderSyncItemCommand, 0, len(values))
 	for _, value := range values {
 		items = append(items, shopifyport.OrderSyncItemCommand{
-			SKU:           strings.TrimSpace(value.SKU),
-			AlternateName: buildAlternateName(value.Title, value.VariantTitle),
-			Quantity:      value.Quantity,
-			Value:         parseMoney(value.Price),
+			SKU:              strings.TrimSpace(value.SKU),
+			AlternateName:    buildAlternateName(value.Title, value.VariantTitle),
+			ProductID:        strings.TrimSpace(value.MannaiahProductID),
+			ShopifyProductID: strings.TrimSpace(value.ProductID),
+			ShopifyVariantID: strings.TrimSpace(value.VariantID),
+			Quantity:         value.Quantity,
+			Value:            parseMoney(value.Price),
 		})
 	}
 
@@ -227,7 +230,84 @@ func buildOrderContactMetadata(order shopifyport.ShopifyOrder) map[string]string
 	if order.Customer != nil && order.Customer.Tags != "" {
 		metadata["shopify_customer_tags"] = strings.TrimSpace(order.Customer.Tags)
 	}
+	if !order.CreatedAt.IsZero() {
+		metadata["privacy.accepted"] = "true"
+		metadata["privacy.acceptedDate"] = order.CreatedAt.UTC().Format(time.RFC3339)
+	}
+	addOrderContactMarketingMetadata(metadata, order)
 	return metadata
+}
+
+func addOrderContactMarketingMetadata(metadata map[string]string, order shopifyport.ShopifyOrder) {
+	emailState := ""
+	var emailConsentAt *time.Time
+	smsState := ""
+	var smsConsentAt *time.Time
+	if order.Customer != nil {
+		emailState = strings.TrimSpace(order.Customer.EmailMarketingState)
+		emailConsentAt = order.Customer.EmailMarketingConsentUpdatedAt
+		smsState = strings.TrimSpace(order.Customer.SMSMarketingState)
+		smsConsentAt = order.Customer.SMSMarketingConsentUpdatedAt
+	}
+	if emailState != "" {
+		metadata["shopify_email_marketing_state"] = emailState
+	}
+	if smsState != "" {
+		metadata["shopify_sms_marketing_state"] = smsState
+	}
+	optedIn := isOrderMarketingOptedIn(emailState) || isOrderMarketingOptedIn(smsState) || hasSubscriptionMarker(order)
+	metadata["membership.opt_in"] = strconv.FormatBool(optedIn)
+	if !optedIn {
+		return
+	}
+	consentedAt := firstOrderConsentTime(emailConsentAt, smsConsentAt)
+	if consentedAt == nil && !order.CreatedAt.IsZero() {
+		createdAt := order.CreatedAt.UTC()
+		consentedAt = &createdAt
+	}
+	if consentedAt != nil {
+		metadata["membership.opt_in_date"] = consentedAt.UTC().Format(time.RFC3339)
+	}
+}
+
+func firstOrderConsentTime(values ...*time.Time) *time.Time {
+	for _, value := range values {
+		if value != nil && !value.IsZero() {
+			resolved := value.UTC()
+			return &resolved
+		}
+	}
+	return nil
+}
+
+func isOrderMarketingOptedIn(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "subscribed", "confirmed", "accepted", "opted_in", "opted-in", "sms_marketing_subscribed":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasSubscriptionMarker(order shopifyport.ShopifyOrder) bool {
+	for _, attr := range append(order.NoteAttributes, customerNoteAttributes(order.Customer)...) {
+		name := strings.ToLower(strings.TrimSpace(attr.Name))
+		value := strings.ToLower(strings.TrimSpace(attr.Value))
+		if name == "" {
+			continue
+		}
+		if strings.Contains(name, "subscription") || strings.Contains(name, "newsletter") || strings.Contains(name, "membership") || strings.Contains(name, "circle") {
+			return value == "true" || value == "1" || value == "yes" || value == "si" || value == "sí" || value == "accepted" || value == "subscribed"
+		}
+	}
+	return false
+}
+
+func customerNoteAttributes(customer *shopifyport.ShopifyCustomer) []shopifyport.ShopifyNoteAttribute {
+	if customer == nil {
+		return nil
+	}
+	return customer.NoteAttributes
 }
 
 func resolveOrderIdentifier(order shopifyport.ShopifyOrder) string {

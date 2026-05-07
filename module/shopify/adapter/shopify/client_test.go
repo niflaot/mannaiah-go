@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -78,6 +79,56 @@ func TestClientGetOrderRetries429(t *testing.T) {
 	}
 	if atomic.LoadInt32(&requests) != 2 {
 		t.Fatalf("request count = %d, want 2", requests)
+	}
+}
+
+// TestClientCancelOrderUsesGraphQLCancellationInputs verifies cancellation write-back suppresses notifications.
+func TestClientCancelOrderUsesGraphQLCancellationInputs(t *testing.T) {
+	var captured graphqlRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/graphql.json" {
+			t.Fatalf("request path = %q, want /graphql.json", request.URL.Path)
+		}
+		if err := json.NewDecoder(request.Body).Decode(&captured); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"data":{"orderCancel":{"orderCancelUserErrors":[],"userErrors":[]}}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com")
+	if err := client.CancelOrder(ctx, "7440453927210", "Cancelled in Mannaiah"); err != nil {
+		t.Fatalf("CancelOrder() error = %v", err)
+	}
+	if !strings.Contains(captured.Query, "refundMethod") {
+		t.Fatalf("query = %q, want refundMethod input", captured.Query)
+	}
+	if captured.Variables["orderId"] != "gid://shopify/Order/7440453927210" {
+		t.Fatalf("orderId = %v", captured.Variables["orderId"])
+	}
+	if captured.Variables["notifyCustomer"] != false {
+		t.Fatalf("notifyCustomer = %v, want false", captured.Variables["notifyCustomer"])
+	}
+	if captured.Variables["reason"] != "OTHER" {
+		t.Fatalf("reason = %v, want OTHER", captured.Variables["reason"])
+	}
+	if captured.Variables["restock"] != true {
+		t.Fatalf("restock = %v, want true", captured.Variables["restock"])
 	}
 }
 

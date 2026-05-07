@@ -192,13 +192,9 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shopify/sync/orders", h.protect("order:sync", h.syncOrders))
 	router.Post("/shopify/webhooks", h.handleWebhook)
 	router.Options("/shopify/ext/orders/:shopifyOrderId", h.handleExtensionOptions)
-	router.Options("/shopify/ext/orders/:shopifyOrderId/sync", h.handleExtensionOptions)
 	router.Options("/shopify/ext/contacts/:shopifyCustomerId", h.handleExtensionOptions)
-	router.Options("/shopify/ext/contacts/:shopifyCustomerId/sync", h.handleExtensionOptions)
 	router.Get("/shopify/ext/orders/:shopifyOrderId", h.protectExtension(h.getExtensionOrder))
-	router.Post("/shopify/ext/orders/:shopifyOrderId/sync", h.protectExtension(h.syncExtensionOrder))
 	router.Get("/shopify/ext/contacts/:shopifyCustomerId", h.protectExtension(h.getExtensionContact))
-	router.Post("/shopify/ext/contacts/:shopifyCustomerId/sync", h.protectExtension(h.syncExtensionContact))
 }
 
 func (h *Handler) syncContacts(ctx corehttp.Context) error {

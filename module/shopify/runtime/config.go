@@ -8,8 +8,12 @@ type Config struct {
 	ClientSecret string `mapstructure:"SHOPIFY_CLIENT_SECRET" default:""`
 	// SyncOrders enables order sync behavior.
 	SyncOrders bool `mapstructure:"SHOPIFY_SYNC_ORDERS" default:"false"`
+	// SyncOrdersCron defines cron specs for scheduled order sync behavior.
+	SyncOrdersCron string `mapstructure:"SHOPIFY_SYNC_ORDERS_CRON" default:"*/10 * * * *"`
 	// SyncContacts enables contact sync behavior.
 	SyncContacts bool `mapstructure:"SHOPIFY_SYNC_CONTACTS" default:"false"`
+	// SyncContactsCron defines cron specs for scheduled contact sync behavior.
+	SyncContactsCron string `mapstructure:"SHOPIFY_SYNC_CONTACTS_CRON" default:"*/15 * * * *"`
 	// SyncWorkers defines webhook worker counts.
 	SyncWorkers int `mapstructure:"SHOPIFY_SYNC_WORKERS" default:"4"`
 	// SyncTimeoutMS defines sync timeout values in milliseconds.

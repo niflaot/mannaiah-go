@@ -68,6 +68,9 @@ func (u *OrderUpserter) UpsertOrder(ctx context.Context, command shopifyport.Ord
 			if linkErr := u.upsertLink(ctx, command, created.ID, created.CurrentStatus); linkErr != nil {
 				return nil, linkErr
 			}
+			if linkErr := u.upsertProductLinks(ctx, command); linkErr != nil {
+				return nil, linkErr
+			}
 			return created, nil
 		}
 	}
@@ -88,6 +91,9 @@ func (u *OrderUpserter) UpsertOrder(ctx context.Context, command shopifyport.Ord
 		}
 	}
 	if linkErr := u.upsertLink(ctx, command, updated.ID, updated.CurrentStatus); linkErr != nil {
+		return nil, linkErr
+	}
+	if linkErr := u.upsertProductLinks(ctx, command); linkErr != nil {
 		return nil, linkErr
 	}
 
@@ -119,6 +125,40 @@ func (u *OrderUpserter) upsertLink(ctx context.Context, command shopifyport.Orde
 		LastSyncedAt:    &lastSyncedAt,
 	})
 	return err
+}
+
+func (u *OrderUpserter) upsertProductLinks(ctx context.Context, command shopifyport.OrderSyncCommand) error {
+	for _, item := range command.Items {
+		productID := strings.TrimSpace(item.ProductID)
+		if productID == "" {
+			continue
+		}
+		lastSyncedAt := time.Now().UTC()
+		if strings.TrimSpace(item.ShopifyProductID) != "" {
+			if _, err := u.links.UpsertLink(ctx, shopifyport.UpsertSyncLinkInput{
+				Kind:         shopifyport.SyncKindProduct,
+				ShopDomain:   strings.TrimSpace(command.ShopDomain),
+				ShopifyID:    strings.TrimSpace(item.ShopifyProductID),
+				MannaiahID:   productID,
+				LastSyncedAt: &lastSyncedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		if strings.TrimSpace(item.ShopifyVariantID) != "" {
+			if _, err := u.links.UpsertLink(ctx, shopifyport.UpsertSyncLinkInput{
+				Kind:         shopifyport.SyncKindVariant,
+				ShopDomain:   strings.TrimSpace(command.ShopDomain),
+				ShopifyID:    strings.TrimSpace(item.ShopifyVariantID),
+				MannaiahID:   productID,
+				LastSyncedAt: &lastSyncedAt,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func buildOrderCreateCommand(command shopifyport.OrderSyncCommand) ordersapplication.CreateCommand {
@@ -159,6 +199,7 @@ func buildCreateItems(values []shopifyport.OrderSyncItemCommand) []ordersapplica
 		items = append(items, ordersapplication.CreateItemCommand{
 			SKU:           strings.TrimSpace(value.SKU),
 			AlternateName: strings.TrimSpace(value.AlternateName),
+			ProductID:     strings.TrimSpace(value.ProductID),
 			Quantity:      value.Quantity,
 			Value:         value.Value,
 		})

@@ -13,6 +13,12 @@ type OrderSyncItemCommand struct {
 	SKU string
 	// AlternateName defines fallback item-name values.
 	AlternateName string
+	// ProductID defines resolved Mannaiah product identifiers.
+	ProductID string
+	// ShopifyProductID defines Shopify product identifiers.
+	ShopifyProductID string
+	// ShopifyVariantID defines Shopify variant identifiers.
+	ShopifyVariantID string
 	// Quantity defines ordered quantity values.
 	Quantity int
 	// Value defines unit-value values.

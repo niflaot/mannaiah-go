@@ -1,7 +1,9 @@
 package service
 
 import (
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	contactsdomain "mannaiah/module/contacts/domain"
@@ -85,8 +87,44 @@ func buildCustomerMetadata(customer shopifyport.ShopifyCustomer) map[string]stri
 	if customer.Tags != "" {
 		metadata["shopify_customer_tags"] = strings.TrimSpace(customer.Tags)
 	}
+	addMarketingMetadata(metadata, customer.EmailMarketingState, customer.EmailMarketingConsentUpdatedAt, customer.SMSMarketingState, customer.SMSMarketingConsentUpdatedAt)
 
 	return metadata
+}
+
+func addMarketingMetadata(metadata map[string]string, emailState string, emailConsentAt *time.Time, smsState string, smsConsentAt *time.Time) {
+	emailState = strings.TrimSpace(emailState)
+	smsState = strings.TrimSpace(smsState)
+	if emailState != "" {
+		metadata["shopify_email_marketing_state"] = emailState
+	}
+	if smsState != "" {
+		metadata["shopify_sms_marketing_state"] = smsState
+	}
+	consentedAt := firstTime(emailConsentAt, smsConsentAt)
+	metadata["membership.opt_in"] = strconv.FormatBool(isMarketingOptedIn(emailState) || isMarketingOptedIn(smsState))
+	if consentedAt != nil && metadata["membership.opt_in"] == "true" {
+		metadata["membership.opt_in_date"] = consentedAt.UTC().Format(time.RFC3339)
+	}
+}
+
+func firstTime(values ...*time.Time) *time.Time {
+	for _, value := range values {
+		if value != nil && !value.IsZero() {
+			resolved := value.UTC()
+			return &resolved
+		}
+	}
+	return nil
+}
+
+func isMarketingOptedIn(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "subscribed", "confirmed", "accepted", "opted_in", "opted-in", "sms_marketing_subscribed":
+		return true
+	default:
+		return false
+	}
 }
 
 func preferString(values ...string) string {

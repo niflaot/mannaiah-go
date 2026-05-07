@@ -1,6 +1,6 @@
 # Shopify HTTP Adapter
 
-This package exposes protected manual sync endpoints and the public Shopify webhook endpoint with signature verification and asynchronous processing.
+This package exposes protected manual sync endpoints, read-only Shopify Admin extension summary endpoints, and the public Shopify webhook endpoint with signature verification and asynchronous processing.
 
 ## Key methods / endpoints / events
 - `http.NewHandler(contactsService, ordersService, processor, deliveries, secret, authorizers...)`

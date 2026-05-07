@@ -91,18 +91,34 @@ type ShopifyCustomer struct {
 	DefaultAddress *ShopifyAddress
 	// NoteAttributes defines structured note attribute values.
 	NoteAttributes []ShopifyNoteAttribute
+	// EmailMarketingState defines Shopify email marketing consent states.
+	EmailMarketingState string
+	// EmailMarketingConsentUpdatedAt defines Shopify email marketing consent timestamps.
+	EmailMarketingConsentUpdatedAt *time.Time
+	// SMSMarketingState defines Shopify SMS marketing consent states.
+	SMSMarketingState string
+	// SMSMarketingConsentUpdatedAt defines Shopify SMS marketing consent timestamps.
+	SMSMarketingConsentUpdatedAt *time.Time
 	// CreatedAt defines source creation timestamps.
 	CreatedAt time.Time
 }
 
 // ShopifyLineItem defines one normalized Shopify order line item.
 type ShopifyLineItem struct {
+	// ID defines Shopify line-item identifiers.
+	ID string
 	// SKU defines SKU values.
 	SKU string
 	// Title defines product-title values.
 	Title string
 	// VariantTitle defines variant-title values.
 	VariantTitle string
+	// ProductID defines Shopify product identifiers.
+	ProductID string
+	// VariantID defines Shopify variant identifiers.
+	VariantID string
+	// MannaiahProductID defines explicit Mannaiah product identifiers from Shopify line-item properties.
+	MannaiahProductID string
 	// Quantity defines ordered quantity values.
 	Quantity int
 	// Price defines unit-price values.

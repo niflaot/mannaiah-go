@@ -75,9 +75,14 @@ func (s *OrderService) resolveItem(ctx context.Context, command CreateItemComman
 	item := ordersdomain.Item{
 		SKU:              strings.TrimSpace(command.SKU),
 		AlternateName:    strings.TrimSpace(command.AlternateName),
+		ProductID:        strings.TrimSpace(command.ProductID),
 		Quantity:         command.Quantity,
 		Value:            command.Value,
 		ResolutionSource: ordersdomain.ItemResolutionSourceUnresolved,
+	}
+	if item.ProductID != "" {
+		item.ResolutionSource = ordersdomain.ItemResolutionSourceSKU
+		return item, nil
 	}
 	if s.productResolver == nil {
 		return item, nil

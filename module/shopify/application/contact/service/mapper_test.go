@@ -10,11 +10,11 @@ import (
 
 func TestBuildContactSyncCommand_CleanNumericCompanyIsDocumentNumber(t *testing.T) {
 	customer := shopifyport.ShopifyCustomer{
-		ID:        "111",
+		ID:         "111",
 		ShopDomain: "shop.myshopify.com",
-		Email:     "test@example.com",
-		FirstName: "Ana",
-		LastName:  "García",
+		Email:      "test@example.com",
+		FirstName:  "Ana",
+		LastName:   "García",
 		DefaultAddress: &shopifyport.ShopifyAddress{
 			Company: "12345678",
 		},
@@ -176,5 +176,35 @@ func TestBuildContactSyncCommand_PhoneAndAddressFromDefaultAddress(t *testing.T)
 	}
 	if cmd.CreatedAt == nil || !cmd.CreatedAt.Equal(createdAt) {
 		t.Errorf("CreatedAt = %v, want %v", cmd.CreatedAt, createdAt)
+	}
+}
+
+// TestBuildContactSyncCommandMapsMarketingConsent verifies Shopify checkout opt-in metadata is preserved.
+func TestBuildContactSyncCommandMapsMarketingConsent(t *testing.T) {
+	consentedAt := time.Date(2026, time.May, 6, 22, 0, 0, 0, time.UTC)
+	customer := shopifyport.ShopifyCustomer{
+		ID:                             "777",
+		Email:                          "optin@example.com",
+		FirstName:                      "Opt",
+		LastName:                       "In",
+		EmailMarketingState:            "subscribed",
+		EmailMarketingConsentUpdatedAt: &consentedAt,
+		SMSMarketingState:              "not_subscribed",
+		SMSMarketingConsentUpdatedAt:   nil,
+	}
+
+	cmd := BuildContactSyncCommand(customer)
+
+	if cmd.Metadata["membership.opt_in"] != "true" {
+		t.Fatalf("membership.opt_in = %q, want true", cmd.Metadata["membership.opt_in"])
+	}
+	if cmd.Metadata["membership.opt_in_date"] != "2026-05-06T22:00:00Z" {
+		t.Fatalf("membership.opt_in_date = %q, want consent timestamp", cmd.Metadata["membership.opt_in_date"])
+	}
+	if cmd.Metadata["shopify_email_marketing_state"] != "subscribed" {
+		t.Fatalf("shopify_email_marketing_state = %q, want subscribed", cmd.Metadata["shopify_email_marketing_state"])
+	}
+	if cmd.Metadata["shopify_sms_marketing_state"] != "not_subscribed" {
+		t.Fatalf("shopify_sms_marketing_state = %q, want not_subscribed", cmd.Metadata["shopify_sms_marketing_state"])
 	}
 }

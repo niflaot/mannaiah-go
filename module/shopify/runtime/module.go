@@ -3,15 +3,20 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	contactapplication "mannaiah/module/contacts/application"
+	corecron "mannaiah/module/core/cron"
 	corehttp "mannaiah/module/core/http"
 	"mannaiah/module/core/messaging/bus"
 	ordersapplication "mannaiah/module/orders/application"
 	shopifyhttp "mannaiah/module/shopify/adapter/http"
+	shopifymessaging "mannaiah/module/shopify/adapter/messaging"
 	shopifystore "mannaiah/module/shopify/adapter/store"
 	shopifycontactservice "mannaiah/module/shopify/application/contact/service"
 	shopifyorderservice "mannaiah/module/shopify/application/order/service"
+	shopifyordereditservice "mannaiah/module/shopify/application/orderedit/service"
+	shopifyshippingservice "mannaiah/module/shopify/application/shipping/service"
 	shopifyport "mannaiah/module/shopify/port"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -45,6 +50,20 @@ type Module struct {
 	contactSyncService *shopifycontactservice.ContactSyncService
 	// orderSyncService defines targeted order sync dependencies.
 	orderSyncService *shopifyorderservice.OrderSyncService
+	// scheduler defines optional cron scheduler dependencies.
+	scheduler corecron.Scheduler
+	// contactsSchedulerEntryID defines the scheduled contact-sync entry identifier.
+	contactsSchedulerEntryID corecron.EntryID
+	// ordersSchedulerEntryID defines the scheduled order-sync entry identifier.
+	ordersSchedulerEntryID corecron.EntryID
+	// mutex guards lifecycle state.
+	mutex sync.Mutex
+	// started reports whether lifecycle start logic has completed.
+	started bool
+	// orderEventConsumer defines Shopify-realm order write-back consumers.
+	orderEventConsumer *shopifymessaging.OrderConsumer
+	// shippingEventConsumer defines Shopify fulfillment write-back consumers.
+	shippingEventConsumer *shopifymessaging.ShippingConsumer
 }
 
 // Loader defines bootstrap hooks required by Shopify modules.
@@ -53,6 +72,14 @@ type Loader interface {
 	RegisterRoutes(register func(router corehttp.Router))
 	// AddOpenAPISpec merges module OpenAPI specs.
 	AddOpenAPISpec(spec *openapi3.T) error
+}
+
+// ConfigureScheduler configures cron scheduler dependencies.
+func (m *Module) ConfigureScheduler(scheduler corecron.Scheduler) {
+	if m == nil {
+		return
+	}
+	m.scheduler = scheduler
 }
 
 // New creates Shopify modules with DB-backed repositories and direct service wiring.
@@ -66,7 +93,6 @@ func New(
 	publishers ...shopifyport.IntegrationEventPublisher,
 ) (*Module, error) {
 	_ = publishers
-	_ = registrar
 	if db == nil {
 		return nil, ErrNilDB
 	}
@@ -120,6 +146,33 @@ func New(
 		return nil, fmt.Errorf("create shopify order sync service: %w", err)
 	}
 
+	var orderEventConsumer *shopifymessaging.OrderConsumer
+	var shippingEventConsumer *shopifymessaging.ShippingConsumer
+	if registrar != nil {
+		orderEditService, serviceErr := shopifyordereditservice.NewService(source, repository, logger)
+		if serviceErr != nil {
+			return nil, fmt.Errorf("create shopify order edit service: %w", serviceErr)
+		}
+		orderEventConsumer, err = shopifymessaging.NewOrderConsumer(orderEditService, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify order consumer: %w", err)
+		}
+		if err := orderEventConsumer.Register(registrar); err != nil {
+			return nil, err
+		}
+		fulfillmentService, serviceErr := shopifyshippingservice.NewService(source, repository, logger)
+		if serviceErr != nil {
+			return nil, fmt.Errorf("create shopify fulfillment service: %w", serviceErr)
+		}
+		shippingEventConsumer, err = shopifymessaging.NewShippingConsumer(fulfillmentService, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create shopify shipping consumer: %w", err)
+		}
+		if err := shippingEventConsumer.Register(registrar); err != nil {
+			return nil, err
+		}
+	}
+
 	processor, err := shopifyhttp.NewProcessor(resolveSyncWorkers(cfg.SyncWorkers), resolveSyncTimeout(cfg.SyncTimeoutMS), contactSyncService, orderSyncService, logger)
 	if err != nil {
 		return nil, fmt.Errorf("create shopify webhook processor: %w", err)
@@ -143,13 +196,15 @@ func New(
 	}
 
 	return &Module{
-		cfg:                  cfg,
-		logger:               logger,
-		installationResolver: installationResolver,
-		handler:              handler,
-		processor:            processor,
-		contactSyncService:   contactSyncService,
-		orderSyncService:     orderSyncService,
+		cfg:                   cfg,
+		logger:                logger,
+		installationResolver:  installationResolver,
+		handler:               handler,
+		processor:             processor,
+		contactSyncService:    contactSyncService,
+		orderSyncService:      orderSyncService,
+		orderEventConsumer:    orderEventConsumer,
+		shippingEventConsumer: shippingEventConsumer,
 	}, nil
 }
 
