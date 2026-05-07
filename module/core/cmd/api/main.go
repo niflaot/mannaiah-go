@@ -39,6 +39,8 @@ import (
 	coretelemetry "mannaiah/module/core/telemetry"
 	"mannaiah/module/coupons"
 	"mannaiah/module/email"
+	"mannaiah/module/exports"
+	exportsstorage "mannaiah/module/exports/adapter/storage"
 	"mannaiah/module/falabella"
 	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	falabellaport "mannaiah/module/falabella/port"
@@ -526,6 +528,20 @@ func run(ctx context.Context, envFile string) error {
 	if err := ordersModule.Load(runtime); err != nil {
 		return fmt.Errorf("load orders module: %w", err)
 	}
+
+	exportStorage, err := exportsstorage.NewCoreStoreAdapter(storageStore)
+	if err != nil {
+		return fmt.Errorf("initialize exports storage adapter: %w", err)
+	}
+	exportsModule, err := exports.New(db, exportStorage, contactsModule.Service(), ordersModule.Service())
+	if err != nil {
+		return fmt.Errorf("initialize exports module: %w", err)
+	}
+	exportsModule.SetAuthorizer(authModule)
+	if err := exportsModule.Load(runtime); err != nil {
+		return fmt.Errorf("load exports module: %w", err)
+	}
+
 	shippingOrderSummaryAdapter := shippingBatchManifestOrderSummaryAdapter{
 		orders: ordersModule.Service(),
 	}

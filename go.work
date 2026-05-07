@@ -8,6 +8,7 @@ use (
 	./module/core
 	./module/coupons
 	./module/email
+	./module/exports
 	./module/falabella
 	./module/membership
 	./module/orders

@@ -34,6 +34,7 @@ steps:
           module/membership \
           module/analytics \
           module/email \
+          module/exports \
           module/shipping \
           module/shopify
         do

@@ -35,6 +35,7 @@ require (
 	mannaiah/module/contacts v0.0.0
 	mannaiah/module/coupons v0.0.0
 	mannaiah/module/email v0.0.0
+	mannaiah/module/exports v0.0.0
 	mannaiah/module/falabella v0.0.0
 	mannaiah/module/membership v0.0.0
 	mannaiah/module/orders v0.0.0
@@ -195,6 +196,8 @@ replace mannaiah/module/syncrecord => ../syncrecord
 replace mannaiah/module/analytics => ../analytics
 
 replace mannaiah/module/email => ../email
+
+replace mannaiah/module/exports => ../exports
 
 replace mannaiah/module/shipping => ../shipping
 
