@@ -13,6 +13,29 @@ import (
 	shopifyport "mannaiah/module/shopify/port"
 )
 
+// TestHandleExtensionOptionsAllowsShopifyCDNOrigin verifies Shopify Admin extension CORS preflight support.
+func TestHandleExtensionOptionsAllowsShopifyCDNOrigin(t *testing.T) {
+	handler := &Handler{}
+	requestContext := &launchTestContext{
+		headers: map[string]string{
+			"Origin": "https://extensions.shopifycdn.com",
+		},
+	}
+
+	if err := handler.handleExtensionOptions(requestContext); err != nil {
+		t.Fatalf("handleExtensionOptions() error = %v", err)
+	}
+	if requestContext.statusCode != 204 {
+		t.Fatalf("status = %d, want 204", requestContext.statusCode)
+	}
+	if requestContext.headers["Access-Control-Allow-Origin"] != "https://extensions.shopifycdn.com" {
+		t.Fatalf("Access-Control-Allow-Origin = %q", requestContext.headers["Access-Control-Allow-Origin"])
+	}
+	if requestContext.headers["Access-Control-Allow-Methods"] != "GET, OPTIONS" {
+		t.Fatalf("Access-Control-Allow-Methods = %q", requestContext.headers["Access-Control-Allow-Methods"])
+	}
+}
+
 type extensionTestSyncLinkRepository struct {
 	link          *shopifyport.SyncLink
 	err           error

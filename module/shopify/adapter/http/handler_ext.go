@@ -12,7 +12,10 @@ import (
 	shopifyport "mannaiah/module/shopify/port"
 )
 
-const extensionOrigin = "https://admin.shopify.com"
+var extensionOrigins = map[string]struct{}{
+	"https://admin.shopify.com":         {},
+	"https://extensions.shopifycdn.com": {},
+}
 
 // ExtensionOrderSummary defines Shopify Admin extension order-summary payload values.
 type ExtensionOrderSummary struct {
@@ -130,7 +133,10 @@ func extensionShopDomain(ctx corehttp.Context) string {
 }
 
 func setExtensionCORSHeaders(ctx corehttp.Context) {
-	ctx.SetHeader("Access-Control-Allow-Origin", extensionOrigin)
+	origin := strings.TrimSpace(ctx.GetHeader("Origin"))
+	if _, ok := extensionOrigins[origin]; ok {
+		ctx.SetHeader("Access-Control-Allow-Origin", origin)
+	}
 	ctx.SetHeader("Access-Control-Allow-Headers", "Authorization, Content-Type")
 	ctx.SetHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
 	ctx.SetHeader("Vary", "Origin")
