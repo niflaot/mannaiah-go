@@ -16,7 +16,8 @@ import (
 func buildContactsCSV(rows []port.ContactRow) ([]byte, error) {
 	records := [][]string{{
 		"id", "documentType", "documentNumber", "legalName", "firstName", "lastName", "email", "phone",
-		"address", "addressExtra", "cityCode", "metadata", "createdAt", "updatedAt",
+		"address", "addressExtra", "cityCode", "membershipOptIn", "membershipOptInAt", "privacyAccepted",
+		"privacyAcceptedAt", "metadata", "createdAt", "updatedAt",
 	}}
 	for _, row := range rows {
 		records = append(records, []string{
@@ -31,6 +32,10 @@ func buildContactsCSV(rows []port.ContactRow) ([]byte, error) {
 			row.Address,
 			row.AddressExtra,
 			row.CityCode,
+			strconv.FormatBool(row.MembershipOptIn),
+			formatTime(row.MembershipOptInAt),
+			strconv.FormatBool(row.PrivacyAccepted),
+			formatTime(row.PrivacyAcceptedAt),
 			metadataString(row.Metadata),
 			formatTime(row.CreatedAt),
 			formatTime(row.UpdatedAt),

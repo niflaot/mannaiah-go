@@ -18,8 +18,9 @@ func TestGenerateContactsUploadsCSVAndStoresRegistry(t *testing.T) {
 	storage := &fakeStorage{}
 	contacts := &fakeContactSource{rows: []port.ContactRow{{
 		ID: "contact-1", LegalName: "Ian Castano", Email: "ian@example.com", Phone: "123",
-		Address: "Street 1", AddressExtra: "Apt 2", CityCode: "BOG", Metadata: map[string]string{"source": "test"},
-		CreatedAt: fixedTime(), UpdatedAt: fixedTime(),
+		Address: "Street 1", AddressExtra: "Apt 2", CityCode: "BOG", MembershipOptIn: true,
+		MembershipOptInAt: fixedTime(), PrivacyAccepted: true, PrivacyAcceptedAt: fixedTime(),
+		Metadata: map[string]string{"source": "test"}, CreatedAt: fixedTime(), UpdatedAt: fixedTime(),
 	}}}
 	service, err := NewService(repository, storage, contacts, &fakeOrderSource{})
 	if err != nil {
@@ -40,6 +41,12 @@ func TestGenerateContactsUploadsCSVAndStoresRegistry(t *testing.T) {
 	}
 	if !strings.Contains(string(storage.request.Body), "Ian Castano") {
 		t.Fatalf("csv body missing contact: %s", string(storage.request.Body))
+	}
+	if !strings.Contains(string(storage.request.Body), "membershipOptIn,membershipOptInAt,privacyAccepted,privacyAcceptedAt") {
+		t.Fatalf("csv body missing consent columns: %s", string(storage.request.Body))
+	}
+	if !strings.Contains(string(storage.request.Body), "true,2026-05-06T12:00:00Z,true,2026-05-06T12:00:00Z") {
+		t.Fatalf("csv body missing consent values: %s", string(storage.request.Body))
 	}
 	sum := sha256.Sum256(storage.request.Body)
 	if report.SHA256 != hex.EncodeToString(sum[:]) {

@@ -41,6 +41,7 @@ import (
 	"mannaiah/module/email"
 	"mannaiah/module/exports"
 	exportsstorage "mannaiah/module/exports/adapter/storage"
+	exportsport "mannaiah/module/exports/port"
 	"mannaiah/module/falabella"
 	falabellaproducts "mannaiah/module/falabella/adapter/products"
 	falabellaport "mannaiah/module/falabella/port"
@@ -533,7 +534,13 @@ func run(ctx context.Context, envFile string) error {
 	if err != nil {
 		return fmt.Errorf("initialize exports storage adapter: %w", err)
 	}
-	exportsModule, err := exports.New(db, exportStorage, contactsModule.Service(), ordersModule.Service())
+	exportsModule, err := exports.New(
+		db,
+		exportStorage,
+		contactsModule.Service(),
+		ordersModule.Service(),
+		exportMembershipConsentAdapter{service: membershipModule.Service()},
+	)
 	if err != nil {
 		return fmt.Errorf("initialize exports module: %w", err)
 	}
@@ -906,6 +913,44 @@ func (a falabellaSyncRecorderAdapter) FailRun(ctx context.Context, runID string,
 type membershipContactLookupAdapter struct {
 	// service defines contacts lookup dependencies.
 	service contactapplication.Service
+}
+
+// exportMembershipStatusService defines membership status behavior required by exports.
+type exportMembershipStatusService interface {
+	// GetStatuses retrieves current statuses by contact across all channels.
+	GetStatuses(ctx context.Context, contactID string) ([]membershipdomain.Status, error)
+}
+
+// exportMembershipConsentAdapter adapts membership status lookups for contact exports.
+type exportMembershipConsentAdapter struct {
+	// service defines membership status dependencies.
+	service exportMembershipStatusService
+}
+
+// GetContactStatuses returns latest consent statuses for a contact.
+func (a exportMembershipConsentAdapter) GetContactStatuses(ctx context.Context, contactID string) ([]exportsport.ContactConsentStatus, error) {
+	if a.service == nil {
+		return nil, nil
+	}
+
+	statuses, err := a.service.GetStatuses(ctx, contactID)
+	if errors.Is(err, membershipdomain.ErrStatusNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]exportsport.ContactConsentStatus, 0, len(statuses))
+	for _, status := range statuses {
+		result = append(result, exportsport.ContactConsentStatus{
+			Channel:    string(status.Channel),
+			Action:     string(status.Action),
+			OccurredAt: status.OccurredAt,
+		})
+	}
+
+	return result, nil
 }
 
 // FindByEmail resolves one contact by normalized email values.

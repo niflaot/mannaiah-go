@@ -29,6 +29,14 @@ type ContactRow struct {
 	AddressExtra string
 	// CityCode defines city code values.
 	CityCode string
+	// MembershipOptIn defines whether latest membership consent is opted in.
+	MembershipOptIn bool
+	// MembershipOptInAt defines latest membership consent decision timestamps.
+	MembershipOptInAt time.Time
+	// PrivacyAccepted defines whether privacy consent was accepted.
+	PrivacyAccepted bool
+	// PrivacyAcceptedAt defines privacy consent acceptance timestamps.
+	PrivacyAcceptedAt time.Time
 	// Metadata defines metadata values.
 	Metadata map[string]string
 	// CreatedAt defines creation timestamps.
@@ -87,10 +95,26 @@ type OrderRow struct {
 	UpdatedAt time.Time
 }
 
+// ContactConsentStatus defines flattened contact consent state values.
+type ContactConsentStatus struct {
+	// Channel defines consent channel values.
+	Channel string
+	// Action defines latest consent action values.
+	Action string
+	// OccurredAt defines latest consent decision timestamps.
+	OccurredAt time.Time
+}
+
 // ContactSource defines contact export source behavior.
 type ContactSource interface {
 	// ListContacts returns all contacts to export.
 	ListContacts(ctx context.Context) ([]ContactRow, error)
+}
+
+// ContactConsentSource defines optional contact consent lookup behavior.
+type ContactConsentSource interface {
+	// GetContactStatuses returns latest consent statuses for a contact.
+	GetContactStatuses(ctx context.Context, contactID string) ([]ContactConsentStatus, error)
 }
 
 // OrderSource defines order export source behavior.

@@ -4,7 +4,7 @@ The exports module generates CSV reports from runtime data and stores report obj
 
 ## Key methods / endpoints / events
 
-- `POST /exports/contacts` generates a contact CSV export and stores it under `exports/contacts/`.
+- `POST /exports/contacts` generates a contact CSV export and stores it under `exports/contacts/`, including membership opt-in and privacy acceptance columns when consent data is available.
 - `POST /exports/orders` generates an order CSV export and stores it under `exports/orders/`.
 - `POST /export/orders` is a compatibility alias for the order export endpoint.
 - `GET /exports/reports` lists generated export report registry entries.

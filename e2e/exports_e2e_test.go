@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"mannaiah/module/exports"
 	exportsport "mannaiah/module/exports/port"
@@ -19,7 +20,8 @@ func TestExportsGenerationE2E(t *testing.T) {
 
 	harness.tracer.Step("initialize exports module")
 	exportStorage := newInMemoryExportStorage()
-	exportsModule, err := exports.New(harness.db, exportStorage, harness.contactsModule.Service(), harness.ordersModule.Service())
+	consentSource := &staticExportConsentSource{statuses: map[string][]exportsport.ContactConsentStatus{}}
+	exportsModule, err := exports.New(harness.db, exportStorage, harness.contactsModule.Service(), harness.ordersModule.Service(), consentSource)
 	if err != nil {
 		t.Fatalf("exports.New() error = %v", err)
 	}
@@ -29,7 +31,7 @@ func TestExportsGenerationE2E(t *testing.T) {
 	manageToken := harness.SignToken(t, "contact:manage order:manage product:manage marketing:manage")
 
 	harness.tracer.Step("create export contact")
-	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"exports@example.com","legalName":"Exports Buyer","address":"Street 1","addressExtra":"Apt 2","phone":"555","cityCode":"BOG"}`))
+	status, payload := harness.DoJSONRequest(t, http.MethodPost, "/contacts", manageToken, []byte(`{"email":"exports@example.com","legalName":"Exports Buyer","address":"Street 1","addressExtra":"Apt 2","phone":"555","cityCode":"BOG","metadata":{"flock_checker_privacy_accept":"yes","flock_checker_privacy_accept_accepted_at_utc":"2026-05-06T14:30:00Z"}}`))
 	if status != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", status, http.StatusCreated)
 	}
@@ -37,6 +39,11 @@ func TestExportsGenerationE2E(t *testing.T) {
 	if contactID == "" {
 		t.Fatalf("expected contact id")
 	}
+	consentSource.statuses[contactID] = []exportsport.ContactConsentStatus{{
+		Channel:    "all",
+		Action:     "opt_in",
+		OccurredAt: fixedE2EExportConsentTime(),
+	}}
 
 	harness.tracer.Step("create export order")
 	orderPayload := `{"identifier":"EXP-1001","realm":"manual","contactId":"` + contactID + `","items":[{"sku":"SKU-EXP","alternateName":"Export Product","quantity":2,"value":19.5}],"shippingAddress":{"address":"Ship Street","address2":"Suite 4","phone":"555","cityCode":"BOG"},"author":"e2e","description":"exports"}`
@@ -54,8 +61,11 @@ func TestExportsGenerationE2E(t *testing.T) {
 	if !strings.HasPrefix(contactsKey, "exports/contacts/") {
 		t.Fatalf("contacts storageKey = %q", contactsKey)
 	}
-	if !strings.Contains(string(exportStorage.mustGet(t, contactsKey)), "exports@example.com") {
-		t.Fatalf("contacts csv missing email")
+	contactsCSV := string(exportStorage.mustGet(t, contactsKey))
+	for _, expected := range []string{"exports@example.com", "membershipOptIn", "true,2026-05-06T13:00:00Z,true,2026-05-06T14:30:00Z"} {
+		if !strings.Contains(contactsCSV, expected) {
+			t.Fatalf("contacts csv missing %q: %s", expected, contactsCSV)
+		}
 	}
 
 	harness.tracer.Step("generate orders export through compatibility alias")
@@ -85,6 +95,25 @@ func TestExportsGenerationE2E(t *testing.T) {
 
 	harness.tracer.Step("assert e2e trace logs")
 	harness.tracer.AssertStepCount(7)
+}
+
+// staticExportConsentSource defines deterministic membership statuses for export E2E flows.
+type staticExportConsentSource struct {
+	// statuses stores contact statuses by contact id.
+	statuses map[string][]exportsport.ContactConsentStatus
+}
+
+// GetContactStatuses returns static contact consent statuses.
+func (s *staticExportConsentSource) GetContactStatuses(_ context.Context, contactID string) ([]exportsport.ContactConsentStatus, error) {
+	if s.statuses == nil {
+		s.statuses = map[string][]exportsport.ContactConsentStatus{}
+	}
+	return s.statuses[contactID], nil
+}
+
+// fixedE2EExportConsentTime returns deterministic consent timestamps.
+func fixedE2EExportConsentTime() time.Time {
+	return time.Date(2026, 5, 6, 13, 0, 0, 0, time.UTC)
 }
 
 // inMemoryExportStorage defines E2E in-memory storage behavior for exports.

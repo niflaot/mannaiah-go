@@ -23,8 +23,8 @@ type Loader interface {
 }
 
 // New creates an exports module with schema migration and adapter wiring.
-func New(db *gorm.DB, storage exportsport.Storage, contacts contactsapplication.Service, orders ordersapplication.Service) (*Module, error) {
-	return exportsruntime.New(db, storage, contacts, orders)
+func New(db *gorm.DB, storage exportsport.Storage, contacts contactsapplication.Service, orders ordersapplication.Service, consentSources ...exportsport.ContactConsentSource) (*Module, error) {
+	return exportsruntime.New(db, storage, contacts, orders, consentSources...)
 }
 
 // OpenAPISpec returns export-module OpenAPI documentation.

@@ -32,12 +32,12 @@ type Loader interface {
 }
 
 // New creates an exports module with adapter wiring.
-func New(db *gorm.DB, objectStorage port.Storage, contactsService contactsapplication.Service, ordersService ordersapplication.Service) (*Module, error) {
+func New(db *gorm.DB, objectStorage port.Storage, contactsService contactsapplication.Service, ordersService ordersapplication.Service, consentSources ...port.ContactConsentSource) (*Module, error) {
 	repository, err := store.NewRepository(db)
 	if err != nil {
 		return nil, err
 	}
-	contactSource, err := contacts.NewSource(contactsService)
+	contactSource, err := contacts.NewSource(contactsService, consentSources...)
 	if err != nil {
 		return nil, err
 	}
