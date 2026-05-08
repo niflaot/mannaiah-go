@@ -4,6 +4,9 @@
 - Root module (`go.mod`) is a container module only and must not contain executable entrypoints.
 - All submodules must live under `module/` (for example, `module/core`, `module/<name>`).
 
+## Tooling
+- Use `ripgrep` (`rg`) for text and file searches whenever possible for faster performance
+
 ## CI/CD
 - Drone CI is the only supported CI/CD orchestrator for this repository.
 - CI/CD source of truth must be `.drone.yml`; do not add or maintain GitHub Actions workflows under `.github/`.
