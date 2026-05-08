@@ -237,7 +237,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 			return nil, fmt.Errorf("%w: %v", ErrIntegrationUnavailable, err)
 		}
 
-		s.logger.Info("shopify contacts page fetched", zap.Int("count", len(customers)), zap.String("sinceID", sinceID), zap.Bool("hasMore", hasMore))
+		s.logger.Debug("shopify contacts page fetched", zap.Int("count", len(customers)), zap.String("sinceID", sinceID), zap.Bool("hasMore", hasMore))
 
 		for _, customer := range customers {
 			summary.Processed++
@@ -246,7 +246,7 @@ func (s *ContactSyncService) SyncContacts(ctx context.Context, trigger string) (
 				s.logger.Warn("shopify contact sync failed", zap.String("id", customer.ID), zap.Error(upsertErr))
 			} else {
 				summary.Succeeded++
-				s.logger.Info("shopify contact synced", zap.String("id", customer.ID))
+				s.logger.Debug("shopify contact synced", zap.String("id", customer.ID))
 			}
 		}
 
