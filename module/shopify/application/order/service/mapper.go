@@ -78,7 +78,7 @@ func BuildOrderSyncCommand(order shopifyport.ShopifyOrder, contactID string, rea
 		AppliedCoupons:    buildAppliedCoupons(order.DiscountCodes, order.CreatedAt),
 		PaymentMethod:     strings.Join(order.PaymentGatewayNames, ", "),
 		Metadata:          buildOrderMetadata(order),
-		Source:            resolveTrigger(trigger),
+		Source:            syncMutationSource,
 	}
 	if !order.CreatedAt.IsZero() {
 		createdAt := order.CreatedAt.UTC()

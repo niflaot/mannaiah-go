@@ -20,7 +20,8 @@ var (
 )
 
 const (
-	statusAuthor = "shopify_sync"
+	syncMutationSource = "shopify_sync"
+	statusAuthor       = syncMutationSource
 )
 
 // OrderUpserter defines mainstream order upsert behavior for Shopify sync flows.
@@ -50,7 +51,7 @@ func NewUpserter(service ordersapplication.Service, links shopifyport.SyncLinkRe
 
 // UpsertOrder creates or updates one mainstream order from Shopify values.
 func (u *OrderUpserter) UpsertOrder(ctx context.Context, command shopifyport.OrderSyncCommand) (*ordersdomain.Order, error) {
-	existing, err := u.findExisting(ctx, command.Realm, command.Identifier)
+	existing, err := u.findExisting(ctx, command)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func (u *OrderUpserter) UpsertOrder(ctx context.Context, command shopifyport.Ord
 			if !errors.Is(createErr, ordersport.ErrDuplicateIdentifier) {
 				return nil, createErr
 			}
-			existing, err = u.findExisting(ctx, command.Realm, command.Identifier)
+			existing, err = u.findExisting(ctx, command)
 			if err != nil || existing == nil {
 				return nil, createErr
 			}
@@ -84,7 +85,7 @@ func (u *OrderUpserter) UpsertOrder(ctx context.Context, command shopifyport.Ord
 			Status:      command.Status,
 			Author:      statusAuthor,
 			Description: strings.TrimSpace(command.StatusDescription),
-			Source:      strings.TrimSpace(command.Source),
+			Source:      syncMutationSource,
 		})
 		if err != nil {
 			return nil, err
@@ -100,7 +101,33 @@ func (u *OrderUpserter) UpsertOrder(ctx context.Context, command shopifyport.Ord
 	return updated, nil
 }
 
-func (u *OrderUpserter) findExisting(ctx context.Context, realm string, identifier string) (*ordersdomain.Order, error) {
+func (u *OrderUpserter) findExisting(ctx context.Context, command shopifyport.OrderSyncCommand) (*ordersdomain.Order, error) {
+	if linked, err := u.findLinkedOrder(ctx, command); err != nil || linked != nil {
+		return linked, err
+	}
+	if exact, err := u.findByIdentifier(ctx, command.Realm, command.Identifier); err != nil || exact != nil {
+		return exact, err
+	}
+	return u.findByIdentifier(ctx, "", command.Identifier)
+}
+
+func (u *OrderUpserter) findLinkedOrder(ctx context.Context, command shopifyport.OrderSyncCommand) (*ordersdomain.Order, error) {
+	shopifyID := strings.TrimSpace(command.ShopifyID)
+	if shopifyID == "" {
+		return nil, nil
+	}
+	link, err := u.links.GetLinkByShopifyID(ctx, shopifyport.SyncKindOrder, command.ShopDomain, shopifyID)
+	if err != nil || link == nil || strings.TrimSpace(link.MannaiahID) == "" {
+		return nil, err
+	}
+	entity, err := u.service.Get(ctx, link.MannaiahID)
+	if errors.Is(err, ordersport.ErrNotFound) {
+		return nil, nil
+	}
+	return entity, err
+}
+
+func (u *OrderUpserter) findByIdentifier(ctx context.Context, realm string, identifier string) (*ordersdomain.Order, error) {
 	result, err := u.service.List(ctx, ordersapplication.ListQuery{
 		Page:       1,
 		Limit:      1,
@@ -176,7 +203,7 @@ func buildOrderCreateCommand(command shopifyport.OrderSyncCommand) ordersapplica
 		AppliedCoupons:  buildCreateCoupons(command.AppliedCoupons),
 		Metadata:        cloneMetadata(command.Metadata),
 		CreatedAt:       command.CreatedAt,
-		Source:          strings.TrimSpace(command.Source),
+		Source:          syncMutationSource,
 	}
 }
 
@@ -189,7 +216,7 @@ func buildOrderUpdateCommand(command shopifyport.OrderSyncCommand) ordersapplica
 		ShippingAddress: buildCreateShippingAddress(command.ShippingAddress),
 		ShippingCharges: &shippingCharges,
 		AppliedCoupons:  &appliedCoupons,
-		Source:          strings.TrimSpace(command.Source),
+		Source:          syncMutationSource,
 	}
 }
 

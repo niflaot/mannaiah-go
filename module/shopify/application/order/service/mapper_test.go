@@ -78,6 +78,9 @@ func TestBuildOrderSyncCommandMapsPaidUnfulfilledToCreated(t *testing.T) {
 	if command.Status != ordersdomain.StatusCreated {
 		t.Fatalf("Status = %q, want CREATED for paid + unfulfilled", command.Status)
 	}
+	if command.Source != syncMutationSource {
+		t.Fatalf("Source = %q, want %q", command.Source, syncMutationSource)
+	}
 }
 
 // TestBuildOrderSyncCommandMapsPaidFulfilledToCompleted verifies completed remains tied to fulfillment.
