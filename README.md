@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v2.0.0-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v3.0.0-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 
@@ -50,7 +50,7 @@ The API listens on `CORE_HOST:CORE_PORT` (`0.0.0.0:8080` by default).
 
 - `ANALYTICS_ENABLED=true` enables ClickHouse analytics and integration consumers.
 - Run `POST /analytics/seed` once to backfill ClickHouse fact tables from transactional data.
-- Analytics no longer exposes CRM-facing routes in `v2.0.0`; the retained module is write-focused infrastructure for BI.
+- Analytics no longer exposes CRM-facing routes as of `v2.0.0`; the retained module is write-focused infrastructure for BI.
 
 ### Email Tracking Pixel
 

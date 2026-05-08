@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	contactsdomain "mannaiah/module/contacts/domain"
+	"mannaiah/module/core/citycode"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -54,7 +55,7 @@ func BuildContactSyncCommand(customer shopifyport.ShopifyCustomer) shopifyport.C
 	if customer.DefaultAddress != nil {
 		command.Address = strings.TrimSpace(customer.DefaultAddress.Address1)
 		command.AddressExtra = strings.TrimSpace(customer.DefaultAddress.Address2)
-		command.CityCode = strings.TrimSpace(customer.DefaultAddress.City)
+		command.CityCode = citycode.Resolve(customer.DefaultAddress.City)
 		command.Phone = preferString(command.Phone, customer.DefaultAddress.Phone)
 	}
 

@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	contactsdomain "mannaiah/module/contacts/domain"
+	"mannaiah/module/core/citycode"
 	ordersdomain "mannaiah/module/orders/domain"
 	shopifyport "mannaiah/module/shopify/port"
 )
@@ -50,7 +51,7 @@ func BuildOrderContactSyncCommand(order shopifyport.ShopifyOrder) (shopifyport.C
 		Phone:          preferString(customerPhone(order.Customer), addressPhone(address), billingPhone(order.BillingAddress)),
 		Address:        addressLine1(address),
 		AddressExtra:   addressLine2(address),
-		CityCode:       addressCity(address),
+		CityCode:       citycode.Resolve(addressCity(address)),
 		Metadata:       buildOrderContactMetadata(order),
 	}
 	if order.Customer != nil && !order.Customer.CreatedAt.IsZero() {
@@ -151,7 +152,7 @@ func buildShippingAddress(order shopifyport.ShopifyOrder) *shopifyport.OrderSync
 		Address:  addressLine1(address),
 		Address2: addressLine2(address),
 		Phone:    addressPhone(address),
-		CityCode: addressCity(address),
+		CityCode: citycode.Resolve(addressCity(address)),
 	}
 }
 

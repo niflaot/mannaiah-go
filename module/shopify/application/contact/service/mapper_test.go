@@ -168,8 +168,8 @@ func TestBuildContactSyncCommand_PhoneAndAddressFromDefaultAddress(t *testing.T)
 	if cmd.AddressExtra != "Apto 101" {
 		t.Errorf("AddressExtra = %q, want %q", cmd.AddressExtra, "Apto 101")
 	}
-	if cmd.CityCode != "Bogotá" {
-		t.Errorf("CityCode = %q, want %q", cmd.CityCode, "Bogotá")
+	if cmd.CityCode != "11001" {
+		t.Errorf("CityCode = %q, want %q", cmd.CityCode, "11001")
 	}
 	if cmd.Phone != "3001112233" {
 		t.Errorf("Phone = %q, want %q", cmd.Phone, "3001112233")

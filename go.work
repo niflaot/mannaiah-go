@@ -14,7 +14,6 @@ use (
 	./module/orders
 	./module/products
 	./module/syncrecord
-	./module/woocommerce
 	./module/analytics
 	./module/shipping
 	./module/shopify

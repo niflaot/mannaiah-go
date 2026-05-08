@@ -127,6 +127,25 @@ func TestBuildOrderSyncCommandMapsLineItemProductIdentity(t *testing.T) {
 	}
 }
 
+// TestBuildOrderSyncCommandMapsShippingCityNameToCityCode verifies Shopify city names are normalized for Mannaiah.
+func TestBuildOrderSyncCommandMapsShippingCityNameToCityCode(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:   "order-1",
+		Name: "#1001",
+		ShippingAddress: &shopifyport.ShopifyAddress{
+			Address1: "Calle 80 # 23-45",
+			City:     "Bogotá",
+		},
+	}, "contact-1", "shopify", "cron")
+
+	if command.ShippingAddress == nil {
+		t.Fatal("ShippingAddress = nil, want mapped address")
+	}
+	if command.ShippingAddress.CityCode != "11001" {
+		t.Fatalf("ShippingAddress.CityCode = %q, want 11001", command.ShippingAddress.CityCode)
+	}
+}
+
 // TestBuildOrderContactSyncCommandMarksPrivacyFromOrderDate verifies Shopify order creation stamps privacy acceptance.
 func TestBuildOrderContactSyncCommandMarksPrivacyFromOrderDate(t *testing.T) {
 	createdAt := time.Date(2026, time.May, 6, 21, 22, 51, 0, time.UTC)

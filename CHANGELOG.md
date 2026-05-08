@@ -51,6 +51,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v3.0.0] - 2026-05-07
+- Removed the WooCommerce integration module from runtime, workspace, docs, route registration, and CI validation.
+- Kept historical sync-record querying for existing `woocommerce.contacts` and `woocommerce.orders` runs, plus historical order `realm`/`source` values for origin visibility.
+- Shopify inbound contact and order sync now resolves Shopify address city names into Mannaiah municipality city codes using the shared core city-code resolver.
+- Release metadata updated to `v3.0.0`.
+
 ### [v2.0.0] - 2026-04-30
 - Removed the legacy marketing and commerce surface:
   - deleted `module/campaign`, `module/coupons`, `module/segment`, `module/storefront`, and `module/woocommerce`

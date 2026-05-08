@@ -67,9 +67,6 @@ import (
 	"mannaiah/module/syncrecord"
 	syncrecorddomain "mannaiah/module/syncrecord/domain"
 	syncrecordport "mannaiah/module/syncrecord/port"
-	"mannaiah/module/woocommerce"
-	wooevent "mannaiah/module/woocommerce/adapter/event"
-	woocommerceport "mannaiah/module/woocommerce/port"
 
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
@@ -100,7 +97,6 @@ func run(ctx context.Context, envFile string) error {
 	var cronCfg corecron.Config
 	var assetsCfg assets.Config
 	var falabellaCfg falabella.Config
-	var wooCfg woocommerce.Config
 	var shopifyCfg shopify.Config
 	var analyticsCfg analytics.Config
 	var emailCfg email.Config
@@ -123,7 +119,6 @@ func run(ctx context.Context, envFile string) error {
 		&cronCfg,
 		&assetsCfg,
 		&falabellaCfg,
-		&wooCfg,
 		&shopifyCfg,
 		&analyticsCfg,
 		&emailCfg,
@@ -218,7 +213,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "2.0.0",
+		Version:     "3.0.0",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -286,10 +281,6 @@ func run(ctx context.Context, envFile string) error {
 	orderPublisher, err := orderevent.NewPublisher(messaging.Publisher())
 	if err != nil {
 		return fmt.Errorf("create orders integration publisher: %w", err)
-	}
-	wooPublisher, err := wooevent.NewPublisher(messaging.Publisher())
-	if err != nil {
-		return fmt.Errorf("create woocommerce integration publisher: %w", err)
 	}
 	membershipPublisher, err := membershipevent.NewPublisher(messaging.Publisher())
 	if err != nil {
@@ -569,42 +560,6 @@ func run(ctx context.Context, envFile string) error {
 		return fmt.Errorf("load coupons module: %w", err)
 	}
 
-	var wooScheduler corecron.Scheduler
-	if wooCfg.SyncContacts || wooCfg.SyncOrders || wooCfg.SyncCoupons {
-		wooScheduler, err = corecron.NewScheduler(cronCfg, logger)
-		if err != nil {
-			return fmt.Errorf("create woocommerce scheduler: %w", err)
-		}
-	}
-
-	wooModule, err := woocommerce.NewWithMessagingAndCouponTarget(
-		wooCfg,
-		contactsModule.Service(),
-		ordersModule.Service(),
-		couponWooSyncAdapter{service: couponsModule.Service()},
-		wooScheduler,
-		logger,
-		messaging.Registrar(),
-		wooPublisher,
-	)
-	if err != nil {
-		return fmt.Errorf("initialize woocommerce module: %w", err)
-	}
-	wooModule.SetSyncRecorder(wooSyncRecorderAdapter{recorder: recorderAdapter})
-	wooModule.SetMembershipStamper(membershipWooStamperAdapter{service: membershipModule.Service()})
-	wooModule.SetAuthorizer(authModule)
-	if err := wooModule.Load(runtime); err != nil {
-		return fmt.Errorf("load woocommerce module: %w", err)
-	}
-	if err := wooModule.Start(ctx); err != nil {
-		return fmt.Errorf("start woocommerce module: %w", err)
-	}
-	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = wooModule.Stop(stopCtx)
-	}()
-
 	shopifyModule, err := shopify.New(
 		shopifyCfg,
 		db,
@@ -812,32 +767,6 @@ type errorPayload struct {
 	Message string
 }
 
-// wooSyncRecorderAdapter adapts sync recorders for WooCommerce sync recorder ports.
-type wooSyncRecorderAdapter struct {
-	// recorder defines base sync recorder dependencies.
-	recorder syncRecordRecorderAdapter
-}
-
-// StartRun starts one synchronization run and returns a run identifier.
-func (a wooSyncRecorderAdapter) StartRun(ctx context.Context, kind string, trigger string) (string, error) {
-	return a.recorder.StartRun(ctx, kind, trigger)
-}
-
-// CompleteRun marks one synchronization run as completed.
-func (a wooSyncRecorderAdapter) CompleteRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int) error {
-	return a.recorder.CompleteRun(ctx, runID, processed, succeeded, failed, skipped)
-}
-
-// FailRun marks one synchronization run as failed.
-func (a wooSyncRecorderAdapter) FailRun(ctx context.Context, runID string, processed int, succeeded int, failed int, skipped int, syncErrors []woocommerceport.SyncError) error {
-	adapted := make([]errorPayload, 0, len(syncErrors))
-	for _, syncErr := range syncErrors {
-		adapted = append(adapted, errorPayload{Type: syncErr.Type, Code: syncErr.Code, Message: syncErr.Message})
-	}
-
-	return a.recorder.FailRun(ctx, runID, processed, succeeded, failed, skipped, adapted)
-}
-
 // shopifySyncRecorderAdapter adapts sync recorders for Shopify sync recorder ports.
 type shopifySyncRecorderAdapter struct {
 	// recorder defines base sync recorder dependencies.
@@ -1004,28 +933,6 @@ func (a membershipContactLookupAdapter) ListByMetadata(ctx context.Context, meta
 	}
 
 	return result, rows.Total, nil
-}
-
-// membershipWooStamperAdapter adapts membership stamping behavior for WooCommerce sync flows.
-type membershipWooStamperAdapter struct {
-	// service defines membership stamper dependencies.
-	service membershipport.Stamper
-}
-
-// StampByEmail stamps membership state by contact email.
-func (a membershipWooStamperAdapter) StampByEmail(ctx context.Context, email string, channel string, action woocommerceport.MembershipAction, source string, occurredAt *time.Time) error {
-	if a.service == nil {
-		return nil
-	}
-
-	_, err := a.service.Stamp(ctx, membershipport.StampCommand{
-		Email:      email,
-		Channel:    membershipdomain.Channel(channel),
-		Action:     membershipdomain.Action(action),
-		Source:     source,
-		OccurredAt: occurredAt,
-	})
-	return err
 }
 
 // analyticsSyncRecorderAdapter adapts sync recorders for analytics sync recorder ports.
