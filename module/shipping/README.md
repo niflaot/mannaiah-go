@@ -67,6 +67,7 @@
 - `GET /shipping/batches/:id/checklist-document` generates `LISTA DE CHEQUEO DE LOTE` for `OPEN` batches (`manual` and `tcc`).
 - Checklist generation is always on-demand and intentionally bypasses Redis/in-memory document cache.
 - Checklist rows render: `PEDIDO`, `DESTINATARIO`, `CIUDAD`, `ARTÍCULOS`, plus right-side manual check columns `1`, `2`, `3`.
+- Item labels include `X{quantity}` and append local product variation labels resolved from variant SKUs when available.
 
 ## Rotulus Document
 - `SHIPPING_ROTULUS_CACHE_TTL_SECONDS` controls per-mark rotulus cache TTL (default `300`).

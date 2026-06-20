@@ -213,7 +213,7 @@ func run(ctx context.Context, envFile string) error {
 
 	document := swagger.NewDocument(swagger.Info{
 		Title:       "Mannaiah API",
-		Version:     "3.0.5",
+		Version:     "3.0.6",
 		Description: "Mannaiah modular monolith API",
 	})
 	runtime, err := startup.NewRuntime(httpServer, document)
@@ -541,7 +541,9 @@ func run(ctx context.Context, envFile string) error {
 	}
 
 	shippingOrderSummaryAdapter := shippingBatchManifestOrderSummaryAdapter{
-		orders: ordersModule.Service(),
+		orders:     ordersModule.Service(),
+		products:   productsModule.Service(),
+		variations: productsModule.VariationService(),
 	}
 	shippingModule.DispatchService().SetBatchManifestOrderSummaryResolver(shippingOrderSummaryAdapter)
 	shippingModule.MarkService().SetRotulusOrderSummaryResolver(shippingOrderSummaryAdapter)

@@ -53,6 +53,10 @@ Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
 
+### [v3.0.6] - 2026-06-20
+- Shipping PDF item labels now append product variation labels resolved from local variant SKUs, covering manifests, checklists, rotulus, and stamped carrier labels.
+- Release metadata updated to `v3.0.6`.
+
 ### [v3.0.5] - 2026-06-20
 - Shopify OAuth now requests `read_products` and `read_metaobjects` so product `custom.color` metaobject labels can be read during order sync.
 - Release metadata updated to `v3.0.5`.
