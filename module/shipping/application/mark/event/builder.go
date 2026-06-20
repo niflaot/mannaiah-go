@@ -1,6 +1,7 @@
 package event
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,8 @@ type MarkGeneratedPayload struct {
 	OrderID string `json:"orderId"`
 	// CarrierID defines carrier identifier values.
 	CarrierID string `json:"carrierId"`
+	// TrackingCompany defines the carrier label that downstream tracking consumers should expose.
+	TrackingCompany string `json:"trackingCompany,omitempty"`
 	// TrackingNumber defines tracking number values.
 	TrackingNumber string `json:"trackingNumber"`
 	// DocumentRef defines mark document reference values.
@@ -62,11 +65,12 @@ func BuildMarkGenerated(mark domain.ShippingMark) port.IntegrationEvent {
 		SchemaVersion: schemaVersion,
 		OccurredAt:    time.Now().UTC(),
 		Payload: MarkGeneratedPayload{
-			MarkID:         mark.ID,
-			OrderID:        mark.OrderID,
-			CarrierID:      mark.CarrierID,
-			TrackingNumber: mark.TrackingNumber,
-			DocumentRef:    mark.DocumentRef,
+			MarkID:          mark.ID,
+			OrderID:         mark.OrderID,
+			CarrierID:       mark.CarrierID,
+			TrackingCompany: resolveTrackingCompany(mark),
+			TrackingNumber:  mark.TrackingNumber,
+			DocumentRef:     mark.DocumentRef,
 		},
 	}
 }
@@ -102,4 +106,15 @@ func BuildMarkVoided(mark domain.ShippingMark, reason string) port.IntegrationEv
 			Reason:         reason,
 		},
 	}
+}
+
+// resolveTrackingCompany resolves the carrier label emitted to downstream tracking integrations.
+func resolveTrackingCompany(mark domain.ShippingMark) string {
+	if domain.IsManualCarrierID(mark.CarrierID) {
+		if carrierName := domain.NormalizeCarrierSlug(mark.Observations); carrierName != "" {
+			return carrierName
+		}
+	}
+
+	return strings.TrimSpace(mark.CarrierID)
 }

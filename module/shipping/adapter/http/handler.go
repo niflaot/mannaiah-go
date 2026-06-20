@@ -61,6 +61,8 @@ type MarkService interface {
 	Related(ctx context.Context, id string) ([]domain.ShippingMark, error)
 	// RotulusDocument builds one rotulus PDF document for one mark.
 	RotulusDocument(ctx context.Context, id string) ([]byte, error)
+	// MarkDocument downloads one shipping label PDF for one mark.
+	MarkDocument(ctx context.Context, id string) ([]byte, error)
 	// BatchAllMarksDocument downloads and merges all shipping label PDFs for marks in a batch.
 	BatchAllMarksDocument(ctx context.Context, batchID string) ([]byte, error)
 	// BatchAllRotulusDocument builds one PDF with all rotulus for marks in a batch, two per page.
@@ -158,6 +160,7 @@ func (h *Handler) RegisterRoutes(router corehttp.Router) {
 	router.Post("/shipping/marks", h.protect("shipping:generate", h.createMark))
 	router.Get("/shipping/marks/:id", h.protect("shipping:quotations", h.getMark))
 	router.Get("/shipping/marks/:id/related", h.protect("shipping:quotations", h.listRelatedMarks))
+	router.Get("/shipping/marks/:id/document", h.protect("shipping:generate", h.markDocument))
 	router.Get("/shipping/marks/:id/rotulus-document", h.protectAny([]string{"shipping:generate", "shipping:quotations", "order:view"}, h.rotulusDocument))
 	router.Get("/shipping/marks", h.protect("shipping:quotations", h.listMarks))
 	router.Patch("/shipping/marks/:id/void", h.protect("shipping:manage", h.voidMark))

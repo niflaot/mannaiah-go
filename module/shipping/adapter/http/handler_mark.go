@@ -173,6 +173,21 @@ func (h *Handler) rotulusDocument(ctx corehttp.Context) error {
 	return ctx.Status(200).SendBytes(payload)
 }
 
+// markDocument handles carrier shipping label downloads for one mark.
+func (h *Handler) markDocument(ctx corehttp.Context) error {
+	markID := strings.TrimSpace(ctx.Params("id"))
+	payload, err := h.marks.MarkDocument(ctx.Context(), markID)
+	if err != nil {
+		return h.mapError(err)
+	}
+
+	ctx.SetHeader("Content-Type", "application/pdf")
+	ctx.SetHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"mark-%s-document.pdf\"", markID))
+	ctx.SetHeader("Cache-Control", "private, max-age=300")
+
+	return ctx.Status(200).SendBytes(payload)
+}
+
 // batchAllMarksDocument handles merged shipping label PDF downloads for all marks in a batch.
 func (h *Handler) batchAllMarksDocument(ctx corehttp.Context) error {
 	batchID := strings.TrimSpace(ctx.Params("id"))

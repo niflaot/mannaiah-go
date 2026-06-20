@@ -22,6 +22,8 @@ type shippingMarkGeneratedPayload struct {
 	OrderID string `json:"orderId"`
 	// CarrierID defines carrier identifier values.
 	CarrierID string `json:"carrierId"`
+	// TrackingCompany defines downstream tracking carrier labels.
+	TrackingCompany string `json:"trackingCompany"`
 	// TrackingNumber defines tracking-number values.
 	TrackingNumber string `json:"trackingNumber"`
 	// DocumentRef defines document-reference values.
@@ -37,6 +39,7 @@ func decodeShippingMarkGeneratedPayload(message coremsgbus.Message) (shippingMar
 	payload.MarkID = strings.TrimSpace(payload.MarkID)
 	payload.OrderID = strings.TrimSpace(payload.OrderID)
 	payload.CarrierID = strings.TrimSpace(payload.CarrierID)
+	payload.TrackingCompany = strings.TrimSpace(payload.TrackingCompany)
 	payload.TrackingNumber = strings.TrimSpace(payload.TrackingNumber)
 	payload.DocumentRef = strings.TrimSpace(payload.DocumentRef)
 	if payload.MarkID == "" || payload.OrderID == "" {

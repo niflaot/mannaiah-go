@@ -19,6 +19,7 @@ func Paths() *openapi3.Paths {
 		openapi3.WithPath("/shipping/marks", &openapi3.PathItem{Post: markCreateOperation(), Get: markListOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}", &openapi3.PathItem{Get: markGetOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}/related", &openapi3.PathItem{Get: markRelatedOperation()}),
+		openapi3.WithPath("/shipping/marks/{id}/document", &openapi3.PathItem{Get: markDocumentOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}/rotulus-document", &openapi3.PathItem{Get: markRotulusDocumentOperation()}),
 		openapi3.WithPath("/shipping/marks/{id}/void", &openapi3.PathItem{Patch: markVoidOperation()}),
 		openapi3.WithPath("/shipping/batches", &openapi3.PathItem{Post: batchCreateOperation(), Get: batchListOperation()}),
@@ -291,6 +292,27 @@ func markRelatedOperation() *openapi3.Operation {
 		},
 		Responses: openapi3.NewResponses(
 			openapi3.WithStatus(200, jsonResponse("Related shipping marks.", markListResponseSchema())),
+		),
+	}
+}
+
+// markDocumentOperation defines the OpenAPI operation for per-mark carrier label documents.
+func markDocumentOperation() *openapi3.Operation {
+	return &openapi3.Operation{
+		OperationID: "ShippingController_getMarkDocument",
+		Summary:     "Get mark carrier label PDF document",
+		Tags:        []string{shippingTag},
+		Security:    bearerSecurityRequirements(),
+		Parameters: openapi3.Parameters{
+			pathStringParameter("id", "Shipping mark identifier."),
+		},
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, binaryPDFResponse("Carrier label PDF document.")),
+			openapi3.WithStatus(400, errorResponse("Bad request. Message code: invalid_payload.")),
+			openapi3.WithStatus(401, errorResponse("Unauthorized. Message code: unauthorized.")),
+			openapi3.WithStatus(403, errorResponse("Forbidden. Message code: forbidden.")),
+			openapi3.WithStatus(404, errorResponse("Not found. Message code: shipping_resource_not_found.")),
+			openapi3.WithStatus(500, errorResponse("Internal server error. Message code: internal_server_error.")),
 		),
 	}
 }

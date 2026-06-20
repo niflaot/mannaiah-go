@@ -229,6 +229,7 @@ func (c *Client) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOr
 	if order.Customer != nil {
 		order.Customer.ShopDomain = installation.ShopDomain
 	}
+	_ = c.enrichOrderProductColorLabels(ctx, installation, &order)
 	return order, nil
 }
 
@@ -256,6 +257,7 @@ func (c *Client) ListOrders(ctx context.Context, sinceID string, limit int) ([]s
 		if o.Customer != nil {
 			o.Customer.ShopDomain = installation.ShopDomain
 		}
+		_ = c.enrichOrderProductColorLabels(ctx, installation, &o)
 		orders[i] = o
 	}
 
@@ -535,6 +537,21 @@ type fulfillmentOrderNode struct {
 	Status string `json:"status"`
 }
 
+type productColorMetafield struct {
+	Reference *struct {
+		Label *struct {
+			Value string `json:"value"`
+		} `json:"label"`
+	} `json:"reference"`
+}
+
+type productColorNode struct {
+	ID           string                 `json:"id"`
+	AppColor     *productColorMetafield `json:"appColor"`
+	CustomColor  *productColorMetafield `json:"customColor"`
+	ProductColor *productColorMetafield `json:"productColor"`
+}
+
 func (e *statusError) Error() string {
 	return fmt.Sprintf("shopify api returned status %d: %s", e.Code, strings.TrimSpace(e.Body))
 }
@@ -555,6 +572,94 @@ func (c *Client) doGraphQL(ctx context.Context, installation *shopifyport.Instal
 		}
 	}
 	return nil
+}
+
+func (c *Client) enrichOrderProductColorLabels(ctx context.Context, installation *shopifyport.Installation, order *shopifyport.ShopifyOrder) error {
+	if c == nil || order == nil || len(order.LineItems) == 0 {
+		return nil
+	}
+	productIDs := make([]string, 0, len(order.LineItems))
+	seen := map[string]struct{}{}
+	for _, item := range order.LineItems {
+		productID := strings.TrimSpace(item.ProductID)
+		if productID == "" {
+			continue
+		}
+		if _, exists := seen[productID]; exists {
+			continue
+		}
+		seen[productID] = struct{}{}
+		productIDs = append(productIDs, productID)
+	}
+	if len(productIDs) == 0 {
+		return nil
+	}
+
+	var response graphqlResponse[struct {
+		Nodes []*productColorNode `json:"nodes"`
+	}]
+	err := c.doGraphQL(ctx, installation, `query productColorLabels($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Product {
+      id
+      appColor: metafield(key: "color") {
+        reference {
+          ... on Metaobject {
+            label: field(key: "label") { value }
+          }
+        }
+      }
+      customColor: metafield(namespace: "custom", key: "color") {
+        reference {
+          ... on Metaobject {
+            label: field(key: "label") { value }
+          }
+        }
+      }
+      productColor: metafield(namespace: "custom", key: "product_color") {
+        reference {
+          ... on Metaobject {
+            label: field(key: "label") { value }
+          }
+        }
+      }
+    }
+  }
+}`, map[string]any{"ids": productIDs}, &response)
+	if err != nil {
+		return err
+	}
+
+	labels := make(map[string]string, len(response.Data.Nodes))
+	for _, node := range response.Data.Nodes {
+		if node == nil {
+			continue
+		}
+		if label := resolveProductColorLabel(*node); label != "" {
+			labels[strings.TrimSpace(node.ID)] = label
+		}
+	}
+	for index := range order.LineItems {
+		if strings.TrimSpace(order.LineItems[index].ColorLabel) != "" {
+			continue
+		}
+		order.LineItems[index].ColorLabel = strings.TrimSpace(labels[strings.TrimSpace(order.LineItems[index].ProductID)])
+	}
+
+	return nil
+}
+
+func resolveProductColorLabel(node productColorNode) string {
+	for _, field := range []*productColorMetafield{node.AppColor, node.CustomColor, node.ProductColor} {
+		if field == nil || field.Reference == nil || field.Reference.Label == nil {
+			continue
+		}
+		if label := strings.TrimSpace(field.Reference.Label.Value); label != "" {
+			return label
+		}
+	}
+
+	return ""
 }
 
 func (r graphqlResponse[T]) graphQLErrors() []graphqlError {
@@ -1125,6 +1230,7 @@ func normalizeLineItems(values []lineItemPayload) []shopifyport.ShopifyLineItem 
 			SKU:               strings.TrimSpace(value.SKU),
 			Title:             strings.TrimSpace(value.Title),
 			VariantTitle:      strings.TrimSpace(value.VariantTitle),
+			ColorLabel:        preferNonEmpty(extractProperty(value.Properties, "color_label"), extractProperty(value.Properties, "colorLabel")),
 			ProductID:         shopifyProductGID(value.ProductID),
 			VariantID:         shopifyVariantGID(value.VariantID),
 			MannaiahProductID: extractProperty(value.Properties, "mannaiah_product_id"),

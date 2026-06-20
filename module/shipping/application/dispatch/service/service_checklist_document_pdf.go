@@ -121,7 +121,6 @@ func (s *Service) drawBatchChecklistTableRow(pdf *gofpdf.Fpdf, row batchChecklis
 		return
 	}
 	startX, startY := pdf.GetX(), pdf.GetY()
-	itemsText := formatBatchManifestItemsAsList(row.Items, "-", "-")
 
 	pdf.SetFont("Arial", "", 8)
 	pdf.CellFormat(batchChecklistTableColumnWidths[0], rowHeight, encodeBatchManifestText(truncateBatchManifestValue(row.OrderNumber, 18, "-")), "1", 0, "L", false, 0, "")
@@ -131,8 +130,7 @@ func (s *Service) drawBatchChecklistTableRow(pdf *gofpdf.Fpdf, row batchChecklis
 	itemsX := startX + sumBatchManifestColumnWidths(batchChecklistTableColumnWidths, 3)
 	itemsWidth := batchChecklistTableColumnWidths[3]
 	pdf.Rect(itemsX, startY, itemsWidth, rowHeight, "D")
-	pdf.SetXY(itemsX, startY)
-	pdf.MultiCell(itemsWidth, batchChecklistItemsLineHeightMM, encodeBatchManifestText(itemsText), "", "L", false)
+	drawBatchManifestItemsCell(pdf, itemsX, startY, itemsWidth, batchChecklistItemsLineHeightMM, row.Items, "-", "-")
 
 	checkStartX := startX + sumBatchManifestColumnWidths(batchChecklistTableColumnWidths, 4)
 	pdf.SetXY(checkStartX, startY)

@@ -68,7 +68,7 @@ func (m *orderCompletionServiceMock) UpdateStatus(ctx context.Context, id string
 	return &copy, nil
 }
 
-// TestRegisterShippingMarkOrderCompletionConsumer verifies registration and order completion behavior.
+// TestRegisterShippingMarkOrderCompletionConsumer verifies registration and the remaining voided-order rollback behavior.
 func TestRegisterShippingMarkOrderCompletionConsumer(t *testing.T) {
 	registrar := &orderCompletionRegistrarMock{}
 	service := &orderCompletionServiceMock{
@@ -93,11 +93,8 @@ func TestRegisterShippingMarkOrderCompletionConsumer(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("handler() error = %v", err)
 	}
-	if service.updatedID != "order-1" {
-		t.Fatalf("service.updatedID = %q, want %q", service.updatedID, "order-1")
-	}
-	if service.updated.Status != ordersdomain.StatusCompleted {
-		t.Fatalf("service.updated.Status = %q, want %q", service.updated.Status, ordersdomain.StatusCompleted)
+	if service.updatedID != "" {
+		t.Fatalf("service.updatedID = %q, want empty", service.updatedID)
 	}
 
 	if err := voidedHandler(context.Background(), coremsgbus.Message{
@@ -117,11 +114,11 @@ func TestRegisterShippingMarkOrderCompletionConsumer(t *testing.T) {
 	}
 }
 
-// TestRegisterShippingMarkOrderCompletionConsumerNoopPaths verifies non-failing paths for already-completed and not-found orders.
+// TestRegisterShippingMarkOrderCompletionConsumerNoopPaths verifies non-failing paths for generated no-ops and not-found orders.
 func TestRegisterShippingMarkOrderCompletionConsumerNoopPaths(t *testing.T) {
 	registrar := &orderCompletionRegistrarMock{}
 	service := &orderCompletionServiceMock{
-		order: &ordersdomain.Order{ID: "order-1", CurrentStatus: ordersdomain.StatusCompleted},
+		order: &ordersdomain.Order{ID: "order-1", CurrentStatus: ordersdomain.StatusCreated},
 	}
 	if err := registerShippingMarkOrderCompletionConsumer(registrar, service, nil); err != nil {
 		t.Fatalf("registerShippingMarkOrderCompletionConsumer() error = %v", err)
@@ -184,8 +181,8 @@ func TestRegisterShippingMarkOrderCompletionConsumerErrors(t *testing.T) {
 		Topic:   shippingport.TopicMarkGenerated,
 		Payload: []byte(`{"markId":"mark-1","orderId":"order-1"}`),
 	})
-	if err == nil {
-		t.Fatalf("handler() error = nil, want non-nil")
+	if err != nil {
+		t.Fatalf("handler() error = %v, want nil", err)
 	}
 
 	service.updateErr = errors.New("db down")

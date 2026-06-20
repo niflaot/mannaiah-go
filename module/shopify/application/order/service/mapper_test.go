@@ -130,6 +130,42 @@ func TestBuildOrderSyncCommandMapsLineItemProductIdentity(t *testing.T) {
 	}
 }
 
+// TestBuildOrderSyncCommandAppendsProductColorLabel verifies Shopify product-color labels are preserved for PDFs.
+func TestBuildOrderSyncCommandAppendsProductColorLabel(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:   "order-1",
+		Name: "#1001",
+		LineItems: []shopifyport.ShopifyLineItem{
+			{
+				SKU:        "7700001",
+				Title:      "Totepack Kairos Classic",
+				ColorLabel: "Negro",
+				Quantity:   1,
+				Price:      "120000",
+			},
+		},
+	}, "contact-1", "shopify", "cron")
+
+	if command.Items[0].AlternateName != "Totepack Kairos Classic NEGRO" {
+		t.Fatalf("AlternateName = %q, want color suffix", command.Items[0].AlternateName)
+	}
+}
+
+// TestBuildOrderSyncCommandDoesNotDuplicateProductColorLabel verifies existing color names are not repeated.
+func TestBuildOrderSyncCommandDoesNotDuplicateProductColorLabel(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:   "order-1",
+		Name: "#1001",
+		LineItems: []shopifyport.ShopifyLineItem{
+			{SKU: "7700001", Title: "Totepack Kairos Classic Negro", ColorLabel: "Negro", Quantity: 1},
+		},
+	}, "contact-1", "shopify", "cron")
+
+	if command.Items[0].AlternateName != "Totepack Kairos Classic Negro" {
+		t.Fatalf("AlternateName = %q, want unchanged label", command.Items[0].AlternateName)
+	}
+}
+
 // TestBuildOrderSyncCommandMapsShippingCityNameToCityCode verifies Shopify city names are normalized for Mannaiah.
 func TestBuildOrderSyncCommandMapsShippingCityNameToCityCode(t *testing.T) {
 	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{

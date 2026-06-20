@@ -414,6 +414,14 @@ Returns a half-letter PDF rotulus for the mark. The QR payload is signed with HM
 
 **Response** `200 OK` with `Content-Type: application/pdf` body.
 
+```http
+GET /shipping/marks/:id/document
+```
+
+Returns the carrier shipping-label PDF for one mark. The backend stamps a compact `CONTENIDO` footer using order-summary item labels, including quantities and product color labels when available.
+
+**Response** `200 OK` with `Content-Type: application/pdf` body.
+
 ---
 
 ## Tracking Endpoint

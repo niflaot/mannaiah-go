@@ -37,7 +37,7 @@
   - `POST /shipping/quotations/order` — auto-build packages from order products and request a quotation
   - `POST /shipping/quotations/order-packaging` — preview package allocation, COD value, destination city, and resolved shipment mode without carrier calls or persistence
   - `GET /shipping/quotations/order/:identifier?carrierId={carrierID}` — retrieve the latest non-expired quotation for an order and carrier
-  - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks/:id/rotulus-document`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
+  - `POST /shipping/marks`, `GET /shipping/marks/:id`, `GET /shipping/marks/:id/related`, `GET /shipping/marks/:id/document`, `GET /shipping/marks/:id/rotulus-document`, `GET /shipping/marks`, `PATCH /shipping/marks/:id/void`
   - `POST /shipping/batches`, `GET /shipping/batches/:id`, `GET /shipping/batches`, `POST /shipping/batches/:id/marks`, `POST /shipping/batches/marks`, `PATCH /shipping/batches/:id/marks/:markID`, `DELETE /shipping/batches/:id/marks/:markID`, `PATCH /shipping/batches/:id/close`, `GET /shipping/batches/:id/manifest-document`, `GET /shipping/batches/:id/checklist-document`
   - `GET /shipping/tracking`, `GET /shipping/tracking/:trackingNumber?carrier={carrierID}`
   - `GET /shipping/carriers`, `GET /shipping/carriers/:id`
@@ -73,6 +73,7 @@
 - `SHIPPING_ROTULUS_TEMPLATE_PATH` optionally points to a JSON template file for Spanish rotulus labels.
 - `SHIPPING_ROTULUS_SIGNING_SECRET` defines the HMAC secret used to sign QR payloads embedded in rotulus PDFs.
 - Default template source: `application/mark/service/templates/rotulus.es.json`.
+- `GET /shipping/marks/:id/document` returns the carrier label PDF and stamps a compact `CONTENIDO` footer using the same order-summary item labels as rotulus and checklist documents.
 
 ## Quotation Discount
 - `SHIPPING_QUOTATION_DISCOUNT_PERCENT` applies a global percentage discount to all carrier quotations.

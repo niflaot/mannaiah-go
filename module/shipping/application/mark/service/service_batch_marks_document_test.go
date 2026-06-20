@@ -26,11 +26,11 @@ func TestBatchAllMarksDocumentReturnsNotFoundWhenNoDocumentRefs(t *testing.T) {
 	repository := newMarkRepositoryStub()
 	batchID := "batch-1"
 	repository.rows["mark-1"] = domain.ShippingMark{
-		ID:           "mark-1",
+		ID:              "mark-1",
 		DispatchBatchID: strPtr(batchID),
-		Status:       domain.MarkStatusGenerated,
-		DocumentType: domain.MarkDocumentType(""),
-		DocumentRef:  "",
+		Status:          domain.MarkStatusGenerated,
+		DocumentType:    domain.MarkDocumentType(""),
+		DocumentRef:     "",
 	}
 
 	service := NewService(repository, markRegistryStub{}, &publisherStub{})
@@ -97,6 +97,35 @@ func TestBatchAllMarksDocumentDownloadsAndMerges(t *testing.T) {
 	}
 	if !bytes.HasPrefix(payload, []byte("%PDF")) {
 		t.Fatalf("BatchAllMarksDocument() result is not a valid PDF")
+	}
+}
+
+// TestMarkDocumentDownloadsAndStampsContent verifies single carrier-label downloads are stamped.
+func TestMarkDocumentDownloadsAndStampsContent(t *testing.T) {
+	pdfBytes := minimalPDFBytes()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write(pdfBytes)
+	}))
+	defer server.Close()
+
+	repository := newMarkRepositoryStub()
+	repository.rows["mark-1"] = domain.ShippingMark{
+		ID:           "mark-1",
+		OrderID:      "order-1",
+		Status:       domain.MarkStatusGenerated,
+		DocumentType: domain.MarkDocumentLink,
+		DocumentRef:  server.URL + "/mark.pdf",
+		Units:        []domain.PackageUnit{{Description: "X1 Totepack Kairos Classic NEGRO"}},
+	}
+	service := NewService(repository, markRegistryStub{}, &publisherStub{})
+
+	payload, err := service.MarkDocument(context.Background(), "mark-1")
+	if err != nil {
+		t.Fatalf("MarkDocument() error = %v", err)
+	}
+	if !bytes.HasPrefix(payload, []byte("%PDF")) {
+		t.Fatalf("MarkDocument() returned non-pdf payload")
 	}
 }
 

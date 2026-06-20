@@ -349,9 +349,11 @@ func resolveRotulusOrderDataItemLabels(orderData *port.OrderQuotationData) []str
 		if label == "" {
 			continue
 		}
-		if item.Quantity > 1 {
-			label = label + " x" + strconv.Itoa(item.Quantity)
+		quantity := item.Quantity
+		if quantity <= 0 {
+			quantity = 1
 		}
+		label = "X" + strconv.Itoa(quantity) + " " + label
 		labels = append(labels, label)
 	}
 

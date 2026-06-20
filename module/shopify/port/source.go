@@ -113,6 +113,8 @@ type ShopifyLineItem struct {
 	Title string
 	// VariantTitle defines variant-title values.
 	VariantTitle string
+	// ColorLabel defines product-color display labels resolved from Shopify custom data.
+	ColorLabel string
 	// ProductID defines Shopify product identifiers.
 	ProductID string
 	// VariantID defines Shopify variant identifiers.

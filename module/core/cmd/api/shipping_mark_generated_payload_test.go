@@ -12,13 +12,16 @@ import (
 func TestDecodeShippingMarkGeneratedPayload(t *testing.T) {
 	payload, err := decodeShippingMarkGeneratedPayload(coremsgbus.Message{
 		Topic:   "shipping.v1.mark.generated",
-		Payload: []byte(`{"markId":"mark-1","orderId":"order-1","carrierId":"tcc","trackingNumber":"6039"}`),
+		Payload: []byte(`{"markId":"mark-1","orderId":"order-1","carrierId":"tcc","trackingCompany":"tcc","trackingNumber":"6039"}`),
 	})
 	if err != nil {
 		t.Fatalf("decodeShippingMarkGeneratedPayload() error = %v", err)
 	}
 	if payload.MarkID != "mark-1" || payload.OrderID != "order-1" {
 		t.Fatalf("payload = %+v", payload)
+	}
+	if payload.TrackingCompany != "tcc" {
+		t.Fatalf("payload.TrackingCompany = %q, want %q", payload.TrackingCompany, "tcc")
 	}
 
 	_, err = decodeShippingMarkGeneratedPayload(coremsgbus.Message{

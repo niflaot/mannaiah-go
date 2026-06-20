@@ -55,27 +55,6 @@ func registerShippingMarkOrderCompletionConsumer(
 		if entity == nil {
 			return nil
 		}
-		if entity.CurrentStatus == ordersdomain.StatusCompleted {
-			return nil
-		}
-
-		_, updateErr := ordersService.UpdateStatus(ctx, entity.ID, ordersapplication.UpdateStatusCommand{
-			Status:      ordersdomain.StatusCompleted,
-			Author:      "shipping",
-			Description: "order completed after shipping mark generation",
-			Source:      "shipping_mark_generated",
-		})
-		if updateErr != nil {
-			if errors.Is(updateErr, ordersport.ErrNotFound) {
-				return nil
-			}
-			if strings.Contains(strings.ToLower(updateErr.Error()), "order not found") {
-				return nil
-			}
-
-			return fmt.Errorf("complete order from shipping mark generated: %w", updateErr)
-		}
-
 		return nil
 	}
 

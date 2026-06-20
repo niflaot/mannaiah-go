@@ -51,6 +51,12 @@ A new release image is accepted only if all are true:
 
 Keep newest entries on top. Add one section per version.
 
+### [v3.0.1] - 2026-06-20
+- Shipping PDFs now render order item quantities in content lists, including rotulus, manifest cover, checklist, and carrier-label downloads.
+- Shopify order sync enriches line-item display names with product color metaobject labels when available.
+- Carrier shipping-label downloads now support a backend single-mark endpoint with a compact stamped `CONTENIDO` footer, and all-marks downloads stamp the same content before merging.
+- Release metadata updated to `v3.0.1`.
+
 ### [v3.0.0] - 2026-05-07
 - Removed the WooCommerce integration module from runtime, workspace, docs, route registration, and CI validation.
 - Kept historical sync-record querying for existing `woocommerce.contacts` and `woocommerce.orders` runs, plus historical order `realm`/`source` values for origin visibility.

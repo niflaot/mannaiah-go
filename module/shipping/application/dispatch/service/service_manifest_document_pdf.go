@@ -128,7 +128,6 @@ func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestC
 	}
 	template := s.resolveBatchManifestCoverTemplate()
 	_, widths := resolveBatchManifestTableLayout(template, isManualBatch)
-	itemCellText := formatBatchManifestItemsAsList(row.Items, template.ItemBulletPrefix, template.EmptyValueFallback)
 	startX, startY := pdf.GetX(), pdf.GetY()
 
 	freightText := fmt.Sprintf("$%.0f", row.FreightCost)
@@ -152,8 +151,7 @@ func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestC
 	itemCellX := startX + sumBatchManifestColumnWidths(widths, itemColumnIndex)
 	itemCellWidth := widths[itemColumnIndex]
 	pdf.Rect(itemCellX, startY, itemCellWidth, rowHeight, "D")
-	pdf.SetXY(itemCellX, startY)
-	pdf.MultiCell(itemCellWidth, batchManifestItemsLineHeightMM, encodeBatchManifestText(itemCellText), "", "L", false)
+	drawBatchManifestItemsCell(pdf, itemCellX, startY, itemCellWidth, batchManifestItemsLineHeightMM, row.Items, template.ItemBulletPrefix, template.EmptyValueFallback)
 	pdf.SetXY(startX, startY+rowHeight)
 }
 
@@ -270,6 +268,76 @@ func formatBatchManifestItemsAsList(items []string, bulletPrefix string, fallbac
 	return strings.Join(rows, "\n")
 }
 
+// drawBatchManifestItemsCell draws item rows and emphasizes the quantity token when present.
+func drawBatchManifestItemsCell(pdf *gofpdf.Fpdf, x float64, y float64, width float64, lineHeight float64, items []string, bulletPrefix string, fallback string) {
+	if pdf == nil {
+		return
+	}
+	normalizedItems := normalizeBatchManifestItems(items)
+	if len(normalizedItems) == 0 {
+		normalizedItems = []string{fallback}
+	}
+	trimmedPrefix := strings.TrimSpace(bulletPrefix)
+	if trimmedPrefix == "" {
+		trimmedPrefix = "-"
+	}
+	currentY := y
+	for _, item := range normalizedItems {
+		nextY := drawBatchManifestItemLine(pdf, x, currentY, width, lineHeight, trimmedPrefix, item)
+		if nextY <= currentY {
+			nextY = currentY + lineHeight
+		}
+		currentY = nextY
+	}
+}
+
+// drawBatchManifestItemLine draws one item row with an optional bold quantity prefix.
+func drawBatchManifestItemLine(pdf *gofpdf.Fpdf, x float64, y float64, width float64, lineHeight float64, bulletPrefix string, item string) float64 {
+	if pdf == nil {
+		return y
+	}
+	quantity, rest, hasQuantity := splitBatchManifestQuantityPrefix(item)
+	pdf.SetXY(x, y)
+	pdf.SetFont("Arial", "", 8)
+	bulletText := encodeBatchManifestText(strings.TrimSpace(bulletPrefix) + " ")
+	pdf.CellFormat(pdf.GetStringWidth(bulletText), lineHeight, bulletText, "", 0, "L", false, 0, "")
+	remainingX := pdf.GetX()
+	if hasQuantity {
+		pdf.SetFont("Arial", "B", 8)
+		quantityText := encodeBatchManifestText(quantity + " ")
+		pdf.CellFormat(pdf.GetStringWidth(quantityText), lineHeight, quantityText, "", 0, "L", false, 0, "")
+		remainingX = pdf.GetX()
+	}
+	pdf.SetXY(remainingX, y)
+	pdf.SetFont("Arial", "", 8)
+	value := strings.TrimSpace(item)
+	if hasQuantity {
+		value = rest
+	}
+	pdf.MultiCell(maxBatchManifestFloat(width-(remainingX-x), 4), lineHeight, encodeBatchManifestText(strings.TrimSpace(value)), "", "L", false)
+
+	return pdf.GetY()
+}
+
+// splitBatchManifestQuantityPrefix splits labels like "X2 Product" into quantity and item text.
+func splitBatchManifestQuantityPrefix(item string) (string, string, bool) {
+	fields := strings.Fields(strings.TrimSpace(item))
+	if len(fields) == 0 {
+		return "", "", false
+	}
+	token := strings.ToUpper(fields[0])
+	if len(token) < 2 || token[0] != 'X' {
+		return "", strings.TrimSpace(item), false
+	}
+	for _, digit := range token[1:] {
+		if digit < '0' || digit > '9' {
+			return "", strings.TrimSpace(item), false
+		}
+	}
+
+	return token, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(item), fields[0])), true
+}
+
 // batchManifestTableRowHeight resolves dynamic row height values based on rendered items.
 func (s *Service) batchManifestTableRowHeight(pdf *gofpdf.Fpdf, row batchManifestCoverRow, isManualBatch bool) float64 {
 	if pdf == nil {
@@ -305,6 +373,15 @@ func sumBatchManifestColumnWidths(widths []float64, endColumn int) float64 {
 	}
 
 	return total
+}
+
+// maxBatchManifestFloat returns the greater float64 value.
+func maxBatchManifestFloat(left float64, right float64) float64 {
+	if left > right {
+		return left
+	}
+
+	return right
 }
 
 // resolveBatchManifestTableLayout resolves table headers and column widths by batch kind.

@@ -127,7 +127,7 @@ func buildOrderItems(values []shopifyport.ShopifyLineItem) []shopifyport.OrderSy
 	for _, value := range values {
 		items = append(items, shopifyport.OrderSyncItemCommand{
 			SKU:              strings.TrimSpace(value.SKU),
-			AlternateName:    buildAlternateName(value.Title, value.VariantTitle),
+			AlternateName:    buildAlternateName(value.Title, value.VariantTitle, value.ColorLabel),
 			ProductID:        strings.TrimSpace(value.MannaiahProductID),
 			ShopifyProductID: strings.TrimSpace(value.ProductID),
 			ShopifyVariantID: strings.TrimSpace(value.VariantID),
@@ -323,17 +323,24 @@ func resolveRealm(value string) string {
 	return "shopify"
 }
 
-func buildAlternateName(title string, variantTitle string) string {
+func buildAlternateName(title string, variantTitle string, colorLabel string) string {
 	trimmedTitle := strings.TrimSpace(title)
 	trimmedVariant := strings.TrimSpace(variantTitle)
+	trimmedColor := strings.TrimSpace(colorLabel)
+	colorSuffix := strings.ToUpper(trimmedColor)
+	base := ""
 	if trimmedTitle == "" {
-		return trimmedVariant
+		base = trimmedVariant
+	} else if trimmedVariant == "" || strings.EqualFold(trimmedVariant, "default title") || strings.EqualFold(trimmedVariant, trimmedTitle) {
+		base = trimmedTitle
+	} else {
+		base = trimmedTitle + " - " + trimmedVariant
 	}
-	if trimmedVariant == "" || strings.EqualFold(trimmedVariant, "default title") || strings.EqualFold(trimmedVariant, trimmedTitle) {
-		return trimmedTitle
+	if colorSuffix == "" || strings.Contains(strings.ToLower(base), strings.ToLower(trimmedColor)) {
+		return base
 	}
 
-	return trimmedTitle + " - " + trimmedVariant
+	return strings.TrimSpace(base + " " + colorSuffix)
 }
 
 func parseMoney(value string) float64 {

@@ -152,7 +152,7 @@ func (s *Service) drawRotulusRightColumn(pdf *gofpdf.Fpdf, meta markRotulusMeta,
 	rightWidth := (rotulusPageWidthMM - (2 * rotulusMarginMM) - rotulusColumnGapMM) / 2
 	qrSize := rotulusQRSizeMM
 	qrX := rightX + (rightWidth-qrSize)/2
-	qrY := rotulusMarginMM + ((rotulusContentHeightMM-(2*rotulusMarginMM)-qrSize)/2) + yOffset
+	qrY := rotulusMarginMM + ((rotulusContentHeightMM - (2 * rotulusMarginMM) - qrSize) / 2) + yOffset
 	opts := gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}
 	pdf.RegisterImageOptionsReader(qrImageName, opts, bytes.NewReader(qrBytes))
 	pdf.ImageOptions(qrImageName, qrX, qrY, qrSize, qrSize, false, opts, 0, "")
@@ -238,13 +238,131 @@ func drawRotulusContent(pdf *gofpdf.Fpdf, x float64, width float64, content stri
 	if pdf == nil {
 		return
 	}
-	drawRotulusLabelValueRow(
-		pdf,
-		x,
-		width,
-		formatRotulusLabel("Contenido"),
-		sanitizeRotulusValue(content, fallback),
-	)
+	label := formatRotulusLabel("Contenido")
+	lines := splitRotulusContentLines(sanitizeRotulusValue(content, fallback))
+	if !rotulusContentLinesHaveQuantity(lines) {
+		drawRotulusLabelValueRow(pdf, x, width, label, strings.Join(lines, "\n"))
+		return
+	}
+	y := pdf.GetY()
+	labelText := encodeRotulusText(label + " ")
+	pdf.SetXY(x, y)
+	pdf.SetFont("Arial", "B", 10)
+	pdf.CellFormat(0, 5.5, labelText, "", 0, "L", false, 0, "")
+	labelWidth := pdf.GetStringWidth(labelText)
+	nextY := drawRotulusContentItemLines(pdf, x+labelWidth, y, width-labelWidth, lines, true)
+	if nextY <= y {
+		nextY = y + 5.5
+	}
+	pdf.SetY(nextY + 0.7)
+}
+
+// rotulusContentLinesHaveQuantity reports whether any content row has an Xn quantity prefix.
+func rotulusContentLinesHaveQuantity(lines []string) bool {
+	for _, line := range lines {
+		_, item := splitRotulusBullet(line)
+		if _, _, ok := splitRotulusQuantityPrefix(item); ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// splitRotulusContentLines normalizes rendered rotulus content rows.
+func splitRotulusContentLines(content string) []string {
+	rows := strings.Split(strings.TrimSpace(content), "\n")
+	normalized := make([]string, 0, len(rows))
+	for _, row := range rows {
+		trimmed := strings.TrimSpace(row)
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return []string{"-"}
+	}
+
+	return normalized
+}
+
+// drawRotulusContentItemLines draws content rows with bold quantity prefixes.
+func drawRotulusContentItemLines(pdf *gofpdf.Fpdf, x float64, y float64, width float64, lines []string, firstLineInline bool) float64 {
+	currentY := y
+	for index, line := range lines {
+		lineX := x
+		if index > 0 || !firstLineInline {
+			lineX = x
+		}
+		nextY := drawRotulusContentItemLine(pdf, lineX, currentY, width, line)
+		if nextY <= currentY {
+			nextY = currentY + 5.5
+		}
+		currentY = nextY
+	}
+
+	return currentY
+}
+
+// drawRotulusContentItemLine draws one rotulus content row with an optional bold quantity prefix.
+func drawRotulusContentItemLine(pdf *gofpdf.Fpdf, x float64, y float64, width float64, line string) float64 {
+	if pdf == nil {
+		return y
+	}
+	bullet, item := splitRotulusBullet(strings.TrimSpace(line))
+	quantity, rest, hasQuantity := splitRotulusQuantityPrefix(item)
+	pdf.SetXY(x, y)
+	pdf.SetFont("Arial", "", 10)
+	if bullet != "" {
+		bulletText := encodeRotulusText(bullet + " ")
+		pdf.CellFormat(pdf.GetStringWidth(bulletText), 5.5, bulletText, "", 0, "L", false, 0, "")
+	}
+	remainingX := pdf.GetX()
+	if hasQuantity {
+		pdf.SetFont("Arial", "B", 10)
+		quantityText := encodeRotulusText(quantity + " ")
+		pdf.CellFormat(pdf.GetStringWidth(quantityText), 5.5, quantityText, "", 0, "L", false, 0, "")
+		remainingX = pdf.GetX()
+	}
+	value := strings.TrimSpace(item)
+	if hasQuantity {
+		value = rest
+	}
+	pdf.SetXY(remainingX, y)
+	pdf.SetFont("Arial", "", 10)
+	pdf.MultiCell(math.Max(width-(remainingX-x), 4), 5.5, encodeRotulusText(value), "", "L", false)
+
+	return pdf.GetY()
+}
+
+// splitRotulusBullet separates list bullet prefixes from content labels.
+func splitRotulusBullet(line string) (string, string) {
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "- ") {
+		return "-", strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
+	}
+
+	return "", trimmed
+}
+
+// splitRotulusQuantityPrefix splits labels like "X2 Product" into quantity and item text.
+func splitRotulusQuantityPrefix(item string) (string, string, bool) {
+	fields := strings.Fields(strings.TrimSpace(item))
+	if len(fields) == 0 {
+		return "", "", false
+	}
+	token := strings.ToUpper(fields[0])
+	if len(token) < 2 || token[0] != 'X' {
+		return "", strings.TrimSpace(item), false
+	}
+	for _, digit := range token[1:] {
+		if digit < '0' || digit > '9' {
+			return "", strings.TrimSpace(item), false
+		}
+	}
+
+	return token, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(item), fields[0])), true
 }
 
 // downloadRotulusLogo downloads one logo image and resolves image type values for gofpdf.

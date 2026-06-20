@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
 
 	corecache "mannaiah/module/core/cache"
 	"mannaiah/module/shipping/domain"
@@ -94,6 +95,9 @@ func (s *Service) BatchAllMarksDocument(ctx context.Context, batchID string) ([]
 		if dlErr != nil {
 			continue
 		}
+		if stampedBytes, stampErr := s.stampMarkDocumentContent(ctx, pdfBytes, mark); stampErr == nil && len(stampedBytes) > 0 {
+			pdfBytes = stampedBytes
+		}
 		readers = append(readers, bytes.NewReader(pdfBytes))
 	}
 
@@ -110,6 +114,33 @@ func (s *Service) BatchAllMarksDocument(ctx context.Context, batchID string) ([]
 	s.cacheBatchAllMarksDocument(ctx, trimmedBatchID, payload)
 
 	return append([]byte(nil), payload...), nil
+}
+
+// MarkDocument downloads one shipping label PDF and stamps the order content footer.
+func (s *Service) MarkDocument(ctx context.Context, markID string) ([]byte, error) {
+	if s == nil || s.repository == nil || s.batchMarksDocuments == nil {
+		return nil, domain.ErrInvalidID
+	}
+	trimmedMarkID := strings.TrimSpace(markID)
+	if trimmedMarkID == "" {
+		return nil, domain.ErrInvalidID
+	}
+	mark, err := s.repository.GetByID(ctx, trimmedMarkID)
+	if err != nil {
+		return nil, err
+	}
+	if mark == nil || mark.DocumentType != domain.MarkDocumentLink || strings.TrimSpace(mark.DocumentRef) == "" {
+		return nil, domain.ErrNotFound
+	}
+	pdfBytes, err := s.downloadMarkDocumentPDF(ctx, mark.DocumentRef)
+	if err != nil {
+		return nil, err
+	}
+	if stampedBytes, stampErr := s.stampMarkDocumentContent(ctx, pdfBytes, *mark); stampErr == nil && len(stampedBytes) > 0 {
+		return stampedBytes, nil
+	}
+
+	return pdfBytes, nil
 }
 
 // SetBatchAllMarksDocumentCacheStore configures external cache dependencies used by batch marks cache.
@@ -164,6 +195,44 @@ func (s *Service) downloadMarkDocumentPDF(ctx context.Context, rawURL string) ([
 		return nil, domain.ErrInvalidID
 	}
 	return body, nil
+}
+
+// stampMarkDocumentContent stamps a compact content footer onto one carrier label PDF.
+func (s *Service) stampMarkDocumentContent(ctx context.Context, payload []byte, mark domain.ShippingMark) ([]byte, error) {
+	text := s.resolveMarkDocumentContentStamp(ctx, mark)
+	if strings.TrimSpace(text) == "" {
+		return payload, nil
+	}
+	watermark, err := pdfcpuapi.TextWatermark(text, "font:Helvetica, points:8, pos:bc, off:0 14, rot:0, op:1, scale:1 abs", true, false, types.POINTS)
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := pdfcpuapi.AddWatermarks(bytes.NewReader(payload), &out, nil, watermark, nil); err != nil {
+		return nil, err
+	}
+
+	return out.Bytes(), nil
+}
+
+// resolveMarkDocumentContentStamp resolves the text stamped on carrier labels.
+func (s *Service) resolveMarkDocumentContentStamp(ctx context.Context, mark domain.ShippingMark) string {
+	content := resolveRotulusContent(mark, s.resolveRotulusOrderSummaryItems(ctx, mark.OrderID), nil)
+	lines := strings.Split(content, "\n")
+	rows := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
+		if trimmed == "" || trimmed == "-" {
+			continue
+		}
+		rows = append(rows, trimmed)
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+
+	return "CONTENIDO: " + strings.Join(rows, " / ")
 }
 
 // getCachedBatchAllMarksDocument resolves one cached merged-marks payload when not expired.

@@ -82,6 +82,58 @@ func TestClientGetOrderRetries429(t *testing.T) {
 	}
 }
 
+// TestClientGetOrderEnrichesProductColorLabel verifies product color metaobject labels are loaded for line items.
+func TestClientGetOrderEnrichesProductColorLabel(t *testing.T) {
+	var graphQLSeen bool
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/orders/123.json":
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"order":{"id":123,"name":"#123","email":"buyer@example.com","line_items":[{"id":1,"product_id":111,"variant_id":222,"sku":"SKU-1","title":"Totepack Kairos Classic","quantity":1,"price":"120000"}],"shipping_lines":[],"discount_codes":[],"payment_gateway_names":[],"created_at":"2026-05-05T00:00:00Z"}}`))
+		case "/graphql.json":
+			graphQLSeen = true
+			var captured graphqlRequest
+			if err := json.NewDecoder(request.Body).Decode(&captured); err != nil {
+				t.Fatalf("decode graphql request: %v", err)
+			}
+			ids, ok := captured.Variables["ids"].([]any)
+			if !ok || len(ids) != 1 || ids[0] != "gid://shopify/Product/111" {
+				t.Fatalf("ids = %#v", captured.Variables["ids"])
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"data":{"nodes":[{"id":"gid://shopify/Product/111","customColor":{"reference":{"label":{"value":"Negro"}}}}]}}`))
+		default:
+			t.Fatalf("request path = %q", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	order, err := client.GetOrder(shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com"), "123")
+	if err != nil {
+		t.Fatalf("GetOrder() error = %v", err)
+	}
+	if !graphQLSeen {
+		t.Fatalf("expected product color GraphQL lookup")
+	}
+	if order.LineItems[0].ColorLabel != "Negro" {
+		t.Fatalf("ColorLabel = %q, want Negro", order.LineItems[0].ColorLabel)
+	}
+}
+
 // TestClientCancelOrderUsesGraphQLCancellationInputs verifies cancellation write-back suppresses notifications.
 func TestClientCancelOrderUsesGraphQLCancellationInputs(t *testing.T) {
 	var captured graphqlRequest

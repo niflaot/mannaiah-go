@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	ordersdomain "mannaiah/module/orders/domain"
@@ -59,7 +60,20 @@ func shippingBatchManifestItemLabels(items []ordersdomain.Item) []string {
 		if label == "" {
 			continue
 		}
-		labels = append(labels, label)
+		labels = append(labels, formatShippingBatchManifestItemLabel(item.Quantity, label))
 	}
 	return labels
+}
+
+// formatShippingBatchManifestItemLabel resolves one PDF-safe product label with quantity prefix.
+func formatShippingBatchManifestItemLabel(quantity int, label string) string {
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		return ""
+	}
+	if quantity <= 0 {
+		quantity = 1
+	}
+
+	return "X" + strconv.Itoa(quantity) + " " + trimmed
 }

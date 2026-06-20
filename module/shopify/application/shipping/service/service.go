@@ -25,6 +25,8 @@ type MarkGeneratedPayload struct {
 	OrderID string `json:"orderId"`
 	// CarrierID defines carrier identifiers.
 	CarrierID string `json:"carrierId"`
+	// TrackingCompany defines the carrier name to expose on Shopify fulfillments.
+	TrackingCompany string `json:"trackingCompany"`
 	// TrackingNumber defines tracking numbers.
 	TrackingNumber string `json:"trackingNumber"`
 }
@@ -84,7 +86,7 @@ func (s *Service) HandleMarkGenerated(ctx context.Context, payload MarkGenerated
 	fulfillmentID, err := s.destination.FulfillOrder(requestCtx, shopifyport.ShopifyFulfillOrderInput{
 		ShopifyOrderID:  strings.TrimSpace(orderLink.ShopifyID),
 		TrackingNumber:  strings.TrimSpace(payload.TrackingNumber),
-		TrackingCompany: strings.TrimSpace(payload.CarrierID),
+		TrackingCompany: resolveTrackingCompany(payload),
 		NotifyCustomer:  false,
 	})
 	if err != nil {
@@ -100,6 +102,15 @@ func (s *Service) HandleMarkGenerated(ctx context.Context, payload MarkGenerated
 		LastSyncedAt:    &now,
 	})
 	return err
+}
+
+// resolveTrackingCompany resolves the fulfillment carrier name persisted in Shopify.
+func resolveTrackingCompany(payload MarkGeneratedPayload) string {
+	if trackingCompany := strings.TrimSpace(payload.TrackingCompany); trackingCompany != "" {
+		return trackingCompany
+	}
+
+	return strings.TrimSpace(payload.CarrierID)
 }
 
 // HandleMarkVoided cancels one Shopify fulfillment for a voided Mannaiah mark.
