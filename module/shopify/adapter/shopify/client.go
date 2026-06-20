@@ -538,10 +538,17 @@ type fulfillmentOrderNode struct {
 }
 
 type productColorMetafield struct {
+	Value     string          `json:"value"`
+	JSONValue json.RawMessage `json:"jsonValue"`
 	Reference *struct {
 		Label *struct {
-			Value string `json:"value"`
+			Value     string          `json:"value"`
+			JSONValue json.RawMessage `json:"jsonValue"`
 		} `json:"label"`
+		Color *struct {
+			Value     string          `json:"value"`
+			JSONValue json.RawMessage `json:"jsonValue"`
+		} `json:"color"`
 	} `json:"reference"`
 }
 
@@ -602,24 +609,23 @@ func (c *Client) enrichOrderProductColorLabels(ctx context.Context, installation
   nodes(ids: $ids) {
     ... on Product {
       id
-      appColor: metafield(key: "color") {
-        reference {
-          ... on Metaobject {
-            label: field(key: "label") { value }
-          }
-        }
-      }
       customColor: metafield(namespace: "custom", key: "color") {
+        value
+        jsonValue
         reference {
           ... on Metaobject {
-            label: field(key: "label") { value }
+            label: field(key: "label") { value jsonValue }
+            color: field(key: "color") { value jsonValue }
           }
         }
       }
       productColor: metafield(namespace: "custom", key: "product_color") {
+        value
+        jsonValue
         reference {
           ... on Metaobject {
-            label: field(key: "label") { value }
+            label: field(key: "label") { value jsonValue }
+            color: field(key: "color") { value jsonValue }
           }
         }
       }
@@ -651,15 +657,54 @@ func (c *Client) enrichOrderProductColorLabels(ctx context.Context, installation
 
 func resolveProductColorLabel(node productColorNode) string {
 	for _, field := range []*productColorMetafield{node.AppColor, node.CustomColor, node.ProductColor} {
-		if field == nil || field.Reference == nil || field.Reference.Label == nil {
+		if field == nil || field.Reference == nil {
 			continue
 		}
-		if label := strings.TrimSpace(field.Reference.Label.Value); label != "" {
+		if label := resolveProductColorMetaobjectField(field.Reference.Label); label != "" {
+			return label
+		}
+		if label := resolveProductColorMetaobjectField(field.Reference.Color); label != "" {
 			return label
 		}
 	}
 
 	return ""
+}
+
+func resolveProductColorMetaobjectField(field *struct {
+	Value     string          `json:"value"`
+	JSONValue json.RawMessage `json:"jsonValue"`
+}) string {
+	if field == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(field.Value); value != "" {
+		return value
+	}
+	return trimGraphQLJSONScalar(field.JSONValue)
+}
+
+func trimGraphQLJSONScalar(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case float64:
+		return strings.TrimSpace(strconv.FormatFloat(typed, 'f', -1, 64))
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	default:
+		return strings.TrimSpace(string(raw))
+	}
 }
 
 func (r graphqlResponse[T]) graphQLErrors() []graphqlError {

@@ -1,7 +1,7 @@
 # Mannaiah Go
 
 [![Build Status](https://ci.niflaot.dev/api/badges/niflaot/mannaiah-go/status.svg)](https://ci.niflaot.dev/niflaot/mannaiah-go)
-![Latest Version](https://img.shields.io/badge/latest-v3.0.3-0A66C2)
+![Latest Version](https://img.shields.io/badge/latest-v3.0.4-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
 

@@ -127,6 +127,12 @@ func TestMarkDocumentDownloadsAndStampsContent(t *testing.T) {
 	if !bytes.HasPrefix(payload, []byte("%PDF")) {
 		t.Fatalf("MarkDocument() returned non-pdf payload")
 	}
+	if len(payload) <= len(pdfBytes) {
+		t.Fatalf("MarkDocument() did not stamp the source PDF")
+	}
+	if got := service.resolveMarkDocumentContentStamp(context.Background(), repository.rows["mark-1"]); got != "CONTENIDO: X1 Totepack Kairos Classic NEGRO" {
+		t.Fatalf("content stamp = %q", got)
+	}
 }
 
 // TestBatchAllMarksDocumentCachesResult verifies that a second call returns the cached payload.

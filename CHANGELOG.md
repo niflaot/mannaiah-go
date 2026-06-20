@@ -53,6 +53,11 @@ Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
 
+### [v3.0.4] - 2026-06-20
+- Shopify product color enrichment now reads `custom.color` metaobject labels from `jsonValue` as well as `value`.
+- Carrier shipping-label downloads stamp `CONTENIDO` in a more visible lower-left position and use a fresh merged-label cache namespace.
+- Release metadata updated to `v3.0.4`.
+
 ### [v3.0.3] - 2026-06-20
 - CI/CD and container publish references moved from `momlesstomato.dev` to `niflaot.dev`, including Drone badges and the Nexus Docker registry target.
 - Shipping dispatch email template touched to force a fresh Drone build.

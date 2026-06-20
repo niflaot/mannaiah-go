@@ -96,12 +96,15 @@ func TestClientGetOrderEnrichesProductColorLabel(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&captured); err != nil {
 				t.Fatalf("decode graphql request: %v", err)
 			}
+			if strings.Contains(captured.Query, `metafield(key: "color")`) {
+				t.Fatalf("query should use explicit custom namespace for product color lookup: %s", captured.Query)
+			}
 			ids, ok := captured.Variables["ids"].([]any)
 			if !ok || len(ids) != 1 || ids[0] != "gid://shopify/Product/111" {
 				t.Fatalf("ids = %#v", captured.Variables["ids"])
 			}
 			writer.Header().Set("Content-Type", "application/json")
-			_, _ = writer.Write([]byte(`{"data":{"nodes":[{"id":"gid://shopify/Product/111","customColor":{"reference":{"label":{"value":"Negro"}}}}]}}`))
+			_, _ = writer.Write([]byte(`{"data":{"nodes":[{"id":"gid://shopify/Product/111","customColor":{"reference":{"label":{"jsonValue":"Negro"}}}}]}}`))
 		default:
 			t.Fatalf("request path = %q", request.URL.Path)
 		}

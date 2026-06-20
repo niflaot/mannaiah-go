@@ -22,7 +22,7 @@ const (
 	// defaultBatchAllMarksCacheTTL defines in-memory cache retention for merged mark PDFs.
 	defaultBatchAllMarksCacheTTL = 5 * time.Minute
 	// defaultBatchAllMarksCacheKeyPrefix defines Redis cache-key prefix for merged mark documents.
-	defaultBatchAllMarksCacheKeyPrefix = "shipping:batch_all_marks_document:"
+	defaultBatchAllMarksCacheKeyPrefix = "shipping:batch_all_marks_document:v2:"
 	// maxMarkDocumentDownloadBytes defines maximum download size for one mark document PDF.
 	maxMarkDocumentDownloadBytes = 20 * 1024 * 1024
 	// defaultBatchAllMarksHTTPTimeout defines HTTP timeout for mark document downloads.
@@ -203,7 +203,7 @@ func (s *Service) stampMarkDocumentContent(ctx context.Context, payload []byte, 
 	if strings.TrimSpace(text) == "" {
 		return payload, nil
 	}
-	watermark, err := pdfcpuapi.TextWatermark(text, "font:Helvetica, points:8, pos:bc, off:0 14, rot:0, op:1, scale:1 abs", true, false, types.POINTS)
+	watermark, err := pdfcpuapi.TextWatermark(text, "font:Helvetica, points:10, pos:bl, off:36 34, rot:0, op:1, scale:1 abs", true, false, types.POINTS)
 	if err != nil {
 		return nil, err
 	}
