@@ -33,7 +33,7 @@ Update all of these when releasing `vX.Y.Z`:
   - `tag` events (`${DRONE_TAG}` + `${DRONE_COMMIT_SHA}`)
 - `.drone.yml` does not hardcode release version numbers.
 - Repository target:
-  - `docker.momlesstomato.dev/fl-docker/mannaiah-go`
+  - `docker.niflaot.dev/fl-docker/mannaiah-go`
 
 ## Image Acceptance Criteria
 
@@ -42,14 +42,17 @@ A new release image is accepted only if all are true:
 2. Drone `validate` pipeline passed for the tagged commit.
 3. Drone `docker-publish` pipeline passed for the tag event.
 4. Nexus contains:
-   - `docker.momlesstomato.dev/fl-docker/mannaiah-go:vX.Y.Z`
-   - `docker.momlesstomato.dev/fl-docker/mannaiah-go:<commit-sha>`
+   - `docker.niflaot.dev/fl-docker/mannaiah-go:vX.Y.Z`
+   - `docker.niflaot.dev/fl-docker/mannaiah-go:<commit-sha>`
 5. Pull smoke test succeeds:
-   - `docker pull docker.momlesstomato.dev/fl-docker/mannaiah-go:vX.Y.Z`
+   - `docker pull docker.niflaot.dev/fl-docker/mannaiah-go:vX.Y.Z`
 
 ## Version Registry
 
 Keep newest entries on top. Add one section per version.
+
+### [Unreleased]
+- CI/CD and container publish references moved from `momlesstomato.dev` to `niflaot.dev`, including Drone badges and the Nexus Docker registry target.
 
 ### [v3.0.1] - 2026-06-20
 - Shipping PDFs now render order item quantities in content lists, including rotulus, manifest cover, checklist, and carrier-label downloads.

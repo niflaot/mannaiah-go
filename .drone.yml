@@ -114,8 +114,8 @@ steps:
   - name: publish-main
     image: plugins/docker
     settings:
-      registry: docker.momlesstomato.dev
-      repo: docker.momlesstomato.dev/fl-docker/mannaiah-go
+      registry: docker.niflaot.dev
+      repo: docker.niflaot.dev/fl-docker/mannaiah-go
       dockerfile: Dockerfile
       username:
         from_secret: nexus_username
@@ -133,8 +133,8 @@ steps:
   - name: publish-tag
     image: plugins/docker
     settings:
-      registry: docker.momlesstomato.dev
-      repo: docker.momlesstomato.dev/fl-docker/mannaiah-go
+      registry: docker.niflaot.dev
+      repo: docker.niflaot.dev/fl-docker/mannaiah-go
       dockerfile: Dockerfile
       username:
         from_secret: nexus_username

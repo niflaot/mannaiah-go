@@ -1,6 +1,6 @@
 # Mannaiah Go
 
-[![Build Status](https://ci.momlesstomato.dev/api/badges/flockstore/mannaiah-go/status.svg)](https://ci.momlesstomato.dev/flockstore/mannaiah-go)
+[![Build Status](https://ci.niflaot.dev/api/badges/niflaot/mannaiah-go/status.svg)](https://ci.niflaot.dev/niflaot/mannaiah-go)
 ![Latest Version](https://img.shields.io/badge/latest-v3.0.1-0A66C2)
 
 Mannaiah Go is a modular monolith built with Go, DDD, and hexagonal architecture. The repository is organized as a container workspace with independent modules under `module/`, composed by the `core` runtime.
@@ -164,7 +164,7 @@ npm run build
 - CI/CD is managed by Drone via `.drone.yml`.
 - Validation pipeline runs module tests, e2e tests, and performance benchmark checks.
 - Docker images are published to Nexus registry:
-  - Registry: `docker.momlesstomato.dev`
+  - Registry: `docker.niflaot.dev`
   - API repository: `fl-docker/mannaiah-go`
   - Wiki repository: `fl-docker/mannaiah-go-wiki` (published when `WIKI_ENABLED=true`)
 - Drone secrets required for publish:

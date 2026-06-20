@@ -11,7 +11,7 @@
 - Drone CI is the only supported CI/CD orchestrator for this repository.
 - CI/CD source of truth must be `.drone.yml`; do not add or maintain GitHub Actions workflows under `.github/`.
 - Validation pipeline must run module tests, root e2e tests, and WooCommerce performance benchmarks.
-- Container publish pipeline must push images to Nexus registry `docker.momlesstomato.dev` under repository `fl-docker/mannaiah-go`.
+- Container publish pipeline must push images to Nexus registry `docker.niflaot.dev` under repository `fl-docker/mannaiah-go`.
 - Drone deployment credentials must be injected via secrets (`nexus_username`, `nexus_password`) and never hardcoded.
 - Publish behavior must include:
   - `main` branch pushes tagged as `latest` plus commit SHA.
