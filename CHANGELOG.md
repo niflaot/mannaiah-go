@@ -53,6 +53,10 @@ Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
 
+### [v3.0.5] - 2026-06-20
+- Shopify OAuth now requests `read_products` and `read_metaobjects` so product `custom.color` metaobject labels can be read during order sync.
+- Release metadata updated to `v3.0.5`.
+
 ### [v3.0.4] - 2026-06-20
 - Shopify product color enrichment now reads `custom.color` metaobject labels from `jsonValue` as well as `value`.
 - Carrier shipping-label downloads stamp `CONTENIDO` in a more visible lower-left position and use a fresh merged-label cache namespace.

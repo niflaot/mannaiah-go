@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -42,5 +43,15 @@ func TestInstallOAuthRedirectsWithSignedState(t *testing.T) {
 	}
 	if !strings.Contains(location, "state=") {
 		t.Fatalf("installOAuth() location = %q, want state param", location)
+	}
+	parsedLocation, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse installOAuth() location: %v", err)
+	}
+	scopes := parsedLocation.Query().Get("scope")
+	for _, scope := range []string{"read_orders", "write_orders", "read_customers", "write_customers", "read_products", "read_metaobjects"} {
+		if !strings.Contains(scopes, scope) {
+			t.Fatalf("installOAuth() scopes = %q, want %q", scopes, scope)
+		}
 	}
 }

@@ -19,7 +19,7 @@ import (
 
 const (
 	oauthStateTTL      = 10 * time.Minute
-	shopifyOAuthScopes = "read_orders,write_orders,read_customers,write_customers"
+	shopifyOAuthScopes = "read_orders,write_orders,read_customers,write_customers,read_products,read_metaobjects"
 )
 
 var (
@@ -292,7 +292,6 @@ func resolveExternalBaseURL(ctx corehttp.Context) (string, error) {
 
 	return proto + "://" + host, nil
 }
-
 
 func computeStateSignature(payload string, secret string) string {
 	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(secret)))
