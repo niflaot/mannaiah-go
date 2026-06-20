@@ -52,7 +52,11 @@ A new release image is accepted only if all are true:
 Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
+
+### [v3.0.3] - 2026-06-20
 - CI/CD and container publish references moved from `momlesstomato.dev` to `niflaot.dev`, including Drone badges and the Nexus Docker registry target.
+- Shipping dispatch email template touched to force a fresh Drone build.
+- Release metadata updated to `v3.0.3`.
 
 ### [v3.0.1] - 2026-06-20
 - Shipping PDFs now render order item quantities in content lists, including rotulus, manifest cover, checklist, and carrier-label downloads.
