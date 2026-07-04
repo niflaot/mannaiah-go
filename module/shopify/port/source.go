@@ -37,6 +37,12 @@ type OrderSource interface {
 	ListOrders(ctx context.Context, sinceID string, limit int) (orders []ShopifyOrder, hasMore bool, err error)
 }
 
+// OrderPaymentStatusUpdater defines Shopify order payment-status mutation behavior.
+type OrderPaymentStatusUpdater interface {
+	// MarkOrderPaid records an offline/manual payment for one Shopify order.
+	MarkOrderPaid(ctx context.Context, order ShopifyOrder) error
+}
+
 // ShopifyNoteAttribute defines one normalized Shopify note attribute.
 type ShopifyNoteAttribute struct {
 	// Name defines note attribute names.

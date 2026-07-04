@@ -46,6 +46,47 @@ func (orderServiceTargetStub) UpsertOrder(ctx context.Context, command shopifypo
 	return &ordersdomain.Order{ID: "order-1"}, nil
 }
 
+type codOrderServiceSourceStub struct {
+	order       shopifyport.ShopifyOrder
+	markCalls   int
+	markedOrder shopifyport.ShopifyOrder
+}
+
+func (s *codOrderServiceSourceStub) Validate(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
+func (s *codOrderServiceSourceStub) GetOrder(ctx context.Context, id string) (shopifyport.ShopifyOrder, error) {
+	_ = ctx
+	_ = id
+	return s.order, nil
+}
+
+func (s *codOrderServiceSourceStub) ListOrders(ctx context.Context, sinceID string, limit int) ([]shopifyport.ShopifyOrder, bool, error) {
+	_ = ctx
+	_ = sinceID
+	_ = limit
+	return []shopifyport.ShopifyOrder{s.order}, false, nil
+}
+
+func (s *codOrderServiceSourceStub) MarkOrderPaid(ctx context.Context, order shopifyport.ShopifyOrder) error {
+	_ = ctx
+	s.markCalls++
+	s.markedOrder = order
+	return nil
+}
+
+type capturingOrderServiceTargetStub struct {
+	command shopifyport.OrderSyncCommand
+}
+
+func (s *capturingOrderServiceTargetStub) UpsertOrder(ctx context.Context, command shopifyport.OrderSyncCommand) (*ordersdomain.Order, error) {
+	_ = ctx
+	s.command = command
+	return &ordersdomain.Order{ID: "order-1"}, nil
+}
+
 type orderServiceRecorderStub struct {
 	startErr      error
 	completeCalls int
@@ -131,5 +172,89 @@ func TestSyncOrdersSkipsCompletionWhenRunStartFails(t *testing.T) {
 	}
 	if recorder.failCalls != 0 {
 		t.Fatalf("FailRun calls = %d, want 0", recorder.failCalls)
+	}
+}
+
+// TestSyncOrderByIDMarksCODOrderPaidBeforeImport verifies COD pending orders are paid in Shopify and imported as created.
+func TestSyncOrderByIDMarksCODOrderPaidBeforeImport(t *testing.T) {
+	source := &codOrderServiceSourceStub{order: shopifyport.ShopifyOrder{
+		ID:                  "123",
+		Name:                "#123",
+		ContactEmail:        "buyer@example.com",
+		FinancialStatus:     "pending",
+		PaymentGatewayNames: []string{"Pago contra entrega"},
+		Customer: &shopifyport.ShopifyCustomer{
+			ID:        "customer-1",
+			Email:     "buyer@example.com",
+			FirstName: "Ada",
+			LastName:  "Lovelace",
+		},
+	}}
+	target := &capturingOrderServiceTargetStub{}
+	service, err := NewService(
+		SyncConfig{Enabled: true, Realm: "shopify"},
+		source,
+		orderServiceContactTargetStub{},
+		target,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	summary, err := service.SyncOrderByID(context.Background(), "webhook", "123")
+	if err != nil {
+		t.Fatalf("SyncOrderByID() error = %v", err)
+	}
+	if summary.Succeeded != 1 {
+		t.Fatalf("summary.Succeeded = %d, want 1", summary.Succeeded)
+	}
+	if source.markCalls != 1 {
+		t.Fatalf("MarkOrderPaid calls = %d, want 1", source.markCalls)
+	}
+	if source.markedOrder.ID != "123" {
+		t.Fatalf("marked order ID = %q, want 123", source.markedOrder.ID)
+	}
+	if target.command.Status != ordersdomain.StatusCreated {
+		t.Fatalf("imported status = %q, want CREATED", target.command.Status)
+	}
+}
+
+// TestSyncOrderByIDDoesNotMarkNonCODPendingOrderPaid verifies non-COD pending orders remain untouched.
+func TestSyncOrderByIDDoesNotMarkNonCODPendingOrderPaid(t *testing.T) {
+	source := &codOrderServiceSourceStub{order: shopifyport.ShopifyOrder{
+		ID:                  "123",
+		Name:                "#123",
+		ContactEmail:        "buyer@example.com",
+		FinancialStatus:     "pending",
+		PaymentGatewayNames: []string{"Addi Payment"},
+		Customer: &shopifyport.ShopifyCustomer{
+			ID:        "customer-1",
+			Email:     "buyer@example.com",
+			FirstName: "Ada",
+			LastName:  "Lovelace",
+		},
+	}}
+	target := &capturingOrderServiceTargetStub{}
+	service, err := NewService(
+		SyncConfig{Enabled: true, Realm: "shopify"},
+		source,
+		orderServiceContactTargetStub{},
+		target,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	_, err = service.SyncOrderByID(context.Background(), "webhook", "123")
+	if err != nil {
+		t.Fatalf("SyncOrderByID() error = %v", err)
+	}
+	if source.markCalls != 0 {
+		t.Fatalf("MarkOrderPaid calls = %d, want 0", source.markCalls)
+	}
+	if target.command.Status != ordersdomain.StatusPending {
+		t.Fatalf("imported status = %q, want PENDING", target.command.Status)
 	}
 }

@@ -188,6 +188,56 @@ func TestClientCancelOrderUsesGraphQLCancellationInputs(t *testing.T) {
 	}
 }
 
+// TestClientMarkOrderPaidUsesOrderMarkAsPaid verifies COD payment reconciliation uses Shopify's mark-paid mutation.
+func TestClientMarkOrderPaidUsesOrderMarkAsPaid(t *testing.T) {
+	var graphQLSeen bool
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/graphql.json" {
+			t.Fatalf("request path = %q, want /graphql.json", request.URL.Path)
+		}
+		graphQLSeen = true
+		var captured graphqlRequest
+		if err := json.NewDecoder(request.Body).Decode(&captured); err != nil {
+			t.Fatalf("decode graphql request: %v", err)
+		}
+		if !strings.Contains(captured.Query, "orderMarkAsPaid") {
+			t.Fatalf("query = %q, want orderMarkAsPaid mutation", captured.Query)
+		}
+		input, ok := captured.Variables["input"].(map[string]any)
+		if !ok {
+			t.Fatalf("input variables = %#v", captured.Variables["input"])
+		}
+		if input["id"] != "gid://shopify/Order/123" {
+			t.Fatalf("input id = %#v, want Shopify order gid", input["id"])
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"data":{"orderMarkAsPaid":{"userErrors":[]}}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	err = client.MarkOrderPaid(context.Background(), shopifyport.ShopifyOrder{ID: "123"})
+	if err != nil {
+		t.Fatalf("MarkOrderPaid() error = %v", err)
+	}
+	if !graphQLSeen {
+		t.Fatalf("expected GraphQL mark-paid request")
+	}
+}
+
 // TestClientApplyOrderUpdateSkipsCommitWhenNoLineItemChanges verifies city-only updates do not create empty Shopify edits.
 func TestClientApplyOrderUpdateSkipsCommitWhenNoLineItemChanges(t *testing.T) {
 	var graphqlCalls int

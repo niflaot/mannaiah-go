@@ -97,6 +97,34 @@ func TestBuildOrderSyncCommandMapsPaidFulfilledToCompleted(t *testing.T) {
 	}
 }
 
+// TestBuildOrderSyncCommandMapsPendingCODToCreated verifies COD imports are operationally processable.
+func TestBuildOrderSyncCommandMapsPendingCODToCreated(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:                  "order-1",
+		Name:                "#1001",
+		FinancialStatus:     "pending",
+		PaymentGatewayNames: []string{"Cash on Delivery (COD)"},
+	}, "contact-1", "shopify", "webhook")
+
+	if command.Status != ordersdomain.StatusCreated {
+		t.Fatalf("Status = %q, want CREATED for pending COD", command.Status)
+	}
+}
+
+// TestBuildOrderSyncCommandKeepsPendingNonCODPending verifies non-COD unpaid orders remain blocked.
+func TestBuildOrderSyncCommandKeepsPendingNonCODPending(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:                  "order-1",
+		Name:                "#1001",
+		FinancialStatus:     "pending",
+		PaymentGatewayNames: []string{"Addi Payment"},
+	}, "contact-1", "shopify", "webhook")
+
+	if command.Status != ordersdomain.StatusPending {
+		t.Fatalf("Status = %q, want PENDING for pending non-COD", command.Status)
+	}
+}
+
 // TestBuildOrderSyncCommandMapsLineItemProductIdentity verifies Shopify line identity survives sync mapping.
 func TestBuildOrderSyncCommandMapsLineItemProductIdentity(t *testing.T) {
 	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{

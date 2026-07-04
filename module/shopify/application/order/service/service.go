@@ -191,6 +191,7 @@ func (s *OrderSyncService) SyncOrderByID(ctx context.Context, trigger string, id
 		s.recordFailure(ctx, runID, trimmedID, err)
 		return nil, err
 	}
+	order = s.markCODOrderPaid(ctx, order)
 
 	contact, err := s.syncOrderContact(ctx, order)
 	if err != nil {
@@ -257,6 +258,7 @@ func (s *OrderSyncService) SyncOrders(ctx context.Context, trigger string) (*Syn
 
 		for _, order := range orders {
 			summary.Processed++
+			order = s.markCODOrderPaid(ctx, order)
 			contact, contactErr := s.syncOrderContact(ctx, order)
 			if contactErr != nil {
 				summary.Failed++
@@ -320,6 +322,22 @@ func (s *OrderSyncService) syncOrderContact(ctx context.Context, order shopifypo
 		return nil, err
 	}
 	return &shopifyportContact{ID: strings.TrimSpace(entity.ID)}, nil
+}
+
+func (s *OrderSyncService) markCODOrderPaid(ctx context.Context, order shopifyport.ShopifyOrder) shopifyport.ShopifyOrder {
+	if !shouldMarkCODOrderPaid(order) {
+		return order
+	}
+	updater, ok := s.source.(shopifyport.OrderPaymentStatusUpdater)
+	if !ok {
+		return order
+	}
+	if err := updater.MarkOrderPaid(ctx, order); err != nil {
+		s.logger.Warn("mark shopify cod order paid failed", zap.String("id", order.ID), zap.Error(err))
+		return order
+	}
+	order.FinancialStatus = "paid"
+	return order
 }
 
 func (s *OrderSyncService) recordFailure(ctx context.Context, runID string, id string, err error) {

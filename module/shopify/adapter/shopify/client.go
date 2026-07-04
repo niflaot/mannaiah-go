@@ -376,6 +376,32 @@ func (c *Client) ApplyOrderUpdate(ctx context.Context, shopifyOrderID string, pa
 	return c.orderEditCommit(ctx, installation, calculatedOrderID, false, "Updated from Mannaiah")
 }
 
+// MarkOrderPaid records an offline/manual payment for one Shopify order.
+func (c *Client) MarkOrderPaid(ctx context.Context, order shopifyport.ShopifyOrder) error {
+	installation, err := c.resolveInstallation(ctx)
+	if err != nil {
+		return err
+	}
+	orderID := orderGID(order.ID)
+	if strings.TrimSpace(orderID) == "" {
+		return shopifyport.ErrOrderNotFound
+	}
+	var response graphqlResponse[struct {
+		OrderMarkAsPaid struct {
+			UserErrors []graphqlUserError `json:"userErrors"`
+		} `json:"orderMarkAsPaid"`
+	}]
+	err = c.doGraphQL(ctx, installation, `mutation orderMarkAsPaid($input: OrderMarkAsPaidInput!) {
+  orderMarkAsPaid(input: $input) {
+    userErrors { field message }
+  }
+}`, map[string]any{"input": map[string]any{"id": orderID}}, &response)
+	if err != nil {
+		return err
+	}
+	return graphQLUserError(response.Data.OrderMarkAsPaid.UserErrors)
+}
+
 // CancelOrder cancels one Shopify order without notifying customers.
 func (c *Client) CancelOrder(ctx context.Context, shopifyOrderID string, reason string) error {
 	installation, err := c.resolveInstallation(ctx)

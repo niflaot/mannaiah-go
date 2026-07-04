@@ -113,10 +113,73 @@ func mapOrderStatus(order shopifyport.ShopifyOrder) ordersdomain.Status {
 	case "voided", "refunded":
 		return ordersdomain.StatusCancelled
 	case "pending", "authorized", "partially_paid":
+		if isCODOrder(order) {
+			return ordersdomain.StatusCreated
+		}
 		return ordersdomain.StatusPending
 	}
 
 	return ordersdomain.StatusCreated
+}
+
+func shouldMarkCODOrderPaid(order shopifyport.ShopifyOrder) bool {
+	if order.CancelledAt != nil || strings.TrimSpace(order.CancelReason) != "" {
+		return false
+	}
+	if !isCODOrder(order) {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(order.FinancialStatus)) {
+	case "pending", "authorized", "partially_paid":
+		return true
+	default:
+		return false
+	}
+}
+
+func isCODOrder(order shopifyport.ShopifyOrder) bool {
+	for _, gateway := range order.PaymentGatewayNames {
+		if isCODPaymentGateway(gateway) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCODPaymentGateway(value string) bool {
+	normalized := normalizeCODPaymentGateway(value)
+	if normalized == "" {
+		return false
+	}
+	if strings.Contains(normalized, "cod") {
+		return true
+	}
+	if strings.Contains(normalized, "cash on delivery") {
+		return true
+	}
+	if strings.Contains(normalized, "contra entrega") || strings.Contains(normalized, "contraentrega") {
+		return true
+	}
+	return strings.Contains(normalized, "pago contra entrega")
+}
+
+func normalizeCODPaymentGateway(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(
+		"á", "a",
+		"é", "e",
+		"í", "i",
+		"ó", "o",
+		"ú", "u",
+		"ü", "u",
+		"ñ", "n",
+		"-", " ",
+		"_", " ",
+	)
+	return strings.Join(strings.Fields(replacer.Replace(value)), " ")
 }
 
 func buildStatusDescription(order shopifyport.ShopifyOrder) string {
