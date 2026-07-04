@@ -185,6 +185,57 @@ func TestBuildOrderSyncCommandMapsShippingCityNameToCityCode(t *testing.T) {
 	}
 }
 
+// TestBuildOrderSyncCommandUsesProvinceToResolveDuplicatedShippingCity verifies department evidence resolves duplicated city names.
+func TestBuildOrderSyncCommandUsesProvinceToResolveDuplicatedShippingCity(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:   "order-1",
+		Name: "#1001",
+		ShippingAddress: &shopifyport.ShopifyAddress{
+			Address1: "Barrio Santa Rita Mz 5 Casa 5",
+			City:     "Armenia",
+			Province: "Quindio",
+		},
+	}, "contact-1", "shopify", "cron")
+
+	if command.ShippingAddress == nil {
+		t.Fatal("ShippingAddress = nil, want mapped address")
+	}
+	if command.ShippingAddress.CityCode != "63001" {
+		t.Fatalf("ShippingAddress.CityCode = %q, want 63001", command.ShippingAddress.CityCode)
+	}
+	if command.Metadata["shipping_city_resolution_status"] != "resolved" {
+		t.Fatalf("resolution status = %q, want resolved", command.Metadata["shipping_city_resolution_status"])
+	}
+}
+
+// TestBuildOrderSyncCommandStoresUnresolvedCityMetadata verifies ambiguous cities leave operator-facing metadata.
+func TestBuildOrderSyncCommandStoresUnresolvedCityMetadata(t *testing.T) {
+	command := BuildOrderSyncCommand(shopifyport.ShopifyOrder{
+		ID:   "order-1",
+		Name: "#1001",
+		ShippingAddress: &shopifyport.ShopifyAddress{
+			Address1: "Barrio Santa Rita Mz 5 Casa 5",
+			City:     "Armenia",
+		},
+	}, "contact-1", "shopify", "cron")
+
+	if command.ShippingAddress == nil {
+		t.Fatal("ShippingAddress = nil, want mapped address")
+	}
+	if command.ShippingAddress.CityCode != "-1" {
+		t.Fatalf("ShippingAddress.CityCode = %q, want -1", command.ShippingAddress.CityCode)
+	}
+	if command.Metadata["shipping_city_resolution_status"] != "unresolved" {
+		t.Fatalf("resolution status = %q, want unresolved", command.Metadata["shipping_city_resolution_status"])
+	}
+	if command.Metadata["shipping_city_resolution_reason"] == "" {
+		t.Fatal("resolution reason is empty, want failure reason")
+	}
+	if command.Metadata["shipping_city_resolution_suggestions"] == "" {
+		t.Fatal("resolution suggestions are empty, want operator hints")
+	}
+}
+
 // TestBuildOrderContactSyncCommandMarksPrivacyFromOrderDate verifies Shopify order creation stamps privacy acceptance.
 func TestBuildOrderContactSyncCommandMarksPrivacyFromOrderDate(t *testing.T) {
 	createdAt := time.Date(2026, time.May, 6, 21, 22, 51, 0, time.UTC)

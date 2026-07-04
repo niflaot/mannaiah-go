@@ -53,6 +53,12 @@ Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
 
+### [v3.1.2] - 2026-07-04
+- Order edit forms now require selecting a valid city through the city selector instead of preserving unresolved raw values like `-1`.
+- Edited shipping quotations now persist their destination city back onto the order shipping address before batch marks, rotulus PDFs, and checklists consume the order snapshot.
+- Shopify order sync now stores city-resolution metadata for unresolved destination cities and resolves duplicated city names when province evidence is available.
+- Release metadata updated to `v3.1.2`.
+
 ### [v.3.1.1] - 2026-07-04
 - Shipping batch marks, rotulus PDFs, and checklist PDFs now preserve edited quotation destinations instead of falling back to stale order city data.
 - Core city matching now delegates to `github.com/flockstore/lib-go-cities` so duplicated, ambiguous, incongruent, and low-confidence city matches fail safely.

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -51,7 +52,7 @@ func BuildOrderContactSyncCommand(order shopifyport.ShopifyOrder) (shopifyport.C
 		Phone:          preferString(customerPhone(order.Customer), addressPhone(address), billingPhone(order.BillingAddress)),
 		Address:        addressLine1(address),
 		AddressExtra:   addressLine2(address),
-		CityCode:       citycode.Resolve(addressCity(address)),
+		CityCode:       resolveAddressCityCode(address),
 		Metadata:       buildOrderContactMetadata(order),
 	}
 	if order.Customer != nil && !order.Customer.CreatedAt.IsZero() {
@@ -64,6 +65,10 @@ func BuildOrderContactSyncCommand(order shopifyport.ShopifyOrder) (shopifyport.C
 
 // BuildOrderSyncCommand maps one Shopify order into normalized mainstream order values.
 func BuildOrderSyncCommand(order shopifyport.ShopifyOrder, contactID string, realm string, trigger string) shopifyport.OrderSyncCommand {
+	metadata := buildOrderMetadata(order)
+	shippingAddress := buildShippingAddress(order)
+	addShippingCityResolutionMetadata(metadata, resolvePrimaryAddress(order), shippingAddress)
+
 	command := shopifyport.OrderSyncCommand{
 		ShopDomain:        strings.TrimSpace(order.ShopDomain),
 		ShopifyID:         strings.TrimSpace(order.ID),
@@ -73,11 +78,11 @@ func BuildOrderSyncCommand(order shopifyport.ShopifyOrder, contactID string, rea
 		Items:             buildOrderItems(order.LineItems),
 		Status:            mapOrderStatus(order),
 		StatusDescription: buildStatusDescription(order),
-		ShippingAddress:   buildShippingAddress(order),
+		ShippingAddress:   shippingAddress,
 		ShippingCharges:   buildShippingCharges(order.ShippingLines),
 		AppliedCoupons:    buildAppliedCoupons(order.DiscountCodes, order.CreatedAt),
 		PaymentMethod:     strings.Join(order.PaymentGatewayNames, ", "),
-		Metadata:          buildOrderMetadata(order),
+		Metadata:          metadata,
 		Source:            syncMutationSource,
 	}
 	if !order.CreatedAt.IsZero() {
@@ -152,8 +157,53 @@ func buildShippingAddress(order shopifyport.ShopifyOrder) *shopifyport.OrderSync
 		Address:  addressLine1(address),
 		Address2: addressLine2(address),
 		Phone:    addressPhone(address),
-		CityCode: citycode.Resolve(addressCity(address)),
+		CityCode: resolveAddressCityCode(address),
 	}
+}
+
+func resolveAddressCityCode(address *shopifyport.ShopifyAddress) string {
+	if address == nil {
+		return "-1"
+	}
+	result, err := citycode.ResolveDetailed(context.Background(), addressCity(address), addressProvince(address))
+	if err != nil || !result.Found {
+		return citycode.Resolve(addressCity(address))
+	}
+	return result.Code
+}
+
+func addShippingCityResolutionMetadata(metadata map[string]string, address *shopifyport.ShopifyAddress, shippingAddress *shopifyport.OrderSyncShippingAddressCommand) {
+	if metadata == nil || address == nil || shippingAddress == nil {
+		return
+	}
+	result, err := citycode.ResolveDetailed(context.Background(), addressCity(address), addressProvince(address))
+	if err == nil && result.Found {
+		metadata["shipping_city_resolution_status"] = "resolved"
+		metadata["shipping_city_resolution_code"] = result.Code
+		metadata["shipping_city_resolution_name"] = result.Name
+		metadata["shipping_city_resolution_department"] = result.Department
+		return
+	}
+	metadata["shipping_city_resolution_status"] = "unresolved"
+	metadata["shipping_city_resolution_input_city"] = addressCity(address)
+	metadata["shipping_city_resolution_input_department"] = addressProvince(address)
+	if err != nil {
+		metadata["shipping_city_resolution_reason"] = "error"
+		metadata["shipping_city_resolution_error"] = err.Error()
+		return
+	}
+	metadata["shipping_city_resolution_reason"] = result.Reason
+	if len(result.Suggestions) > 0 {
+		metadata["shipping_city_resolution_suggestions"] = formatCityResolutionSuggestions(result.Suggestions)
+	}
+}
+
+func formatCityResolutionSuggestions(values []citycode.ResolveSuggestion) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, strings.TrimSpace(value.Name)+" ("+strings.TrimSpace(value.Code)+", "+strings.TrimSpace(value.Department)+")")
+	}
+	return strings.Join(parts, "; ")
 }
 
 func buildShippingCharges(values []shopifyport.ShopifyShippingLine) []shopifyport.OrderSyncShippingChargeCommand {
@@ -446,6 +496,13 @@ func addressCity(address *shopifyport.ShopifyAddress) string {
 		return ""
 	}
 	return strings.TrimSpace(address.City)
+}
+
+func addressProvince(address *shopifyport.ShopifyAddress) string {
+	if address == nil {
+		return ""
+	}
+	return strings.TrimSpace(address.Province)
 }
 
 func billingFirstName(address *shopifyport.ShopifyAddress) string {
