@@ -141,6 +141,55 @@ func TestCalculateOrderMonetaryTotals(t *testing.T) {
 	}
 }
 
+// TestCalculateOrderMonetaryTotalsUsesFinalDiscountedShopifyTotal verifies COD totals use final payable order values.
+func TestCalculateOrderMonetaryTotalsUsesFinalDiscountedShopifyTotal(t *testing.T) {
+	t.Parallel()
+
+	itemTotalValue, orderGrandTotal := calculateOrderMonetaryTotals(&ordersdomain.Order{
+		Items: []ordersdomain.Item{
+			{SKU: "journey-croma", Quantity: 1, Value: 145000},
+			{SKU: "neceser-gift", Quantity: 1, Value: 45000},
+		},
+		ShippingCharges: []ordersdomain.ShippingCharge{
+			{MethodID: "flat", MethodTitle: "Envios a todo Colombia", Price: 10000},
+		},
+		AppliedCoupons: []ordersdomain.AppliedCoupon{
+			{Code: "SQUID_FGFGIGX", DiscountType: "fixed", DiscountAmount: 45000},
+		},
+		Metadata: map[string]string{"shopify_total_price": "155000"},
+	})
+	if itemTotalValue != 145000 {
+		t.Fatalf("itemTotalValue = %v, want 145000", itemTotalValue)
+	}
+	if orderGrandTotal != 155000 {
+		t.Fatalf("orderGrandTotal = %v, want 155000", orderGrandTotal)
+	}
+}
+
+// TestCalculateOrderMonetaryTotalsSubtractsAppliedCoupons verifies non-Shopify rows still account for stored discounts.
+func TestCalculateOrderMonetaryTotalsSubtractsAppliedCoupons(t *testing.T) {
+	t.Parallel()
+
+	itemTotalValue, orderGrandTotal := calculateOrderMonetaryTotals(&ordersdomain.Order{
+		Items: []ordersdomain.Item{
+			{SKU: "journey-croma", Quantity: 1, Value: 145000},
+			{SKU: "neceser-gift", Quantity: 1, Value: 45000},
+		},
+		ShippingCharges: []ordersdomain.ShippingCharge{
+			{MethodID: "flat", MethodTitle: "Envios a todo Colombia", Price: 10000},
+		},
+		AppliedCoupons: []ordersdomain.AppliedCoupon{
+			{Code: "SQUID_FGFGIGX", DiscountType: "fixed", DiscountAmount: 45000},
+		},
+	})
+	if itemTotalValue != 145000 {
+		t.Fatalf("itemTotalValue = %v, want 145000", itemTotalValue)
+	}
+	if orderGrandTotal != 155000 {
+		t.Fatalf("orderGrandTotal = %v, want 155000", orderGrandTotal)
+	}
+}
+
 // TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientEnrichment verifies recipient fields are resolved from contact and shipping data.
 func TestShippingOrderQuotationSourceAdapterGetByIDOrIdentifierRecipientEnrichment(t *testing.T) {
 	t.Parallel()

@@ -19,6 +19,14 @@ const (
 
 	// maxOverlappedPerBox defines the maximum number of overlapped items that fit in one main box.
 	maxOverlappedPerBox = 3
+	// defaultPackageWidthCM defines fallback package width when products have no valid dimensions.
+	defaultPackageWidthCM = 30
+	// defaultPackageHeightCM defines fallback package height when products have no valid dimensions.
+	defaultPackageHeightCM = 5
+	// defaultPackageLengthCM defines fallback package length/depth when products have no valid dimensions.
+	defaultPackageLengthCM = 40
+	// defaultPackageWeightKG defines fallback package real weight when products have no valid dimensions.
+	defaultPackageWeightKG = 1
 )
 
 // QuoteFromOrderCommand defines input values for order-based quotation requests.
@@ -111,10 +119,16 @@ func (s *Service) OrderPackagingFromOrder(ctx context.Context, cmd QuoteFromOrde
 	}
 
 	if len(candidates) == 0 {
-		return nil, domain.ErrNoValidProducts
+		warnings = append(warnings, domain.QuotationWarning{
+			Code:    warningNoProducts,
+			Message: "no products have valid shipping dimensions; default package dimensions were used",
+		})
 	}
 
 	units := packBoxes(candidates, &warnings)
+	if len(units) == 0 {
+		units = []domain.PackageUnit{buildDefaultPackageUnit(orderData.TotalValue)}
+	}
 	shipmentMode := resolveShipmentModeByUnits(units)
 
 	return &OrderPackagingResult{
@@ -162,6 +176,21 @@ func (s *Service) buildCandidates(ctx context.Context, items []port.OrderQuotati
 	}
 
 	return candidates, warnings, nil
+}
+
+// buildDefaultPackageUnit returns the fallback package used when no product measurements are available.
+func buildDefaultPackageUnit(declaredValue float64) domain.PackageUnit {
+	return domain.PackageUnit{
+		Description: "Default package",
+		PackageType: "CAJA",
+		Dimensions: domain.Dimensions{
+			HeightCM:         defaultPackageHeightCM,
+			WidthCM:          defaultPackageWidthCM,
+			DepthCM:          defaultPackageLengthCM,
+			RealWeightKG:     defaultPackageWeightKG,
+			DeclaredValueCOP: declaredValue,
+		},
+	}.Normalize()
 }
 
 // packBoxes applies the overlapping box-packing algorithm to the resolved candidates

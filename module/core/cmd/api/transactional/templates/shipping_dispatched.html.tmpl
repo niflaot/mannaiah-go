@@ -103,35 +103,6 @@
                   </td>
                 </tr>
 
-                <!-- ── Product items ── -->
-                {{ if .Items }}
-                {{ range .Items }}
-                <tr>
-                  <td colspan="2" style="padding:0 0 10px 0;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-                           class="bg-section" style="background-color:#f0f0f0;border-radius:2px;">
-                      <tr>
-                        <td class="item-img-td" width="106" valign="middle"
-                            style="padding:16px 8px 16px 16px;width:106px;">
-                          {{ if .ImageURL }}
-                          <img src="{{ .ImageURL }}" alt="{{ .ProductName }}" width="80"
-                               style="display:block;width:80px;height:auto;max-height:120px;object-fit:cover;border:0;" />
-                          {{ else }}
-                          <div style="width:80px;height:80px;background:#dddddd;font-size:10px;color:#888;text-align:center;line-height:80px;">Sin imagen</div>
-                          {{ end }}
-                        </td>
-                        <td valign="middle" style="padding:16px 16px 16px 8px;">
-                          <p style="margin:0 0 5px 0;font-size:14px;line-height:18px;font-weight:700;color:#1a1a1a;" class="txt-product">{{ .ProductName }}</p>
-                          <p style="margin:0 0 12px 0;font-size:12px;line-height:16px;font-weight:500;color:#555555;" class="txt-body">{{ .SKU }} - {{ .Variation }}</p>
-                          <p style="margin:0;font-size:12px;line-height:16px;font-weight:500;color:#1a1a1a;border-top:1px solid #cccccc;padding-top:9px;" class="txt-product divider">CANTIDAD: {{ .Quantity }}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                {{ end }}
-                {{ end }}
-
                 <!-- ── Addresses + payment ── -->
                 <!--
                   No border-right between columns to avoid overflow artifacts on mobile Gmail.

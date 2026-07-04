@@ -531,6 +531,53 @@ func TestOrderPackagingFromOrderPreviewsUnitsWithoutPersistence(t *testing.T) {
 	}
 }
 
+// TestOrderPackagingFromOrderFallsBackToDefaultUnitWhenProductsHaveNoDimensions verifies sparse product data does not block quotation.
+func TestOrderPackagingFromOrderFallsBackToDefaultUnitWhenProductsHaveNoDimensions(t *testing.T) {
+	repository := &quotationRepositoryStub{}
+	service := NewService(repository, quotationRegistryStub{provider: quotationProviderStub{}}, Config{})
+	service.SetOrderSource(orderSourceStub{row: &port.OrderQuotationData{
+		OrderID:         "order-no-dimensions",
+		OrderIdentifier: "1024999",
+		DestCityCode:    "11001",
+		TotalValue:      95000,
+		Items: []port.OrderQuotationItem{
+			{SKU: "gift-no-dimensions", Quantity: 1},
+		},
+	}})
+	service.SetProductSource(productSourceStub{attrsBySKU: map[string]port.ProductShippingAttributes{
+		"gift-no-dimensions": {
+			SKU:   "gift-no-dimensions",
+			Price: 95000,
+			Valid: false,
+		},
+	}})
+
+	result, err := service.OrderPackagingFromOrder(context.Background(), QuoteFromOrderCommand{
+		OrderIdentifier: "1024999",
+		CarrierID:       "manual",
+		OriginCityCode:  "11001",
+	})
+	if err != nil {
+		t.Fatalf("OrderPackagingFromOrder() error = %v", err)
+	}
+	if len(result.Units) != 1 {
+		t.Fatalf("units = %d, want 1", len(result.Units))
+	}
+	unit := result.Units[0]
+	if unit.Dimensions.WidthCM != 30 || unit.Dimensions.HeightCM != 5 || unit.Dimensions.DepthCM != 40 || unit.Dimensions.RealWeightKG != 1 {
+		t.Fatalf("default dimensions = %#v, want 30x5x40 @ 1kg", unit.Dimensions)
+	}
+	if unit.Dimensions.DeclaredValueCOP != 95000 {
+		t.Fatalf("declared value = %v, want 95000", unit.Dimensions.DeclaredValueCOP)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != warningNoProducts {
+		t.Fatalf("warnings = %#v, want %q warning", result.Warnings, warningNoProducts)
+	}
+	if result.ShipmentMode != domain.ShipmentModeExpress {
+		t.Fatalf("shipment mode = %q, want %q", result.ShipmentMode, domain.ShipmentModeExpress)
+	}
+}
+
 // TestQuoteFromOrderUsesResolvedCollectOnDeliveryAmount verifies QuoteFromOrder forwards resolved COD amounts from order data.
 func TestQuoteFromOrderUsesResolvedCollectOnDeliveryAmount(t *testing.T) {
 	repository := &quotationRepositoryStub{}

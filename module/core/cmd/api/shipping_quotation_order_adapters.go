@@ -147,12 +147,78 @@ func calculateOrderMonetaryTotals(order *ordersdomain.Order) (float64, float64) 
 		itemTotalValue += item.Value * float64(item.Quantity)
 	}
 
-	orderGrandTotal := itemTotalValue
+	var shippingTotal float64
 	for _, charge := range order.ShippingCharges {
-		orderGrandTotal += charge.Price
+		shippingTotal += charge.Price
 	}
 
+	if metadataTotal := resolveOrderMetadataTotal(order.Metadata); metadataTotal > 0 {
+		return maxFloat(metadataTotal-shippingTotal, 0), metadataTotal
+	}
+
+	itemTotalValue = maxFloat(itemTotalValue-resolveOrderDiscountAmount(itemTotalValue, order.AppliedCoupons), 0)
+	orderGrandTotal := itemTotalValue + shippingTotal
+
 	return itemTotalValue, orderGrandTotal
+}
+
+// resolveOrderMetadataTotal resolves final payable order totals from source metadata.
+func resolveOrderMetadataTotal(metadata map[string]string) float64 {
+	if len(metadata) == 0 {
+		return 0
+	}
+	for _, key := range []string{"shopify_total_price", "total_price", "order_total"} {
+		value, exists := metadata[key]
+		if !exists {
+			continue
+		}
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+
+	return 0
+}
+
+// resolveOrderDiscountAmount resolves the total order-level discount amount.
+func resolveOrderDiscountAmount(itemTotalValue float64, coupons []ordersdomain.AppliedCoupon) float64 {
+	if itemTotalValue <= 0 || len(coupons) == 0 {
+		return 0
+	}
+	var discount float64
+	for _, coupon := range coupons {
+		amount := coupon.DiscountAmount
+		if amount <= 0 {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(coupon.DiscountType)) {
+		case "percentage", "percent":
+			discount += itemTotalValue * amount / 100
+		default:
+			discount += amount
+		}
+	}
+
+	return maxFloat(minFloat(discount, itemTotalValue), 0)
+}
+
+// maxFloat returns the greater of two float values.
+func maxFloat(left float64, right float64) float64 {
+	if left > right {
+		return left
+	}
+
+	return right
+}
+
+// minFloat returns the lesser of two float values.
+func minFloat(left float64, right float64) float64 {
+	if left < right {
+		return left
+	}
+
+	return right
 }
 
 // isOrderNotFound reports whether an error indicates a missing order record.

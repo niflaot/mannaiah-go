@@ -103,14 +103,15 @@
    - `pweight` → weight (kg), `pheight` → height (cm), `pwidth` → width (cm), `plength` → length/depth (cm)
    - `price` → declared value (defaults to `1` if missing), `overlapped` → packing flag (defaults to `true` if missing)
 3. Skips products with any missing dimension.
-4. Applies box-packing: non-overlapped items are standalone boxes; overlapped items are nested (max 3 per box).
-5. If all products are overlapped, the largest becomes the main box (emits `ALL_OVERLAPPED` warning).
-6. COD is resolved from the order payment method: COD methods map to total order value; non-COD methods map to `0`.
+4. If no products have valid dimensions, uses one default package (`width=30cm`, `height=5cm`, `length=40cm`, `weight=1kg`) with the order item value as declared value and emits `NO_PRODUCTS`.
+5. Applies box-packing: non-overlapped items are standalone boxes; overlapped items are nested (max 3 per box).
+6. If all products are overlapped, the largest becomes the main box (emits `ALL_OVERLAPPED` warning).
+7. COD is resolved from the order payment method: COD methods map to the final payable order value after discounts and shipping; non-COD methods map to `0`.
 
 **Warnings** (non-fatal, included in response `warnings[]`):
 | Code | Meaning |
 |---|---|
-| `NO_PRODUCTS` | No valid products found — returns an error |
+| `NO_PRODUCTS` | No valid products found — default package dimensions were used |
 | `ALL_OVERLAPPED` | Every product is flagged as overlapped; largest item promoted to main box |
 | `INVALID_CITY` | Carrier rejected the destination city code |
 

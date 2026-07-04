@@ -205,6 +205,9 @@ func TestRegisterShippingMarkTransactionalEmailConsumer(t *testing.T) {
 	if !strings.Contains(sender.command.HTMLBody, "https://wa.me/573104314990") {
 		t.Fatalf("HTMLBody should contain help URL")
 	}
+	if strings.Contains(sender.command.HTMLBody, "Morral Dream Nubuk") || strings.Contains(sender.command.HTMLBody, "Producto fallback") {
+		t.Fatalf("HTMLBody should not contain dispatched product rows")
+	}
 }
 
 // TestRegisterShippingMarkTransactionalEmailConsumerVoided verifies transactional shipping mark-voided email dispatch behavior.
