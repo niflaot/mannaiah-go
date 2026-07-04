@@ -912,6 +912,68 @@ func TestCreateBatchMarkFromQuotation(t *testing.T) {
 	}
 }
 
+// TestCreateBatchMarkFromQuotationKeepsEditedQuotationCity verifies edited quotation destinations are not overwritten by stale order data.
+func TestCreateBatchMarkFromQuotationKeepsEditedQuotationCity(t *testing.T) {
+	batchRepository := newDispatchBatchRepositoryStub()
+	markRepository := newDispatchMarkRepositoryStub()
+	batchRepository.markStore = markRepository
+	quotationRepository := newDispatchQuotationRepositoryStub()
+	service := NewService(batchRepository, markRepository, nil)
+	service.SetQuotationRepository(quotationRepository)
+	service.SetDefaultSender(domain.Address{Name: "Sender", CityCode: "11001"})
+	service.SetOrderSource(dispatchOrderQuotationSourceStub{row: &port.OrderQuotationData{
+		OrderID:              "order-2385",
+		DestCityCode:         "05001",
+		RecipientName:        "Weilmar Pacheco",
+		RecipientAddressLine: "Cr 72 # 51 sur 7",
+		RecipientPhone:       "3145171032",
+	}})
+
+	batch, err := service.Create(context.Background(), CreateBatchCommand{CarrierID: "tcc", CreatedBy: "user-123"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	snapshot, marshalErr := json.Marshal(domain.QuotationRequest{
+		OrderID:        "order-2385",
+		CarrierID:      "tcc",
+		OriginCityCode: "11001",
+		DestCityCode:   "05059",
+		Units:          []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		DeclaredValue:  95000,
+		ShipmentMode:   domain.ShipmentModeExpress,
+	})
+	if marshalErr != nil {
+		t.Fatalf("marshal snapshot: %v", marshalErr)
+	}
+	quotationRepository.rows["quote-edited-city"] = port.QuotationRecord{
+		ID:              "quote-edited-city",
+		OrderID:         "order-2385",
+		OrderIdentifier: "#2385",
+		CarrierID:       "tcc",
+		OriginCityCode:  "11001",
+		DestCityCode:    "05059",
+		FreightCost:     32210,
+		Units:           []domain.PackageUnit{{Description: "box", PackageType: "CAJA", Dimensions: domain.Dimensions{HeightCM: 10, WidthCM: 10, DepthCM: 10, RealWeightKG: 2}}},
+		RequestSnapshot: base64.StdEncoding.EncodeToString(snapshot),
+		CreatedAt:       time.Now().UTC(),
+	}
+
+	mark, err := service.CreateBatchMarkFromQuotation(context.Background(), CreateBatchMarkFromQuotationCommand{
+		BatchID:     batch.ID,
+		QuotationID: "quote-edited-city",
+		Direct:      false,
+	})
+	if err != nil {
+		t.Fatalf("CreateBatchMarkFromQuotation() error = %v", err)
+	}
+	if mark.Recipient.CityCode != "05059" {
+		t.Fatalf("mark.Recipient.CityCode = %q, want edited quotation city 05059", mark.Recipient.CityCode)
+	}
+	if mark.Recipient.AddressLine != "Cr 72 # 51 sur 7" {
+		t.Fatalf("mark.Recipient.AddressLine = %q, want order-enriched address", mark.Recipient.AddressLine)
+	}
+}
+
 // TestCreateBatchMarkDirectOnExistingQuotedMaterializes verifies direct mode materializes the existing quoted mark instead of creating duplicates.
 func TestCreateBatchMarkDirectOnExistingQuotedMaterializes(t *testing.T) {
 	batchRepository := newDispatchBatchRepositoryStub()

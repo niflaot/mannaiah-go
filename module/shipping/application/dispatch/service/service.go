@@ -443,7 +443,7 @@ func (s *Service) CreateBatchMarkFromQuotation(ctx context.Context, command Crea
 			recipient.ID = strings.TrimSpace(orderData.RecipientID)
 			recipient.IDType = strings.TrimSpace(orderData.RecipientIDType)
 			recipient.AddressLine = strings.TrimSpace(orderData.RecipientAddressLine)
-			recipient.CityCode = firstNonEmptyString(strings.TrimSpace(orderData.DestCityCode), recipient.CityCode)
+			recipient.CityCode = firstNonEmptyString(recipient.CityCode, strings.TrimSpace(orderData.DestCityCode))
 			recipient.Phone = strings.TrimSpace(orderData.RecipientPhone)
 			recipient.Email = strings.TrimSpace(orderData.RecipientEmail)
 			if collectOnDeliveryAmount <= 0 {

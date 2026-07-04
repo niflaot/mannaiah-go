@@ -2,82 +2,38 @@
 package citycode
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 
-	"golang.org/x/text/unicode/norm"
+	citiesplatform "github.com/flockstore/lib-go-cities/platform"
 )
 
 //go:embed cities.json
 var citiesJSON []byte
 
 const (
-	unknownCode    = "-1"
-	fuzzyThreshold = 0.80
+	unknownCode      = "-1"
+	matcherThreshold = 0.80
 )
 
-// CityCode holds a municipality code value that may be encoded as a JSON integer or string.
-type CityCode struct {
-	// value is the resolved string representation of the code.
-	value string
-}
-
-// UnmarshalJSON decodes city codes from both JSON number and JSON string representations.
-func (c *CityCode) UnmarshalJSON(b []byte) error {
-	if len(b) > 0 && b[0] == '"' {
-		var s string
-		if err := json.Unmarshal(b, &s); err != nil {
-			return err
-		}
-		c.value = normalizeCode(s)
-		return nil
-	}
-	var n int
-	if err := json.Unmarshal(b, &n); err != nil {
-		return err
-	}
-	c.value = normalizeCode(strconv.Itoa(n))
-	return nil
-}
-
-// CityEntry holds a single city record from the embedded dataset.
-type CityEntry struct {
-	// Code is the Colombian municipality numeric code.
-	Code CityCode `json:"code"`
-	// Name is the human-readable city name.
-	Name string `json:"name"`
-	// Normalized is the accent-stripped city name used as lookup key.
-	Normalized string `json:"normalized"`
-}
-
-var cityMap map[string]string
+var cityMatcher *citiesplatform.Matcher
 var cityNames map[string]string
-var cityKeys []string
 
 func init() {
-	var entries []CityEntry
-	if err := json.Unmarshal(citiesJSON, &entries); err != nil {
+	matcher, err := citiesplatform.LoadBytes("module/core/citycode/cities.json", citiesJSON)
+	if err != nil {
 		panic("citycode: failed to parse embedded cities.json: " + err.Error())
 	}
 
-	cityMap = make(map[string]string, len(entries))
-	cityNames = make(map[string]string, len(entries))
-	cityKeys = make([]string, 0, len(entries))
-
-	for _, entry := range entries {
-		key := strings.ToLower(strings.TrimSpace(entry.Normalized))
-		code := normalizeCode(entry.Code.value)
-		name := strings.TrimSpace(entry.Name)
-		if key != "" && code != "" {
-			if _, exists := cityMap[key]; !exists {
-				cityMap[key] = code
-				cityKeys = append(cityKeys, key)
-			}
-		}
+	cityMatcher = matcher
+	cityNames = make(map[string]string, len(matcher.Cities()))
+	for _, city := range matcher.Cities() {
+		code := normalizeCode(string(city.Code))
+		name := strings.TrimSpace(city.Name)
 		if code != "" && name != "" {
 			cityNames[code] = name
 		}
@@ -90,18 +46,15 @@ func Resolve(name string) string {
 		return normalizeCode(name)
 	}
 
-	normalized := normalizeName(name)
-	if normalized == "" {
+	match, found, err := cityMatcher.Match(context.Background(), citiesplatform.SearchRequest{
+		City:      name,
+		Threshold: matcherThreshold,
+	})
+	if err != nil || !found {
 		return unknownCode
 	}
 
-	if code, ok := cityMap[normalized]; ok {
-		return code
-	}
-	if code, ok := prefixResolve(normalized); ok {
-		return code
-	}
-	return fuzzyResolve(normalized)
+	return normalizeCode(string(match.City.Code))
 }
 
 // Name maps a municipality code to its human-readable city name.
@@ -126,116 +79,58 @@ func IsNumericCode(value string) bool {
 	return err == nil && n > 0
 }
 
-func prefixResolve(normalized string) (string, bool) {
-	if len([]rune(normalized)) < 4 {
-		return "", false
-	}
-
-	matched := ""
-	count := 0
-	for _, key := range cityKeys {
-		if strings.HasPrefix(key, normalized) {
-			matched = key
-			count++
-			if count > 1 {
-				return "", false
-			}
-		}
-	}
-	if count == 1 {
-		return cityMap[matched], true
-	}
-	return "", false
+// ResolveResult defines a city resolution outcome with failure details.
+type ResolveResult struct {
+	// Code defines the resolved municipality code when Found is true.
+	Code string
+	// Name defines the resolved city display name when Found is true.
+	Name string
+	// Department defines the resolved department display name when Found is true.
+	Department string
+	// Found reports whether the input resolved safely.
+	Found bool
+	// Reason defines the city matcher rejection reason when Found is false.
+	Reason string
+	// Suggestions defines plausible city alternatives for operator repair.
+	Suggestions []ResolveSuggestion
 }
 
-func normalizeName(s string) string {
-	lower := strings.ToLower(strings.TrimSpace(s))
-	if lower == "" {
-		return ""
-	}
-
-	decomposed := norm.NFD.String(lower)
-	result := make([]rune, 0, len(decomposed))
-	for _, r := range decomposed {
-		if unicode.Is(unicode.Mn, r) {
-			continue
-		}
-		result = append(result, r)
-	}
-	return string(result)
+// ResolveSuggestion defines a suggested city candidate for failed resolution.
+type ResolveSuggestion struct {
+	// Code defines the suggested municipality code.
+	Code string
+	// Name defines the suggested city display name.
+	Name string
+	// Department defines the suggested department display name.
+	Department string
+	// Confidence defines the match confidence from 0 to 1.
+	Confidence float64
 }
 
-func fuzzyResolve(normalized string) string {
-	best := ""
-	bestSim := 0.0
-	for _, key := range cityKeys {
-		sim := similarity(normalized, key)
-		if sim > bestSim {
-			bestSim = sim
-			best = key
-		}
+// ResolveDetailed maps city and department text to a safe city-code result.
+func ResolveDetailed(ctx context.Context, city string, department string) (ResolveResult, error) {
+	match, found, err := cityMatcher.Match(ctx, citiesplatform.SearchRequest{
+		City:       city,
+		Department: department,
+		Threshold:  matcherThreshold,
+	})
+	if err != nil {
+		return ResolveResult{}, fmt.Errorf("resolve city: %w", err)
 	}
-	if bestSim >= fuzzyThreshold {
-		return cityMap[best]
-	}
-	return unknownCode
-}
-
-func similarity(a string, b string) float64 {
-	if a == "" && b == "" {
-		return 1
-	}
-	maxLen := len([]rune(a))
-	if l := len([]rune(b)); l > maxLen {
-		maxLen = l
-	}
-	if maxLen == 0 {
-		return 1
-	}
-	distance := levenshtein(a, b)
-	return 1 - float64(distance)/float64(maxLen)
-}
-
-func levenshtein(a string, b string) int {
-	ar := []rune(a)
-	br := []rune(b)
-	if len(ar) == 0 {
-		return len(br)
-	}
-	if len(br) == 0 {
-		return len(ar)
+	if found {
+		return ResolveResult{
+			Code:       normalizeCode(string(match.City.Code)),
+			Name:       strings.TrimSpace(match.City.Name),
+			Department: strings.TrimSpace(match.City.Department),
+			Found:      true,
+		}, nil
 	}
 
-	prev := make([]int, len(br)+1)
-	curr := make([]int, len(br)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(ar); i++ {
-		curr[0] = i
-		for j := 1; j <= len(br); j++ {
-			cost := 0
-			if ar[i-1] != br[j-1] {
-				cost = 1
-			}
-			curr[j] = minInt(curr[j-1]+1, prev[j]+1, prev[j-1]+cost)
-		}
-		prev, curr = curr, prev
-	}
-	return prev[len(br)]
-}
-
-func minInt(values ...int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	result := values[0]
-	for _, value := range values[1:] {
-		if value < result {
-			result = value
-		}
-	}
-	return result
+	return ResolveResult{
+		Found:       false,
+		Reason:      string(match.Reason),
+		Suggestions: mapSuggestions(match.Suggestions),
+	}, nil
 }
 
 func normalizeCode(value string) string {
@@ -251,4 +146,42 @@ func normalizeCode(value string) string {
 		return fmt.Sprintf("%05d", n)
 	}
 	return strconv.Itoa(n)
+}
+
+func mapSuggestions(candidates []citiesplatform.MatchCandidate) []ResolveSuggestion {
+	suggestions := make([]ResolveSuggestion, 0, len(candidates))
+	for _, candidate := range candidates {
+		suggestions = append(suggestions, ResolveSuggestion{
+			Code:       normalizeCode(string(candidate.City.Code)),
+			Name:       strings.TrimSpace(candidate.City.Name),
+			Department: strings.TrimSpace(candidate.City.Department),
+			Confidence: candidate.Confidence,
+		})
+	}
+
+	return suggestions
+}
+
+// CityCode holds a municipality code value that may be encoded as a JSON integer or string.
+type CityCode struct {
+	// value is the resolved string representation of the code.
+	value string
+}
+
+// UnmarshalJSON decodes city codes from both JSON number and JSON string representations.
+func (c *CityCode) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		c.value = normalizeCode(s)
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	c.value = normalizeCode(strconv.Itoa(n))
+	return nil
 }
