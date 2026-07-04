@@ -35,13 +35,19 @@ func (c *rotulusCityCode) UnmarshalJSON(payload []byte) error {
 }
 
 type rotulusCityEntry struct {
-	Code rotulusCityCode `json:"code"`
-	Name string          `json:"name"`
+	Code       rotulusCityCode `json:"code"`
+	Name       string          `json:"name"`
+	Department string          `json:"department"`
+}
+
+type rotulusCityDisplay struct {
+	Name       string
+	Department string
 }
 
 var (
 	rotulusCityNamesOnce sync.Once
-	rotulusCityNames     map[string]string
+	rotulusCityNames     map[string]rotulusCityDisplay
 )
 
 // resolveRotulusCityDisplayName resolves municipality codes into human-readable city labels.
@@ -54,8 +60,8 @@ func resolveRotulusCityDisplayName(value string) string {
 	rotulusCityNamesOnce.Do(loadRotulusCityNames)
 
 	for _, candidate := range resolveRotulusCityLookupCandidates(trimmed) {
-		if name, ok := rotulusCityNames[candidate]; ok && strings.TrimSpace(name) != "" {
-			return strings.TrimSpace(name)
+		if city, ok := rotulusCityNames[candidate]; ok && strings.TrimSpace(city.Name) != "" {
+			return formatRotulusCityDisplay(city)
 		}
 	}
 
@@ -85,7 +91,7 @@ func resolveRotulusCityLookupCandidates(value string) []string {
 
 // loadRotulusCityNames parses the embedded municipality dataset into a code-to-name map.
 func loadRotulusCityNames() {
-	rotulusCityNames = map[string]string{}
+	rotulusCityNames = map[string]rotulusCityDisplay{}
 	if len(rotulusCitiesJSON) == 0 {
 		return
 	}
@@ -101,6 +107,21 @@ func loadRotulusCityNames() {
 		if code == "" || name == "" {
 			continue
 		}
-		rotulusCityNames[code] = name
+		rotulusCityNames[code] = rotulusCityDisplay{
+			Name:       name,
+			Department: strings.TrimSpace(entry.Department),
+		}
 	}
+}
+
+func formatRotulusCityDisplay(city rotulusCityDisplay) string {
+	name := strings.TrimSpace(city.Name)
+	department := strings.TrimSpace(city.Department)
+	if name == "" || department == "" {
+		return name
+	}
+	if strings.EqualFold(name, department) {
+		return name
+	}
+	return name + " (" + department + ")"
 }

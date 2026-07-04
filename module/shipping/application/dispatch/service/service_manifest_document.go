@@ -29,7 +29,7 @@ const (
 	// maxBatchManifestDownloadBytes defines the maximum download size for one manifest PDF payload.
 	maxBatchManifestDownloadBytes = 20 * 1024 * 1024
 	// defaultBatchManifestCacheKeyPrefix defines Redis cache-key prefixes for merged manifest documents.
-	defaultBatchManifestCacheKeyPrefix = "shipping:batch_manifest_document:"
+	defaultBatchManifestCacheKeyPrefix = "shipping:batch_manifest_document:v2:"
 )
 
 // BatchManifestOrderSummary defines order metadata rendered in one batch manifest cover row.

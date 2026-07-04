@@ -53,6 +53,13 @@ Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
 
+### [v3.1.3] - 2026-07-04
+- Shopify order write-back now skips empty order-edit commits when Mannaiah updates only local shipping metadata, avoiding retry noise from Shopify's "at least one change" validation.
+- Rotulus and manifest city labels now include department names where the city code resolves through the embedded Colombia city catalog.
+- Batch manifest cover pages now format `FLETE` as COP values with dot thousands separators and include a total freight row.
+- Shipping quotation screens now default origin city to Bogotá (`11001`) and remember operator changes locally.
+- Release metadata updated to `v3.1.3`.
+
 ### [v3.1.2] - 2026-07-04
 - Order edit forms now require selecting a valid city through the city selector instead of preserving unresolved raw values like `-1`.
 - Edited shipping quotations now persist their destination city back onto the order shipping address before batch marks, rotulus PDFs, and checklists consume the order snapshot.

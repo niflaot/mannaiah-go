@@ -342,6 +342,7 @@ func (c *Client) ApplyOrderUpdate(ctx context.Context, shopifyOrderID string, pa
 	if calculatedOrderID == "" {
 		return errors.New("shopify order edit calculated order id is empty")
 	}
+	changed := false
 	existing := mapCalculatedLineItems(begin.CalculatedOrder.LineItems.Nodes)
 	for _, item := range payload.Items {
 		sku := strings.TrimSpace(item.SKU)
@@ -350,6 +351,7 @@ func (c *Client) ApplyOrderUpdate(ctx context.Context, shopifyOrderID string, pa
 				if err := c.orderEditSetQuantity(ctx, installation, calculatedOrderID, line.ID, item.Quantity); err != nil {
 					return err
 				}
+				changed = true
 			}
 			continue
 		}
@@ -366,6 +368,10 @@ func (c *Client) ApplyOrderUpdate(ctx context.Context, shopifyOrderID string, pa
 		if err := c.orderEditAddVariant(ctx, installation, calculatedOrderID, variantID, item.Quantity); err != nil {
 			return err
 		}
+		changed = true
+	}
+	if !changed {
+		return nil
 	}
 	return c.orderEditCommit(ctx, installation, calculatedOrderID, false, "Updated from Mannaiah")
 }

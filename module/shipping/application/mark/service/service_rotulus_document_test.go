@@ -179,13 +179,13 @@ func TestBuildSignedRotulusQRToken(t *testing.T) {
 	}
 }
 
-// TestResolveRotulusCityDisplayName verifies city-code values resolve to municipality names for rotulus labels.
+// TestResolveRotulusCityDisplayName verifies city-code values resolve to municipality names with departments for rotulus labels.
 func TestResolveRotulusCityDisplayName(t *testing.T) {
-	if got := resolveRotulusCityDisplayName("76364"); got != "Jamundí" {
-		t.Fatalf("resolveRotulusCityDisplayName(76364) = %q, want %q", got, "Jamundí")
+	if got := resolveRotulusCityDisplayName("76364"); got != "Jamundí (VALLE DEL CAUCA)" {
+		t.Fatalf("resolveRotulusCityDisplayName(76364) = %q, want %q", got, "Jamundí (VALLE DEL CAUCA)")
 	}
-	if got := resolveRotulusCityDisplayName("76001000"); got != "Cali" {
-		t.Fatalf("resolveRotulusCityDisplayName(76001000) = %q, want %q", got, "Cali")
+	if got := resolveRotulusCityDisplayName("76001000"); got != "Cali (VALLE DEL CAUCA)" {
+		t.Fatalf("resolveRotulusCityDisplayName(76001000) = %q, want %q", got, "Cali (VALLE DEL CAUCA)")
 	}
 	if got := resolveRotulusCityDisplayName("Bogotá"); got != "Bogotá" {
 		t.Fatalf("resolveRotulusCityDisplayName(Bogotá) = %q, want %q", got, "Bogotá")

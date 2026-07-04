@@ -30,7 +30,7 @@ const (
 	// defaultRotulusSigningSecret defines fallback signing-secret values for QR payloads.
 	defaultRotulusSigningSecret = "shipping-rotulus-default-secret-change-me"
 	// rotulusDocumentCacheVersion defines cache version values used to invalidate stale document payloads.
-	rotulusDocumentCacheVersion = "v3"
+	rotulusDocumentCacheVersion = "v4"
 )
 
 // markRotulusDocumentCacheEntry defines one cached rotulus document value.

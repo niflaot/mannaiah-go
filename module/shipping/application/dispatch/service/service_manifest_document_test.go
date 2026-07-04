@@ -339,6 +339,16 @@ func TestResolveBatchManifestCoverRowsSkipsFailedMarks(t *testing.T) {
 	}
 }
 
+// TestFormatBatchManifestCurrencyUsesDotThousands verifies COP values are readable in manifest summaries.
+func TestFormatBatchManifestCurrencyUsesDotThousands(t *testing.T) {
+	if got := formatBatchManifestCurrency(17285); got != "$17.285" {
+		t.Fatalf("formatBatchManifestCurrency() = %q, want $17.285", got)
+	}
+	if got := formatBatchManifestCurrency(67210); got != "$67.210" {
+		t.Fatalf("formatBatchManifestCurrency() = %q, want $67.210", got)
+	}
+}
+
 // buildTestPDF creates one deterministic in-memory PDF payload for merge tests.
 func buildTestPDF(t *testing.T, value string) []byte {
 	t.Helper()

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	ordersport "mannaiah/module/orders/port"
 	shopifyport "mannaiah/module/shopify/port"
 )
 
@@ -184,6 +185,52 @@ func TestClientCancelOrderUsesGraphQLCancellationInputs(t *testing.T) {
 	}
 	if captured.Variables["restock"] != true {
 		t.Fatalf("restock = %v, want true", captured.Variables["restock"])
+	}
+}
+
+// TestClientApplyOrderUpdateSkipsCommitWhenNoLineItemChanges verifies city-only updates do not create empty Shopify edits.
+func TestClientApplyOrderUpdateSkipsCommitWhenNoLineItemChanges(t *testing.T) {
+	var graphqlCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/graphql.json" {
+			t.Fatalf("request path = %q, want /graphql.json", request.URL.Path)
+		}
+		graphqlCalls++
+		var captured graphqlRequest
+		if err := json.NewDecoder(request.Body).Decode(&captured); err != nil {
+			t.Fatalf("decode graphql request: %v", err)
+		}
+		if strings.Contains(captured.Query, "orderEditCommit") {
+			t.Fatalf("orderEditCommit should not be called for no-op updates")
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"data":{"orderEditBegin":{"calculatedOrder":{"id":"gid://shopify/CalculatedOrder/1","lineItems":{"nodes":[{"id":"gid://shopify/CalculatedLineItem/1","sku":"SKU-1","quantity":1}]}},"userErrors":[]}}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:      server.URL,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenResolver: staticInstallationResolver{installation: &shopifyport.Installation{
+			ShopDomain:  "flock-6591.myshopify.com",
+			AccessToken: "token",
+		}},
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	payload := ordersport.OrderEventPayload{
+		Items: []ordersport.OrderEventItem{{SKU: "SKU-1", Quantity: 1}},
+	}
+	ctx := shopifyport.WithShopDomain(context.Background(), "flock-6591.myshopify.com")
+	if err := client.ApplyOrderUpdate(ctx, "7440453927210", payload, nil); err != nil {
+		t.Fatalf("ApplyOrderUpdate() error = %v", err)
+	}
+	if graphqlCalls != 1 {
+		t.Fatalf("graphql calls = %d, want 1 begin call", graphqlCalls)
 	}
 }
 

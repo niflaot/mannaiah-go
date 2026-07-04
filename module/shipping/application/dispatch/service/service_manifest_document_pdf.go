@@ -53,13 +53,18 @@ func (s *Service) buildBatchManifestCoverPDF(ctx context.Context, meta batchMani
 	s.drawBatchManifestCoverHeader(ctx, pdf, meta)
 	s.drawBatchManifestTableHeader(pdf, meta.IsManualBatch)
 
+	totalFreight := 0.0
 	for _, row := range rows {
+		totalFreight += maxBatchManifestFreight(row.FreightCost)
 		rowHeight := s.batchManifestTableRowHeight(pdf, row, meta.IsManualBatch)
 		if pdf.GetY()+rowHeight > batchManifestPageHeightMM-batchManifestMarginMM {
 			pdf.AddPage()
 			s.drawBatchManifestTableHeader(pdf, meta.IsManualBatch)
 		}
 		s.drawBatchManifestTableRow(pdf, row, rowHeight, meta.IsManualBatch)
+	}
+	if !meta.IsManualBatch {
+		s.drawBatchManifestFreightTotalRow(pdf, totalFreight)
 	}
 
 	var output bytes.Buffer
@@ -130,7 +135,7 @@ func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestC
 	_, widths := resolveBatchManifestTableLayout(template, isManualBatch)
 	startX, startY := pdf.GetX(), pdf.GetY()
 
-	freightText := fmt.Sprintf("$%.0f", row.FreightCost)
+	freightText := formatBatchManifestCurrency(row.FreightCost)
 	if row.FreightCost <= 0 {
 		freightText = template.EmptyValueFallback
 	}
@@ -153,6 +158,27 @@ func (s *Service) drawBatchManifestTableRow(pdf *gofpdf.Fpdf, row batchManifestC
 	pdf.Rect(itemCellX, startY, itemCellWidth, rowHeight, "D")
 	drawBatchManifestItemsCell(pdf, itemCellX, startY, itemCellWidth, batchManifestItemsLineHeightMM, row.Items, template.ItemBulletPrefix, template.EmptyValueFallback)
 	pdf.SetXY(startX, startY+rowHeight)
+}
+
+// drawBatchManifestFreightTotalRow draws the total freight amount after all cover rows.
+func (s *Service) drawBatchManifestFreightTotalRow(pdf *gofpdf.Fpdf, totalFreight float64) {
+	if pdf == nil {
+		return
+	}
+	template := s.resolveBatchManifestCoverTemplate()
+	_, widths := resolveBatchManifestTableLayout(template, false)
+	rowHeight := batchManifestRowHeightMM
+	if pdf.GetY()+rowHeight > batchManifestPageHeightMM-batchManifestMarginMM {
+		pdf.AddPage()
+		s.drawBatchManifestTableHeader(pdf, false)
+	}
+	pdf.SetFont("Arial", "B", 8)
+	pdf.CellFormat(widths[0], rowHeight, encodeBatchManifestText("TOTAL"), "1", 0, "L", false, 0, "")
+	pdf.CellFormat(widths[1], rowHeight, encodeBatchManifestText(formatBatchManifestCurrency(totalFreight)), "1", 0, "R", false, 0, "")
+	for index := 2; index < len(widths); index += 1 {
+		pdf.CellFormat(widths[index], rowHeight, "", "1", 0, "L", false, 0, "")
+	}
+	pdf.Ln(-1)
 }
 
 // downloadBatchManifestLogo downloads one cover-logo image and resolves image type values for gofpdf.
@@ -235,6 +261,32 @@ func maxBatchManifestQuantity(value int) int {
 		return 0
 	}
 	return value
+}
+
+// maxBatchManifestFreight normalizes negative freight values for totals.
+func maxBatchManifestFreight(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+// formatBatchManifestCurrency renders COP values with dot thousands separators.
+func formatBatchManifestCurrency(value float64) string {
+	rounded := int64(maxBatchManifestFreight(value) + 0.5)
+	raw := fmt.Sprintf("%d", rounded)
+	if len(raw) <= 3 {
+		return "$" + raw
+	}
+	parts := make([]string, 0, (len(raw)+2)/3)
+	for len(raw) > 3 {
+		parts = append([]string{raw[len(raw)-3:]}, parts...)
+		raw = raw[:len(raw)-3]
+	}
+	if raw != "" {
+		parts = append([]string{raw}, parts...)
+	}
+	return "$" + strings.Join(parts, ".")
 }
 
 // resolveBatchManifestCoverTemplate resolves active cover template values with default fallback.
