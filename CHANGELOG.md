@@ -53,6 +53,11 @@ Keep newest entries on top. Add one section per version.
 
 ### [Unreleased]
 
+### [v.3.1.1] - 2026-07-04
+- Shipping batch marks, rotulus PDFs, and checklist PDFs now preserve edited quotation destinations instead of falling back to stale order city data.
+- Core city matching now delegates to `github.com/flockstore/lib-go-cities` so duplicated, ambiguous, incongruent, and low-confidence city matches fail safely.
+- Release metadata updated to `v.3.1.1`.
+
 ### [v3.0.6] - 2026-06-20
 - Shipping PDF item labels now append product variation labels resolved from local variant SKUs, covering manifests, checklists, rotulus, and stamped carrier labels.
 - Release metadata updated to `v3.0.6`.
